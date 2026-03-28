@@ -83,6 +83,12 @@
                       </el-button>
                     </div>
                     
+                    <!-- 思考过程说明 -->
+                    <div class="thinking-process-info">
+                      <el-icon class="thinking-icon"><DataAnalysis /></el-icon>
+                      <span class="thinking-text">AI正在分析您的问题，通过多个步骤生成最准确的答案</span>
+                    </div>
+                    
                     <!-- 横向步骤标签 - 紧凑显示 -->
                     <div class="process-steps-compact">
                       <div 
@@ -177,35 +183,47 @@
                       查询结果：<strong>{{ msg.row_count }}</strong> 条
                     </div>
 
-                    <!-- SQL 展示 - 紧凑版本 -->
+                    <!-- SQL 展示 - 紧凑版本，默认收起 -->
                     <div v-if="msg.sql" class="sql-block-compact">
-                      <div class="sql-header-compact">
-                        <span class="sql-label-compact">SQL</span>
-                        <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
-                      </div>
-                      <div class="sql-content-compact">
-                        <pre class="sql-code-compact">{{ msg.sql }}</pre>
-                      </div>
+                      <el-collapse v-model="activeSteps">
+                        <el-collapse-item name="sql">
+                          <template #title>
+                            <span class="sql-label-compact">SQL</span>
+                          </template>
+                          <div class="sql-content-compact">
+                            <div class="sql-actions-compact">
+                              <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
+                            </div>
+                            <pre class="sql-code-compact">{{ msg.sql }}</pre>
+                          </div>
+                        </el-collapse-item>
+                      </el-collapse>
                     </div>
 
-                    <!-- 结果表格 - 紧凑版本 -->
+                    <!-- 结果表格 - 紧凑版本，默认收起 -->
                     <div v-if="msg.row_count > 0" class="data-block-compact">
-                      <div class="data-header-compact">
-                        <span class="data-label-compact">数据 ({{ msg.row_count }}条)</span>
-                        <el-button link type="primary" size="small" @click="copyData(msg)">复制</el-button>
-                      </div>
-                      <div class="data-content-compact">
-                        <el-table :data="msg.rows" border stripe size="small" max-height="200">
-                          <el-table-column 
-                            v-for="column in msg.columns" 
-                            :key="column"
-                            :prop="column"
-                            :label="column"
-                            show-overflow-tooltip
-                            min-width="80"
-                          />
-                        </el-table>
-                      </div>
+                      <el-collapse v-model="activeSteps">
+                        <el-collapse-item name="data">
+                          <template #title>
+                            <span class="data-label-compact">数据 ({{ msg.row_count }}条)</span>
+                          </template>
+                          <div class="data-content-compact">
+                            <div class="data-actions-compact">
+                              <el-button link type="primary" size="small" @click="copyData(msg)">复制</el-button>
+                            </div>
+                            <el-table :data="msg.rows" border stripe size="small" max-height="200">
+                              <el-table-column 
+                                v-for="column in msg.columns" 
+                                :key="column"
+                                :prop="column"
+                                :label="column"
+                                show-overflow-tooltip
+                                min-width="80"
+                              />
+                            </el-table>
+                          </div>
+                        </el-collapse-item>
+                      </el-collapse>
                     </div>
 
                     <!-- 无数据提示 -->
@@ -1316,6 +1334,31 @@ onMounted(() => {
   font-size: 10px;
 }
 
+/* 思考过程说明 */
+.thinking-process-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  color: #0369a1;
+  font-size: 12px;
+}
+
+.thinking-icon {
+  color: #0284c7;
+  font-size: 14px;
+}
+
+.thinking-text {
+  font-size: 12px;
+  color: #0369a1;
+  line-height: 1.4;
+}
+
 /* 紧凑版本样式 */
 .result-summary-compact {
   padding: 6px 12px;
@@ -1418,6 +1461,20 @@ onMounted(() => {
 .data-content-compact :deep(.el-table .cell) {
   padding: 0 6px;
   line-height: 1.2;
+}
+
+.sql-actions-compact {
+  text-align: right;
+  padding: 4px 12px;
+  background: #334155;
+  border-bottom: 1px solid #475569;
+}
+
+.data-actions-compact {
+  text-align: right;
+  padding: 4px 12px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 /* 原版本样式（保留用于错误状态） */
