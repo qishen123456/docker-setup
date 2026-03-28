@@ -826,120 +826,117 @@ const formatAnalysis = (analysis) => {
   console.log('=== formatAnalysis 调试 ===')
   console.log('输入文本:', analysis.substring(0, 100) + '...')
   
-  // 更智能的分割方式：找到真正的分析内容开始位置
-  // 思考过程通常包含这些关键词，真正的分析从具体数据或报告标题开始
-  const thinkingEndPatterns = [
-    /(?:分析数据：|让我仔细分析数据：|接下来，|根据分析，|通过分析，|从数据中，)(.*?)(?=\n|$)/gim,
-    /(?:首先，|其次，|然后，|第一步，|第二步，|第三步，)(.*?)(?=\n|$)/gim,
-    /(?:用户要求我作为.*?，.*?分析。)(.*?)(?=\n|$)/gim
-  ]
-  
-  // 找到思考过程结束位置
-  let thinkingEndIndex = -1
-  let analysisStartIndex = -1
-  
-  // 寻找真正的分析内容开始标志
-  const analysisStartPatterns = [
-    /商用事业部年度业绩复盘报告/,
-    /事业部总体业绩/,
-    /## 概述/,
-    /### /,
-    /## /,
-    /一、/,
-    /二、/,
-    /三、/,
-    /^\d+\./,
-    /根据数据分析/,
-    /从数据来看/,
-    /数据显示/
-  ]
-  
-  // 找到最早出现的分析内容标志
-  for (const pattern of analysisStartPatterns) {
-    const match = analysis.match(pattern)
-    if (match) {
-      const index = analysis.indexOf(match[0])
-      if (analysisStartIndex === -1 || index < analysisStartIndex) {
-        analysisStartIndex = index
-      }
-    }
-  }
-  
-  // 如果找到了分析内容开始位置，分割内容
-  if (analysisStartIndex > 0) {
-    const thinkingContent = analysis.substring(0, analysisStartIndex).trim()
-    const analysisContent = analysis.substring(analysisStartIndex).trim()
-    
-    console.log('思考过程内容:', thinkingContent.substring(0, 50) + '...')
-    console.log('分析内容开始:', analysisContent.substring(0, 50) + '...')
-    
-    // 包装思考过程
-    const wrappedThinking = `<div class="thinking-process">${thinkingContent}</div>`
-    
-    // 处理分析内容
-    formatted = wrappedThinking + '\n\n' + analysisContent
+  // 流式输出优化：只有在内容相对完整时才进行分割处理
+  // 避免在流式输出过程中频繁分割导致内容闪烁
+  if (analysis.length < 100) {
+    // 内容太短，暂时不处理，直接返回
+    console.log('内容较短，暂时不进行分割处理')
   } else {
-    // 如果没找到明确的分割点，使用原来的关键词匹配方式
-    console.log('未找到明确的分割点，使用关键词匹配')
-    
-    // 精确的思考过程关键词 - 避免误匹配正文
-    const processKeywords = [
-      '用户要求我作为',
-      '让我仔细分析数据',
-      '关键数据提取：',
-      '关键要求：',
-      '分析数据：',
-      '提取数据：',
-      '推导过程：',
-      '分析过程：',
-      '处理步骤：',
-      '计算过程：',
-      '观察发现：',
-      '可以看出：',
-      '正在分析',
-      '开始处理',
-      '接下来我',
-      '思考过程',
-      '第一步',
-      '第二步',
-      '第三步',
-      '首先，我',
-      '其次，',
-      '然后，',
-      '通过分析',
-      '从数据中',
-      '根据分析',
-      '关键要求是',
-      '关键数据包括',
-      '让我仔细',
-      '需要直接输出',
-      '禁止展示',
-      '按照要求',
-      '分析数据发现',
-      '提取了以下',
-      '推导出',
-      '分析过程如下',
-      '处理步骤包括',
-      '计算得出',
-      '观察发现'
+    // 更智能的分割方式：找到真正的分析内容开始位置
+    // 寻找真正的分析内容开始标志
+    const analysisStartPatterns = [
+      /商用事业部年度业绩复盘报告/,
+      /事业部总体业绩/,
+      /## 概述/,
+      /### /,
+      /## /,
+      /一、/,
+      /二、/,
+      /三、/,
+      /^\d+\./,
+      /根据数据分析/,
+      /从数据来看/,
+      /数据显示/
     ]
     
-    // 创建正则表达式来匹配包含这些关键词的段落
-    const keywordPattern = processKeywords.join('|')
-    const processPattern = new RegExp(
-      `(^.*(?:${keywordPattern}).*?(?:\\n|$))`,
-      'gim'
-    )
-    
-    // 将匹配到的思考过程内容用特殊样式包装
-    formatted = formatted.replace(processPattern, (match) => {
-      // 检查是否是完整的思考过程段落
-      const lines = match.split('\n').filter(line => line.trim())
-      if (lines.length > 0) {
-        return `<div class="thinking-process">${match}</div>`
+    // 找到最早出现的分析内容标志
+    let analysisStartIndex = -1
+    for (const pattern of analysisStartPatterns) {
+      const match = analysis.match(pattern)
+      if (match) {
+        const index = analysis.indexOf(match[0])
+        if (analysisStartIndex === -1 || index < analysisStartIndex) {
+          analysisStartIndex = index
+        }
       }
-      return match
-    })
+    }
+    
+    // 如果找到了分析内容开始位置，分割内容
+    if (analysisStartIndex > 0) {
+      const thinkingContent = analysis.substring(0, analysisStartIndex).trim()
+      const analysisContent = analysis.substring(analysisStartIndex).trim()
+      
+      console.log('思考过程内容:', thinkingContent.substring(0, 50) + '...')
+      console.log('分析内容开始:', analysisContent.substring(0, 50) + '...')
+      
+      // 包装思考过程
+      const wrappedThinking = `<div class="thinking-process">${thinkingContent}</div>`
+      
+      // 处理分析内容
+      formatted = wrappedThinking + '\n\n' + analysisContent
+    } else {
+      // 如果没找到明确的分割点，使用原来的关键词匹配方式
+      console.log('未找到明确的分割点，使用关键词匹配')
+      
+      // 精确的思考过程关键词 - 避免误匹配正文
+      const processKeywords = [
+        '用户要求我作为',
+        '让我仔细分析数据',
+        '关键数据提取：',
+        '关键要求：',
+        '分析数据：',
+        '提取数据：',
+        '推导过程：',
+        '分析过程：',
+        '处理步骤：',
+        '计算过程：',
+        '观察发现：',
+        '可以看出：',
+        '正在分析',
+        '开始处理',
+        '接下来我',
+        '思考过程',
+        '第一步',
+        '第二步',
+        '第三步',
+        '首先，我',
+        '其次，',
+        '然后，',
+        '通过分析',
+        '从数据中',
+        '根据分析',
+        '关键要求是',
+        '关键数据包括',
+        '让我仔细',
+        '需要直接输出',
+        '禁止展示',
+        '按照要求',
+        '分析数据发现',
+        '提取了以下',
+        '推导出',
+        '分析过程如下',
+        '处理步骤包括',
+        '计算得出',
+        '观察发现'
+      ]
+      
+      // 创建正则表达式来匹配包含这些关键词的段落
+      const keywordPattern = processKeywords.join('|')
+      const processPattern = new RegExp(
+        `(^.*(?:${keywordPattern}).*?(?:\\n|$))`,
+        'gim'
+      )
+      
+      // 将匹配到的思考过程内容用特殊样式包装
+      formatted = formatted.replace(processPattern, (match) => {
+        // 检查是否是完整的思考过程段落
+        const lines = match.split('\n').filter(line => line.trim())
+        if (lines.length > 0) {
+          return `<div class="thinking-process">${match}</div>`
+        }
+        return match
+      })
+    }
   }
   
   // 先处理代码块，避免被其他规则干扰
@@ -2353,28 +2350,28 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.analysis-content h1, .analysis-content h2, .analysis-content h3 {
+.analysis-content :deep(h1), .analysis-content :deep(h2), .analysis-content :deep(h3) {
   color: #333;
   margin: 16px 0 8px 0;
 }
 
-.analysis-content h1 {
+.analysis-content :deep(h1) {
   font-size: 20px;
   border-bottom: 2px solid #409EFF;
   padding-bottom: 8px;
 }
 
-.analysis-content h2 {
+.analysis-content :deep(h2) {
   font-size: 18px;
   border-bottom: 1px solid #e0e0e0;
   padding-bottom: 4px;
 }
 
-.analysis-content h3 {
+.analysis-content :deep(h3) {
   font-size: 16px;
 }
 
-.analysis-content p {
+.analysis-content :deep(p) {
   margin: 8px 0;
 }
 
