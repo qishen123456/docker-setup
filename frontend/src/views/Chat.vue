@@ -826,63 +826,121 @@ const formatAnalysis = (analysis) => {
   console.log('=== formatAnalysis 调试 ===')
   console.log('输入文本:', analysis.substring(0, 100) + '...')
   
-  // 识别并处理思考过程、数据提取、分析过程类内容
-  // 定义需要特殊处理的关键词模式（// 精确的思考过程关键词 - 避免误匹配正文
-  const processKeywords = [
-    '用户要求我作为',
-    '让我仔细分析数据',
-    '关键数据提取：',
-    '关键要求：',
-    '分析数据：',
-    '提取数据：',
-    '推导过程：',
-    '分析过程：',
-    '处理步骤：',
-    '计算过程：',
-    '观察发现：',
-    '可以看出：',
-    '正在分析',
-    '开始处理',
-    '接下来我',
-    '思考过程',
-    '第一步',
-    '第二步',
-    '第三步',
-    '首先，我',
-    '其次，',
-    '然后，',
-    '通过分析',
-    '从数据中',
-    '根据分析',
-    '关键要求是',
-    '关键数据包括',
-    '让我仔细',
-    '需要直接输出',
-    '禁止展示',
-    '按照要求',
-    '分析数据发现',
-    '提取了以下',
-    '推导出',
-    '分析过程如下',
-    '处理步骤包括',
-    '计算得出',
-    '观察发现'
-  ] // 创建正则表达式来匹配包含这些关键词的段落
-  const keywordPattern = processKeywords.join('|')
-  const processPattern = new RegExp(
-    `(^.*(?:${keywordPattern}).*?(?:\\n|$))`,
-    'gim'
-  )
+  // 更智能的分割方式：找到真正的分析内容开始位置
+  // 思考过程通常包含这些关键词，真正的分析从具体数据或报告标题开始
+  const thinkingEndPatterns = [
+    /(?:分析数据：|让我仔细分析数据：|接下来，|根据分析，|通过分析，|从数据中，)(.*?)(?=\n|$)/gim,
+    /(?:首先，|其次，|然后，|第一步，|第二步，|第三步，)(.*?)(?=\n|$)/gim,
+    /(?:用户要求我作为.*?，.*?分析。)(.*?)(?=\n|$)/gim
+  ]
   
-  // 将匹配到的思考过程内容用特殊样式包装
-  formatted = formatted.replace(processPattern, (match) => {
-    // 检查是否是完整的思考过程段落
-    const lines = match.split('\n').filter(line => line.trim())
-    if (lines.length > 0) {
-      return `<div class="thinking-process">${match}</div>`
+  // 找到思考过程结束位置
+  let thinkingEndIndex = -1
+  let analysisStartIndex = -1
+  
+  // 寻找真正的分析内容开始标志
+  const analysisStartPatterns = [
+    /商用事业部年度业绩复盘报告/,
+    /事业部总体业绩/,
+    /## 概述/,
+    /### /,
+    /## /,
+    /一、/,
+    /二、/,
+    /三、/,
+    /^\d+\./,
+    /根据数据分析/,
+    /从数据来看/,
+    /数据显示/
+  ]
+  
+  // 找到最早出现的分析内容标志
+  for (const pattern of analysisStartPatterns) {
+    const match = analysis.match(pattern)
+    if (match) {
+      const index = analysis.indexOf(match[0])
+      if (analysisStartIndex === -1 || index < analysisStartIndex) {
+        analysisStartIndex = index
+      }
     }
-    return match
-  })
+  }
+  
+  // 如果找到了分析内容开始位置，分割内容
+  if (analysisStartIndex > 0) {
+    const thinkingContent = analysis.substring(0, analysisStartIndex).trim()
+    const analysisContent = analysis.substring(analysisStartIndex).trim()
+    
+    console.log('思考过程内容:', thinkingContent.substring(0, 50) + '...')
+    console.log('分析内容开始:', analysisContent.substring(0, 50) + '...')
+    
+    // 包装思考过程
+    const wrappedThinking = `<div class="thinking-process">${thinkingContent}</div>`
+    
+    // 处理分析内容
+    formatted = wrappedThinking + '\n\n' + analysisContent
+  } else {
+    // 如果没找到明确的分割点，使用原来的关键词匹配方式
+    console.log('未找到明确的分割点，使用关键词匹配')
+    
+    // 精确的思考过程关键词 - 避免误匹配正文
+    const processKeywords = [
+      '用户要求我作为',
+      '让我仔细分析数据',
+      '关键数据提取：',
+      '关键要求：',
+      '分析数据：',
+      '提取数据：',
+      '推导过程：',
+      '分析过程：',
+      '处理步骤：',
+      '计算过程：',
+      '观察发现：',
+      '可以看出：',
+      '正在分析',
+      '开始处理',
+      '接下来我',
+      '思考过程',
+      '第一步',
+      '第二步',
+      '第三步',
+      '首先，我',
+      '其次，',
+      '然后，',
+      '通过分析',
+      '从数据中',
+      '根据分析',
+      '关键要求是',
+      '关键数据包括',
+      '让我仔细',
+      '需要直接输出',
+      '禁止展示',
+      '按照要求',
+      '分析数据发现',
+      '提取了以下',
+      '推导出',
+      '分析过程如下',
+      '处理步骤包括',
+      '计算得出',
+      '观察发现'
+    ]
+    
+    // 创建正则表达式来匹配包含这些关键词的段落
+    const keywordPattern = processKeywords.join('|')
+    const processPattern = new RegExp(
+      `(^.*(?:${keywordPattern}).*?(?:\\n|$))`,
+      'gim'
+    )
+    
+    // 将匹配到的思考过程内容用特殊样式包装
+    formatted = formatted.replace(processPattern, (match) => {
+      // 检查是否是完整的思考过程段落
+      const lines = match.split('\n').filter(line => line.trim())
+      if (lines.length > 0) {
+        return `<div class="thinking-process">${match}</div>`
+      }
+      return match
+    })
+  }
   
   // 先处理代码块，避免被其他规则干扰
   formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
