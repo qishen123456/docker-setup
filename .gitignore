@@ -1,0 +1,82 @@
+# 依赖目录
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+*.log
+logs/
+
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 配置文件（如果包含敏感信息）
+config.json
+secrets.json
+
+# 前端构建产物
+dist/
+build/
+.nuxt/
+.next/
+
+# Python相关
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 本地存储数据
+local_storage/
+*.local
+
+# 备份文件
+*.bak
+*.backup

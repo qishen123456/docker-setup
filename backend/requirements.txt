@@ -1,0 +1,32 @@
+# ===================================================
+# Vanna 智能问数系统 - 后端依赖
+# 安装命令（使用清华镜像加速）：
+# pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# ===================================================
+
+# Web 框架
+flask==3.0.3
+flask-cors==4.0.1
+
+# Vanna 核心（含 ChromaDB 向量存储）
+vanna[chromadb]==0.7.9
+
+# OpenAI 兼容 SDK（通义千问/DeepSeek/自定义第三方均使用此库）
+openai>=1.30.0
+
+# 数据处理
+pandas>=2.0.0
+plotly>=5.20.0
+
+# 飞书同步
+requests>=2.31.0
+schedule>=1.2.0
+
+# 数据库驱动（按需安装）
+pymysql>=1.1.0          # MySQL 支持
+psycopg2-binary>=2.9.0   # PostgreSQL 支持
+# pyodbc>=5.0.0         # SQL Server 支持（需本机装 ODBC Driver 17，已注释）
+
+# 其他工具
+python-dotenv>=1.0.0
+requests>=2.31.0

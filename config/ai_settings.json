@@ -1,0 +1,29 @@
+{
+  "models": [
+    {
+      "id": 1,
+      "name": "通义千问 qwen-max",
+      "provider": "custom",
+      "model": "qwen-max",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_b64": "c2stNzY1ODVhODcxMWY4NGQ0NWE2MGI5ZGMzNjQ5NzIxM2U=",
+      "is_active": true,
+      "is_default": false,
+      "created_at": "2026-03-21 18:52:37",
+      "updated_at": "2026-03-21 19:13:04"
+    },
+    {
+      "id": 4,
+      "name": "MiniMax-M2.5",
+      "provider": "custom",
+      "model": "MiniMax-M2.5",
+      "base_url": "https://api.edgefn.net/v1",
+      "api_key_b64": "c2stdHA3MjNRTmU1WWlrQThwQTdjQzg1MjU0NGRDMjQ3N2RCNjk4NWIwOTIwNTY1NzA3",
+      "is_active": true,
+      "is_default": true,
+      "created_at": "2026-03-27 15:05:13",
+      "updated_at": "2026-03-27 15:05:13"
+    }
+  ],
+  "next_id": 5
+}

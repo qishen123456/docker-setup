@@ -1,0 +1,21 @@
+{
+  "databases": [
+    {
+      "id": 5,
+      "name": "飞书多维表格",
+      "type": "postgresql",
+      "sqlite_path": "",
+      "host": "localhost",
+      "port": 5432,
+      "database_name": "feishu_dtable_sync",
+      "username": "postgres",
+      "password_b64": "MTIzNDU2",
+      "driver": "psycopg2",
+      "is_active": true,
+      "is_default": true,
+      "created_at": "2026-03-26 15:52:32",
+      "updated_at": "2026-03-26 19:50:02"
+    }
+  ],
+  "next_id": 6
+}
