@@ -149,7 +149,7 @@
                   </div>
 
                   <!-- 错误 -->
-                  <div v-else-if="msg.error" class="ai-error-body">
+                  <div v-else-if="msg.error && msg.error !== ''" class="ai-error-body">
                     <el-alert type="error" :description="msg.error" :closable="false" show-icon />
                     
                     <!-- SQL 展示（即使错误也显示） -->
