@@ -151,13 +151,6 @@
                   <!-- 错误 -->
                   <div v-else-if="msg.error && msg.error !== ''" class="ai-error-body">
                     <el-alert type="error" :description="msg.error" :closable="false" show-icon />
-                    <!-- 调试信息 -->
-                    <div style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-size: 12px;">
-                      <strong>调试信息:</strong><br>
-                      Error: "{{ msg.error }}" ({{ msg.error.length }} 字符)<br>
-                      Type: {{ typeof msg.error }}<br>
-                      Should show error: {{ msg.error && msg.error !== '' }}
-                    </div>
                     
                     <!-- SQL 展示（即使错误也显示） -->
                     <div v-if="msg.sql" class="sql-block">
@@ -179,16 +172,6 @@
 
                   <!-- 正常结果 -->
                   <div v-else class="ai-result-body">
-                    <!-- 调试信息 -->
-                    <div style="background: #e8f5e8; padding: 10px; margin: 10px 0; font-size: 12px;">
-                      <strong>正常结果调试信息:</strong><br>
-                      Error: "{{ msg.error }}" ({{ msg.error?.length || 0 }} 字符)<br>
-                      Type: {{ typeof msg.error }}<br>
-                      Should show error: {{ msg.error && msg.error !== '' }}<br>
-                      RowCount: {{ msg.row_count }}<br>
-                      Loading: {{ msg.loading }}
-                    </div>
-                    
                     <!-- 结果统计 -->
                     <div v-if="msg.row_count !== undefined" class="result-summary">
                       <el-icon><Memo /></el-icon> 
@@ -273,6 +256,18 @@
                       title="基于当前数据生成分析报告"
                     >
                       <el-icon><DataAnalysis /></el-icon> 生成分析报告
+                    </el-button>
+                    
+                    <!-- 暂停按钮 (生成中显示) -->
+                    <el-button 
+                      v-if="msg.analyzing"
+                      size="small" 
+                      link 
+                      type="danger" 
+                      @click="cancelAnalysisReport(msg)"
+                      title="暂停分析报告生成"
+                    >
+                      <el-icon><Close /></el-icon> 暂停生成
                     </el-button>
                   </div>
                 </div>
@@ -368,6 +363,7 @@ const hoveredMsgId = ref(null)
 const activeSteps = ref([]) // 默认全部收起
 let hideDelayTimer = null
 let currentAbortController = null
+let currentAnalysisAbortController = null // 分析报告的AbortController
 
 // 格式化时间显示
 const formatDuration = (ms) => {
@@ -728,9 +724,26 @@ const copyFeedback = (msg) => {
   ElMessage.success('调试信息已复制，请粘贴发送给助手')
 }
 
+// 暂停分析报告生成
+const cancelAnalysisReport = (msg) => {
+  if (currentAnalysisAbortController) {
+    currentAnalysisAbortController.abort()
+    currentAnalysisAbortController = null
+    
+    // 更新消息状态
+    msg.analyzing = false
+    
+    ElMessage.success('分析报告生成已取消')
+    saveLocalMessages()
+  }
+}
+
 // 生成分析报告
 const generateAnalysisReport = async (msg) => {
   try {
+    // 创建 AbortController 用于取消分析报告生成
+    currentAnalysisAbortController = new AbortController()
+    
     // 添加分析状态
     msg.analyzing = true
     msg.analysis = "" // 初始化空的分析内容
@@ -752,6 +765,7 @@ const generateAnalysisReport = async (msg) => {
     // 使用流式API
     await generateAnalysisStream(
       analysisData,
+      currentAnalysisAbortController.signal,
       // onContent - 接收到内容时调用
       (content) => {
         msg.analysis += content
@@ -773,12 +787,21 @@ const generateAnalysisReport = async (msg) => {
           data_preview: msg.rows?.slice(0, 5) || []
         }
         
+        currentAnalysisAbortController = null
         ElMessage.success('分析报告生成成功')
         saveLocalMessages()
       },
       // onError - 错误时调用
       (error) => {
         msg.analyzing = false
+        currentAnalysisAbortController = null
+        
+        // 检查是否是取消操作
+        if (error.name === 'AbortError') {
+          console.log('分析报告生成被用户取消')
+          return // 已经在cancelAnalysisReport中处理了
+        }
+        
         console.error('流式生成分析报告失败:', error)
         ElMessage.error('生成分析报告失败: ' + error)
       }
