@@ -827,8 +827,9 @@ const formatAnalysis = (analysis) => {
   ]
   
   // 创建正则表达式来匹配包含这些关键词的段落
+  const keywordPattern = processKeywords.join('|')
   const processPattern = new RegExp(
-    `(?:(?:${processKeywords.join('|')})[^\\n]*(?:\\n[^\\n]*)*)`,
+    `(?:(?:${keywordPattern})[^\\n]*(?:\\n[^\\n]*)*)`,
     'gi'
   )
   
