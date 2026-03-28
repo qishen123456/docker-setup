@@ -89,21 +89,18 @@
                       <span class="thinking-text">AI正在分析您的问题，通过多个步骤生成最准确的答案</span>
                     </div>
                     
-                    <!-- 横向步骤标签 - 紧凑显示 -->
-                    <div class="process-steps-compact">
+                    <!-- 横向步骤标签 - 文字紧凑显示 -->
+                    <div class="process-steps-text">
                       <div 
                         v-for="(step, idx) in msg.steps" 
                         :key="step.key"
-                        :class="['process-step-compact', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
+                        :class="['process-step-text', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
                         :title="`${step.name}: ${step.status === 'success' ? '完成' : step.status === 'skipped' ? '跳过' : step.status === 'error' ? '失败' : '进行中'}${step.duration ? ' (' + formatDuration(step.duration) + ')' : ''}`"
                       >
-                        <div class="step-indicator-compact">
-                          <el-icon v-if="step.status === 'waiting'" class="icon-waiting"><Clock /></el-icon>
-                          <el-icon v-else-if="step.status === 'running'" class="icon-running is-loading"><Loading /></el-icon>
-                          <el-icon v-else-if="step.status === 'success'" class="icon-success"><CircleCheck /></el-icon>
-                          <el-icon v-else-if="step.status === 'error'" class="icon-error"><CircleClose /></el-icon>
-                          <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped"><ArrowRight /></el-icon>
-                        </div>
+                        <span class="step-name-text">{{ step.name }}</span>
+                        <span v-if="step.duration" class="step-duration-text">{{ formatDuration(step.duration) }}</span>
+                        <span v-if="step.status === 'skipped'" class="step-skipped-text">跳过</span>
+                        <span v-if="idx < msg.steps.length - 1" class="step-separator">></span>
                       </div>
                     </div>
                     
@@ -1254,7 +1251,104 @@ onMounted(() => {
   transition: transform 0.2s ease;
 }
 
-/* 横向步骤标签 - 紧凑版本 */
+/* 横向步骤标签 - 文字紧凑版本 */
+.process-steps-text {
+  display: flex;
+  padding: 8px 16px;
+  gap: 4px;
+  background: #fff;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.process-steps-text::-webkit-scrollbar {
+  height: 3px;
+}
+
+.process-steps-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.process-steps-text::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 2px;
+}
+
+.process-step-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.process-step-text.step-waiting {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+}
+
+.process-step-text.step-running {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.process-step-text.step-success {
+  background: #f0fdf4;
+  border-color: #22c55e;
+  color: #16a34a;
+}
+
+.process-step-text.step-error {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+.process-step-text.step-skipped {
+  background: #fefce8;
+  border-color: #f59e0b;
+  color: #d97706;
+  opacity: 0.8;
+}
+
+.step-name-text {
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.step-duration-text {
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.step-skipped-text {
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.step-separator {
+  color: #94a3b8;
+  font-size: 12px;
+  margin: 0 2px;
+  opacity: 0.6;
+}
+
+/* 横向步骤标签 - 紧凑版本（保留） */
 .process-steps-compact {
   display: flex;
   padding: 8px 16px;
