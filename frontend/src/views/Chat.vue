@@ -698,7 +698,11 @@ const copyFeedback = (msg) => {
   if (msg.steps && msg.steps.length > 0) {
     feedbackText += `**处理步骤**:\n`
     msg.steps.forEach(s => {
-      feedbackText += `- ${s.title}: ${s.status === 'success' ? '✅' : '❌'} (${s.duration}ms)${s.message ? ' - ' + s.message : ''}\n`
+      const status = s.status === 'success' ? '✅' : s.status === 'error' ? '❌' : '⏳'
+      const duration = s.duration ? `${s.duration}ms` : 'nullms'
+      const name = s.name || 'undefined'
+      const content = s.content || ''
+      feedbackText += `- ${name}: ${status} (${duration})${content ? ' - ' + content : ''}\n`
     })
   }
   feedbackText += `\n*反馈来源: 前端可视化调试面板*`
@@ -990,8 +994,8 @@ const sendMessage = async () => {
       messages.value[idx].error = err.message || '请求失败'
       
       // 标记当前步骤为错误
-      if (aiMsg.steps && aiMsg.currentStep >= 0) {
-        const currentStep = aiMsg.steps[aiMsg.currentStep]
+      if (messages.value[idx].steps && messages.value[idx].currentStep >= 0) {
+        const currentStep = messages.value[idx].steps[messages.value[idx].currentStep]
         if (currentStep) {
           currentStep.status = STEP_STATUS.ERROR
         }
