@@ -2214,38 +2214,39 @@ onMounted(() => {
   border: 1px solid #e9ecef;
 }
 
-/* 思考过程样式 */
-.thinking-process {
-  color: #9ca3af;
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 8px 12px;
-  background: #f9fafb;
-  border-left: 3px solid #d1d5db;
-  border-radius: 4px;
-  margin: 8px 0;
-  font-style: italic;
+/* 思考过程样式 - 提高优先级 */
+.analysis-content .thinking-process {
+  color: #9ca3af !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  padding: 8px 12px !important;
+  background: #f9fafb !important;
+  border-left: 3px solid #d1d5db !important;
+  border-radius: 4px !important;
+  margin: 8px 0 !important;
+  font-style: italic !important;
+  opacity: 0.8 !important;
 }
 
-.thinking-process p {
-  margin: 0;
-  color: #9ca3af;
-  font-size: 12px;
+.analysis-content .thinking-process p {
+  margin: 0 !important;
+  color: #9ca3af !important;
+  font-size: 12px !important;
 }
 
-.thinking-process strong,
-.thinking-process em {
-  color: #6b7280;
+.analysis-content .thinking-process strong,
+.analysis-content .thinking-process em {
+  color: #6b7280 !important;
 }
 
-.thinking-process code {
-  background: #f3f4f6;
-  color: #6b7280;
+.analysis-content .thinking-process code {
+  background: #f3f4f6 !important;
+  color: #6b7280 !important;
 }
 
-.thinking-process blockquote {
-  border-left-color: #d1d5db;
-  color: #9ca3af;
+.analysis-content .thinking-process blockquote {
+  border-left-color: #d1d5db !important;
+  color: #9ca3af !important;
 }
 
 .analysis-content {
