@@ -172,51 +172,40 @@
                   <!-- 正常结果 -->
                   <div v-else class="ai-result-body">
                     <!-- 结果统计 -->
-                    <div v-if="msg.row_count !== undefined" class="result-summary">
+                    <div v-if="msg.row_count !== undefined" class="result-summary-compact">
                       <el-icon><Memo /></el-icon> 
-                      查询结果：共找到 <strong>{{ msg.row_count }}</strong> 条相关数据
+                      查询结果：<strong>{{ msg.row_count }}</strong> 条
                     </div>
 
-                    <!-- SQL 展示 -->
-                    <div v-if="msg.sql" class="sql-block">
-                      <el-collapse v-model="activeSteps">
-                        <el-collapse-item name="sql">
-                          <template #title>
-                            <span class="sql-label">生成的 SQL 语句</span>
-                          </template>
-                          <div class="sql-content">
-                            <div class="sql-actions">
-                              <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
-                            </div>
-                            <pre class="sql-code">{{ msg.sql }}</pre>
-                          </div>
-                        </el-collapse-item>
-                      </el-collapse>
+                    <!-- SQL 展示 - 紧凑版本 -->
+                    <div v-if="msg.sql" class="sql-block-compact">
+                      <div class="sql-header-compact">
+                        <span class="sql-label-compact">SQL</span>
+                        <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
+                      </div>
+                      <div class="sql-content-compact">
+                        <pre class="sql-code-compact">{{ msg.sql }}</pre>
+                      </div>
                     </div>
 
-                    <!-- 结果表格 -->
-                    <div v-if="msg.row_count > 0" class="data-block">
-                      <el-collapse v-model="activeSteps">
-                        <el-collapse-item name="data">
-                          <template #title>
-                            <span class="data-label">返回数据 ({{ msg.row_count }}条)</span>
-                          </template>
-                          <div class="data-content">
-                            <div class="data-actions">
-                              <el-button link type="primary" size="small" @click="copyData(msg)">复制数据</el-button>
-                            </div>
-                            <el-table :data="msg.rows" border stripe size="small" max-height="300">
-                              <el-table-column 
-                                v-for="column in msg.columns" 
-                                :key="column"
-                                :prop="column"
-                                :label="column"
-                                show-overflow-tooltip
-                              />
-                            </el-table>
-                          </div>
-                        </el-collapse-item>
-                      </el-collapse>
+                    <!-- 结果表格 - 紧凑版本 -->
+                    <div v-if="msg.row_count > 0" class="data-block-compact">
+                      <div class="data-header-compact">
+                        <span class="data-label-compact">数据 ({{ msg.row_count }}条)</span>
+                        <el-button link type="primary" size="small" @click="copyData(msg)">复制</el-button>
+                      </div>
+                      <div class="data-content-compact">
+                        <el-table :data="msg.rows" border stripe size="small" max-height="200">
+                          <el-table-column 
+                            v-for="column in msg.columns" 
+                            :key="column"
+                            :prop="column"
+                            :label="column"
+                            show-overflow-tooltip
+                            min-width="80"
+                          />
+                        </el-table>
+                      </div>
                     </div>
 
                     <!-- 无数据提示 -->
@@ -1327,7 +1316,111 @@ onMounted(() => {
   font-size: 10px;
 }
 
-/* 横向步骤标签 - 原版本（保留用于详情展开） */
+/* 紧凑版本样式 */
+.result-summary-compact {
+  padding: 6px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sql-block-compact {
+  background: #1e293b;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #334155;
+}
+
+.sql-header-compact {
+  padding: 6px 12px;
+  background: #334155;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #475569;
+}
+
+.sql-label-compact {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.sql-content-compact {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.sql-code-compact {
+  margin: 0;
+  padding: 8px 12px;
+  background: transparent;
+  color: #e2e8f0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.data-block-compact {
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.data-header-compact {
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.data-label-compact {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.data-content-compact {
+  padding: 8px;
+}
+
+.data-content-compact :deep(.el-table) {
+  font-size: 11px;
+}
+
+.data-content-compact :deep(.el-table th) {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+.data-content-compact :deep(.el-table td) {
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.data-content-compact :deep(.el-table .cell) {
+  padding: 0 6px;
+  line-height: 1.2;
+}
+
+/* 原版本样式（保留用于错误状态） */
 .process-steps {
   display: flex;
   padding: 16px 20px;
