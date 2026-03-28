@@ -817,6 +817,31 @@ const formatAnalysis = (analysis) => {
   
   let formatted = analysis
   
+  // 识别并处理思考过程、数据提取、分析过程类内容
+  // 定义需要特殊处理的关键词模式
+  const processKeywords = [
+    '数据提取', '思考', '分析过程', '推导', '计算', '处理步骤',
+    '第一步', '第二步', '第三步', '首先', '其次', '然后', '最后',
+    '正在分析', '开始处理', '接下来', '我需要', '我发现',
+    '通过分析', '根据数据', '从结果中', '可以看出', '观察发现'
+  ]
+  
+  // 创建正则表达式来匹配包含这些关键词的段落
+  const processPattern = new RegExp(
+    `(?:(?:${processKeywords.join('|')})[^\\n]*(?:\\n[^\\n]*)*)`,
+    'gi'
+  )
+  
+  // 将匹配到的思考过程内容用特殊样式包装
+  formatted = formatted.replace(processPattern, (match) => {
+    // 检查是否是完整的思考过程段落
+    const lines = match.split('\n').filter(line => line.trim())
+    if (lines.length > 0) {
+      return `<div class="thinking-process">${match}</div>`
+    }
+    return match
+  })
+  
   // 先处理代码块，避免被其他规则干扰
   formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
     return `<pre class="code-block"><code class="language-${lang || 'text'}">${code.trim()}</code></pre>`
@@ -897,6 +922,8 @@ const formatAnalysis = (analysis) => {
   formatted = formatted.replace(/(<\/blockquote>)<\/p>/g, '$1')
   formatted = formatted.replace(/<p>(<ul>)/g, '$1')
   formatted = formatted.replace(/(<\/ul>)<\/p>/g, '$1')
+  formatted = formatted.replace(/<p>(<div class="thinking-process">)/g, '$1')
+  formatted = formatted.replace(/(<\/div>)<\/p>/g, '$1')
   
   return formatted
 }
@@ -2168,6 +2195,40 @@ onMounted(() => {
   border-radius: 8px;
   padding: 16px;
   border: 1px solid #e9ecef;
+}
+
+/* 思考过程样式 */
+.thinking-process {
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-left: 3px solid #d1d5db;
+  border-radius: 4px;
+  margin: 8px 0;
+  font-style: italic;
+}
+
+.thinking-process p {
+  margin: 0;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.thinking-process strong,
+.thinking-process em {
+  color: #6b7280;
+}
+
+.thinking-process code {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.thinking-process blockquote {
+  border-left-color: #d1d5db;
+  color: #9ca3af;
 }
 
 .analysis-content {
