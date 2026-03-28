@@ -813,6 +813,11 @@ const generateAnalysisReport = async (msg) => {
 
 // 格式化分析报告（支持Markdown）
 const formatAnalysis = (analysis) => {
+  // 强制调试信息
+  console.error('🚨 formatAnalysis 函数被调用了！')
+  console.error('🚨 输入参数:', analysis ? '有内容' : '空的')
+  console.error('🚨 输入长度:', analysis ? analysis.length : 0)
+  
   if (!analysis) return ''
   
   let formatted = analysis
