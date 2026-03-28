@@ -151,6 +151,13 @@
                   <!-- 错误 -->
                   <div v-else-if="msg.error && msg.error !== ''" class="ai-error-body">
                     <el-alert type="error" :description="msg.error" :closable="false" show-icon />
+                    <!-- 调试信息 -->
+                    <div style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-size: 12px;">
+                      <strong>调试信息:</strong><br>
+                      Error: "{{ msg.error }}" ({{ msg.error.length }} 字符)<br>
+                      Type: {{ typeof msg.error }}<br>
+                      Should show error: {{ msg.error && msg.error !== '' }}
+                    </div>
                     
                     <!-- SQL 展示（即使错误也显示） -->
                     <div v-if="msg.sql" class="sql-block">
@@ -172,6 +179,16 @@
 
                   <!-- 正常结果 -->
                   <div v-else class="ai-result-body">
+                    <!-- 调试信息 -->
+                    <div style="background: #e8f5e8; padding: 10px; margin: 10px 0; font-size: 12px;">
+                      <strong>正常结果调试信息:</strong><br>
+                      Error: "{{ msg.error }}" ({{ msg.error?.length || 0 }} 字符)<br>
+                      Type: {{ typeof msg.error }}<br>
+                      Should show error: {{ msg.error && msg.error !== '' }}<br>
+                      RowCount: {{ msg.row_count }}<br>
+                      Loading: {{ msg.loading }}
+                    </div>
+                    
                     <!-- 结果统计 -->
                     <div v-if="msg.row_count !== undefined" class="result-summary">
                       <el-icon><Memo /></el-icon> 
