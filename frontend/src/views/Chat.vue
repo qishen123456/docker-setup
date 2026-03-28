@@ -341,8 +341,7 @@ import { sendChat, getVannaStatus, getChatHistory, generateAnalysis, generateAna
 const STEPS = [
   { key: 'init', name: '初始化', icon: 'Search', description: '初始化AI引擎' },
   { key: 'sql', name: 'SQL生成', icon: 'Document', description: '自然语言转SQL' },
-  { key: 'execute', name: '执行查询', icon: 'CaretRight', description: '执行SQL查询' },
-  { key: 'data', name: '数据处理', icon: 'DataBoard', description: '处理查询结果' }
+  { key: 'execute', name: '执行查询', icon: 'CaretRight', description: '执行SQL查询' }
 ]
 
 // 步骤状态枚举
@@ -963,7 +962,7 @@ const sendMessage = async () => {
         let stepKey = 'data' // 默认
         if (backendStep.title.includes('初始化')) {
           stepKey = 'init'
-        } else if (backendStep.title.includes('SQL')) {
+        } else if (backendStep.title.includes('SQL') || backendStep.title.includes('自然语言')) {
           stepKey = 'sql'
         } else if (backendStep.title.includes('执行')) {
           stepKey = 'execute'
