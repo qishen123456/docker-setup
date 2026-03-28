@@ -817,6 +817,10 @@ const formatAnalysis = (analysis) => {
   
   let formatted = analysis
   
+  // 调试信息
+  console.log('=== formatAnalysis 调试 ===')
+  console.log('输入文本:', analysis.substring(0, 100) + '...')
+  
   // 识别并处理思考过程、数据提取、分析过程类内容
   // 定义需要特殊处理的关键词模式（更精确的关键词）
   const processKeywords = [
@@ -926,6 +930,12 @@ const formatAnalysis = (analysis) => {
   formatted = formatted.replace(/(<\/ul>)<\/p>/g, '$1')
   formatted = formatted.replace(/<p>(<div class="thinking-process">)/g, '$1')
   formatted = formatted.replace(/(<\/div>)<\/p>/g, '$1')
+  
+  // 调试信息
+  console.log('是否包含thinking-process:', formatted.includes('thinking-process'))
+  console.log('匹配数量:', (formatted.match(/thinking-process/g) || []).length)
+  console.log('输出文本:', formatted.substring(0, 200) + '...')
+  console.log('=== formatAnalysis 调试结束 ===')
   
   return formatted
 }
