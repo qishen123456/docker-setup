@@ -2214,8 +2214,8 @@ onMounted(() => {
   border: 1px solid #e9ecef;
 }
 
-/* 思考过程样式 - 提高优先级 */
-.analysis-content .thinking-process {
+/* 思考过程样式 - 使用:deep()穿透scoped样式 */
+.analysis-content :deep(.thinking-process) {
   color: #9ca3af !important;
   font-size: 12px !important;
   line-height: 1.4 !important;
@@ -2228,23 +2228,23 @@ onMounted(() => {
   opacity: 0.8 !important;
 }
 
-.analysis-content .thinking-process p {
+.analysis-content :deep(.thinking-process p) {
   margin: 0 !important;
   color: #9ca3af !important;
   font-size: 12px !important;
 }
 
-.analysis-content .thinking-process strong,
-.analysis-content .thinking-process em {
+.analysis-content :deep(.thinking-process strong),
+.analysis-content :deep(.thinking-process em) {
   color: #6b7280 !important;
 }
 
-.analysis-content .thinking-process code {
+.analysis-content :deep(.thinking-process code) {
   background: #f3f4f6 !important;
   color: #6b7280 !important;
 }
 
-.analysis-content .thinking-process blockquote {
+.analysis-content :deep(.thinking-process blockquote) {
   border-left-color: #d1d5db !important;
   color: #9ca3af !important;
 }
