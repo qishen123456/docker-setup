@@ -340,7 +340,10 @@ import { sendChat, getVannaStatus, getChatHistory, generateAnalysis, generateAna
 // 步骤定义 - 与后端步骤对应
 const STEPS = [
   { key: 'init', name: '初始化', icon: 'Search', description: '初始化AI引擎' },
-  { key: 'sql', name: 'SQL生成', icon: 'Document', description: '自然语言转SQL' },
+  { key: 'parse', name: '解析问题', icon: 'Document', description: '解析用户问题' },
+  { key: 'match', name: '匹配训练', icon: 'Link', description: '匹配训练问答对' },
+  { key: 'generate', name: '生成SQL', icon: 'Edit', description: '大模型生成SQL' },
+  { key: 'sql_complete', name: 'SQL完成', icon: 'Check', description: 'SQL生成完成' },
   { key: 'execute', name: '执行查询', icon: 'CaretRight', description: '执行SQL查询' }
 ]
 
@@ -959,15 +962,19 @@ const sendMessage = async () => {
     if (result.steps && result.steps.length > 0) {
       result.steps.forEach((backendStep, index) => {
         // 根据后端步骤标题映射到前端步骤key
-        let stepKey = 'data' // 默认
+        let stepKey = 'execute' // 默认
         if (backendStep.title.includes('初始化')) {
           stepKey = 'init'
-        } else if (backendStep.title.includes('SQL') || backendStep.title.includes('自然语言')) {
-          stepKey = 'sql'
+        } else if (backendStep.title.includes('解析问题')) {
+          stepKey = 'parse'
+        } else if (backendStep.title.includes('匹配训练')) {
+          stepKey = 'match'
+        } else if (backendStep.title.includes('大模型生成SQL')) {
+          stepKey = 'generate'
+        } else if (backendStep.title.includes('SQL生成完成')) {
+          stepKey = 'sql_complete'
         } else if (backendStep.title.includes('执行')) {
           stepKey = 'execute'
-        } else if (backendStep.title.includes('数据')) {
-          stepKey = 'data'
         }
         
         const status = backendStep.status === 'success' ? STEP_STATUS.SUCCESS : 

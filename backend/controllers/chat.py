@@ -46,8 +46,16 @@ def chat():
         if error:
             return jsonify({"error": error, "question": question, "steps": steps}), 503
 
-        # Step 1: 生成 SQL（优先使用训练数据）
+        # Step 1: 解析问题
         step1_start = time.time()
+        steps.append({
+            "title": "解析问题",
+            "duration": round((time.time() - step1_start) * 1000, 2),
+            "status": "success"
+        })
+        
+        # Step 2: 匹配训练问答对
+        step2_start = time.time()
         sql = None
         sql_source = "大模型生成"
         
@@ -80,6 +88,12 @@ def chat():
                     sql = matched_sql
                     sql_source = "训练数据匹配"
                     print(f"✅ 从训练数据找到匹配问题: {question}")
+                    steps.append({
+                        "title": "匹配训练问答对",
+                        "duration": round((time.time() - step2_start) * 1000, 2),
+                        "status": "success",
+                        "content": f"找到匹配的训练数据，SQL长度: {len(sql)}"
+                    })
                 else:
                     # 尝试模糊匹配（相似度高的）
                     for _, row in training_data.iterrows():
@@ -118,23 +132,53 @@ def chat():
                         sql = matched_sql
                         sql_source = "训练数据模糊匹配"
                         print(f"✅ 从训练数据模糊匹配: {question}")
+                        steps.append({
+                            "title": "匹配训练问答对",
+                            "duration": round((time.time() - step2_start) * 1000, 2),
+                            "status": "success",
+                            "content": f"模糊匹配成功，重叠度: {overlap_ratio:.2f}"
+                        })
+                    else:
+                        steps.append({
+                            "title": "匹配训练问答对",
+                            "duration": round((time.time() - step2_start) * 1000, 2),
+                            "status": "success",
+                            "content": "未找到匹配的训练数据"
+                        })
+            else:
+                steps.append({
+                    "title": "匹配训练问答对",
+                    "duration": round((time.time() - step2_start) * 1000, 2),
+                    "status": "success",
+                    "content": "无训练数据"
+                })
             
             # 如果没有找到匹配的训练数据，使用大模型生成
             if not sql:
+                # Step 3: 大模型生成SQL
+                step3_start = time.time()
                 sql = vn.generate_sql(question=question)
                 sql_source = "大模型生成"
                 print(f"🤖 使用大模型生成SQL: {question}")
+                steps.append({
+                    "title": "大模型生成SQL",
+                    "duration": round((time.time() - step3_start) * 1000, 2),
+                    "status": "success",
+                    "content": f"生成SQL长度: {len(sql)}"
+                })
             
+            # Step 4: SQL生成完成
+            step4_start = time.time()
             steps.append({
-                "title": f"自然语言转 SQL ({sql_source})",
-                "duration": round((time.time() - step1_start) * 1000, 2),
+                "title": f"SQL生成完成 ({sql_source})",
+                "duration": round((time.time() - step4_start) * 1000, 2),
                 "status": "success",
                 "content": sql
             })
             
         except Exception as e:
             steps.append({
-                "title": "自然语言转 SQL",
+                "title": "生成SQL",
                 "duration": round((time.time() - step1_start) * 1000, 2),
                 "status": "error",
                 "message": str(e)
@@ -150,13 +194,13 @@ def chat():
                 "steps": steps
             }), 400
 
-        # Step 2: 执行 SQL
-        step2_start = time.time()
+        # Step 5: 执行 SQL
+        step5_start = time.time()
         try:
             df = vn.run_sql(sql=sql)
             steps.append({
-                "title": "执行 SQL 查询",
-                "duration": round((time.time() - step2_start) * 1000, 2),
+                "title": "执行SQL查询",
+                "duration": round((time.time() - step5_start) * 1000, 2),
                 "status": "success"
             })
             
