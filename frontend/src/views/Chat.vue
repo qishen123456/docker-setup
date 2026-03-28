@@ -133,39 +133,37 @@
 
                   <!-- 正常结果 -->
                   <div v-else class="ai-result-body">
-                    <!-- 结果统计 -->
-                    <div v-if="msg.row_count !== undefined" class="result-summary-compact">
-                      <el-icon><Memo /></el-icon> 
-                      查询结果：<strong>{{ msg.row_count }}</strong> 条
-                    </div>
-
-                    <!-- SQL 和数据展示 - 一行紧凑显示 -->
-                    <div class="sql-data-row">
-                      <!-- SQL 切换 -->
-                      <div v-if="msg.sql" class="sql-data-item">
+                    <!-- 结果统计和操作按钮 -->
+                    <div v-if="msg.row_count !== undefined" class="result-summary-with-actions">
+                      <div class="result-info">
+                        <el-icon><Memo /></el-icon> 
+                        查询结果：<strong>{{ msg.row_count }}</strong> 条
+                      </div>
+                      <div class="result-actions">
+                        <!-- SQL 切换 -->
                         <el-button 
+                          v-if="msg.sql"
                           link 
                           type="primary" 
                           size="small" 
                           @click="toggleSqlDisplay(msg)"
-                          class="sql-data-toggle"
+                          class="action-btn"
                         >
                           <el-icon><Document /></el-icon>
                           SQL {{ msg.showSql ? '▼' : '▶' }}
                         </el-button>
-                      </div>
-                      
-                      <!-- 数据切换 -->
-                      <div v-if="msg.row_count > 0" class="sql-data-item">
+                        
+                        <!-- 数据切换 -->
                         <el-button 
+                          v-if="msg.row_count > 0"
                           link 
                           type="primary" 
                           size="small" 
                           @click="toggleDataDisplay(msg)"
-                          class="sql-data-toggle"
+                          class="action-btn"
                         >
                           <el-icon><Grid /></el-icon>
-                          数据 ({{ msg.row_count }}条) {{ msg.showData ? '▼' : '▶' }}
+                          数据 {{ msg.showData ? '▼' : '▶' }}
                         </el-button>
                       </div>
                     </div>
@@ -988,6 +986,7 @@ const sendMessage = async () => {
     // 更新消息内容
     const idx = messages.value.findIndex(m => m.id === aiMsg.id)
     if (idx !== -1) {
+      const currentMsg = messages.value[idx]
       messages.value[idx] = {
         ...aiMsg,
         loading: false,
@@ -996,7 +995,10 @@ const sendMessage = async () => {
         rows: result.rows || [],
         row_count: result.row_count,
         error: result.error,
-        total_duration: result.total_duration
+        total_duration: result.total_duration,
+        // 保留显示状态
+        showSql: currentMsg.showSql !== undefined ? currentMsg.showSql : false,
+        showData: currentMsg.showData !== undefined ? currentMsg.showData : false
       }
     }
     
@@ -1442,7 +1444,52 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-/* SQL和数据一行显示 */
+/* 结果统计和操作按钮合并 */
+.result-summary-with-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.result-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #3b82f6;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+/* SQL和数据一行显示（保留但可能不再使用） */
 .sql-data-row {
   display: flex;
   gap: 8px;
