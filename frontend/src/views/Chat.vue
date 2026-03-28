@@ -139,51 +139,68 @@
                       查询结果：<strong>{{ msg.row_count }}</strong> 条
                     </div>
 
-                    <!-- SQL 展示 - 紧凑版本，默认收起 -->
-                    <div v-if="msg.sql" class="sql-block-compact">
-                      <el-collapse v-model="activeSteps">
-                        <el-collapse-item name="sql">
-                          <template #title>
-                            <span class="sql-label-compact">SQL</span>
-                          </template>
-                          <div class="sql-content-compact">
-                            <div class="sql-actions-compact">
-                              <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
-                            </div>
-                            <pre class="sql-code-compact">{{ msg.sql }}</pre>
-                          </div>
-                        </el-collapse-item>
-                      </el-collapse>
+                    <!-- SQL 和数据展示 - 一行紧凑显示 -->
+                    <div class="sql-data-row">
+                      <!-- SQL 切换 -->
+                      <div v-if="msg.sql" class="sql-data-item">
+                        <el-button 
+                          link 
+                          type="primary" 
+                          size="small" 
+                          @click="toggleSqlDisplay(msg)"
+                          class="sql-data-toggle"
+                        >
+                          <el-icon><Document /></el-icon>
+                          SQL {{ msg.showSql ? '▼' : '▶' }}
+                        </el-button>
+                      </div>
+                      
+                      <!-- 数据切换 -->
+                      <div v-if="msg.row_count > 0" class="sql-data-item">
+                        <el-button 
+                          link 
+                          type="primary" 
+                          size="small" 
+                          @click="toggleDataDisplay(msg)"
+                          class="sql-data-toggle"
+                        >
+                          <el-icon><Grid /></el-icon>
+                          数据 ({{ msg.row_count }}条) {{ msg.showData ? '▼' : '▶' }}
+                        </el-button>
+                      </div>
                     </div>
 
-                    <!-- 结果表格 - 紧凑版本，默认收起 -->
-                    <div v-if="msg.row_count > 0" class="data-block-compact">
-                      <el-collapse v-model="activeSteps">
-                        <el-collapse-item name="data">
-                          <template #title>
-                            <span class="data-label-compact">数据 ({{ msg.row_count }}条)</span>
-                          </template>
-                          <div class="data-content-compact">
-                            <div class="data-actions-compact">
-                              <el-button link type="primary" size="small" @click="copyData(msg)">复制</el-button>
-                            </div>
-                            <el-table :data="msg.rows" border stripe size="small" max-height="200">
-                              <el-table-column 
-                                v-for="column in msg.columns" 
-                                :key="column"
-                                :prop="column"
-                                :label="column"
-                                show-overflow-tooltip
-                                min-width="80"
-                              />
-                            </el-table>
-                          </div>
-                        </el-collapse-item>
-                      </el-collapse>
-                    </div>
+                    <!-- SQL 展开内容 -->
+                    <el-collapse-transition>
+                      <div v-if="msg.sql && msg.showSql" class="sql-expanded">
+                        <div class="sql-actions">
+                          <el-button link type="primary" size="small" @click="copySQL(msg.sql)">复制</el-button>
+                        </div>
+                        <pre class="sql-code">{{ msg.sql }}</pre>
+                      </div>
+                    </el-collapse-transition>
+
+                    <!-- 数据展开内容 -->
+                    <el-collapse-transition>
+                      <div v-if="msg.row_count > 0 && msg.showData" class="data-expanded">
+                        <div class="data-actions">
+                          <el-button link type="primary" size="small" @click="copyData(msg)">复制数据</el-button>
+                        </div>
+                        <el-table :data="msg.rows" border stripe size="small" max-height="200">
+                          <el-table-column 
+                            v-for="column in msg.columns" 
+                            :key="column"
+                            :prop="column"
+                            :label="column"
+                            show-overflow-tooltip
+                            min-width="80"
+                          />
+                        </el-table>
+                      </div>
+                    </el-collapse-transition>
 
                     <!-- 无数据提示 -->
-                    <div v-else-if="msg.row_count === 0" class="no-data">
+                    <div v-if="msg.row_count === 0" class="no-data">
                       查询成功，但没有找到匹配数据
                     </div>
 
@@ -296,7 +313,7 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { DocumentCopy, Edit, RefreshRight, Close, DataAnalysis, ChatDotRound, Timer, Clock, Loading, CircleCheck, CircleClose, Memo, ArrowDown, ArrowUp, ArrowRight } from '@element-plus/icons-vue'
+import { DocumentCopy, Edit, RefreshRight, Close, DataAnalysis, ChatDotRound, Timer, Clock, Loading, CircleCheck, CircleClose, Memo, ArrowDown, ArrowUp, ArrowRight, Document, Grid } from '@element-plus/icons-vue'
 import { sendChat, getVannaStatus, getChatHistory, generateAnalysis, generateAnalysisStream } from '../api/index.js'
 
 // 步骤定义 - 与后端步骤对应
@@ -355,6 +372,26 @@ const initializeMessageSteps = (msg) => {
     startTime: null
   }))
   msg.currentStep = 0
+  msg.showSql = false // 默认收起SQL
+  msg.showData = false // 默认收起数据
+}
+
+// 切换SQL显示
+const toggleSqlDisplay = (msg) => {
+  msg.showSql = !msg.showSql
+  if (msg.showSql) {
+    msg.showData = false // 显示SQL时收起数据
+  }
+  saveLocalMessages()
+}
+
+// 切换数据显示
+const toggleDataDisplay = (msg) => {
+  msg.showData = !msg.showData
+  if (msg.showData) {
+    msg.showSql = false // 显示数据时收起SQL
+  }
+  saveLocalMessages()
 }
 
 // 更新步骤状态
@@ -1405,7 +1442,104 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-/* 紧凑版本样式 */
+/* SQL和数据一行显示 */
+.sql-data-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.sql-data-item {
+  display: inline-block;
+}
+
+.sql-data-toggle {
+  font-size: 11px;
+  padding: 2px 6px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #3b82f6;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.sql-data-toggle:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.sql-expanded {
+  background: #1e293b;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #334155;
+}
+
+.sql-actions {
+  text-align: right;
+  padding: 6px 12px;
+  background: #334155;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 1px solid #475569;
+}
+
+.sql-code {
+  margin: 0;
+  padding: 12px;
+  background: transparent;
+  color: #e2e8f0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.data-expanded {
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.data-actions {
+  text-align: right;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.data-expanded :deep(.el-table) {
+  font-size: 11px;
+}
+
+.data-expanded :deep(.el-table th) {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.data-expanded :deep(.el-table td) {
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.data-expanded :deep(.el-table .cell) {
+  padding: 0 8px;
+  line-height: 1.3;
+}
+
+/* 紧凑版本样式（保留用于错误状态） */
 .result-summary-compact {
   padding: 6px 12px;
   background: #f8fafc;
