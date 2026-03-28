@@ -972,7 +972,8 @@ const sendMessage = async () => {
         }
         
         const status = backendStep.status === 'success' ? STEP_STATUS.SUCCESS : 
-                     backendStep.status === 'error' ? STEP_STATUS.ERROR : STEP_STATUS.WAITING
+                     backendStep.status === 'error' ? STEP_STATUS.ERROR : 
+                     backendStep.status === 'running' ? STEP_STATUS.RUNNING : STEP_STATUS.WAITING
         
         updateStepStatus(aiMsg, stepKey, status, backendStep.message || backendStep.title)
         
