@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>思考过程过滤测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-input {
+            width: 100%;
+            height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+        
+        .test-button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .test-button:hover {
+            background: #3366cc;
+        }
+        
+        .result-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        
+        /* 思考过程样式 */
+        .thinking-process {
+            color: #9ca3af;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 8px 12px;
+            background: #f9fafb;
+            border-left: 3px solid #d1d5db;
+            border-radius: 4px;
+            margin: 8px 0;
+            font-style: italic;
+        }
+
+        .thinking-process p {
+            margin: 0;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .thinking-process strong,
+        .thinking-process em {
+            color: #6b7280;
+        }
+
+        .thinking-process code {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .thinking-process blockquote {
+            border-left-color: #d1d5db;
+            color: #9ca3af;
+        }
+        
+        .analysis-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+            padding: 16px;
+            border-radius: 6px;
+            border-left: 4px solid #409EFF;
+        }
+        
+        .analysis-content h1 {
+            font-size: 20px;
+            border-bottom: 2px solid #409EFF;
+            padding-bottom: 8px;
+            color: #1a1a1a;
+        }
+        
+        .analysis-content h2 {
+            font-size: 18px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 6px;
+            color: #333;
+        }
+        
+        .analysis-content h3 {
+            font-size: 16px;
+            color: #444;
+        }
+        
+        .analysis-content p {
+            margin: 8px 0;
+        }
+        
+        .debug-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="test-title">思考过程过滤功能测试</h1>
+        
+        <div>
+            <label for="testInput">测试文本（包含思考过程和分析内容）：</label>
+            <textarea id="testInput" class="test-input"># 数据分析报告
+
+我正在分析这些数据，首先需要提取关键信息。
+
+通过分析，我发现了以下模式...
+
+## 总体概述
+
+根据查询结果，本次共获取到10条记录，主要特征如下：
+
+1. 数据完整性较好
+2. 时间分布均匀
+3. 数值范围合理
+
+## 详细分析
+
+从结果中可以看出，数据呈现以下特点：
+
+- 第一步：数据清洗完成
+- 第二步：特征提取完成
+- 第三步：模式识别完成
+
+观察发现，这些数据具有明显的季节性特征。
+
+正在处理统计信息...
+
+## 结论
+
+根据数据分析，我们得出以下结论。</textarea>
+            
+            <button class="test-button" onclick="testFilter()">测试过滤功能</button>
+        </div>
+        
+        <div>
+            <h3>过滤结果：</h3>
+            <div id="result" class="result-container">
+                点击"测试过滤功能"按钮查看结果
+            </div>
+        </div>
+        
+        <div id="debugInfo" class="debug-info" style="display: none;">
+            <h4>调试信息：</h4>
+            <div id="debugContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // 格式化分析报告（支持Markdown）
+        const formatAnalysis = (analysis) => {
+            if (!analysis) return ''
+            
+            let formatted = analysis
+            
+            // 识别并处理思考过程、数据提取、分析过程类内容
+            // 定义需要特殊处理的关键词模式
+            const processKeywords = [
+                '数据提取', '思考', '分析过程', '推导', '计算', '处理步骤',
+                '第一步', '第二步', '第三步', '首先', '其次', '然后', '最后',
+                '正在分析', '开始处理', '接下来', '我需要', '我发现',
+                '通过分析', '根据数据', '从结果中', '可以看出', '观察发现'
+            ]
+            
+            // 创建正则表达式来匹配包含这些关键词的段落
+            const keywordPattern = processKeywords.join('|')
+            const processPattern = new RegExp(
+                `(?:(?:${keywordPattern})[^\\n]*(?:\\n[^\\n]*)*)`,
+                'gi'
+            )
+            
+            // 调试信息
+            console.log('关键词模式:', keywordPattern)
+            console.log('正则表达式:', processPattern)
+            
+            // 将匹配到的思考过程内容用特殊样式包装
+            formatted = formatted.replace(processPattern, (match) => {
+                console.log('匹配到内容:', match)
+                // 检查是否是完整的思考过程段落
+                const lines = match.split('\n').filter(line => line.trim())
+                if (lines.length > 0) {
+                    return `<div class="thinking-process">${match}</div>`
+                }
+                return match
+            })
+            
+            // 处理标题
+            formatted = formatted
+                .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+            
+            // 处理粗体和斜体
+            formatted = formatted
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            
+            // 处理列表
+            formatted = formatted
+                .replace(/^[\*\-\+] (.+)$/gm, '<li>$1</li>')
+                .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+            
+            // 将连续的li包装在ul中
+            formatted = formatted.replace(/(<li>.*?<\/li>(\s*<li>.*?<\/li>)*)/g, '<ul>$1</ul>')
+            
+            // 处理换行
+            formatted = formatted.replace(/\n\n/g, '</p><p>')
+            formatted = formatted.replace(/\n/g, '<br>')
+            
+            // 包装在段落中
+            if (!formatted.startsWith('<') && !formatted.startsWith('<h')) {
+                formatted = `<p>${formatted}</p>`
+            }
+            
+            // 清理多余的标签
+            formatted = formatted.replace(/<p><\/p>/g, '')
+            formatted = formatted.replace(/<p>(<h[1-6]>)/g, '$1')
+            formatted = formatted.replace(/(<\/h[1-6]>)<\/p>/g, '$1')
+            formatted = formatted.replace(/<p>(<ul>)/g, '$1')
+            formatted = formatted.replace(/(<\/ul>)<\/p>/g, '$1')
+            formatted = formatted.replace(/<p>(<div class="thinking-process">)/g, '$1')
+            formatted = formatted.replace(/(<\/div>)<\/p>/g, '$1')
+            
+            return formatted
+        }
+        
+        function testFilter() {
+            const input = document.getElementById('testInput').value
+            const result = formatAnalysis(input)
+            const resultDiv = document.getElementById('result')
+            const debugDiv = document.getElementById('debugInfo')
+            const debugContent = document.getElementById('debugContent')
+            
+            // 显示结果
+            resultDiv.innerHTML = `<div class="analysis-content">${result}</div>`
+            
+            // 显示调试信息
+            debugDiv.style.display = 'block'
+            debugContent.innerHTML = `
+                <p><strong>原始文本长度:</strong> ${input.length}</p>
+                <p><strong>处理后长度:</strong> ${result.length}</p>
+                <p><strong>是否包含thinking-process:</strong> ${result.includes('thinking-process')}</p>
+                <p><strong>匹配的关键词数量:</strong> ${(result.match(/thinking-process/g) || []).length}</p>
+            `
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('页面加载完成，准备测试')
+        }
+    </script>
+</body>
+</html>

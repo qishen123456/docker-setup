@@ -42,6 +42,10 @@
           <el-icon><Document /></el-icon>
           <template #title>分析提示词</template>
         </el-menu-item>
+        <el-menu-item index="/sql-prompts">
+          <el-icon><Setting /></el-icon>
+          <template #title>SQL提示词</template>
+        </el-menu-item>
         <el-menu-item index="/feishu-sync">
           <el-icon><Connection /></el-icon>
           <template #title>飞书同步</template>
@@ -180,6 +184,8 @@ const titleMap = {
   '/databases': '数据源管理',
   '/ai-models': 'AI模型配置',
   '/training': '训练数据',
+  '/analysis-prompts': '分析提示词',
+  '/sql-prompts': 'SQL提示词',
   '/chat': '智能聊天',
   '/feishu-sync': '飞书同步'
 }

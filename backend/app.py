@@ -38,6 +38,7 @@ from controllers.feishu_sync import feishu_bp
 from controllers.smart_chat import smart_chat_bp
 from controllers.analysis import analysis_bp
 from controllers.analysis_thinking import analysis_thinking_bp
+from controllers.sql_prompt import sql_prompt_bp
 
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(datasources_bp)
@@ -48,6 +49,7 @@ app.register_blueprint(feishu_bp)
 app.register_blueprint(smart_chat_bp)
 app.register_blueprint(analysis_bp)
 app.register_blueprint(analysis_thinking_bp)
+app.register_blueprint(sql_prompt_bp)
 
 
 # ─────────────────────────────────────────────────────────

@@ -199,10 +199,28 @@ class DataSourceRouter:
     
     def _generate_system_prompt(self, source_config):
         """为数据源生成特定的系统提示"""
+        from sql_prompt_manager import sql_prompt_manager
+        
         name = source_config['name']
         db_type = source_config['type']
         
-        prompt = f"""你是一个SQL专家。重要提示：
+        # 根据数据源类型选择合适的提示词
+        prompt_id = 'default'
+        if '飞书' in name or 'feishu' in name.lower():
+            prompt_id = 'feishu_specific'
+        elif 'crm' in name.lower() or '客户' in name:
+            prompt_id = 'crm_specific'
+        
+        # 使用SQL提示词管理器获取格式化的提示词
+        prompt = sql_prompt_manager.format_prompt(
+            prompt_id=prompt_id,
+            database_name=name,
+            database_type=db_type
+        )
+        
+        # 如果没有找到特定提示词，使用默认逻辑
+        if not prompt or prompt == sql_prompt_manager.get_prompt('default').get('content', ''):
+            prompt = f"""你是一个SQL专家。重要提示：
 1. 当前连接的数据库是：{name} ({db_type})
 2. 请根据这个数据源的特点生成SQL
 3. 如果是飞书数据，注意字段是JSONB格式

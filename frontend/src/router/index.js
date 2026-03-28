@@ -32,6 +32,12 @@ const routes = [
     meta: { title: '分析提示词' }
   },
   {
+    path: '/sql-prompts',
+    name: 'SqlPrompts',
+    component: () => import('../views/SqlPromptManager.vue'),
+    meta: { title: 'SQL提示词管理' }
+  },
+  {
     path: '/chat',
     name: 'Chat',
     component: () => import('../views/Chat.vue'),

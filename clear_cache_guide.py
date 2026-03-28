@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+print("🔧 前端缓存清理和调试指南")
+print("="*50)
+
+print("🚀 问题可能的原因:")
+print("1. 浏览器缓存了旧的JavaScript文件")
+print("2. 前端开发服务器没有重新编译")
+print("3. Vue的热重载没有生效")
+print("4. 本地存储中的旧数据")
+print()
+
+print("🔧 解决步骤:")
+print()
+
+print("1. 强制刷新浏览器:")
+print("   • Chrome: Ctrl+Shift+R (Windows) 或 Cmd+Shift+R (Mac)")
+print("   • Firefox: Ctrl+F5 (Windows) 或 Cmd+Shift+R (Mac)")
+print("   • 或者打开开发者工具，右键刷新按钮选择'清空缓存并硬性重新加载'")
+print()
+
+print("2. 清除浏览器存储:")
+print("   • 打开开发者工具 (F12)")
+print("   • Application 标签")
+print("   • Local Storage → 清除")
+print("   • Session Storage → 清除")
+print("   • Cookies → 清除 (可选)")
+print()
+
+print("3. 重启前端开发服务器:")
+print("   • 停止当前的前端服务 (Ctrl+C)")
+print("   • 重新运行: npm run dev")
+print("   • 等待编译完成")
+print()
+
+print("4. 检查前端控制台:")
+print("   • 打开开发者工具 → Console")
+print("   • 查看是否有JavaScript错误")
+print("   • 输入以下命令检查数据:")
+print("     console.log('最新消息:', messages.value[messages.value.length - 1])")
+print()
+
+print("5. 验证修复是否生效:")
+print("   • 发送一个新的查询")
+print("   • 查看是否还显示错误状态")
+print("   • 检查Network面板的API响应")
+print()
+
+print("🐛 调试命令 (在浏览器Console中执行):")
+print()
+
+print("// 检查最新消息的error字段")
+print("const lastMsg = messages.value[messages.value.length - 1];")
+print("console.log('Error字段:', lastMsg.error);")
+print("console.log('Error类型:', typeof lastMsg.error);")
+print("console.log('Error长度:', lastMsg.error?.length);")
+print()
+
+print("// 检查消息状态")
+print("console.log('Loading:', lastMsg.loading);")
+print("console.log('Cancelled:', lastMsg.cancelled);")
+print("console.log('RowCount:', lastMsg.row_count);")
+print()
+
+print("// 手动测试判断逻辑")
+print("const shouldShowError = lastMsg.error && lastMsg.error !== '';")
+print("console.log('应该显示错误:', shouldShowError);")
+print()
+
+print("📱 如果问题仍然存在:")
+print("1. 检查前端是否真的重新编译了")
+print("2. 查看Network面板，确认请求的是新的JS文件")
+print("3. 尝试无痕模式打开浏览器")
+print("4. 清除DNS缓存: ipconfig /flushdns (Windows)")
+print()
+
+print("💡 额外的调试方法:")
+print("• 在模板中添加调试信息: {{ msg.error }}")
+print("• 临时移除其他条件判断进行测试")
+print("• 检查Vue DevTools中的组件状态")
+print()
+
+print("="*50)
+print("🎯 按照以上步骤操作，问题应该能解决！")
+print("="*50)
