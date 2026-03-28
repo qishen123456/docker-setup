@@ -1546,6 +1546,27 @@ onMounted(() => {
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #1e293b;
+}
+
+.sql-code::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sql-code::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.sql-code::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+.sql-code::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .data-expanded {
