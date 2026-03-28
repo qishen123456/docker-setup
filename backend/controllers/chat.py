@@ -166,6 +166,14 @@ def chat():
                     "status": "success",
                     "content": f"生成SQL长度: {len(sql)}"
                 })
+            else:
+                # 如果找到了匹配的训练数据，标记大模型生成SQL为跳过
+                steps.append({
+                    "title": "大模型生成SQL",
+                    "duration": 0,
+                    "status": "skipped",
+                    "content": "已找到训练数据匹配，跳过大模型生成"
+                })
             
             # Step 4: SQL生成完成
             step4_start = time.time()

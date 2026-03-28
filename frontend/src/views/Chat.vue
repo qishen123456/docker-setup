@@ -95,6 +95,7 @@
                           <el-icon v-else-if="step.status === 'running'" class="icon-running is-loading"><Loading /></el-icon>
                           <el-icon v-else-if="step.status === 'success'" class="icon-success"><CircleCheck /></el-icon>
                           <el-icon v-else-if="step.status === 'error'" class="icon-error"><CircleClose /></el-icon>
+                          <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped"><ArrowRight /></el-icon>
                         </div>
                         <div class="step-info">
                           <div class="step-name">{{ step.name }}</div>
@@ -334,7 +335,7 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { DocumentCopy, Edit, RefreshRight, Close, DataAnalysis, ChatDotRound, Timer, Clock, Loading, CircleCheck, CircleClose, Memo, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { DocumentCopy, Edit, RefreshRight, Close, DataAnalysis, ChatDotRound, Timer, Clock, Loading, CircleCheck, CircleClose, Memo, ArrowDown, ArrowUp, ArrowRight } from '@element-plus/icons-vue'
 import { sendChat, getVannaStatus, getChatHistory, generateAnalysis, generateAnalysisStream } from '../api/index.js'
 
 // 步骤定义 - 与后端步骤对应
@@ -352,7 +353,8 @@ const STEP_STATUS = {
   WAITING: 'waiting',    // 等待中
   RUNNING: 'running',    // 进行中
   SUCCESS: 'success',    // 成功
-  ERROR: 'error'        // 失败
+  ERROR: 'error',        // 失败
+  SKIPPED: 'skipped'      // 跳过
 }
 
 const messages = ref([])
@@ -979,7 +981,8 @@ const sendMessage = async () => {
         
         const status = backendStep.status === 'success' ? STEP_STATUS.SUCCESS : 
                      backendStep.status === 'error' ? STEP_STATUS.ERROR : 
-                     backendStep.status === 'running' ? STEP_STATUS.RUNNING : STEP_STATUS.WAITING
+                     backendStep.status === 'running' ? STEP_STATUS.RUNNING : 
+                     backendStep.status === 'skipped' ? STEP_STATUS.SKIPPED : STEP_STATUS.WAITING
         
         updateStepStatus(aiMsg, stepKey, status, backendStep.message || backendStep.title)
         
@@ -1304,6 +1307,12 @@ onMounted(() => {
   border-color: #ef4444;
 }
 
+.process-step.step-skipped {
+  background: #fefce8;
+  border-color: #f59e0b;
+  opacity: 0.8;
+}
+
 .step-indicator {
   width: 16px;
   height: 16px;
@@ -1330,6 +1339,11 @@ onMounted(() => {
 
 .icon-error {
   color: #ef4444;
+  font-size: 14px;
+}
+
+.icon-skipped {
+  color: #f59e0b;
   font-size: 14px;
 }
 
