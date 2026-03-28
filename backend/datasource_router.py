@@ -313,7 +313,7 @@ class DataSourceRouter:
                     common_words = set(question_lower.split()) & set(train_question.split())
                     if len(common_words) >= 2:  # 至少有2个共同词
                         similarity = len(common_words) / max(len(question_lower.split()), len(train_question.split()))
-                        if similarity > 0.3:  # 相似度超过30%
+                        if similarity > 0.5:  # 相似度超过50%
                             similar_matches.append((idx, similarity, row))
                 
                 # 按相似度排序
@@ -329,8 +329,8 @@ class DataSourceRouter:
                     print(f"   相似度: {best_match[1]:.2f}")
                     print(f"   SQL长度: {len(matched_sql)} 字符")
                     
-                    # 如果相似度很高（>0.7），直接使用训练数据
-                    if best_match[1] > 0.7:
+                    # 如果相似度很高（>0.95），直接使用训练数据
+                    if best_match[1] > 0.95:
                         print(f"   ✅ 相似度很高，使用训练数据")
                         
                         # 执行匹配的SQL
