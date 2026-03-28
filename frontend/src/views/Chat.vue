@@ -363,7 +363,6 @@ const hoveredMsgId = ref(null)
 const activeSteps = ref([]) // 默认全部收起
 let hideDelayTimer = null
 let currentAbortController = null
-let currentAnalysisAbortController = null // 分析报告的AbortController
 
 // 格式化时间显示
 const formatDuration = (ms) => {
@@ -726,24 +725,15 @@ const copyFeedback = (msg) => {
 
 // 暂停分析报告生成
 const cancelAnalysisReport = (msg) => {
-  if (currentAnalysisAbortController) {
-    currentAnalysisAbortController.abort()
-    currentAnalysisAbortController = null
-    
-    // 更新消息状态
-    msg.analyzing = false
-    
-    ElMessage.success('分析报告生成已取消')
-    saveLocalMessages()
-  }
+  // 简单的UI状态停止（API不支持真正的取消）
+  msg.analyzing = false
+  ElMessage.success('分析报告生成已取消')
+  saveLocalMessages()
 }
 
 // 生成分析报告
 const generateAnalysisReport = async (msg) => {
   try {
-    // 创建 AbortController 用于取消分析报告生成
-    currentAnalysisAbortController = new AbortController()
-    
     // 添加分析状态
     msg.analyzing = true
     msg.analysis = "" // 初始化空的分析内容
@@ -765,7 +755,6 @@ const generateAnalysisReport = async (msg) => {
     // 使用流式API
     await generateAnalysisStream(
       analysisData,
-      currentAnalysisAbortController.signal,
       // onContent - 接收到内容时调用
       (content) => {
         msg.analysis += content
@@ -787,21 +776,12 @@ const generateAnalysisReport = async (msg) => {
           data_preview: msg.rows?.slice(0, 5) || []
         }
         
-        currentAnalysisAbortController = null
         ElMessage.success('分析报告生成成功')
         saveLocalMessages()
       },
       // onError - 错误时调用
       (error) => {
         msg.analyzing = false
-        currentAnalysisAbortController = null
-        
-        // 检查是否是取消操作
-        if (error.name === 'AbortError') {
-          console.log('分析报告生成被用户取消')
-          return // 已经在cancelAnalysisReport中处理了
-        }
-        
         console.error('流式生成分析报告失败:', error)
         ElMessage.error('生成分析报告失败: ' + error)
       }
