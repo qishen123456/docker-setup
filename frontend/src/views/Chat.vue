@@ -208,7 +208,7 @@
                         <el-icon><DataAnalysis /></el-icon>
                         <span style="margin-left: 8px">数据分析报告</span>
                       </el-divider>
-                      <div class="analysis-content" v-html="formatMarkdown(msg.analysis)"></div>
+                      <div class="analysis-content" v-html="formatAnalysis(msg.analysis)"></div>
                     </div>
                   </div>
 
@@ -342,7 +342,8 @@ const history = ref([])
 const hoveredMsgId = ref(null)
 const activeSteps = ref([]) // 默认全部收起
 let hideDelayTimer = null
-let currentAbortController = null
+let currentAbortController = null // 用于取消聊天请求
+let currentAnalysisAbortController = null // 用于取消分析报告请求
 
 // 格式化时间显示
 const formatDuration = (ms) => {
@@ -717,9 +718,22 @@ const copyFeedback = (msg) => {
 }
 
 // 暂停分析报告生成
+// 取消分析报告生成
 const cancelAnalysisReport = (msg) => {
-  // 简单的UI状态停止（API不支持真正的取消）
+  // 检查是否有正在进行的分析
+  if (currentAnalysisAbortController) {
+    currentAnalysisAbortController.abort()
+    currentAnalysisAbortController = null
+  }
+  
+  // 停止分析状态
   msg.analyzing = false
+  
+  // 如果分析内容为空或很少，完全清除
+  if (!msg.analysis || msg.analysis.trim().length < 10) {
+    msg.analysis = null
+  }
+  
   ElMessage.success('分析报告生成已取消')
   saveLocalMessages()
 }
@@ -730,6 +744,9 @@ const generateAnalysisReport = async (msg) => {
     // 添加分析状态
     msg.analyzing = true
     msg.analysis = "" // 初始化空的分析内容
+    
+    // 创建AbortController
+    currentAnalysisAbortController = new AbortController()
     
     // 查找对应的用户问题
     const userMsg = messages.value.find(m => m.id === msg.id - 1)
@@ -750,6 +767,11 @@ const generateAnalysisReport = async (msg) => {
       analysisData,
       // onContent - 接收到内容时调用
       (content) => {
+        // 检查是否已被取消
+        if (currentAnalysisAbortController?.signal.aborted) {
+          return
+        }
+        
         msg.analysis += content
         // 滚动到底部
         nextTick(() => {
@@ -759,25 +781,27 @@ const generateAnalysisReport = async (msg) => {
         })
       },
       // onDone - 完成时调用
-      (fullAnalysis) => {
+      () => {
         msg.analyzing = false
-        msg.analysis = fullAnalysis
-        msg.analysis_summary = {
-          question: question,
-          row_count: msg.rows?.length || 0,
-          columns: msg.columns || [],
-          data_preview: msg.rows?.slice(0, 5) || []
-        }
-        
-        ElMessage.success('分析报告生成成功')
+        currentAnalysisAbortController = null
         saveLocalMessages()
       },
       // onError - 错误时调用
       (error) => {
         msg.analyzing = false
-        console.error('流式生成分析报告失败:', error)
-        ElMessage.error('生成分析报告失败: ' + error)
-      }
+        currentAnalysisAbortController = null
+        
+        // 检查是否是取消操作
+        if (error.name === 'AbortError') {
+          ElMessage.info('分析报告生成已取消')
+        } else {
+          console.error('流式生成分析报告失败:', error)
+          ElMessage.error('生成分析报告失败: ' + (error.message || '未知错误'))
+        }
+        
+        saveLocalMessages()
+      },
+      currentAnalysisAbortController.signal
     )
     
   } catch (error) {
