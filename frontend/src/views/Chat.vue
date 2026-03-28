@@ -83,23 +83,20 @@
                       </el-button>
                     </div>
                     
-                    <!-- 横向步骤标签 -->
-                    <div class="process-steps">
+                    <!-- 横向步骤标签 - 紧凑显示 -->
+                    <div class="process-steps-compact">
                       <div 
                         v-for="(step, idx) in msg.steps" 
                         :key="step.key"
-                        :class="['process-step', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
+                        :class="['process-step-compact', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
+                        :title="`${step.name}: ${step.status === 'success' ? '完成' : step.status === 'skipped' ? '跳过' : step.status === 'error' ? '失败' : '进行中'}${step.duration ? ' (' + formatDuration(step.duration) + ')' : ''}`"
                       >
-                        <div class="step-indicator">
+                        <div class="step-indicator-compact">
                           <el-icon v-if="step.status === 'waiting'" class="icon-waiting"><Clock /></el-icon>
                           <el-icon v-else-if="step.status === 'running'" class="icon-running is-loading"><Loading /></el-icon>
                           <el-icon v-else-if="step.status === 'success'" class="icon-success"><CircleCheck /></el-icon>
                           <el-icon v-else-if="step.status === 'error'" class="icon-error"><CircleClose /></el-icon>
                           <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped"><ArrowRight /></el-icon>
-                        </div>
-                        <div class="step-info">
-                          <div class="step-name">{{ step.name }}</div>
-                          <div v-if="step.duration" class="step-time">{{ formatDuration(step.duration) }}</div>
                         </div>
                       </div>
                     </div>
@@ -108,24 +105,25 @@
                     <el-collapse-transition>
                       <div v-show="msg.showThinkingDetail" class="process-details">
                         <div class="details-content">
-                          <div 
-                            v-for="(step, idx) in msg.steps" 
-                            :key="step.key"
-                            class="detail-item"
-                          >
-                            <div class="detail-header">
-                              <div class="detail-status">
-                                <el-icon v-if="step.status === 'success'" class="status-success"><CircleCheck /></el-icon>
-                                <el-icon v-else-if="step.status === 'error'" class="status-error"><CircleClose /></el-icon>
-                                <el-icon v-else class="status-waiting"><Clock /></el-icon>
+                          <!-- 使用原来的完整步骤显示 -->
+                          <div class="process-steps">
+                            <div 
+                              v-for="(step, idx) in msg.steps" 
+                              :key="step.key"
+                              :class="['process-step', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
+                            >
+                              <div class="step-indicator">
+                                <el-icon v-if="step.status === 'waiting'" class="icon-waiting"><Clock /></el-icon>
+                                <el-icon v-else-if="step.status === 'running'" class="icon-running is-loading"><Loading /></el-icon>
+                                <el-icon v-else-if="step.status === 'success'" class="icon-success"><CircleCheck /></el-icon>
+                                <el-icon v-else-if="step.status === 'error'" class="icon-error"><CircleClose /></el-icon>
+                                <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped"><ArrowRight /></el-icon>
                               </div>
-                              <div class="detail-title">
-                                <span class="detail-name">{{ step.name }}</span>
-                                <span class="detail-desc">{{ step.description }}</span>
-                                <span v-if="step.duration" class="detail-duration">{{ formatDuration(step.duration) }}</span>
+                              <div class="step-info">
+                                <div class="step-name">{{ step.name }}</div>
+                                <div v-if="step.duration" class="step-time">{{ formatDuration(step.duration) }}</div>
                               </div>
                             </div>
-                            <div v-if="step.content" class="detail-content">{{ step.content }}</div>
                           </div>
                         </div>
                       </div>
@@ -1249,7 +1247,87 @@ onMounted(() => {
   transition: transform 0.2s ease;
 }
 
-/* 横向步骤标签 */
+/* 横向步骤标签 - 紧凑版本 */
+.process-steps-compact {
+  display: flex;
+  padding: 8px 16px;
+  gap: 4px;
+  background: #fff;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.process-steps-compact::-webkit-scrollbar {
+  height: 3px;
+}
+
+.process-steps-compact::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.process-steps-compact::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 2px;
+}
+
+.process-step-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  min-width: 20px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.process-step-compact.step-waiting {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.process-step-compact.step-running {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.process-step-compact.step-success {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.process-step-compact.step-error {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+.process-step-compact.step-skipped {
+  background: #fefce8;
+  border-color: #f59e0b;
+  opacity: 0.8;
+}
+
+.step-indicator-compact {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-indicator-compact .el-icon {
+  font-size: 10px;
+}
+
+/* 横向步骤标签 - 原版本（保留用于详情展开） */
 .process-steps {
   display: flex;
   padding: 16px 20px;
