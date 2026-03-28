@@ -68,19 +68,6 @@
                         <span>思考过程</span>
                         <el-tag v-if="msg.total_duration" size="small" type="info">{{ formatDuration(msg.total_duration) }}</el-tag>
                       </div>
-                      <el-button 
-                        link 
-                        type="primary" 
-                        size="small" 
-                        @click="toggleThinkingDetail(msg)"
-                        class="detail-toggle"
-                      >
-                        {{ msg.showThinkingDetail ? '收起详情' : '查看详情' }}
-                        <el-icon class="toggle-icon">
-                          <ArrowDown v-if="!msg.showThinkingDetail" />
-                          <ArrowUp v-else />
-                        </el-icon>
-                      </el-button>
                     </div>
                     
                     <!-- 思考过程说明 -->
@@ -103,34 +90,6 @@
                         <span v-if="idx < msg.steps.length - 1" class="step-separator">></span>
                       </div>
                     </div>
-                    
-                    <!-- 详细信息展开区域 -->
-                    <el-collapse-transition>
-                      <div v-show="msg.showThinkingDetail" class="process-details">
-                        <div class="details-content">
-                          <!-- 使用原来的完整步骤显示 -->
-                          <div class="process-steps">
-                            <div 
-                              v-for="(step, idx) in msg.steps" 
-                              :key="step.key"
-                              :class="['process-step', `step-${step.status}`, { 'step-active': msg.currentStep === idx && step.status === 'running' }]"
-                            >
-                              <div class="step-indicator">
-                                <el-icon v-if="step.status === 'waiting'" class="icon-waiting"><Clock /></el-icon>
-                                <el-icon v-else-if="step.status === 'running'" class="icon-running is-loading"><Loading /></el-icon>
-                                <el-icon v-else-if="step.status === 'success'" class="icon-success"><CircleCheck /></el-icon>
-                                <el-icon v-else-if="step.status === 'error'" class="icon-error"><CircleClose /></el-icon>
-                                <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped"><ArrowRight /></el-icon>
-                              </div>
-                              <div class="step-info">
-                                <div class="step-name">{{ step.name }}</div>
-                                <div v-if="step.duration" class="step-time">{{ formatDuration(step.duration) }}</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </el-collapse-transition>
                   </div>
 
                   <!-- 加载中 -->
@@ -386,12 +345,6 @@ const formatDuration = (ms) => {
   }
 }
 
-// 切换思考过程详情显示
-const toggleThinkingDetail = (msg) => {
-  msg.showThinkingDetail = !msg.showThinkingDetail
-  saveLocalMessages()
-}
-
 // 初始化消息步骤
 const initializeMessageSteps = (msg) => {
   msg.steps = STEPS.map(step => ({
@@ -402,7 +355,6 @@ const initializeMessageSteps = (msg) => {
     startTime: null
   }))
   msg.currentStep = 0
-  msg.showThinkingDetail = false // 默认收起详情
 }
 
 // 更新步骤状态
