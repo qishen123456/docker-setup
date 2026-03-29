@@ -10,6 +10,10 @@ from vanna.chromadb import ChromaDB_VectorStore
 from openai import OpenAI
 import os
 
+# 禁用代理设置
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -43,7 +47,8 @@ class OpenAICompatibleLLM(VannaBase):
             import httpx
             # 创建自定义HTTP客户端，禁用代理
             http_client = httpx.Client(
-                timeout=30.0  # 恢复到30秒
+                timeout=30.0,  # 恢复到30秒
+                follow_redirects=True
             )
             self.client = OpenAI(
                 api_key=api_key,

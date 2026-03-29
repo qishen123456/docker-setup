@@ -23,8 +23,8 @@ init_default_configs()
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False  # 支持中文 JSON 输出
 
-# 启用 CORS（允许前端 5173 和 5174 端口访问）
-CORS(app, origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"])
+# 启用 CORS（允许前端 5173、5174 和 5175 端口访问）
+CORS(app, origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://127.0.0.1:5175"])
 
 # ─────────────────────────────────────────────────────────
 # 注册路由蓝图
