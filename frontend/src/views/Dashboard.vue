@@ -67,7 +67,7 @@
             <el-button type="primary" block @click="goToChat">🚀 开始智能问答</el-button>
             <el-button block @click="router.push('/databases')">🔗 配置数据库</el-button>
             <el-button block @click="router.push('/ai-models')">🤖 设置AI模型</el-button>
-            <el-button block @click="router.push('/training')">📚 添加训练数据</el-button>
+            <el-button block @click="router.push('/datasets')">📚 数据集书架维护</el-button>
           </div>
         </el-card>
       </el-col>

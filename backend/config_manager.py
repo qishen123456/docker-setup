@@ -58,8 +58,19 @@ def read_json(filename: str) -> dict:
     filepath = _path(filename)
     if not os.path.exists(filepath):
         return {}
-    with open(filepath, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    encodings = ['utf-8', 'utf-8-sig', 'gb18030', 'gbk']
+    last_error = None
+    for encoding in encodings:
+        try:
+            with open(filepath, 'r', encoding=encoding) as f:
+                return json.load(f)
+        except UnicodeDecodeError as e:
+            last_error = e
+            continue
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+    raise ValueError(f"无法读取配置文件 {filepath}: {last_error}")
 
 
 def write_json(filename: str, data: dict):

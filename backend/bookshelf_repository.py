@@ -1,0 +1,260 @@
+import os
+import re
+from typing import Any, Dict, List
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+try:
+    from .config_manager import decode_secret, get_default_datasource, get_datasources
+except ImportError:
+    from config_manager import decode_secret, get_default_datasource, get_datasources
+
+
+class BookshelfConfigurationError(Exception):
+    pass
+
+
+class BookshelfRepository:
+    """Load dataset-isolated Bookshelf metadata from PostgreSQL."""
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def _pick_metadata_datasource() -> Dict[str, Any]:
+        default_ds = get_default_datasource()
+        if default_ds and default_ds.get("type") == "postgresql":
+            return default_ds
+
+        for item in get_datasources():
+            if item.get("is_active") and item.get("type") == "postgresql":
+                return {
+                    **item,
+                    "password": item.get("password") or decode_secret(item.get("password_b64", "")),
+                }
+
+        raise BookshelfConfigurationError(
+            "No active PostgreSQL datasource found. Please configure one in 数据源管理 and set it active."
+        )
+
+    def _connect(self):
+        datasource = self._pick_metadata_datasource()
+        try:
+            return psycopg2.connect(
+                host=datasource.get("host", "localhost"),
+                port=int(datasource.get("port", 5432) or 5432),
+                database=datasource.get("database_name", ""),
+                user=datasource.get("username", ""),
+                password=datasource.get("password", ""),
+                connect_timeout=8,
+            )
+        except UnicodeDecodeError as exc:
+            raise BookshelfConfigurationError(
+                "PostgreSQL connection failed. Please confirm PostgreSQL service is started and "
+                "the datasource host/port/user/password are correct."
+            ) from exc
+        except Exception as exc:
+            raise BookshelfConfigurationError(f"PostgreSQL connection failed: {exc}") from exc
+
+    def ensure_schema(self) -> None:
+        migration_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "migrations",
+            "20260330_bookshelf_schema.sql",
+        )
+        if not os.path.exists(migration_path):
+            raise BookshelfConfigurationError(f"Migration file not found: {migration_path}")
+
+        with self._connect() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT to_regclass('public.bs_datasets') AS table_name;")
+                row = cur.fetchone()
+                if row and row.get("table_name"):
+                    return
+
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                with open(migration_path, "r", encoding="utf-8") as file:
+                    raw_sql = file.read()
+                sql_lines = []
+                for line in raw_sql.splitlines():
+                    marker = line.strip().upper()
+                    if marker in ("BEGIN;", "COMMIT;"):
+                        continue
+                    sql_lines.append(line)
+                cur.execute("\n".join(sql_lines))
+
+    def is_ready(self) -> bool:
+        sql = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'bs_datasets'
+        ) AS exists;
+        """
+        try:
+            with self._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql)
+                row = cur.fetchone()
+                return bool(row and row["exists"])
+        except Exception:
+            return False
+
+    def get_agent1_catalog(self) -> List[Dict[str, Any]]:
+        sql = """
+        SELECT
+            d.id,
+            d.dataset_code,
+            d.dataset_name,
+            d.business_domain,
+            d.source_id,
+            d.description,
+            COALESCE(
+                ARRAY_AGG(s.synonym) FILTER (WHERE s.synonym IS NOT NULL),
+                ARRAY[]::TEXT[]
+            ) AS synonyms
+        FROM bs_datasets d
+        LEFT JOIN bs_dataset_synonyms s ON s.dataset_id = d.id
+        WHERE d.is_active = TRUE
+        GROUP BY d.id
+        ORDER BY d.id;
+        """
+        with self._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_dataset_context(
+        self, dataset_id: int, question: str, top_k_samples: int = 5
+    ) -> Dict[str, Any]:
+        with self._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, dataset_code, dataset_name, business_domain, source_id, description
+                FROM bs_datasets
+                WHERE id = %s AND is_active = TRUE;
+                """,
+                (dataset_id,),
+            )
+            dataset = cur.fetchone()
+            if not dataset:
+                raise ValueError(f"Dataset not found or inactive: {dataset_id}")
+
+            cur.execute(
+                """
+                SELECT id, version, title, content, redline_rules
+                FROM bs_lld_documents
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY version DESC, updated_at DESC
+                LIMIT 1;
+                """,
+                (dataset_id,),
+            )
+            lld = cur.fetchone() or {}
+
+            cur.execute(
+                """
+                SELECT table_name, column_name, jsonb_key, semantic_name, data_type, enum_mapping, extraction_rule
+                FROM bs_data_dictionary_items
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY table_name, column_name;
+                """,
+                (dataset_id,),
+            )
+            dictionary_items = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT table_name, ddl_sql, description
+                FROM bs_schema_definitions
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY table_name;
+                """,
+                (dataset_id,),
+            )
+            schema_definitions = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT left_table, left_key, right_table, right_key, relation_type, description
+                FROM bs_table_relations
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY left_table, right_table;
+                """,
+                (dataset_id,),
+            )
+            table_relations = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT id, intent_type, question, sql_text, tags, quality_score, updated_at
+                FROM bs_golden_sql_samples
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY quality_score DESC, updated_at DESC
+                LIMIT 80;
+                """,
+                (dataset_id,),
+            )
+            all_samples = [dict(row) for row in cur.fetchall()]
+            selected_samples = self._rank_samples(question, all_samples, top_k_samples)
+
+            cur.execute(
+                """
+                SELECT agent_no, prompt_key, prompt_content
+                FROM bs_agent_prompt_fragments
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY agent_no, prompt_key;
+                """,
+                (dataset_id,),
+            )
+            prompt_rows = [dict(row) for row in cur.fetchall()]
+
+            prompts: Dict[int, List[Dict[str, str]]] = {1: [], 2: [], 3: [], 4: []}
+            for item in prompt_rows:
+                agent_no = int(item["agent_no"])
+                if agent_no not in prompts:
+                    prompts[agent_no] = []
+                prompts[agent_no].append(
+                    {"prompt_key": item["prompt_key"], "prompt_content": item["prompt_content"]}
+                )
+
+            return {
+                "dataset": dict(dataset),
+                "lld_document": dict(lld),
+                "data_dictionary": dictionary_items,
+                "schema_definition": schema_definitions,
+                "table_relations": table_relations,
+                "golden_sql_samples": selected_samples,
+                "agent_prompts": prompts,
+            }
+
+    def _rank_samples(
+        self, question: str, samples: List[Dict[str, Any]], top_k_samples: int
+    ) -> List[Dict[str, Any]]:
+        tokens = self._tokenize(question)
+        if not samples:
+            return []
+
+        if not tokens:
+            return samples[:top_k_samples]
+
+        def score(sample: Dict[str, Any]) -> int:
+            text_parts = [sample.get("question", ""), " ".join(sample.get("tags", []) or [])]
+            sample_tokens = self._tokenize(" ".join(text_parts))
+            overlap = len(tokens.intersection(sample_tokens))
+            quality = int(sample.get("quality_score") or 0) // 20
+            return overlap * 10 + quality
+
+        ranked = sorted(samples, key=score, reverse=True)
+        selected = []
+        for sample in ranked[:top_k_samples]:
+            item = dict(sample)
+            item["match_score"] = score(sample)
+            selected.append(item)
+        return selected
+
+    @staticmethod
+    def _tokenize(text: str) -> set:
+        parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
+        return {item for item in parts if item.strip()}

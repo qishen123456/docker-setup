@@ -131,12 +131,16 @@ class MyVanna(ChromaDB_VectorStore, OpenAICompatibleLLM):
         self._system_prompt = """你是一个SQL专家。重要提示：
 1. 当前连接的数据库是：feishu_dtable_sync，只包含 angel_group_data 表
 2. angel_group_data 表只包含 2026 年的飞书多维表格数据
-3. 当查询涉及"当前年"、"最新年"等时间概念时，请使用 2026 年
-4. 字段存储格式为 JSONB，需要使用 jsonb_typeof 和 ->> 操作符
-5. 金额字段需要使用 regexp_replace 清理非数字字符
-6. 确保生成的 SQL 能正确处理 UNION ALL 查询
-7. 不要生成其他数据库的表名或字段名
-8. 所有查询都应该基于 angel_group_data 表"""
+3. angel_group_data 表的字段结构：id, record_id, fields(JSONB), created_time, updated_time, sync_time
+4. 所有业务数据都存储在 fields 字段中，使用 fields ->> '字段名' 语法访问
+5. 当查询涉及"当前年"、"最新年"等时间概念时，请使用 2026 年
+6. 字段存储格式为 JSONB，需要使用 jsonb_typeof 和 ->> 操作符
+7. 金额字段需要使用 regexp_replace 清理非数字字符
+8. 生成简单、直接的SQL，避免过度复杂的CTE结构
+9. 优先使用单层查询，只在必要时使用简单的CTE
+10. 不要生成其他数据库的表名或字段名
+11. 所有查询都应该基于 angel_group_data 表，使用 fields 字段访问数据
+12. 确保SQL语法正确且高效，限制返回100行以内"""
 
     def system_message(self, message: str) -> dict:
         # 合并默认系统提示和自定义提示

@@ -133,6 +133,27 @@
 
                   <!-- 正常结果 -->
                   <div v-else class="ai-result-body">
+                    <div
+                      v-if="msg.requires_confirmation"
+                      class="boss-confirm-box"
+                    >
+                      <div class="boss-confirm-title">等待老板确认口径</div>
+                      <div class="boss-confirm-question">{{ msg.confirmation_question || '请确认后继续。' }}</div>
+                      <div class="boss-confirm-options">
+                        <el-button
+                          v-for="(option, idx) in (msg.confirmation_options || [])"
+                          :key="`${msg.id}-opt-${idx}`"
+                          size="small"
+                          type="primary"
+                          plain
+                          @click="confirmBossOption(msg, option)"
+                          :loading="msg.confirming === option"
+                        >
+                          {{ option }}
+                        </el-button>
+                      </div>
+                    </div>
+
                     <!-- 结果统计和操作按钮 -->
                     <div v-if="msg.row_count !== undefined" class="result-summary-with-actions">
                       <div class="result-info">
@@ -312,7 +333,7 @@
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DocumentCopy, Edit, RefreshRight, Close, DataAnalysis, ChatDotRound, Timer, Clock, Loading, CircleCheck, CircleClose, Memo, ArrowDown, ArrowUp, ArrowRight, Document, Grid } from '@element-plus/icons-vue'
-import { sendChat, getVannaStatus, getChatHistory, generateAnalysis, generateAnalysisStream } from '../api/index.js'
+import { sendSmartChat, getVannaStatus, getChatHistory, generateAnalysis, generateAnalysisStream, confirmByBoss } from '../api/index.js'
 
 // 步骤定义 - 与后端步骤对应
 const STEPS = [
@@ -1101,7 +1122,7 @@ const sendMessage = async () => {
     // 开始第一步：初始化
     updateStepStatus(aiMsg, 'init', STEP_STATUS.RUNNING)
     
-    const result = await sendChat(q, currentAbortController.signal)
+    const result = await sendSmartChat(q, currentAbortController.signal)
     
     // 根据后端返回的步骤信息更新状态
     if (result.steps && result.steps.length > 0) {
@@ -1150,6 +1171,13 @@ const sendMessage = async () => {
         row_count: result.row_count,
         error: result.error,
         total_duration: result.total_duration,
+        route: result.route || null,
+        dataset_results: result.dataset_results || [],
+        requires_confirmation: !!result.requires_confirmation,
+        confirmation_role: result.confirmation_role || '',
+        confirmation_question: result.confirmation_question || '',
+        confirmation_options: result.confirmation_options || [],
+        session_id: result.session_id || '',
         // 保留显示状态
         showSql: currentMsg.showSql !== undefined ? currentMsg.showSql : false,
         showData: currentMsg.showData !== undefined ? currentMsg.showData : false
@@ -1184,6 +1212,49 @@ const sendMessage = async () => {
   } finally {
     isSending.value = false
     currentAbortController = null
+  }
+}
+
+const confirmBossOption = async (msg, option) => {
+  if (!msg.session_id) {
+    ElMessage.warning('缺少 session_id，无法继续确认流转')
+    return
+  }
+  if (msg.confirming) return
+
+  msg.confirming = option
+  try {
+    const result = await confirmByBoss({
+      session_id: msg.session_id,
+      selected_option: option,
+    })
+
+    msg.loading = false
+    msg.sql = result.sql || ''
+    msg.columns = result.columns || []
+    msg.rows = result.rows || []
+    msg.row_count = result.row_count ?? 0
+    msg.error = result.error || ''
+    msg.total_duration = result.total_duration
+    msg.route = result.route || msg.route
+    msg.dataset_results = result.dataset_results || []
+    msg.requires_confirmation = !!result.requires_confirmation
+    msg.confirmation_role = result.confirmation_role || ''
+    msg.confirmation_question = result.confirmation_question || ''
+    msg.confirmation_options = result.confirmation_options || []
+    msg.analysis = result.analysis || msg.analysis
+    msg.steps = result.steps || msg.steps
+    msg.session_id = result.session_id || msg.session_id
+
+    saveLocalMessages()
+    loadHistory()
+    await scrollToBottom()
+    ElMessage.success('老板确认已生效，已继续执行后续 Agent 流程')
+  } catch (err) {
+    msg.error = err.message || '老板确认续跑失败'
+    ElMessage.error('老板确认续跑失败: ' + (err.message || '未知错误'))
+  } finally {
+    msg.confirming = ''
   }
 }
 
@@ -2291,6 +2362,32 @@ onMounted(() => {
 .result-summary { color: #67c23a; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #f0f2f5; padding-bottom: 10px; }
 .result-table { max-height: 350px; overflow: auto; border-radius: 4px; border: 1px solid #f0f2f5; }
 .no-data { color: #909399; font-size: 14px; padding: 20px; text-align: center; background: #fafafa; border-radius: 8px; }
+
+.boss-confirm-box {
+  margin: 12px;
+  padding: 12px;
+  border: 1px solid #d4d8de;
+  border-radius: 8px;
+  background: #f7f8fa;
+}
+
+.boss-confirm-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.boss-confirm-question {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.boss-confirm-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .analysis-report {
   margin-top: 16px;

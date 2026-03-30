@@ -1,7 +1,7 @@
 @echo off
-echo ============================================
-echo [Vanna AI System] Starting Backend Flask API...
-echo ============================================
-cd /d %~dp0backend
-python app.py
+echo ========================================
+echo   智能问数系统 - 后端服务启动
+echo ========================================
+cd /d "%~dp0backend"
+py app.py
 pause

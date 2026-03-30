@@ -8,6 +8,32 @@ const routes = [
     meta: { title: '仪表盘' }
   },
   {
+    path: '/smart-ask',
+    name: 'SmartAsk',
+    component: () => import('../views/SmartAsk.vue'),
+    meta: { title: '智能问数' }
+  },
+  {
+    path: '/chat',
+    redirect: '/smart-ask'
+  },
+  {
+    path: '/agents',
+    name: 'Agents',
+    component: () => import('../views/AgentManagement.vue'),
+    meta: { title: 'AGENT管理' }
+  },
+  {
+    path: '/datasets',
+    name: 'Datasets',
+    component: () => import('../views/DatasetManagement.vue'),
+    meta: { title: '数据集管理' }
+  },
+  {
+    path: '/bookshelves',
+    redirect: '/datasets'
+  },
+  {
     path: '/databases',
     name: 'Databases',
     component: () => import('../views/Databases.vue'),
@@ -18,30 +44,6 @@ const routes = [
     name: 'AIModels',
     component: () => import('../views/AIModels.vue'),
     meta: { title: 'AI模型配置' }
-  },
-  {
-    path: '/training',
-    name: 'Training',
-    component: () => import('../views/Training.vue'),
-    meta: { title: '训练数据' }
-  },
-  {
-    path: '/analysis-prompts',
-    name: 'AnalysisPrompts',
-    component: () => import('../views/AnalysisPrompts_simple.vue'),
-    meta: { title: '分析提示词' }
-  },
-  {
-    path: '/sql-prompts',
-    name: 'SqlPrompts',
-    component: () => import('../views/SqlPromptManager.vue'),
-    meta: { title: 'SQL提示词管理' }
-  },
-  {
-    path: '/chat',
-    name: 'Chat',
-    component: () => import('../views/Chat.vue'),
-    meta: { title: '智能聊天' }
   },
   {
     path: '/feishu-sync',
@@ -62,9 +64,8 @@ const router = createRouter({
   routes
 })
 
-// 动态设置页面标题
 router.afterEach((to) => {
-  document.title = `${to.meta.title || 'Vanna'} — 智能问数系统`
+  document.title = `${to.meta.title || '智能问数'} - 智能问数系统`
 })
 
 export default router
