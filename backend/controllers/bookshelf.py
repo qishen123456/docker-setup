@@ -83,9 +83,11 @@ def bookshelf_health():
 def list_bookshelf_datasets():
     try:
         repo.ensure_schema()
+        include_inactive = str(request.args.get("include_inactive", "")).lower() in ("1", "true", "yes")
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            active_filter_sql = "" if include_inactive else "WHERE d.is_active = TRUE"
             cur.execute(
-                """
+                f"""
                 SELECT
                     d.id,
                     d.dataset_code,
@@ -109,6 +111,7 @@ def list_bookshelf_datasets():
                     WHERE is_active = TRUE
                     GROUP BY dataset_id
                 ) g ON g.dataset_id = d.id
+                {active_filter_sql}
                 ORDER BY d.id DESC;
                 """
             )

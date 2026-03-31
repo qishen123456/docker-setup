@@ -350,7 +350,8 @@ def test_feishu_connection():
             }), 400
         
         # 测试获取访问令牌
-        access_token = sync_service.get_access_token(app_id, app_secret)
+        # 使用临时config_id=1进行测试
+        access_token = sync_service.get_access_token(app_id, app_secret, 1)
         if not access_token:
             return jsonify({
                 "success": False,

@@ -1,53 +1,53 @@
-﻿{
-    "databases":  [
-                      {
-                          "id":  6,
-                          "name":  "SQLite Test Database",
-                          "type":  "sqlite",
-                          "sqlite_path":  "./test.db",
-                          "host":  "",
-                          "port":  0,
-                          "database_name":  "",
-                          "username":  "",
-                          "password_b64":  "",
-                          "driver":  "",
-                          "is_active":  true,
-                          "is_default":  false,
-                          "created_at":  "2026-03-29 16:00:00",
-                          "updated_at":  "2026-03-29 16:00:00"
-                      },
-                      {
-                          "id":  5,
-                          "name":  "Feishu DTable Sync",
-                          "type":  "postgresql",
-                          "sqlite_path":  "",
-                          "host":  "localhost",
-                          "port":  5432,
-                          "database_name":  "feishu_dtable_sync",
-                          "username":  "postgres",
-                          "password_b64":  "MTIzNDU2",
-                          "driver":  "psycopg2",
-                          "is_active":  true,
-                          "is_default":  true,
-                          "created_at":  "2026-03-26 15:52:32",
-                          "updated_at":  "2026-03-30 00:00:00"
-                      },
-                      {
-                          "id":  7,
-                          "name":  "PG Smart Warehouse",
-                          "type":  "postgresql",
-                          "sqlite_path":  "",
-                          "host":  "localhost",
-                          "port":  5432,
-                          "database_name":  "smart_warehouse",
-                          "username":  "postgres",
-                          "password_b64":  "MTIzNDU2",
-                          "driver":  "psycopg2",
-                          "is_active":  true,
-                          "is_default":  false,
-                          "created_at":  "2026-03-30 17:17:50",
-                          "updated_at":  "2026-03-30 00:00:00"
-                      }
-                  ],
-    "next_id":  8
+{
+  "databases": [
+    {
+      "id": 6,
+      "name": "SQLite Test Database",
+      "type": "sqlite",
+      "sqlite_path": "./test.db",
+      "host": "",
+      "port": 0,
+      "database_name": "",
+      "username": "",
+      "password_b64": "",
+      "driver": "",
+      "is_active": true,
+      "is_default": false,
+      "created_at": "2026-03-29 16:00:00",
+      "updated_at": "2026-03-29 16:00:00"
+    },
+    {
+      "id": 5,
+      "name": "Feishu DTable Sync",
+      "type": "postgresql",
+      "sqlite_path": "",
+      "host": "localhost",
+      "port": 5432,
+      "database_name": "postgres",
+      "username": "postgres",
+      "password_b64": "",
+      "driver": "psycopg2",
+      "is_active": true,
+      "is_default": true,
+      "created_at": "2026-03-26 15:52:32",
+      "updated_at": "2026-03-31 23:25:09"
+    },
+    {
+      "id": 7,
+      "name": "PG Smart Warehouse",
+      "type": "postgresql",
+      "sqlite_path": "",
+      "host": "localhost",
+      "port": 5432,
+      "database_name": "smart_warehouse",
+      "username": "postgres",
+      "password_b64": "",
+      "driver": "psycopg2",
+      "is_active": true,
+      "is_default": false,
+      "created_at": "2026-03-30 17:17:50",
+      "updated_at": "2026-03-30 00:00:00"
+    }
+  ],
+  "next_id": 8
 }

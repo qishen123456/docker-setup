@@ -73,6 +73,9 @@ class BookshelfRepository:
                 if row and row.get("table_name"):
                     return
 
+            # End the implicit transaction opened by the existence probe before
+            # toggling autocommit for multi-statement schema bootstrap.
+            conn.rollback()
             conn.autocommit = True
             with conn.cursor() as cur:
                 with open(migration_path, "r", encoding="utf-8") as file:

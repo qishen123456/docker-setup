@@ -119,7 +119,11 @@ class FeishuSyncService:
             # 直接读取数据源配置文件
             import json
             import os
-            config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config', 'datasources.json')
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
+            config_file = os.path.join(config_dir, 'datasources.json')
+            local_file = os.path.join(config_dir, 'datasources.local.json')
+            if os.path.exists(local_file):
+                config_file = local_file
             
             with open(config_file, 'r', encoding='utf-8') as f:
                 datasources = json.load(f)
@@ -234,14 +238,14 @@ class FeishuSyncService:
                     
                     # 使用UPSERT操作
                     cursor.execute(f"""
-                        INSERT INTO {table_name} (record_id, fields, sync_time)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO {table_name} (record_id, fields, sync_time, created_time, updated_time)
+                        VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (record_id) 
                         DO UPDATE SET 
                             fields = EXCLUDED.fields,
                             sync_time = EXCLUDED.sync_time,
-                            updated_time = CURRENT_TIMESTAMP
-                    """, (record_id, fields_json, sync_time))
+                            updated_time = EXCLUDED.updated_time
+                    """, (record_id, fields_json, sync_time, sync_time, sync_time))
                 
                 conn.commit()
                 print(f"成功同步{len(records_to_sync)}条记录到{table_name}")
@@ -274,13 +278,18 @@ class FeishuSyncService:
                 return False
             
             # 同步到PostgreSQL
+            write_log(config['id'], 'INFO', f'开始同步数据到PostgreSQL，共{len(records)}条记录')
             success = self.sync_data_to_postgres(config, records)
             if success:
                 sync_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                write_log(config['id'], 'INFO', f'数据库同步成功，更新状态为success')
                 update_sync_status(config['id'], 'success', sync_time)
+                write_log(config['id'], 'SUCCESS', f'配置 {config["name"]} 同步完成')
                 print(f"配置 {config['name']} 同步完成")
             else:
+                write_log(config['id'], 'ERROR', f'数据库同步失败，更新状态为failed')
                 update_sync_status(config['id'], 'failed')
+                print(f"配置 {config['name']} 同步失败")
             
             return success
             

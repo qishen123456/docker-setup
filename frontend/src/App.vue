@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-container class="app-shell">
     <el-aside class="sidebar" :width="collapsed ? '78px' : '244px'">
       <div class="brand">
@@ -61,6 +61,7 @@
           <div class="topbar-subtitle">{{ currentSubtitle }}</div>
         </div>
         <div class="topbar-right">
+          <el-button size="small" @click="refreshCurrentPage">刷新页面</el-button>
           <el-tag :type="backendOk ? 'success' : 'danger'" effect="plain" round>
             {{ backendOk ? '后端在线' : '后端异常' }}
           </el-tag>
@@ -72,15 +73,62 @@
         <router-view />
       </el-main>
     </el-container>
+
+    <transition name="session-panel">
+      <div v-if="showSessionPanel" class="session-panel">
+        <div class="session-panel-header">
+          <div>
+            <div class="session-panel-title">当前问数会话</div>
+            <div class="session-panel-subtitle">{{ sessionStatusText }}</div>
+          </div>
+          <el-tag :type="sessionStatusType" effect="plain" size="small">
+            {{ sessionStatusText }}
+          </el-tag>
+        </div>
+
+        <div class="session-panel-block">
+          <div class="session-label">问题</div>
+          <div class="session-value">{{ session.state.question }}</div>
+        </div>
+
+        <div class="session-panel-block">
+          <div class="session-label">命中数据集</div>
+          <div class="session-value">
+            <span v-if="activeDatasetIds.length > 0">ID: {{ activeDatasetIds.join(', ') }}</span>
+            <span v-else>正在识别</span>
+          </div>
+        </div>
+
+        <div class="session-panel-block">
+          <div class="session-label">最新阶段</div>
+          <div class="session-value">
+            {{ latestLog?.title || '等待执行' }}
+          </div>
+          <div class="session-detail">
+            {{ latestLog?.detail || '提交问题后，这里会持续显示执行轨迹。' }}
+          </div>
+        </div>
+
+        <div class="session-panel-actions">
+          <el-button size="small" @click="openSmartAsk">回到问数页</el-button>
+          <el-button v-if="session.state.status === 'completed' || session.state.status === 'error'" size="small" @click="session.resetSession">
+            清空记录
+          </el-button>
+        </div>
+      </div>
+    </transition>
   </el-container>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { healthCheck } from './api/index.js'
+import { useSmartAskSession } from './state/smartAskSession.js'
 
 const route = useRoute()
+const router = useRouter()
+const session = useSmartAskSession()
 const collapsed = ref(false)
 const backendOk = ref(false)
 const currentTime = ref('')
@@ -97,17 +145,34 @@ const titleMap = {
 
 const subtitleMap = {
   '/': '系统概览与运行状态',
-  '/smart-ask': '四Agent 协作式问数与老板确认流转',
-  '/agents': '维护四个中枢大脑的系统提示词与知识规则',
-  '/datasets': '维护每个数据集的书架元数据与 Golden SQL',
-  '/databases': '管理 PostgreSQL 与其他连接源',
+  '/smart-ask': '四Agent协作问数与老板确认流转',
+  '/agents': '维护四个核心Agent的系统提示词与知识规则',
+  '/datasets': '维护每个数据集的书架元数据与Golden SQL',
+  '/databases': '管理PostgreSQL与其他连接源',
   '/ai-models': '配置默认模型与模型连接',
-  '/feishu-sync': '飞书多维表格同步、日志与运行控制'
+  '/feishu-sync': '飞书多维表格同步、日志与任务控制'
 }
 
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => titleMap[route.path] || '智能问数')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '企业级问数工作台')
+const latestLog = computed(() => session.latestLog.value)
+const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
+const showSessionPanel = computed(() => session.state.status !== 'idle')
+const sessionStatusType = computed(() => {
+  if (session.state.status === 'completed') return 'success'
+  if (session.state.status === 'waiting_confirmation') return 'warning'
+  if (session.state.status === 'error') return 'danger'
+  if (session.state.status === 'running') return 'primary'
+  return 'info'
+})
+const sessionStatusText = computed(() => {
+  if (session.state.status === 'completed') return '已完成'
+  if (session.state.status === 'waiting_confirmation') return '待确认'
+  if (session.state.status === 'error') return '执行失败'
+  if (session.state.status === 'running') return '执行中'
+  return '空闲'
+})
 
 const refreshClock = () => {
   currentTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
@@ -117,9 +182,17 @@ const pingBackend = async () => {
   try {
     await healthCheck()
     backendOk.value = true
-  } catch (error) {
+  } catch {
     backendOk.value = false
   }
+}
+
+const refreshCurrentPage = () => {
+  window.location.reload()
+}
+
+const openSmartAsk = () => {
+  router.push('/smart-ask')
 }
 
 let clockTimer = null
@@ -285,6 +358,83 @@ body,
 
 .page-wrap > * {
   animation: page-enter 0.28s ease;
+}
+
+.session-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
+  width: 360px;
+  padding: 16px;
+  border: 1px solid rgba(96, 104, 116, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 48px rgba(44, 52, 63, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.session-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.session-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #20242b;
+}
+
+.session-panel-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #717784;
+}
+
+.session-panel-block + .session-panel-block {
+  margin-top: 12px;
+}
+
+.session-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #717784;
+}
+
+.session-value {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #22252b;
+  word-break: break-word;
+}
+
+.session-detail {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #5f6775;
+  white-space: pre-wrap;
+}
+
+.session-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.session-panel-enter-active,
+.session-panel-leave-active {
+  transition: all 0.22s ease;
+}
+
+.session-panel-enter-from,
+.session-panel-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 @keyframes page-enter {

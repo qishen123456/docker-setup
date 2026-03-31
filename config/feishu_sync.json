@@ -5,18 +5,18 @@
       "name": "商用事业部销售结果表",
       "description": "同步飞书多维表格数据到PostgreSQL",
       "app_id": "cli_a94aae39fe38dcc7",
-      "app_secret": "DegvsVgTJZkI4sSvBzTtJbZJoz0vS6Um",
-      "base_id": "SVNywM56hiMUdDkDAhbcYbMLnzd",
-      "table_id": "tbl4u0l6mz9vu3lI",
-      "view_id": "vew57gIJtX",
+      "app_secret": "",
+      "base_id": "MRxHbj3LpaOJwRsSF4lcvzBinqg",
+      "table_id": "tbl3hnhHgjX3zwwd",
+      "view_id": "vew2xYKIIi",
       "sync_mode": "full",
       "sync_frequency": 1440,
-      "target_table": "feishu_business_sales",
+      "target_table": "angel_group_data",
       "is_active": true,
-      "last_sync_time": "2026-03-30 17:27:13",
-      "last_sync_status": "running",
+      "last_sync_time": "2026-03-31 23:37:06",
+      "last_sync_status": "success",
       "created_at": "2026-03-26 16:35:36",
-      "updated_at": "2026-03-30 17:52:59"
+      "updated_at": "2026-03-31 23:37:07"
     }
   ]
 }

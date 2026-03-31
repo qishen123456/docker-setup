@@ -12,6 +12,23 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
+
+def _make_console_safe():
+    """
+    Prevent startup crashes on Windows terminals when imported modules print
+    characters that are not representable in the active code page.
+    """
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(errors="ignore")
+            except Exception:
+                pass
+
+
+_make_console_safe()
+
 from config_manager import init_default_configs
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
