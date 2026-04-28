@@ -5,7 +5,7 @@
 import json
 import os
 from datetime import datetime
-from config_manager import read_json, write_json
+from config_manager import apply_env_feishu_overrides, read_json, write_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,16 +14,16 @@ DEFAULT_FEISHU_CONFIG = {
     "sync_configs": [
         {
             "id": 1,
-            "name": "商用事业部销售结果表",
-            "description": "同步飞书多维表格数据到PostgreSQL",
-            "app_id": "cli_a94aae39fe38dcc7",
-            "app_secret": "DegvsVgTJZkI4sSvBzTtJbZJoz0vS6Um",
-            "base_id": "EqXfbrQ98aZdpXsLKyecQUPqn0d",
-            "table_id": "tblhZC2W8B2RmfO5",
-            "view_id": "vewsDasdeY",
+            "name": "飞书同步示例",
+            "description": "请通过 .env 或管理后台填写真实飞书配置",
+            "app_id": "",
+            "app_secret": "",
+            "base_id": "",
+            "table_id": "",
+            "view_id": "",
             "sync_mode": "incremental",  # incremental: 增量同步, full: 全量同步
             "sync_frequency": "30",  # 分钟
-            "target_table": "feishu_business_sales",
+            "target_table": "feishu_sync_demo",
             "is_active": False,
             "last_sync_time": None,
             "last_sync_status": "pending",
@@ -42,15 +42,15 @@ def read_feishu_config():
     try:
         config = read_json('feishu_sync.json')
         if config:
-            return config
+            return apply_env_feishu_overrides(config)
         write_feishu_config(DEFAULT_FEISHU_CONFIG)
-        return DEFAULT_FEISHU_CONFIG
+        return apply_env_feishu_overrides(DEFAULT_FEISHU_CONFIG)
     except FileNotFoundError:
         write_feishu_config(DEFAULT_FEISHU_CONFIG)
-        return DEFAULT_FEISHU_CONFIG
+        return apply_env_feishu_overrides(DEFAULT_FEISHU_CONFIG)
     except Exception as e:
         print(f"读取飞书同步配置失败: {e}")
-        return DEFAULT_FEISHU_CONFIG
+        return apply_env_feishu_overrides(DEFAULT_FEISHU_CONFIG)
 
 def write_feishu_config(config):
     """写入飞书同步配置"""

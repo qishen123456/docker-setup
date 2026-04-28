@@ -7,10 +7,15 @@ import sys
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
+
+BASE_DIR = os.path.dirname(CURRENT_DIR)
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=False)
+load_dotenv(os.path.join(BASE_DIR, ".env.local"), override=True)
 
 
 def _make_console_safe():
@@ -29,9 +34,7 @@ def _make_console_safe():
 
 _make_console_safe()
 
-BACKEND_PORT = int(os.getenv("SMARTASK_BACKEND_PORT", "5001"))
-
-from config_manager import init_default_configs
+from config_manager import get_app_config, init_default_configs
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
 from controllers.bookshelf import bookshelf_bp
@@ -42,9 +45,12 @@ from controllers.smart_chat import smart_chat_bp
 
 
 init_default_configs()
+APP_CONFIG = get_app_config()
+BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", "5001"))
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
+app.secret_key = str(APP_CONFIG.get("secret_key") or os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026"))
 
 CORS(
     app,

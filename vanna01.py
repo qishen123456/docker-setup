@@ -46,13 +46,13 @@ class MyVanna(ChromaDB_VectorStore, DeepSeekChat):
 if __name__ == "__main__":
     # 定义配置信息
     config = {
-        'api_key': 'sk-76585a8711f84d45a60b9dc36497213e',  # DeepSeek API Key
+        'api_key': '请改为你自己的 API Key',  # DeepSeek API Key
         'model': 'qwen-max',  # 使用的模型
         # SQL Server 连接参数
-        'server': 'crmproddbread.angelgroup.com.cn',  # 服务器名称或IP
-        'database': 'CRM01_MSCRM',  # 数据库名称
-        'username': 'dc',  # 登录用户名
-        'password': 'angel@oa!@#3',  # 登录密码
+        'server': '请填写你的数据库地址',  # 服务器名称或IP
+        'database': '请填写你的数据库名',  # 数据库名称
+        'username': '请填写你的数据库用户名',  # 登录用户名
+        'password': '请填写你的数据库密码',  # 登录密码
         'driver': 'ODBC Driver 17 for SQL Server'  # ODBC驱动版本
     }
 

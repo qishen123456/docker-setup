@@ -6,7 +6,7 @@ DB_CONFIG = {
     'port': 5432,
     'database': 'postgres',
     'user': 'postgres',
-    'password': '6670326'
+    'password': '请填写你的数据库密码'
 }
 
 def add_missing_columns():

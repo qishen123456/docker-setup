@@ -60,6 +60,10 @@ backend/chroma_db_source_*/
 config.json
 secrets.json
 config/*.local.json
+config/ai_settings.json
+config/datasources.json
+config/feishu_sync.json
+config/app_config.json
 
 # Frontend build output / caches
 dist/
