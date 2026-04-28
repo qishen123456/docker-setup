@@ -14,6 +14,17 @@
       <span class="sa-live-current-text">{{ latestLog.title }}</span>
     </div>
 
+    <div v-if="isReportPending" class="sa-live-report-pending">
+      <div class="sa-live-report-pending-badge">报告生成中</div>
+      <div class="sa-live-report-pending-copy">
+        <div class="sa-live-report-pending-title">正在整理结果摘要、分析结论和最终报告</div>
+        <div class="sa-live-report-pending-desc">
+          当前不是停住了，而是在等待模型完成最后一段结果归纳与报告输出。
+        </div>
+      </div>
+      <div v-if="elapsedLabel" class="sa-live-report-pending-elapsed">已等待 {{ elapsedLabel }}</div>
+    </div>
+
     <div class="sa-live-stream">
       <div
         v-for="(log, index) in normalizedLogs"
@@ -116,15 +127,25 @@ const normalizedLogs = computed(() => {
       thoughtLines,
       conciseDetailLines,
       showThought: isLatest && status !== 'success',
+      kind: log?.kind || '',
+      toolType: log?.toolType || '',
       timeLabel: log?.timeLabel || log?.time || '',
       durationLabel: log?.durationLabel || (log?.duration ? `${log.duration} ms` : ''),
       status,
-      statusText: statusTextMap[status] || '已完成',
+      statusText:
+        status === 'running' && /report/i.test(`${log?.toolType || ''} ${log?.kind || ''}`)
+          ? '报告生成中'
+          : (statusTextMap[status] || '已完成'),
     }
   })
 })
 
 const latestLog = computed(() => normalizedLogs.value[normalizedLogs.value.length - 1] || null)
+const isReportPending = computed(() => {
+  const log = latestLog.value
+  if (!log || props.mode === 'completed') return false
+  return log.status === 'running' && /报告|report/i.test(`${log.title || ''} ${log.toolType || ''} ${log.kind || ''}`)
+})
 </script>
 
 <style scoped>
@@ -200,6 +221,65 @@ const latestLog = computed(() => normalizedLogs.value[normalizedLogs.value.lengt
   font-size: 12px;
   color: #1d2129;
   line-height: 1.55;
+}
+
+.sa-live-report-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  background: linear-gradient(135deg, rgba(237, 244, 255, 0.98) 0%, rgba(247, 250, 255, 0.98) 52%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: 0 12px 28px rgba(22, 93, 255, 0.08);
+}
+
+.sa-live-report-pending-badge {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #165dff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.2);
+}
+
+.sa-live-report-pending-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sa-live-report-pending-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d2129;
+  line-height: 1.5;
+}
+
+.sa-live-report-pending-desc {
+  font-size: 12px;
+  color: #4e5969;
+  line-height: 1.65;
+}
+
+.sa-live-report-pending-elapsed {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
 }
 
 .sa-live-stream {
@@ -396,6 +476,13 @@ const latestLog = computed(() => normalizedLogs.value[normalizedLogs.value.lengt
   }
   50% {
     box-shadow: 0 0 0 8px rgba(22, 93, 255, 0.14);
+  }
+}
+
+@media (max-width: 760px) {
+  .sa-live-report-pending {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

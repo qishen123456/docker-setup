@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartask-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SMARTASK_DB_DATABASE:-postgres}
+      POSTGRES_USER: ${SMARTASK_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${SMARTASK_DB_PASSWORD:-postgres}
+    ports:
+      - "${SMARTASK_DOCKER_PG_PORT:-5433}:5432"
+    volumes:
+      - smartask_pg_data:/var/lib/postgresql/data
+      - ./backend/migrations/20260330_bookshelf_schema.sql:/docker-entrypoint-initdb.d/001_bookshelf_schema.sql:ro
+      - ./docker/postgres/init/002_angel_group_data.sql:/docker-entrypoint-initdb.d/002_angel_group_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SMARTASK_DB_USERNAME:-postgres} -d ${SMARTASK_DB_DATABASE:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartask-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SMARTASK_BACKEND_PORT: 5002
+      SMARTASK_DB_HOST: postgres
+      SMARTASK_DB_PORT: 5432
+      SMARTASK_CHROMA_PATH: /app/chroma_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${SMARTASK_BACKEND_PORT:-5002}:5002"
+    volumes:
+      - smartask_chroma:/app/chroma_db
+      - ./backend/logs:/app/backend/logs
+      - ./config:/app/config
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smartask-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${SMARTASK_FRONTEND_PORT:-8080}:80"
+
+volumes:
+  smartask_pg_data:
+  smartask_chroma:

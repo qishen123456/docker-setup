@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 120000,
+  timeout: 600000,
   headers: {
     'Content-Type': 'application/json'
   }

@@ -87,9 +87,9 @@ const phaseTemplates = [
   },
   {
     key: 'analyze',
-    title: '生成分析结论',
-    summary: '正在输出经营分析摘要与结果报告。',
-    detailLines: ['生成经营分析摘要。', '整理完整报告内容。'],
+    title: '等待报告生成',
+    summary: '正在输出经营分析摘要与最终报告，请稍候。',
+    detailLines: ['正在生成经营分析摘要。', '正在整理完整报告内容。'],
     status: 'pending',
     kind: 'report-stage',
     toolType: 'report',
@@ -322,17 +322,15 @@ const beginPhaseStreaming = () => {
       return
     }
 
-    if (nextPhase.key === 'analyze') {
-      stopPhaseTimer()
-      persist()
-      return
-    }
-
     appendLog({
       ...nextPhase,
       status: 'running',
     })
     persist()
+
+    if (nextPhase.key === 'analyze') {
+      stopPhaseTimer()
+    }
   }, 1200)
 }
 
