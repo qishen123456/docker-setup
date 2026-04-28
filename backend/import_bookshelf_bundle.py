@@ -101,10 +101,27 @@ def _prepare_value(value: Any):
     return value
 
 
+def _get_table_columns(cur, table_name: str) -> List[str]:
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s
+        ORDER BY ordinal_position;
+        """,
+        (table_name,),
+    )
+    return [str(row["column_name"]) for row in cur.fetchall()]
+
+
 def _insert_rows(cur, table_name: str, rows: Iterable[Dict[str, Any]], fallback_source_id: int):
     inserted = 0
+    available_columns = set(_get_table_columns(cur, table_name))
     for raw_row in rows:
         row = _normalize_row(table_name, raw_row, fallback_source_id)
+        row = {key: value for key, value in row.items() if key in available_columns}
+        if not row:
+            continue
         columns = list(row.keys())
         placeholders = ", ".join(["%s"] * len(columns))
         sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders});"

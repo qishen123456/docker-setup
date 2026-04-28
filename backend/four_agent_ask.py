@@ -871,8 +871,6 @@ class FourAgentAskService:
             "你是 Agent1 路由中枢，负责识别数据集、判断歧义、决定是否需要老板确认。",
         )
         seed_block = ""
-        if seed_sql:
-            seed_block = f"\n\nReference SQL sample (prefer light rewriting over full regeneration):\nsample_id={seed_sample_id or ''}\n{seed_sql}"
         user_prompt = f"""
 用户问题：
 {question}
@@ -1150,6 +1148,12 @@ LIMIT 100
                 sql=self._truncate_text(rule_based_sql, 12000),
             )
             return {"sql": rule_based_sql, "notes": "rule based sql fallback"}
+        seed_block = ""
+        if seed_sql:
+            seed_block = (
+                "\n\nReference SQL sample (prefer light rewriting over full regeneration):\n"
+                f"sample_id={seed_sample_id or ''}\n{seed_sql}"
+            )
         system_prompt = self._get_agent_prompt(
             2,
             "你是 Agent2 SQL 架构师，只能生成安全的只读 PostgreSQL SQL。",
