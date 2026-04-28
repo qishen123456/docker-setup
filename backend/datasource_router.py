@@ -97,7 +97,14 @@ class DataSourceRouter:
             return vanna_cls(config=vn_config)
         except Exception as exc:
             message = str(exc)
-            if "default_tenant" not in message and "Could not connect to tenant" not in message:
+            recoverable_errors = [
+                "default_tenant",
+                "Could not connect to tenant",
+                "disk I/O error",
+                "database disk image is malformed",
+                "readonly database",
+            ]
+            if not any(token in message for token in recoverable_errors):
                 raise
             broken_path = vn_config.get("chroma_path")
             if broken_path and os.path.isdir(broken_path):

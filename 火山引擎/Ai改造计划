@@ -1,0 +1,186 @@
+既然之前的方案对你来说还不够详细，那么这次我将为你提供一份**「开发级」的工程实施手册**。
+
+这份报告不再是计划书，而是一份**技术规格书 (Technical Specification)**。我将把每一个像素、每一段逻辑、每一个 Prompt 策略全部拆解，让你在开发时不需要猜测，只需要按照这个手册进行“填空”式开发。
+
+---
+
+# 🛠️ 火山引擎「智能问数」100% 复刻工程实施手册 (Ultra-Detailed)
+
+## 第一部分：像素级 UI 还原 (The Visual Shell)
+
+### 1. 基础样式全局变量 (CSS Variables)
+必须在 `index.css` 或 `tailwind.config.js` 中定义以下精确色值，否则无法达到 100% 还原度。
+
+```css
+:root {
+  /* 品牌色 */
+  --volcano-blue: #165DFF; 
+  --volcano-blue-light: #E8F3FF; 
+  --volcano-blue-hover: #0E4BCC;
+  
+  /* 状态色 */
+  --status-success: #00B42A;
+  --status-success-bg: #E8FFEA;
+  --status-executing: #165DFF;
+  
+  /* 背景色 */
+  --bg-page: #F2F3F5;          /* 页面大底色 */
+  --bg-card: #FFFFFF;          /* 卡片纯白 */
+  --bg-muted: #F7F8FA;         /* 思考区/表头浅灰 */
+  --bg-code: #1E1E2E;          /* SQL代码块深色 */
+  
+  /* 文字色 */
+  --text-primary: #1D2129;     /* 主标题/正文 */
+  --text-secondary: #4E5969;   /* 步骤描述/次要文字 */
+  --text-muted: #86909C;       /* 提示词/时间戳 */
+  
+  /* 边框与阴影 */
+  --border-color: #E5E6EB;     /* 细边框线 */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.06);
+}
+```
+
+### 2. 关键组件结构拆解
+
+#### A. 中间对话区 (ChatPanel)
+*   **输入框 (Composer)**: 
+    *   **布局**: `flex-column` $\rightarrow$ 顶部是一个 `DatasetSelector`（带蓝色圆点和下拉箭头） $\rightarrow$ 底部是 `Textarea` $\rightarrow$ 右下角是 `SendButton`。
+    *   **细节**: `Textarea` 必须实现 `auto-resize`（高度随文字增加，最大 $120\text{px}$）。
+*   **AI 思考卡片 (ThinkingCard)**:
+    *   **Header**: `display: flex; justify-content: space-between;` $\rightarrow$ 左侧 $\text{ArrowIcon}$ + "思考完成" $\text{Text}$ + $\text{CheckIcon}$。
+    *   **Body**: 每一行是一个 `ThinkingStep` $\rightarrow$ `左侧圆点` $\rightarrow$ `步骤描述` $\rightarrow$ `状态标签`。
+    *   **动画**: 展开时使用 `transition: max-height 0.3s ease-in-out`。
+
+#### B. 右侧执行详情区 (DetailPanel)
+*   **时间线节点 (LogNode)**:
+    *   **结构**: 父节点 (Tool Name) $\rightarrow$ 子节点 (Log Details)。
+    *   **SQL 块 (SqlBlock)**: 
+        *   `background: var(--bg-code); color: #D4D4D4;`
+        *   必须集成 `Prism.js` 仅针对 $\text{SQL}$ 语言进行高亮。
+        *   右上角 `CopyButton` 状态切换：`复制` $\rightarrow$ `✓ 已复制` (持续 $1.5\text{s}$)。
+*   **内嵌结果区 (ResultArea)**:
+    *   **KPI 卡片**: $\text{Center-align}$ $\rightarrow$ `大数字 (24px, Bold)` $\rightarrow$ `小标签 (12px, Muted)`。
+    *   **表格**: `table-layout: auto;` $\rightarrow$ 表头背景 `var(--bg-muted)` $\rightarrow$ 奇偶行交替色。
+
+---
+
+## 第二部分：Agent 逻辑大脑 (The Brain)
+
+你要复刻的不是一个聊天机器人，而是一个 **ReAct-based SQL Agent**。其核心循环如下：
+
+### 1. 执行工作流 (The Workflow Loop)
+1.  **User Query** $\rightarrow$ **Planner LLM** $\rightarrow$ 输出 $\text{JSON}$ 格式的 `ExecutionPlan`。
+2.  **Dispatcher** $\rightarrow$ 遍历计划中的步骤 $\rightarrow$ 调度对应工具。
+3.  **Tool Execution** $\rightarrow$ `execute_one_sql` $\rightarrow$ 数据库 $\rightarrow$ 返回 $\text{Raw Data}$。
+4.  **Reasoning** $\rightarrow$ **Refiner LLM** $\rightarrow$ 根据数据决定是否需要调用 `code_interpreter` (Python) 进行计算。
+5.  **Synthesis** $\rightarrow$ **Final LLM** $\rightarrow$ 将所有中间结果 $\text{JSON}$ 填充进 HTML 模板 $\rightarrow$ 生成报告。
+
+### 2. 核心工具集 (Tool Definition)
+
+| 工具名称 | 输入 | 内部实现逻辑 | 输出 |
+| :--- | :--- | :--- | :--- |
+| `execute_one_sql` | $\text{SQL String}$ | 连接数据库 $\rightarrow$ `pd.read_sql()` $\rightarrow$ 返回 $\text{DataFrame}$ | $\text{JSON (Rows/Cols)}$ |
+| `code_interpreter` | $\text{Python Code} + \text{DFs}$ | 在隔离沙箱执行 Python 代码 $\rightarrow$ 处理环比/贡献度 $\rightarrow$ 生成新 $\text{DF}$ | $\text{Calculated JSON}$ |
+| `final_answer` | $\text{All Intermediate Data}$ | 检索预设的 $\text{HTML/Markdown}$ 报告模板 $\rightarrow$ 变量替换 $\rightarrow$ 生成文件 | $\text{File URL / HTML}$ |
+
+---
+
+## 第三部分：Prompt 策略 (The Secrets of LLM)
+
+为了让 AI 输出像图中那样精准的步骤和 SQL，你需要三组不同的 Prompt：
+
+### 1. 规划者 Prompt (Planner Prompt)
+**目标**: 将问题转化为结构化计划。
+> **System Prompt**: 
+> 你是一个资深经营分析师。请将用户问题拆解为可执行的原子步骤。
+> 每个步骤必须包含：步骤编号、工具名称 (`execute_one_sql` 或 `code_interpreter`)、详细的操作描述。
+> **输出格式**: 
+> `{"plan": [{"step": 1, "tool": "execute_one_sql", "desc": "查询近30日交易日期最大值..."}]}`
+
+### 2. SQL 生成 Prompt (Text-to-SQL Prompt)
+**目标**: 生成严谨的 $\text{SQL}$。
+> **System Prompt**:
+> 你是一个 SQL 专家。基于以下数据库 Schema: `[提供表名、列名、类型]`。
+> 必须严格遵守：
+> 1. 使用 `COUNT(DISTINCT 用户ID)` 计算活跃用户数。
+> 2. 时间筛选必须使用 `BETWEEN 'start' AND 'end'`。
+> 3. 必须包含 `GROUP BY` 以支持维度分析。
+> **输出**: 仅输出 SQL 代码，不要任何解释。
+
+### 3. 分析报告 Prompt (Synthesis Prompt)
+**目标**: 将碎片化数据转化为经营洞察。
+> **System Prompt**:
+> 你现在需要编写一份经营分析报告。
+> 你拥有以下数据：`[步骤1-6的结果数据集]`。
+> 报告结构必须包含：
+> 1. 整体概况（核心指标 $\text{KPI}$）。
+> 2. 趋势分析（结合折线图数据）。
+> 3. 维度拆解（结合分公司/城市数据）。
+> 4. 结论与改进建议。
+> **语言风格**: 专业、客观、结论先行。
+
+---
+
+## 第四部分：数据流与实时同步 (Real-time Sync)
+
+这是实现“右侧日志随中间区同步”的关键技术点。
+
+### 1. 状态机设计 (State Management)
+使用 $\text{Pinia}$ 或 $\text{Redux}$ 定义全局状态：
+```typescript
+interface AgentState {
+  currentStep: number;             // 当前执行到第几步
+  plan: PlanStep[];                // 完整的计划列表
+  executionLogs: LogEntry[];       // 右侧面板的详细日志流
+  activeTool: string | null;       // 当前激活的工具名
+  results: Record<string, any>;    // 存储每个步骤的中间结果(DF)
+}
+```
+
+### 2. 事件流同步 (Streaming Flow)
+使用 $\text{SSE (Server-Sent Events)}$ 传输，后端推送的事件类型定义：
+*   `event: plan_updated` $\rightarrow$ 更新中间区计划卡片。
+*   `event: tool_start` $\rightarrow$ 右侧面板新增一个 `LogNode`，状态设为 `Executing`。
+*   `event: tool_sql` $\rightarrow$ 向当前 `LogNode` 填充 $\text{SQL}$ 代码块。
+*   `event: tool_result` $\rightarrow$ 向当前 `LogNode` 填充结果表格/图表，状态设为 `Completed`。
+*   `event: chat_update` $\rightarrow$ 更新中间区思考过程的 $\text{Checkmark}$。
+
+---
+
+## 第五部分：具体代码实现路径 (Component Tree)
+
+如果你使用 $\text{Vue 3}$，请按照这个目录结构创建文件：
+
+```text
+src/
+├── components/
+│   ├── SmartAsk/
+│   │   ├── index.vue               # 顶层布局 (Flex Row)
+│   │   ├── ChatPanel/
+│   │   │   ├── Header.vue          # 标题 + 申请按钮
+│   │   │   ├── MessageList.vue     # 消息流容器
+│   │   │   │   ├── UserBubble.vue  # 用户气泡
+│   │   │   │   ├── AIPlanCard.vue  # 执行计划卡片
+│   │   │   │   ├── ThinkingBox.vue # 可折叠思考区
+│   │   │   │   └── ReportCard.vue  # 最终报告入口
+│   │   │   └── Composer.vue        # 底部输入框 + 数据集选择
+│   │   └── DetailPanel/
+│   │       ├── TabNav.vue          # 顶部 Tab (执行详情/报告)
+│   │       ├── LogTimeline.vue     # 右侧时间线主体
+│   │       │   ├── LogNode.vue     # 递归折叠节点
+│   │       │   ├── SqlCodeBlock.vue # 代码高亮组件
+│   │       │   └── DataView.vue    # 动态渲染表格/图表
+│   │       └── ReportViewer.vue    # HTML 报告全屏预览
+├── store/
+│   └── agent.ts                    # Pinia 状态管理
+└── services/
+    └── agentApi.ts                 # SSE 连接与事件解析
+```
+
+## 第六部分：验收标准 (The Definition of Done)
+
+当你完成开发后，对照以下项检查：
+1. [ ] **交互一致性**: 点击中间区“查看详情” $\rightarrow$ 右侧面板自动滚动到对应的日志节点。
+2. [ ] **计算准确性**: 使用 Python 计算的贡献度是否与公式 $\text{C} = (S_t - S_{t-1}) / (T_t - T_{t-1})$ 完全一致。
+3. [ ] **视觉还原度**: 打开 Chrome 开发者工具，检查主色是否为 `#165DFF`，边框是否为 `#E5E6EB`。
+4. [ ] **闭环能力**: 用户输入 $\rightarrow$ 计划 $\rightarrow$ 思考 $\rightarrow$ SQL $\rightarrow$ 图表 $\rightarrow$ HTML报告 $\rightarrow$ 下载，全链路无断层。

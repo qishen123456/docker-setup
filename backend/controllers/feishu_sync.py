@@ -360,6 +360,8 @@ def test_feishu_connection():
         
         # 测试获取数据（只获取前几条）
         test_records = sync_service.get_feishu_data({
+            'id': 0,
+            'name': 'connection_test',
             'base_id': base_id,
             'table_id': table_id
         }, access_token)

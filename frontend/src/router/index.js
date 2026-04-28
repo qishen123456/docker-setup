@@ -3,9 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
-    name: 'Dashboard',
-    component: () => import('../views/Dashboard.vue'),
-    meta: { title: '仪表盘' }
+    redirect: '/smart-ask'
   },
   {
     path: '/smart-ask',
@@ -31,7 +29,9 @@ const routes = [
   },
   {
     path: '/bookshelves',
-    redirect: '/datasets'
+    name: 'Bookshelves',
+    component: () => import('../views/Bookshelves.vue'),
+    meta: { title: '数据集书架' }
   },
   {
     path: '/databases',

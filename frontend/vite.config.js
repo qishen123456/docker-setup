@@ -10,11 +10,12 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',
     port: 5173,
     // 代理：前端 /api 请求自动转发到后端 5000 端口（避免跨域）
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5002',
         changeOrigin: true
       }
     }

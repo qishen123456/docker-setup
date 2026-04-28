@@ -1,0 +1,96 @@
+{
+  "angel_business_2026": {
+    "dataset_name": "商用事业部",
+    "business_domain": "商用事业部",
+    "dataset_aliases": [
+      "商用事业部",
+      "商用",
+      "安吉尔商用事业部"
+    ],
+    "root_nodes": [
+      "商用事业部"
+    ],
+    "default_drill_depth": 2,
+    "max_drill_depth": 3,
+    "levels": [
+      {
+        "dimension_name": "事业部",
+        "aliases": [
+          "事业部",
+          "商用事业部"
+        ],
+        "members": [
+          "商用事业部"
+        ],
+        "child_dimensions": [
+          "分公司",
+          "业务部"
+        ]
+      },
+      {
+        "dimension_name": "分公司",
+        "aliases": [
+          "分公司",
+          "大分公司"
+        ],
+        "members": [
+          "东部分公司",
+          "南部分公司",
+          "西部分公司",
+          "北部分公司"
+        ],
+        "child_dimensions": [
+          "代表处"
+        ],
+        "groups": [
+          {
+            "group_name": "4大分公司",
+            "aliases": [
+              "4大分公司",
+              "四大分公司",
+              "四个分公司"
+            ],
+            "members": [
+              "东部分公司",
+              "南部分公司",
+              "西部分公司",
+              "北部分公司"
+            ],
+            "description": "商用事业部默认统计口径下的4大分公司范围。"
+          }
+        ]
+      },
+      {
+        "dimension_name": "业务部",
+        "aliases": [
+          "业务部",
+          "行业业务部",
+          "条线"
+        ],
+        "child_dimensions": [
+          "业务员"
+        ]
+      },
+      {
+        "dimension_name": "代表处",
+        "aliases": [
+          "代表处",
+          "办事处",
+          "网点"
+        ],
+        "child_dimensions": [
+          "业务员"
+        ]
+      },
+      {
+        "dimension_name": "业务员",
+        "aliases": [
+          "业务员",
+          "业务代表",
+          "销售"
+        ],
+        "child_dimensions": []
+      }
+    ]
+  }
+}

@@ -29,6 +29,8 @@ def _make_console_safe():
 
 _make_console_safe()
 
+BACKEND_PORT = int(os.getenv("SMARTASK_BACKEND_PORT", "5001"))
+
 from config_manager import init_default_configs
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
@@ -93,6 +95,6 @@ def internal_error(error):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Smart analytics backend starting at http://localhost:5000")
+    print(f"Smart analytics backend starting at http://localhost:{BACKEND_PORT}")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=BACKEND_PORT, debug=False, use_reloader=False)

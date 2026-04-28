@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="bookshelf-page">
     <el-row :gutter="16" style="height: 100%;">
       <el-col :span="6" style="height:100%;">
@@ -190,7 +190,8 @@
                   <el-table-column label="Prompt Content">
                     <template #default="{ row }"><el-input type="textarea" :rows="4" v-model="row.prompt_content" /></template>
                   </el-table-column>
-                  <el-table-column label="操作" width="90"><template #default="{ $index }"><el-button link type="danger" @click="full.agent_prompts.splice($index,1)">删除</el-button></template></el-table-column>
+                  <el-table-column label="操作" width="90"><template #default="{ $index }"><el-button link type="danger" @click="full.agent_prompts.splice($index,1)">删除</el-button></template>
+                  </el-table-column>
                 </el-table>
               </el-tab-pane>
             </el-tabs>
@@ -390,4 +391,3 @@ onMounted(async () => {
   background: #fafbfc;
 }
 </style>
-

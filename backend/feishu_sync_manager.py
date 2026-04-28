@@ -5,6 +5,7 @@
 import json
 import os
 from datetime import datetime
+from config_manager import read_json, write_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -39,8 +40,11 @@ def _path(filename):
 def read_feishu_config():
     """读取飞书同步配置"""
     try:
-        with open(_path('feishu_sync.json'), 'r', encoding='utf-8') as f:
-            return json.load(f)
+        config = read_json('feishu_sync.json')
+        if config:
+            return config
+        write_feishu_config(DEFAULT_FEISHU_CONFIG)
+        return DEFAULT_FEISHU_CONFIG
     except FileNotFoundError:
         write_feishu_config(DEFAULT_FEISHU_CONFIG)
         return DEFAULT_FEISHU_CONFIG
@@ -52,8 +56,7 @@ def write_feishu_config(config):
     """写入飞书同步配置"""
     try:
         os.makedirs(os.path.dirname(_path('feishu_sync.json')), exist_ok=True)
-        with open(_path('feishu_sync.json'), 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
+        write_json('feishu_sync.json', config)
         return True
     except Exception as e:
         print(f"写入飞书同步配置失败: {e}")

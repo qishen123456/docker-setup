@@ -1,0 +1,137 @@
+/* ===== 火山引擎设计系统 ===== */
+:root {
+  /* 主色系 */
+  --color-primary: #165dff;
+  --color-primary-light: #e8f3ff;
+  --color-primary-hover: #0e4bcc;
+  
+  /* 背景色 */
+  --bg-page: #f2f3f5;
+  --bg-card: #ffffff;
+  --bg-muted: #f7f8fa;
+  
+  /* 文字色 */
+  --text-title: #1d2129;
+  --text-body: #4e5969;
+  --text-muted: #86909c;
+  
+  /* 边框色 */
+  --border: #e5e6eb;
+  
+  /* 状态色 */
+  --success: #00b42a;
+  --success-bg: #e8ffea;
+  --warning: #ff7d00;
+  --error: #f53f3f;
+  --info: #165dff;
+  
+  /* 阴影 */
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  
+  /* 圆角 */
+  --radius-card: 12px;
+  --radius-card-mid: 8px;
+  --radius-btn: 6px;
+  --radius-tag: 4px;
+  
+  /* 动画缓动 */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 全局字体 */
+* {
+  font-family: 'PingFang SC', 'Helvetica Neue', 'Inter', Arial, sans-serif;
+}
+
+/* 代码块字体 */
+code, pre {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+
+/* ===== 动画定义 ===== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 动画工具类 */
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* 按钮悬停效果 */
+.sa-btn-hover:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  transition: filter 0.15s, transform 0.15s;
+}

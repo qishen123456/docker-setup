@@ -16,12 +16,36 @@ from typing import Optional, Dict, Any
 # 配置目录：backend/ 同级的 config/ 文件夹
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, 'config')
+LOCAL_OVERRIDE_FILES = {'datasources.json'}
 
 # ─────────────────────────────────────────────────────────
 # 工具函数：文件路径
 # ─────────────────────────────────────────────────────────
 def _path(filename):
     return os.path.join(CONFIG_DIR, filename)
+
+
+def _local_path(filename):
+    if not filename.endswith('.json'):
+        return None
+    base, ext = os.path.splitext(filename)
+    return os.path.join(CONFIG_DIR, f'{base}.local{ext}')
+
+
+def resolve_read_path(filename: str) -> str:
+    local_path = _local_path(filename)
+    if filename in LOCAL_OVERRIDE_FILES and local_path and os.path.exists(local_path):
+        return local_path
+    return _path(filename)
+
+
+def resolve_write_paths(filename: str):
+    primary = _path(filename)
+    if filename in LOCAL_OVERRIDE_FILES:
+        local_path = _local_path(filename)
+        if local_path:
+            return [primary, local_path]
+    return [primary]
 
 
 def _ensure_dir():
@@ -55,7 +79,7 @@ def decode_secret(encoded: str) -> str:
 def read_json(filename: str) -> dict:
     """读取 JSON 配置文件，文件不存在则返回空 dict"""
     _ensure_dir()
-    filepath = _path(filename)
+    filepath = resolve_read_path(filename)
     if not os.path.exists(filepath):
         return {}
     encodings = ['utf-8', 'utf-8-sig', 'gb18030', 'gbk']
@@ -76,14 +100,13 @@ def read_json(filename: str) -> dict:
 def write_json(filename: str, data: dict):
     """将 dict 写入 JSON 配置文件（格式化输出）"""
     _ensure_dir()
-    filepath = _path(filename)
-    
     # 添加变更日志（仅对数据源配置）
     if filename == 'datasources.json':
-        log_datasource_change(data, filepath)
-    
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        log_datasource_change(data, _path(filename))
+
+    for filepath in resolve_write_paths(filename):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def log_datasource_change(data: dict, filepath: str):

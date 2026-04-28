@@ -17,7 +17,7 @@ from feishu_sync_manager import (
     read_feishu_config
 )
 from feishu_sync_logger import write_log
-from config_manager import read_json
+from config_manager import decode_secret, get_datasources
 
 class FeishuSyncService:
     """飞书同步服务"""
@@ -116,37 +116,28 @@ class FeishuSyncService:
     def get_postgres_connection(self, config: Dict) -> Optional[psycopg2.extensions.connection]:
         """获取PostgreSQL连接"""
         try:
-            # 直接读取数据源配置文件
-            import json
-            import os
-            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config')
-            config_file = os.path.join(config_dir, 'datasources.json')
-            local_file = os.path.join(config_dir, 'datasources.local.json')
-            if os.path.exists(local_file):
-                config_file = local_file
-            
-            with open(config_file, 'r', encoding='utf-8') as f:
-                datasources = json.load(f)
-            
             db_config = None
-            for db in datasources.get('databases', []):
-                if db.get('type') == 'postgresql' and db.get('is_active'):
+            for db in get_datasources():
+                if db.get('type') == 'postgresql' and db.get('is_active') and db.get('is_default'):
                     db_config = db
                     break
+
+            if not db_config:
+                for db in get_datasources():
+                    if db.get('type') == 'postgresql' and db.get('is_active'):
+                        db_config = db
+                        break
             
             if not db_config:
                 print("未找到活跃的PostgreSQL数据源")
                 return None
-            
-            import base64
-            password = base64.b64decode(db_config['password_b64']).decode('utf-8')
-            
+
             conn = psycopg2.connect(
                 host=db_config['host'],
                 port=db_config['port'],
                 database=db_config['database_name'],
                 user=db_config['username'],
-                password=password,
+                password=decode_secret(db_config.get('password_b64', '')),
                 connect_timeout=30
             )
             return conn

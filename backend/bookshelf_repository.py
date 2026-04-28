@@ -222,6 +222,18 @@ class BookshelfRepository:
                     {"prompt_key": item["prompt_key"], "prompt_content": item["prompt_content"]}
                 )
 
+            cur.execute(
+                """
+                SELECT question_text, sort_order
+                FROM bs_common_questions
+                WHERE dataset_id = %s AND is_active = TRUE
+                ORDER BY sort_order ASC, id ASC
+                LIMIT 30;
+                """,
+                (dataset_id,),
+            )
+            common_questions = [dict(row) for row in cur.fetchall()]
+
             return {
                 "dataset": dict(dataset),
                 "lld_document": dict(lld),
@@ -230,6 +242,7 @@ class BookshelfRepository:
                 "table_relations": table_relations,
                 "golden_sql_samples": selected_samples,
                 "agent_prompts": prompts,
+                "common_questions": common_questions,
             }
 
     def _rank_samples(
@@ -243,11 +256,19 @@ class BookshelfRepository:
             return samples[:top_k_samples]
 
         def score(sample: Dict[str, Any]) -> int:
-            text_parts = [sample.get("question", ""), " ".join(sample.get("tags", []) or [])]
+            text_parts = [
+                sample.get("question", ""),
+                " ".join(sample.get("tags", []) or []),
+                sample.get("intent_type", ""),
+            ]
             sample_tokens = self._tokenize(" ".join(text_parts))
             overlap = len(tokens.intersection(sample_tokens))
-            quality = int(sample.get("quality_score") or 0) // 20
-            return overlap * 10 + quality
+            exact_hit = 1 if (question or "").strip().lower() == str(sample.get("question") or "").strip().lower() else 0
+            quality = int(sample.get("quality_score") or 0) // 10
+            sql_bonus = self._score_sql_shape(question, sample.get("sql_text") or "")
+            coverage = len(sample_tokens) or 1
+            overlap_ratio = int((overlap / coverage) * 20)
+            return overlap * 12 + overlap_ratio + quality + sql_bonus + exact_hit * 20
 
         ranked = sorted(samples, key=score, reverse=True)
         selected = []
@@ -261,3 +282,19 @@ class BookshelfRepository:
     def _tokenize(text: str) -> set:
         parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
         return {item for item in parts if item.strip()}
+
+    @staticmethod
+    def _score_sql_shape(question: str, sql_text: str) -> int:
+        text = f"{question or ''} {(sql_text or '').lower()}"
+        score = 0
+        if re.search(r"(趋势|变化|按月|按日|时间|日期)", question or "") and re.search(r"(date|time|month|day)", sql_text or "", re.IGNORECASE):
+            score += 8
+        if re.search(r"(占比|分布|构成|比例)", question or "") and re.search(r"(group\s+by|count\s*\(|sum\s*\()", sql_text or "", re.IGNORECASE):
+            score += 8
+        if re.search(r"(top|排名|前\d+|最高|最低)", question or "", re.IGNORECASE) and re.search(r"(order\s+by|limit|top\s+\d+)", sql_text or "", re.IGNORECASE):
+            score += 8
+        if re.search(r"(明细|列表|记录)", question or "") and re.search(r"select\s+.+from", sql_text or "", re.IGNORECASE):
+            score += 4
+        if "where" in text:
+            score += 2
+        return score

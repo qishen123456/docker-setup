@@ -33,6 +33,171 @@ def _parse_json_like(value: Any, default: Any):
     return default
 
 
+def _validate_full_payload(payload: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    lld_documents = payload.get("lld_documents") or []
+    data_dictionary = payload.get("data_dictionary") or []
+    schema_definition = payload.get("schema_definition") or []
+    golden_sql_samples = payload.get("golden_sql_samples") or []
+    agent_prompts = payload.get("agent_prompts") or []
+
+    valid_lld = [item for item in lld_documents if str(item.get("content") or "").strip()]
+    valid_schema = [item for item in schema_definition if str(item.get("table_name") or "").strip() and str(item.get("ddl_sql") or "").strip()]
+    valid_dictionary = [
+        item for item in data_dictionary
+        if str(item.get("table_name") or "").strip()
+        and str(item.get("column_name") or "").strip()
+        and str(item.get("semantic_name") or "").strip()
+    ]
+    valid_golden = [
+        item for item in golden_sql_samples
+        if str(item.get("question") or "").strip() and str(item.get("sql_text") or "").strip()
+    ]
+
+    prompt_agents = {
+        int(item.get("agent_no") or 0)
+        for item in agent_prompts
+        if int(item.get("agent_no") or 0) in (1, 2, 3, 4) and str(item.get("prompt_content") or "").strip()
+    }
+    missing_agents = [str(agent_no) for agent_no in (1, 2, 3, 4) if agent_no not in prompt_agents]
+
+    if not valid_lld:
+        errors.append("请至少维护一份有效的 LLD 文档。")
+    if not valid_schema:
+        errors.append("请至少维护一张带 DDL 的表定义。")
+    if valid_schema and not valid_dictionary:
+        errors.append("当前已有 DDL，但数据字典为空，请至少补充一批字段语义。")
+    if len(valid_golden) < 3:
+        errors.append("请至少维护 3 条有效的 Golden SQL 样本后再保存。")
+    if missing_agents:
+        errors.append(f"Agent 提示片段缺失：Agent {', '.join(missing_agents)}。")
+
+    seen_pairs = set()
+    duplicate_count = 0
+    for item in valid_golden:
+        key = (str(item.get("question") or "").strip(), str(item.get("sql_text") or "").strip())
+        if key in seen_pairs:
+            duplicate_count += 1
+        seen_pairs.add(key)
+    if duplicate_count > 0:
+        errors.append(f"Golden SQL 中存在 {duplicate_count} 条重复样本，请去重后再保存。")
+
+    return errors
+
+
+def _build_quality_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
+    lld_documents = payload.get("lld_documents") or []
+    data_dictionary = payload.get("data_dictionary") or []
+    schema_definition = payload.get("schema_definition") or []
+    golden_sql_samples = payload.get("golden_sql_samples") or []
+    agent_prompts = payload.get("agent_prompts") or []
+    common_questions = payload.get("common_questions") or []
+    regression_cases = payload.get("regression_cases") or []
+
+    valid_lld = [item for item in lld_documents if str(item.get("content") or "").strip()]
+    valid_schema = [item for item in schema_definition if str(item.get("table_name") or "").strip() and str(item.get("ddl_sql") or "").strip()]
+    valid_dictionary = [
+        item for item in data_dictionary
+        if str(item.get("table_name") or "").strip()
+        and str(item.get("column_name") or "").strip()
+        and str(item.get("semantic_name") or "").strip()
+    ]
+    valid_golden = [
+        item for item in golden_sql_samples
+        if str(item.get("question") or "").strip() and str(item.get("sql_text") or "").strip()
+    ]
+    valid_common_questions = [item for item in common_questions if str(item.get("question_text") or "").strip()]
+    valid_regression_cases = [item for item in regression_cases if str(item.get("question_text") or "").strip()]
+    prompt_agents = {
+        int(item.get("agent_no") or 0)
+        for item in agent_prompts
+        if int(item.get("agent_no") or 0) in (1, 2, 3, 4) and str(item.get("prompt_content") or "").strip()
+    }
+
+    schema_table_count = len({str(item.get("table_name") or "").strip() for item in valid_schema if str(item.get("table_name") or "").strip()})
+    dictionary_table_count = len({str(item.get("table_name") or "").strip() for item in valid_dictionary if str(item.get("table_name") or "").strip()})
+
+    checks = []
+
+    def add_check(key: str, label: str, score: int, max_score: int, summary: str):
+        status = "healthy" if score >= max_score * 0.8 else "warning" if score > 0 else "risk"
+        checks.append(
+            {
+                "key": key,
+                "label": label,
+                "score": score,
+                "max_score": max_score,
+                "status": status,
+                "summary": summary,
+            }
+        )
+
+    lld_score = 15 if valid_lld else 0
+    add_check("lld", "LLD 文档", lld_score, 15, f"有效 LLD {len(valid_lld)} 份")
+
+    schema_score = 20 if valid_schema else 0
+    add_check("schema", "DDL / 表结构", schema_score, 20, f"有效表定义 {len(valid_schema)} 张")
+
+    dictionary_target = max(8, schema_table_count * 4)
+    dictionary_score = min(20, int(round(min(1, len(valid_dictionary) / dictionary_target) * 20))) if dictionary_target > 0 else 0
+    add_check(
+        "dictionary",
+        "数据字典",
+        dictionary_score,
+        20,
+        f"有效字段语义 {len(valid_dictionary)} 条，覆盖表 {dictionary_table_count}/{schema_table_count or 0}",
+    )
+
+    golden_score = min(20, int(round(min(1, len(valid_golden) / 5) * 20)))
+    add_check("golden_sql", "Golden SQL", golden_score, 20, f"有效样本 {len(valid_golden)} 条")
+
+    prompt_score = min(15, int(round((len(prompt_agents) / 4) * 15)))
+    add_check("prompts", "Agent Prompt", prompt_score, 15, f"已配置 Agent {len(prompt_agents)}/4")
+
+    question_score = min(5, int(round(min(1, len(valid_common_questions) / 5) * 5)))
+    add_check("common_questions", "常见问题", question_score, 5, f"有效常见问题 {len(valid_common_questions)} 条")
+
+    regression_score = min(5, int(round(min(1, len(valid_regression_cases) / 4) * 5)))
+    add_check("regression_cases", "标准题集", regression_score, 5, f"有效回归题 {len(valid_regression_cases)} 条")
+
+    total_score = sum(item["score"] for item in checks)
+    level = "healthy" if total_score >= 85 else "warning" if total_score >= 65 else "risk"
+    label = "健康" if total_score >= 85 else "待补强" if total_score >= 65 else "风险较高"
+
+    gaps: List[str] = []
+    if not valid_lld:
+        gaps.append("缺少有效 LLD 文档，Agent2/3/4 容易失去业务约束。")
+    if not valid_schema:
+        gaps.append("缺少带 DDL 的表定义，SQL 生成会明显变弱。")
+    if valid_schema and len(valid_dictionary) < dictionary_target:
+        gaps.append("数据字典覆盖偏低，字段语义不足会影响问数准确率。")
+    if len(valid_golden) < 3:
+        gaps.append("Golden SQL 少于 3 条，高质量样本不足。")
+    if len(prompt_agents) < 4:
+        gaps.append("Agent1-4 Prompt 未覆盖完整，部分 Agent 仍缺少专用提示词。")
+    if len(valid_common_questions) < 3:
+        gaps.append("常见问题样本过少，路由与口径识别信号偏弱。")
+    if len(valid_regression_cases) < 4:
+        gaps.append("标准题集不足，建议至少覆盖明细、汇总、趋势、口径确认四类问题。")
+
+    return {
+        "score": total_score,
+        "level": level,
+        "label": label,
+        "checks": checks,
+        "gaps": gaps,
+        "stats": {
+            "lld_count": len(valid_lld),
+            "schema_count": len(valid_schema),
+            "dictionary_count": len(valid_dictionary),
+            "golden_sql_count": len(valid_golden),
+            "agent_prompt_count": len(prompt_agents),
+            "common_question_count": len(valid_common_questions),
+            "regression_case_count": len(valid_regression_cases),
+        },
+    }
+
+
 def _ensure_optional_tables(cur):
     cur.execute(
         """
@@ -59,6 +224,22 @@ def _ensure_optional_tables(cur):
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(dataset_id, config_type, config_key)
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_regression_cases (
+            id BIGSERIAL PRIMARY KEY,
+            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
+            case_type VARCHAR(32) NOT NULL DEFAULT 'summary',
+            question_text TEXT NOT NULL,
+            expected_focus TEXT NOT NULL DEFAULT '',
+            expected_intent VARCHAR(32) NOT NULL DEFAULT 'generate_sql',
+            sort_order INT NOT NULL DEFAULT 100,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         """
     )
@@ -352,6 +533,29 @@ def get_bookshelf_dataset_full(dataset_id: int):
             )
             external_configs = [dict(row) for row in cur.fetchall()]
 
+            cur.execute(
+                """
+                SELECT id, case_type, question_text, expected_focus, expected_intent, sort_order, is_active, updated_at
+                FROM bs_regression_cases
+                WHERE dataset_id = %s
+                ORDER BY sort_order ASC, id ASC;
+                """,
+                (dataset_id,),
+            )
+            regression_cases = [dict(row) for row in cur.fetchall()]
+
+            quality_summary = _build_quality_summary(
+                {
+                    "lld_documents": lld_documents,
+                    "data_dictionary": data_dictionary,
+                    "schema_definition": schema_definition,
+                    "golden_sql_samples": golden_sql_samples,
+                    "agent_prompts": agent_prompts,
+                    "common_questions": common_questions,
+                    "regression_cases": regression_cases,
+                }
+            )
+
             return jsonify(
                 {
                     "dataset": dict(dataset),
@@ -364,6 +568,8 @@ def get_bookshelf_dataset_full(dataset_id: int):
                     "agent_prompts": agent_prompts,
                     "common_questions": common_questions,
                     "external_configs": external_configs,
+                    "regression_cases": regression_cases,
+                    "quality_summary": quality_summary,
                 }
             )
     except BookshelfConfigurationError as exc:
@@ -377,6 +583,9 @@ def save_bookshelf_dataset_full(dataset_id: int):
     try:
         repo.ensure_schema()
         payload = request.get_json() or {}
+        validation_errors = _validate_full_payload(payload)
+        if validation_errors:
+            return jsonify({"error": "dataset validation failed", "details": validation_errors}), 400
         synonyms = payload.get("synonyms") or []
         lld_documents = payload.get("lld_documents") or []
         data_dictionary = payload.get("data_dictionary") or []
@@ -385,6 +594,7 @@ def save_bookshelf_dataset_full(dataset_id: int):
         golden_sql_samples = payload.get("golden_sql_samples") or []
         agent_prompts = payload.get("agent_prompts") or []
         common_questions = payload.get("common_questions") or []
+        regression_cases = payload.get("regression_cases") or []
         external_configs = payload.get("external_configs") or []
 
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -633,6 +843,29 @@ def save_bookshelf_dataset_full(dataset_id: int):
                     ),
                 )
 
+            cur.execute("DELETE FROM bs_regression_cases WHERE dataset_id = %s;", (dataset_id,))
+            for idx, item in enumerate(regression_cases, start=1):
+                question_text = (item.get("question_text") or "").strip()
+                if not question_text:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO bs_regression_cases(
+                        dataset_id, case_type, question_text, expected_focus, expected_intent, sort_order, is_active
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """,
+                    (
+                        dataset_id,
+                        (item.get("case_type") or "summary").strip(),
+                        question_text,
+                        (item.get("expected_focus") or "").strip(),
+                        (item.get("expected_intent") or "generate_sql").strip(),
+                        int(item.get("sort_order") or idx * 10),
+                        bool(item.get("is_active", True)),
+                    ),
+                )
+
             cur.execute("UPDATE bs_datasets SET updated_at = NOW() WHERE id = %s;", (dataset_id,))
 
         return jsonify({"message": "bookshelf content saved", "dataset_id": dataset_id})
@@ -686,21 +919,21 @@ def list_common_questions():
 
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/import-legacy", methods=["POST"])
 def import_legacy_to_dataset(dataset_id: int):
+    return jsonify({"error": "legacy import has been removed"}), 410
+
+
+@bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/cleanup-legacy", methods=["POST"])
+def cleanup_legacy_dataset_data(dataset_id: int):
     try:
         repo.ensure_schema()
         payload = request.get_json() or {}
-        include_query_history = bool(payload.get("include_query_history", True))
-        include_feishu_sync = bool(payload.get("include_feishu_sync", True))
-        include_sql_prompts = bool(payload.get("include_sql_prompts", True))
-        include_ai_models = bool(payload.get("include_ai_models", True))
-        max_history = int(payload.get("max_history", 300) or 300)
+        clear_common_questions = bool(payload.get("clear_common_questions", False))
 
-        imported = {
+        cleaned = {
             "golden_sql_samples": 0,
             "common_questions": 0,
             "external_configs": 0,
             "agent_prompts": 0,
-            "ai_model_configs": 0,
         }
 
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -709,120 +942,45 @@ def import_legacy_to_dataset(dataset_id: int):
             if not cur.fetchone():
                 return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
 
-            if include_query_history:
-                history_data = read_json("query_history.json")
-                history_items = history_data.get("history", [])[:max_history]
-                seen = set()
-                for item in history_items:
-                    question = (item.get("question") or "").strip()
-                    sql_text = (item.get("sql") or "").strip()
-                    status = (item.get("status") or "").strip().lower()
-                    if not question or not sql_text or status != "success":
-                        continue
-                    dedupe_key = (question, sql_text)
-                    if dedupe_key in seen:
-                        continue
-                    seen.add(dedupe_key)
+            cur.execute("SELECT COUNT(*) AS count FROM bs_golden_sql_samples WHERE dataset_id = %s AND created_by = 'legacy-import';", (dataset_id,))
+            cleaned["golden_sql_samples"] = int(cur.fetchone()["count"])
+            cur.execute("DELETE FROM bs_golden_sql_samples WHERE dataset_id = %s AND created_by = 'legacy-import';", (dataset_id,))
 
-                    cur.execute(
-                        """
-                        INSERT INTO bs_golden_sql_samples(
-                            dataset_id, intent_type, question, sql_text, tags, quality_score, is_active, created_by
-                        )
-                        VALUES (%s, 'detail', %s, %s, '[]'::jsonb, 85, TRUE, 'legacy-import');
-                        """,
-                        (dataset_id, question, sql_text),
-                    )
-                    imported["golden_sql_samples"] += 1
+            cur.execute("SELECT COUNT(*) AS count FROM bs_agent_prompt_fragments WHERE dataset_id = %s AND created_by = 'legacy-import';", (dataset_id,))
+            cleaned["agent_prompts"] = int(cur.fetchone()["count"])
+            cur.execute("DELETE FROM bs_agent_prompt_fragments WHERE dataset_id = %s AND created_by = 'legacy-import';", (dataset_id,))
 
-                top_questions = []
-                for item in history_items:
-                    question = (item.get("question") or "").strip()
-                    if question and question not in top_questions:
-                        top_questions.append(question)
-                    if len(top_questions) >= 20:
-                        break
+            cur.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM bs_dataset_external_configs
+                WHERE dataset_id = %s
+                  AND (config_key LIKE 'legacy_sync_%%' OR config_key LIKE 'legacy_ai_model_%%');
+                """,
+                (dataset_id,),
+            )
+            cleaned["external_configs"] = int(cur.fetchone()["count"])
+            cur.execute(
+                """
+                DELETE FROM bs_dataset_external_configs
+                WHERE dataset_id = %s
+                  AND (config_key LIKE 'legacy_sync_%%' OR config_key LIKE 'legacy_ai_model_%%');
+                """,
+                (dataset_id,),
+            )
 
+            if clear_common_questions:
+                cur.execute("SELECT COUNT(*) AS count FROM bs_common_questions WHERE dataset_id = %s;", (dataset_id,))
+                cleaned["common_questions"] = int(cur.fetchone()["count"])
                 cur.execute("DELETE FROM bs_common_questions WHERE dataset_id = %s;", (dataset_id,))
-                for idx, question in enumerate(top_questions, start=1):
-                    cur.execute(
-                        """
-                        INSERT INTO bs_common_questions(dataset_id, question_text, sort_order, is_active)
-                        VALUES (%s, %s, %s, TRUE);
-                        """,
-                        (dataset_id, question, idx * 10),
-                    )
-                    imported["common_questions"] += 1
-
-            if include_feishu_sync:
-                feishu_data = read_json("feishu_sync.json")
-                sync_items = feishu_data.get("sync_configs", [])
-                for item in sync_items:
-                    config_key = f"legacy_sync_{item.get('id')}"
-                    cur.execute(
-                        """
-                        INSERT INTO bs_dataset_external_configs(
-                            dataset_id, config_type, config_key, config_value, is_active
-                        )
-                        VALUES (%s, 'feishu_sync', %s, %s::jsonb, TRUE)
-                        ON CONFLICT (dataset_id, config_type, config_key)
-                        DO UPDATE SET
-                            config_value = EXCLUDED.config_value,
-                            updated_at = NOW();
-                        """,
-                        (dataset_id, config_key, json_dump(item)),
-                    )
-                    imported["external_configs"] += 1
-
-            if include_sql_prompts:
-                prompt_data = read_json("sql_prompts.json")
-                prompt_map = prompt_data.get("sql_generation_prompts", {})
-                for key, item in prompt_map.items():
-                    prompt_content = (item.get("content") or "").strip()
-                    if not prompt_content:
-                        continue
-                    cur.execute(
-                        """
-                        INSERT INTO bs_agent_prompt_fragments(
-                            dataset_id, agent_no, prompt_key, prompt_content, is_active, created_by
-                        )
-                        VALUES (%s, 2, %s, %s, TRUE, 'legacy-import')
-                        ON CONFLICT (dataset_id, agent_no, prompt_key)
-                        DO UPDATE SET
-                            prompt_content = EXCLUDED.prompt_content,
-                            updated_at = NOW();
-                        """,
-                        (dataset_id, f"legacy_{key}", prompt_content),
-                    )
-                    imported["agent_prompts"] += 1
-
-            if include_ai_models:
-                ai_data = read_json("ai_settings.json")
-                for model in ai_data.get("models", []):
-                    config_key = f"legacy_ai_model_{model.get('id')}"
-                    cur.execute(
-                        """
-                        INSERT INTO bs_dataset_external_configs(
-                            dataset_id, config_type, config_key, config_value, is_active
-                        )
-                        VALUES (%s, 'ai_model', %s, %s::jsonb, TRUE)
-                        ON CONFLICT (dataset_id, config_type, config_key)
-                        DO UPDATE SET
-                            config_value = EXCLUDED.config_value,
-                            updated_at = NOW();
-                        """,
-                        (dataset_id, config_key, json_dump(model)),
-                    )
-                    imported["external_configs"] += 1
-                    imported["ai_model_configs"] += 1
 
             cur.execute("UPDATE bs_datasets SET updated_at = NOW() WHERE id = %s;", (dataset_id,))
 
-        return jsonify({"message": "legacy data imported", "dataset_id": dataset_id, "imported": imported})
+        return jsonify({"message": "legacy data cleaned", "dataset_id": dataset_id, "cleaned": cleaned})
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
-        return jsonify({"error": f"import legacy failed: {exc}"}), 500
+        return jsonify({"error": f"cleanup legacy failed: {exc}"}), 500
 
 
 def json_dump(obj: Any) -> str:
