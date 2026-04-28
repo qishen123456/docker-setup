@@ -37,6 +37,8 @@ Write-Host "Project root: $ProjectRoot"
 
 $envPath = Join-Path $ProjectRoot ".env"
 $envExamplePath = Join-Path $ProjectRoot ".env.example"
+$bundlePath = Join-Path $ProjectRoot "backend\\imports\\bookshelf_bundle.json"
+$dataBundlePath = Join-Path $ProjectRoot "backend\\imports\\angel_group_data_bundle.json"
 
 Write-Step "Check Docker Desktop"
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -72,11 +74,27 @@ else {
 Write-Step "Show container status"
 docker compose ps
 
+if (Test-Path -LiteralPath $bundlePath) {
+    Write-Step "Import Bookshelf metadata bundle"
+    docker compose exec -T backend python import_bookshelf_bundle.py /app/backend/imports/bookshelf_bundle.json
+}
+else {
+    Write-Step "Seed default dataset template"
+    docker compose exec -T backend python fill_syyb_dataset.py
+}
+
+if (Test-Path -LiteralPath $dataBundlePath) {
+    Write-Step "Import angel_group_data snapshot"
+    docker compose exec -T backend python import_angel_group_data.py /app/backend/imports/angel_group_data_bundle.json
+}
+
 Write-Host ""
 Write-Host "Deployment completed." -ForegroundColor Green
 Write-Host "Frontend: http://localhost:$frontendPort"
 Write-Host "Backend: http://localhost:$backendPort"
 Write-Host "PostgreSQL port: $pgPort"
+Write-Host "Metadata source: $(if (Test-Path -LiteralPath $bundlePath) { 'bookshelf_bundle.json imported' } else { 'default 商用事业部 template seeded' })"
+Write-Host "Business data source: $(if (Test-Path -LiteralPath $dataBundlePath) { 'angel_group_data snapshot imported' } else { 'no angel_group_data snapshot found' })"
 Write-Host ""
 Write-Host "Useful commands:"
 Write-Host "  Update project: .\\update.ps1"

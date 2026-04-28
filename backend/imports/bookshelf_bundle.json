@@ -1,0 +1,448 @@
+{
+  "version": 1,
+  "exported_at": "2026-04-28T23:25:17",
+  "tables": {
+    "bs_datasets": [
+      {
+        "id": 1,
+        "dataset_code": "angel_business_2026",
+        "dataset_name": "商用事业部",
+        "business_domain": "安吉尔商用事业部销售业绩分析",
+        "source_id": 5,
+        "description": "商用事业部（飞书多维表格）四Agent模板",
+        "is_active": true,
+        "created_at": "2026-04-24T23:44:22.759869+08:00",
+        "updated_at": "2026-04-26T22:03:36.823140+08:00",
+        "agent_prompt": "你是 Agent1（语义路由与口径守卫）。\n任务：识别用户问题对应的数据集与统计口径，必要时触发老板确认。\n\n硬性规则：\n1. 仅围绕 angel_group_data（2026年）语义做判断。\n2. 如果问题包含\"分公司/代表处/业务部/业务代表/条线\"且可能产生歧义，必须进入确认流程。\n3. 统计上级层级时，必须强调\"不含下级明细行\"的口径。\n4. 涉及\"当前年/最新年/本年\"统一按 2026。\n5. 输出偏好：若样本命中高，优先 direct_execute，否则 generate_sql。\n6. 若用户明确指定\"东部分公司\"，保留该过滤意图并透传给下游Agent。",
+        "ddl_context": "\nCREATE TABLE IF NOT EXISTS angel_group_data (\n    id BIGSERIAL PRIMARY KEY,\n    record_id TEXT,\n    fields JSONB,\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n",
+        "synonyms": "{\"销售\": [\"业绩\", \"开单\", \"成交\", \"订单\"], \"任务\": [\"目标\", \"指标\", \"KPI\"], \"分公司\": [\"分部\", \"分支\"], \"代表处\": [\"办事处\", \"网点\"], \"事业部\": [\"部门\", \"业务单元\"], \"金额\": [\"钱\", \"数额\", \"数值\"]}",
+        "common_questions": "[{\"question_text\": \"商用事业部2026年整体销售业绩如何？\"}, {\"question_text\": \"各分公司任务完成情况分析\"}, {\"question_text\": \"业务代表业绩排名\"}, {\"question_text\": \"年度开单金额趋势分析\"}]"
+      }
+    ],
+    "bs_dataset_synonyms": [
+      {
+        "id": 5,
+        "dataset_id": 1,
+        "synonym": "商用事业部",
+        "normalized_synonym": "商用事业部",
+        "weight": 10,
+        "created_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 6,
+        "dataset_id": 1,
+        "synonym": "安吉尔商用",
+        "normalized_synonym": "安吉尔商用",
+        "weight": 9,
+        "created_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 7,
+        "dataset_id": 1,
+        "synonym": "销售业绩",
+        "normalized_synonym": "销售业绩",
+        "weight": 8,
+        "created_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 8,
+        "dataset_id": 1,
+        "synonym": "东部分公司",
+        "normalized_synonym": "东部分公司",
+        "weight": 8,
+        "created_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ],
+    "bs_lld_documents": [
+      {
+        "id": 2,
+        "dataset_id": 1,
+        "version": 1,
+        "title": "飞书多维表格 -> PostgreSQL 智能SQL生成规范（商用事业部）",
+        "content": "核心约束：全中文命名、层级数据隔离（统计上级时不含下级明细）、自动清洗金额、2026年过滤。适用场景：安吉尔商用事业部销售业绩分析、层级隔离取数、任务达成率/剩余任务统计。主表：angel_group_data，JSONB字段：fields。",
+        "redline_rules": [
+          "必须只读SQL",
+          "必须使用2026年份过滤",
+          "必须执行层级隔离",
+          "必须限制LIMIT 100"
+        ],
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ],
+    "bs_data_dictionary_items": [
+      {
+        "id": 12,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "事业部",
+        "semantic_name": "事业部",
+        "data_type": "text",
+        "enum_mapping": {},
+        "extraction_rule": "CASE WHEN jsonb_typeof(fields->'事业部')='array' THEN fields->'事业部'->0->>'text' ELSE fields->>'事业部' END",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 13,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "分公司",
+        "semantic_name": "分公司",
+        "data_type": "text",
+        "enum_mapping": {},
+        "extraction_rule": "CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 14,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "代表处",
+        "semantic_name": "代表处",
+        "data_type": "text",
+        "enum_mapping": {},
+        "extraction_rule": "CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 15,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "业务代表",
+        "semantic_name": "业务代表",
+        "data_type": "text",
+        "enum_mapping": {},
+        "extraction_rule": "CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 16,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "当前年",
+        "semantic_name": "当前年",
+        "data_type": "text",
+        "enum_mapping": {},
+        "extraction_rule": "CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 17,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "总任务（金额）",
+        "semantic_name": "总任务金额",
+        "data_type": "numeric",
+        "enum_mapping": {},
+        "extraction_rule": "COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END,'[^0-9.-]','','g'),''),'0')::NUMERIC",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 18,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "column_name": "fields",
+        "jsonb_key": "年度开单金额",
+        "semantic_name": "年度开单金额",
+        "data_type": "numeric",
+        "enum_mapping": {},
+        "extraction_rule": "COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END,'[^0-9.-]','','g'),''),'0')::NUMERIC",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ],
+    "bs_schema_definitions": [
+      {
+        "id": 3,
+        "dataset_id": 1,
+        "table_name": "angel_group_data",
+        "ddl_sql": "CREATE TABLE angel_group_data (\n  \"id\" integer,\n  \"record_id\" character varying,\n  \"fields\" jsonb,\n  \"created_time\" timestamp without time zone,\n  \"updated_time\" timestamp without time zone,\n  \"sync_time\" timestamp without time zone\n);",
+        "description": "飞书多维表格落库主表，业务字段位于 fields(JSONB)。",
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00",
+        "source_id": 5
+      }
+    ],
+    "bs_table_relations": [],
+    "bs_golden_sql_samples": [
+      {
+        "id": 2,
+        "dataset_id": 1,
+        "intent_type": "summary",
+        "question": "商用事业部全维度业绩分析（含层级隔离）",
+        "sql_text": "WITH 字段提取 AS ( SELECT CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END AS 任务原始,CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END AS 开单原始,CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年 FROM angel_group_data), 基础数据 AS ( SELECT 分公司,代表处,业务代表,COALESCE(NULLIF(regexp_replace(任务原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,COALESCE(NULLIF(regexp_replace(开单原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额,CASE WHEN 分公司 LIKE '%分公司' THEN '区域条线' WHEN 分公司 LIKE '%业务部' THEN '行业条线' ELSE '事业部层级' END AS 条线 FROM 字段提取 WHERE 当前年='2026'), 维度汇总 AS ( SELECT '区域条线' AS 条线,分公司 AS 上级名称,代表处 AS 节点名称,'代表处' AS 层级,任务金额,开单金额 FROM 基础数据 WHERE 代表处<>'' AND (业务代表 IS NULL OR 业务代表='') UNION ALL SELECT '区域条线','商用事业部',分公司,'分公司',任务金额,开单金额 FROM 基础数据 WHERE 分公司 LIKE '%分公司' AND (代表处 IS NULL OR 代表处='') AND (业务代表 IS NULL OR 业务代表='') UNION ALL SELECT '行业条线',分公司,业务代表,'业务代表',任务金额,开单金额 FROM 基础数据 WHERE 业务代表<>'' UNION ALL SELECT '行业条线','商用事业部',分公司,'业务部',任务金额,开单金额 FROM 基础数据 WHERE 分公司 LIKE '%业务部' AND (代表处 IS NULL OR 代表处='') AND (业务代表 IS NULL OR 业务代表='')) SELECT 条线,层级,节点名称,上级名称,SUM(任务金额) AS 总任务金额,SUM(开单金额) AS 年度开单金额,CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100,2) ELSE 0 END AS 达成率,ROUND(SUM(任务金额)-SUM(开单金额),2) AS 剩余任务金额 FROM 维度汇总 GROUP BY 条线,层级,节点名称,上级名称 ORDER BY 条线 DESC,层级 DESC,上级名称 LIMIT 100",
+        "tags": [
+          "商用事业部",
+          "层级隔离",
+          "达成率",
+          "UNION ALL"
+        ],
+        "quality_score": 95,
+        "usage_count": 0,
+        "last_used_at": null,
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ],
+    "bs_agent_prompt_fragments": [
+      {
+        "id": 5,
+        "dataset_id": 1,
+        "agent_no": 1,
+        "prompt_key": "default",
+        "prompt_content": "你是 Agent1（语义路由与口径守卫）。\n任务：识别用户问题对应的数据集与统计口径，必要时触发老板确认。\n\n硬性规则：\n1. 仅围绕 angel_group_data（2026年）语义做判断。\n2. 如果问题包含“分公司/代表处/业务部/业务代表/条线”且可能产生歧义，必须进入确认流程。\n3. 统计上级层级时，必须强调“不含下级明细行”的口径。\n4. 涉及“当前年/最新年/本年”统一按 2026。\n5. 输出偏好：若样本命中高，优先 direct_execute，否则 generate_sql。\n6. 若用户明确指定“东部分公司”，保留该过滤意图并透传给下游Agent。",
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 6,
+        "dataset_id": 1,
+        "agent_no": 2,
+        "prompt_key": "default",
+        "prompt_content": "你是 Agent2（SQL生成专家），专门处理飞书多维表格落库到 PostgreSQL 的 JSONB 数据。\n只允许输出只读 SQL（SELECT/WITH/SHOW），禁止增删改。\n\n固定上下文：\n1. 当前数据库：{database_name}（PostgreSQL）。\n2. 仅使用 angel_group_data 表（字段 fields 为 JSONB）。\n3. 年份口径固定：2026。\n\n强制生成规则：\n1. 必须使用 WITH 结构：字段提取 -> 基础数据 -> 维度汇总。\n2. 字段提取必须兼容 JSONB 数组/文本：\n   CASE WHEN jsonb_typeof(fields->'字段')='array' THEN fields->'字段'->0->>'text' ELSE fields->>'字段' END\n3. 金额字段必须清洗：\n   COALESCE(NULLIF(regexp_replace(金额原始,'[^0-9.-]','','g'),''),'0')::NUMERIC\n4. 年份过滤必须写死：\n   WHERE 当前年 = '2026'\n5. 层级隔离必须执行：\n   - 代表处统计：代表处<>'' AND (业务代表 IS NULL OR 业务代表='')\n   - 分公司/业务部统计：(代表处 IS NULL OR 代表处='') AND (业务代表 IS NULL OR 业务代表='')\n   - 业务代表统计：业务代表<>''\n6. UNION ALL 合并顺序必须是：\n   代表处 -> 分公司 -> 业务代表 -> 业务部 -> 事业部\n7. 东部分公司统一过滤：\n   WHERE 上级名称='东部分公司' OR 节点名称='东部分公司'\n8. 指标算法：\n   - 达成率：CASE WHEN SUM(任务)>0 THEN ROUND(SUM(开单)/SUM(任务)*100,2) ELSE 0 END\n   - 剩余任务：ROUND(SUM(任务)-SUM(开单),2)\n9. 默认排序：\n   ORDER BY 条线 DESC, 层级 DESC, 上级名称\n10. 必须 LIMIT 100。\n\n字段中文键：\n事业部、分公司、代表处、业务代表、当前年、总任务（金额）、年度开单金额\n\n输出要求：\n1. SQL 使用中文别名。\n2. 不要解释，不要Markdown，不要代码块，只输出SQL正文。",
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 7,
+        "dataset_id": 1,
+        "agent_no": 3,
+        "prompt_key": "default",
+        "prompt_content": "你是 Agent3（SQL复核官）。\n你要对 Agent2 SQL 进行口径、安全、可执行性复核，并在必要时修正 SQL。\n\n复核清单（全部必须满足）：\n1. 只读安全：仅 SELECT/WITH/SHOW。\n2. 仅使用 angel_group_data。\n3. JSONB 提取是否使用 jsonb_typeof + ->> 兼容数组/文本。\n4. 金额是否使用 regexp_replace 清洗非数字字符。\n5. 是否包含 当前年='2026' 过滤。\n6. 层级隔离是否正确（上级不含下级明细）。\n7. UNION ALL 顺序是否符合：\n   代表处 -> 分公司 -> 业务代表 -> 业务部 -> 事业部。\n8. 达成率、剩余任务金额计算是否正确且避免除零。\n9. 是否具备 LIMIT 100。\n10. 涉及东部分公司时，过滤条件是否统一：\n    上级名称='东部分公司' OR 节点名称='东部分公司'\n\n若发现问题，直接修正为可执行SQL并返回 final_sql。",
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      },
+      {
+        "id": 8,
+        "dataset_id": 1,
+        "agent_no": 4,
+        "prompt_key": "default",
+        "prompt_content": "你是 Agent4（业务解读官），面向商用事业部管理层输出结论。\n\n解读要求：\n1. 先给结论：目标达成情况、风险层级、优先动作。\n2. 分层说明：事业部 -> 条线 -> 分公司/业务部 -> 代表处/业务代表。\n3. 重点关注：\n   - 达成率偏低节点\n   - 剩余任务金额高的节点\n   - 东部分公司专项表现\n4. 明确给出 2-3 条“可执行动作建议”，语言简洁，避免空话。\n5. 所有结论均基于查询结果，不编造数据。",
+        "is_active": true,
+        "created_by": "ui",
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ],
+    "bs_common_questions": [
+      {
+        "id": 45,
+        "dataset_id": 1,
+        "question_text": "商用事业部当前年整体达成率是多少？",
+        "sort_order": 10,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 46,
+        "dataset_id": 1,
+        "question_text": "东部分公司当前年达成率和剩余任务是多少？",
+        "sort_order": 20,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 47,
+        "dataset_id": 1,
+        "question_text": "哪些代表处达成率最低？",
+        "sort_order": 30,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 48,
+        "dataset_id": 1,
+        "question_text": "各业务部当前年开单金额排名",
+        "sort_order": 40,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 49,
+        "dataset_id": 1,
+        "question_text": "商用事业部近30天销售业绩趋势如何？",
+        "sort_order": 50,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 50,
+        "dataset_id": 1,
+        "question_text": "业务代表当前年开单金额 Top10 是谁？",
+        "sort_order": 60,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 51,
+        "dataset_id": 1,
+        "question_text": "哪些节点剩余任务压力最大？",
+        "sort_order": 70,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 52,
+        "dataset_id": 1,
+        "question_text": "东部区域当前年销售表现是否需要先确认统计口径？",
+        "sort_order": 80,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      }
+    ],
+    "bs_regression_cases": [
+      {
+        "id": 17,
+        "dataset_id": 1,
+        "case_type": "summary",
+        "question_text": "商用事业部当前年整体达成率是多少？",
+        "expected_focus": "验证系统能正确汇总商用事业部当前年的整体达成率，并输出核心指标摘要。",
+        "expected_intent": "generate_sql",
+        "sort_order": 10,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 18,
+        "dataset_id": 1,
+        "case_type": "summary",
+        "question_text": "东部分公司当前年达成率和剩余任务是多少？",
+        "expected_focus": "验证系统能围绕东部分公司输出达成率、任务额和剩余任务，并给出简要分析。",
+        "expected_intent": "generate_sql",
+        "sort_order": 20,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 19,
+        "dataset_id": 1,
+        "case_type": "detail",
+        "question_text": "哪些代表处达成率最低？",
+        "expected_focus": "验证系统能识别低达成率代表处，并按达成率从低到高排序展示。",
+        "expected_intent": "generate_sql",
+        "sort_order": 30,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 20,
+        "dataset_id": 1,
+        "case_type": "detail",
+        "question_text": "开单金额最高的前5个业务部是哪几个？",
+        "expected_focus": "验证系统能输出业务部开单金额 Top5，并适合生成柱状图预览。",
+        "expected_intent": "generate_sql",
+        "sort_order": 40,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 21,
+        "dataset_id": 1,
+        "case_type": "summary",
+        "question_text": "商用事业部近30天销售业绩趋势如何？",
+        "expected_focus": "验证系统能按时间维度输出近30天销售趋势，并适合生成折线或组合图。",
+        "expected_intent": "generate_sql",
+        "sort_order": 50,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 22,
+        "dataset_id": 1,
+        "case_type": "detail",
+        "question_text": "业务代表当前年开单金额 Top10 是谁？",
+        "expected_focus": "验证系统能输出业务代表 Top10 排名，并包含姓名与开单金额。",
+        "expected_intent": "generate_sql",
+        "sort_order": 60,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 23,
+        "dataset_id": 1,
+        "case_type": "confirmation",
+        "question_text": "东部区域销售表现怎么样？",
+        "expected_focus": "验证系统遇到区域口径不清的问题时，会先要求确认统计范围，而不是直接生成结果。",
+        "expected_intent": "requires_confirmation",
+        "sort_order": 70,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      },
+      {
+        "id": 24,
+        "dataset_id": 1,
+        "case_type": "confirmation",
+        "question_text": "哪些节点表现不太好？",
+        "expected_focus": "验证系统遇到指标定义模糊的问题时，会先要求确认“节点”与“表现不佳”的统计口径。",
+        "expected_intent": "requires_confirmation",
+        "sort_order": 80,
+        "is_active": true,
+        "created_at": "2026-04-26T22:29:46.781254+08:00",
+        "updated_at": "2026-04-26T22:29:46.781254+08:00"
+      }
+    ],
+    "bs_dataset_external_configs": [
+      {
+        "id": 2,
+        "dataset_id": 1,
+        "config_type": "dataset_meta",
+        "config_key": "sql_generation_profile",
+        "config_value": {
+          "db_type": "postgresql",
+          "readonly": true,
+          "main_table": "angel_group_data",
+          "year_fixed": "2026",
+          "jsonb_column": "fields"
+        },
+        "is_active": true,
+        "created_at": "2026-04-25T00:54:28.686923+08:00",
+        "updated_at": "2026-04-25T00:54:28.686923+08:00"
+      }
+    ]
+  }
+}

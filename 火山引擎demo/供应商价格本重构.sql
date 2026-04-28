@@ -107,79 +107,6 @@ COMMENT ON COLUMN meiju.ods_nebula_t_purchase_order_material.total_contract_pric
 
 
 
-SELECT 
-    id AS 主键ID,
-    business_id AS 业务ID,
-    order_material_list_code AS 订单材料清单编码,
-    sku_id AS SKU_ID,
-    sku_type_code AS SKU类型编码,
-    auxiliary_flag AS 辅材标识,
-    supplier_id AS 供应商ID,
-    purchase_num AS 采购数量,
-    purchase_unit AS 采购单位,
-    prices AS 单价,
-    service_rate AS 服务费率,
-    vat_amount_due AS 应交增值税额,
-    additional_tax_amount_due AS 应交附加税额,
-    amount AS 金额,
-    plan_settle_num AS 计划结算数量,
-    ori_total_amount AS 原始总金额,
-    real_settle_num AS 实际结算数量,
-    material_total_amount_due AS 应交材料总金额,
-    take_over_num AS 接收数量,
-    return_num AS 退货数量,
-    total_return_amount AS 总退货金额,
-    concentrate_price AS 集中采购价,
-    concentrate_amount AS 集中采购金额,
-    deliver_time AS 交付时间,
-    status AS 状态,
-    remark AS 备注,
-    remark_imgs AS 备注图片,
-    send_attachments AS 发送附件,
-    return_attachments AS 退货附件,
-    reason AS 原因,
-    snapshot_json AS 快照JSON,
-    cost_no AS 成本编号,
-    yecai_status AS 野菜状态,
-    document_no AS 单据编号,
-    construction_phase AS 施工阶段,
-    version AS 版本,
-    deleted AS 是否删除,
-    creator AS 创建人,
-    created_time AS 创建时间,
-    updator AS 更新人,
-    updated_time AS 更新时间,
-    contract_price AS 合同价格,
-    total_contract_price AS 合同总价,
-    install_status AS 安装状态,
-    install_attachments AS 安装附件,
-    takeover_time AS 接收时间,
-    takeover_source AS 接收来源,
-    takeover_status AS 接收状态,
-    package_id AS 包裹ID,
-    need_shipment AS 是否需要发货,
-    logistics_company_code AS 物流公司编码,
-    logistics_company_name AS 物流公司名称,
-    shipment_number AS 运单号,
-    installation_type AS 安装类型,
-    pay_amount_no_tax AS 不含税支付金额,
-    material_supplier_id AS 材料供应商ID,
-    relate_ship_code AS 关联发货编码,
-    procurement_price AS 采购价格,
-    new_purchase_type AS 新采购类型,
-    msg_status AS 消息状态
-FROM meiju.ods_nebula_t_purchase_order_material
-WHERE deleted =  '0' AND
-sku_type_code in (MAIN_MATERIAL：主材；SERVICE：服务；)
- AND 
-   created_time >='2026-01-01 00:00:00'
-   AND created_time <'2026-04-01 00:00:00'
-business_id = '83768'
-主键id	业务id	订单材料清单编码	sku_id	sku类型编码	辅材标识	供应商id	采购数量	采购单位	单价	服务费率	应交增值税额	应交附加税额	金额	计划结算数量	原始总金额	实际结算数量	应交材料总金额	接收数量	退货数量	总退货金额	集中采购价	集中采购金额	交付时间	状态	备注	备注图片	发送附件	退货附件	原因	快照json	成本编号	野菜状态	单据编号	施工阶段	版本	是否删除	创建人	创建时间	更新人	更新时间	合同价格	合同总价	安装状态	安装附件	接收时间	接收来源	接收状态	包裹id	是否需要发货	物流公司编码	物流公司名称	运单号	安装类型	不含税支付金额	材料供应商id	关联发货编码	采购价格	新采购类型	消息状态
-421502	83768	POM00004FQK	21723	MAIN_MATERIAL	0	3378	80.000000	片	16.60	0.000000	0.000000	0.000000	1328.000000	80.000000	1328.000000	80.000000	1328.000000	80.000000	0.000000	0.000000	0.00	0.00	2025-12-31 00:00:00	2			[{"name":"微信图片_2026-01-27_145702_809.jpg","url":"https://yxcos.onewo.com/2026/01/27/5c55e52f-da14-4e45-b0df-fbace753c064.jpg"},{"name":"微信图片_2026-01-27_145700_608.jpg","url":"https://yxcos.onewo.com/2026/01/27/8bacb677-2149-401c-b180-34ce2256a774.jpg"},{"name":"微信图片_2026-01-27_145656_842.jpg","url":"https://yxcos.onewo.com/2026/01/27/66f85ef5-5a76-4b0f-bd84-007082fb66f5.jpg"}]			{"brandName":"蒙娜丽莎","categoryId":9,"categoryPath":"瓷砖>墙砖>墙砖400×800mm","companyOrgCode":"2289","companyOrgName":"深圳市万物研选科技服务有限公司佛山分公司","contractPrice":0.00,"corporateEntityInfoVO":{"cityCompanyCode":"2289","cityCompanyName":"深圳市万物研选科技服务有限公司佛山分公司","companyName":"深圳市万物研选科技服务有限公司佛山分公司","taxRate":"null","taxerIdNumber":"91440604MABPQF0L4H"},"deliveryFee":0.00,"description":"400*800mm，釉面砖","installationType":"无需安装","materialSupplierId":3378,"materialSupplierName":"佛山市创粤建材有限公司","model":"墙砖【40-80FKB07002PM-蒙娜丽莎】","newPurchaseType":0,"procureRemark":"","purchasePrice":16.60,"purchasePriceList":[],"purchasingUnit":"片","sellAreas":[{"concentratePrice":"0","id":21723,"purchasePrice":"16.6","pushStatus":1,"relatedContractStatus":false,"salesStatus":1,"sellableArea":"全国"}],"skuAttr":"-","skuCode":"12921723","skuId":21723,"skuName":"墙砖400×800mm/-","skuType":"主材","skuTypeCode":"MAIN_MATERIAL","supplier":{"businessLicenseNo":"91440604MABPQF0L4H","generalTaxpayer":true,"id":2289,"isGeneralTaxpayer":1,"taxCalculationMethod":0,"taxPayerType":1},"supplierId":3378,"supplierInvoicingType":"专票","supplierName":"佛山市创粤建材有限公司","supplierQyOrgCode":"CT00010092,CT00010088","taxRate":"13%"}	M1260127638754288935587841	1	ZY2601275408929121		2	0	21683461	2026-01-27 15:01:29		2026-02-16 00:00:58+08	0.000000	0.000000	0					2	false				无需安装	1176.430000	3378	MLC00000PR4	16.60	0	0
-421501	83768	POM00004FQJ	11690	MAIN_MATERIAL	0	3378	1.000000	次	200.00	0.000000	0.000000	0.000000	200.000000	1.000000	200.000000	1.000000	200.000000	1.000000	0.000000	0.000000	0.00	0.00	2025-12-31 00:00:00	2			[{"name":"微信图片_2026-01-27_145702_809.jpg","url":"https://yxcos.onewo.com/2026/01/27/5c55e52f-da14-4e45-b0df-fbace753c064.jpg"},{"name":"微信图片_2026-01-27_145700_608.jpg","url":"https://yxcos.onewo.com/2026/01/27/8bacb677-2149-401c-b180-34ce2256a774.jpg"},{"name":"微信图片_2026-01-27_145656_842.jpg","url":"https://yxcos.onewo.com/2026/01/27/66f85ef5-5a76-4b0f-bd84-007082fb66f5.jpg"}]			{"brandName":"蒙娜丽莎","categoryId":33,"categoryPath":"瓷砖>瓷砖服务费>瓷砖服务费","companyOrgCode":"2289","companyOrgName":"深圳市万物研选科技服务有限公司佛山分公司","contractPrice":0.00,"contractPriceVO":[{"contractId":38179,"purchasePriceList":[200]}],"corporateEntityInfoVO":{"cityCompanyCode":"2289","cityCompanyName":"深圳市万物研选科技服务有限公司佛山分公司","companyName":"深圳市万物研选科技服务有限公司佛山分公司","taxRate":"null","taxerIdNumber":"91440604MABPQF0L4H"},"deliveryFee":0.00,"description":"","installationType":"无需安装","materialSupplierId":3378,"materialSupplierName":"佛山市创粤建材有限公司","model":"瓷砖服务费【小单费-蒙娜丽莎】","newPurchaseType":0,"procureRemark":"","purchasePrice":200.00,"purchasePriceList":[],"purchasingUnit":"次","sellAreas":[{"concentratePrice":"0","id":11690,"purchasePrice":"200","pushStatus":1,"relatedContractStatus":false,"salesStatus":1,"sellableArea":"全国"}],"skuAttr":"小单费","skuCode":"153311690","skuId":11690,"skuName":"瓷砖服务费/小单费","skuType":"主材","skuTypeCode":"MAIN_MATERIAL","supplier":{"businessLicenseNo":"91440604MABPQF0L4H","generalTaxpayer":true,"id":2289,"isGeneralTaxpayer":1,"taxCalculationMethod":0,"taxPayerType":1},"supplierId":3378,"supplierInvoicingType":"专票","supplierName":"佛山市创粤建材有限公司","supplierQyOrgCode":"CT00010092,CT00010088","taxRate":"13%"}	M1260127638754288935587840	1	ZY2601275408928757		2	0	21683461	2026-01-27 15:01:29		2026-02-16 00:00:58+08	0.000000	0.000000	0					2	false				无需安装	175.780000	3378	MLC00000PR3	200.00	0	0
-
-
 -- ============================================================================
 -- 采购订单表查询
 -- 功能说明：查询集采供应商稽查相关的采购订单数据，排除草稿、待接单、驳回、待审核状态
@@ -287,8 +214,16 @@ LIMIT 100;  -- 限制返回100条记录
 采购订单编号(主键)	业务编码(订单号)	面客装修主合同号	客户姓名	客户手机号	客户地址	单据类型(RENOVATION=装修采购单;PLATFORM=精装微改	单据创建方式(PUBLISH=拆包推送材料申领单;MANUAL=	来源申请单据编码	归属组织编码	归属组织名称	实际采购类型(MATERIAL=材料;LABOR=工费;CAPTAIN=超级	采购入库方式(HOME=入户;WAREHOUSE=入仓)	采购方式(SALES=销采;BATCH=批采)	采购总金额	集采采购金额	增值税	附加税	采购方编码	采购方名称	材料库供应商ID	供应商名称	采购单据状态(1=草稿;2=待供应商接单;3=供应商已	对账状态(0=待对账;1=已对账)	结算状态(0=未结算;1=已结算)	订单异常标记(0=正常;1=异常)	采购发起时间	采购价格明确提交时间	创建时间	更新时间	工长手机号	工长姓名	联系人手机号	联系人姓名	工费信息JSON串	工费信息凭证URL	供应商服务费用信息	总承包价总额	发票含税总金额折算额	发票不含税总金额折算额	付款发票税率	发货单	发货单附件合并外链	送货地址	公司名称	纳税人识别号	是否含集采材料(1=是;0=否)	供应商接单驳回原因	采购订单备注	订单信息	审核信息	流程实例编码	来源订单类型	是否删除(1=已删除;0=未删除)	创建人	更新人
 83768	4251220625037780111724544	4005375324963144712	杨东立	13927724877	广东省佛山市南海区桂城街道佛山金色家园金虹一座1单元603	RENOVATION	MANUAL		CT00010288	佛山金湾服务站	MATERIAL	HOME	SALES	1528.00	1528.00			2289	深圳市万物研选科技服务有限公司佛山分公司	3378	佛山市创粤建材有限公司	7	1	1	0	2025-12-31 18:02:10		2025-12-31 18:02:10	2026-02-16 00:00:58+08	13106712514	谢兆锟	13106712514	谢兆锟				0.000000	1528.00	1352.21	0.130000	[{"name":"万物研选26年1月份对账_2.pdf","url":"https://yxcos.onewo.com/2026/01/30/9ed603f9-4f04-430d-b96b-43cad0cb98ea.pdf"}]	https://yxcos.onewo.com/2026/1/30/8c835df909884062a9d4c2aa18dc1b9d.zip	广东省佛山市南海区桂城街道佛山金色家园金虹一座1单元603	深圳市万物研选科技服务有限公司佛山分公司	91440604MABPQF0L4H	0						0	0	21683461	
 
--- 第三步：创建经销商临时表 (【重点修改】：前置 Coalesce)
--- ------------------------------------------------------------
+-- ============================================================================
+-- 【正式执行块】一键运行：建临时表 → 主查询 → 清理临时表
+-- 使用说明：全选本块（从 DROP 到最后一行 DROP）一起执行
+-- ============================================================================
+
+-- Step 0: 清理可能已存在的临时表（避免重复执行报错）
+DROP TABLE IF EXISTS temp_dealer_list;
+
+-- Step 1: 创建经销商临时表，前置 COALESCE 确定匹配基准名称
+-- 优先用"属地确认的供应商"(COL_9)，为空时退用"战略供应商清单"(COL_4)
 CREATE TEMP TABLE temp_dealer_list AS
 SELECT
     "COL_1" AS 品牌,
@@ -301,112 +236,238 @@ SELECT
     "COL_8" AS 供应商ID,
     TRIM("COL_9") AS 属地确认的供应商,
     "COL_10" AS 引入方,
-    -- 【新增】：在这里直接确定最终要拿去匹配的名称
     COALESCE(NULLIF(TRIM("COL_9"), ''), TRIM("COL_4")) AS 匹配基准供应商
 FROM public.qbi_file_20260423_10_49_26_0;
 
+-- Step 2: 主查询
+-- ============================================================================
+-- 【供应商价格本稽查 + 采购订单统计】（修正版 v2）
+-- 
+-- 需求：拿人工Excel供应商清单，按"供应商+城市"为维度：
+--   1. 用供应商名 → ods_diana_t_supplier → 拿到 supplier_id
+--   2. 用 supplier_id → ods_diana_t_price_book（价格本主表）→ 判断是否有价格本
+--   3. 用 book_code → ods_diana_t_price_book_detail → 拿到价格本中的 sku_id 列表
+--   4. 用价格本中的 sku_id → ods_nebula_t_purchase_order_material → 找到用了这些SKU的材料行
+--   5. 用材料行的 business_id → ods_nebula_t_purchase_order → 找到对应的采购订单
+--   6. 用采购订单的 business_code → 研选订单表 → 拿到城市
+--   7. 按"供应商+城市"聚合统计订单数和金额
+--
+-- ⚠️ 核心修正：之前错误地用 supplier_id 直接关联采购订单
+--   正确路径是：价格本明细 sku_id → 材料清单 sku_id → business_id → 采购订单
+--   这样才能知道"价格本里的材料在实际采购中被用了多少"
+--
+-- ⚠️ 关键点：同一个供应商在多个城市都有业务，必须用城市区分
+-- ============================================================================
 
+WITH 
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第①步：人工清单 匹配 供应商主数据，拿到 supplier_id
+-- ────────────────────────────────────────────────────────────────────────────
+supplier_match AS (
+    SELECT 
+        dl.匹配基准供应商,                  -- 最终用来匹配的供应商名
+        dl.品牌,
+        dl.区域,
+        dl.城市       AS 清单城市,          -- 人工清单的城市（关键维度！）
+        s.id          AS supplier_id,       -- 系统供应商ID
+        s.company_name AS 供应商名称        -- 系统中的公司名
+    FROM temp_dealer_list dl
+    LEFT JOIN meiju.ods_diana_t_supplier s 
+        ON s.company_name = dl.匹配基准供应商
+        AND s.deleted = 0
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第②步：查价格本主表，判断该供应商是否有价格本
+-- 说明：ods_diana_t_price_book 是价格本主表
+--       status: 0=未生效, 1=启用, 2=停用
+-- ────────────────────────────────────────────────────────────────────────────
+price_book_summary AS (
+    SELECT 
+        pb.supplier_id,
+        COUNT(*)                                                    AS 价格本总数,
+        COUNT(CASE WHEN pb.status = 1 THEN 1 END)                  AS 启用价格本数,
+        STRING_AGG(DISTINCT pb.book_code, ', ')                     AS 价格本编码列表,
+        STRING_AGG(DISTINCT CASE WHEN pb.status = 1 THEN pb.book_code END, ', ') AS 启用价格本编码
+    FROM meiju.ods_diana_t_price_book pb
+    WHERE pb.deleted = 0
+    GROUP BY pb.supplier_id
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第③步：价格本明细 — 拿到每个供应商价格本中的所有 sku_id
+-- 说明：这是核心关联桥梁！
+--       supplier_id → price_book(book_code) → price_book_detail(sku_id)
+--       拿到的 sku_id 是"该供应商价格本里登记的材料"
+-- ────────────────────────────────────────────────────────────────────────────
+supplier_pricebook_skus AS (
+    SELECT 
+        pb.supplier_id,
+        pbd.sku_id,
+        pbd.purchase_price AS 价格本采购价,     -- 价格本中登记的采购价
+        pbd.book_code,
+        COUNT(DISTINCT pbd.sku_id) OVER (PARTITION BY pb.supplier_id) AS 该供应商价格本SKU总数
+    FROM meiju.ods_diana_t_price_book pb
+    INNER JOIN meiju.ods_diana_t_price_book_detail pbd 
+        ON pbd.book_code = pb.book_code         -- 通过价格本编码关联明细
+        AND pbd.deleted = 0 
+        AND pbd.status = 0                       -- 正常（非作废）
+    WHERE pb.deleted = 0 
+      AND pb.status = 1                          -- 只看启用的价格本
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第④步：用价格本的 sku_id → 采购订单材料清单 → 找到 business_id（采购订单主键）
+-- 说明：这是关键！从价格本的 sku_id 出发，去材料清单表中找
+--       哪些采购订单用了这些材料（通过 sku_id 匹配）
+--       材料清单表中的 business_id 就是 采购订单表的 id（主键）
+-- ────────────────────────────────────────────────────────────────────────────
+sku_order_material AS (
+    SELECT 
+        sps.supplier_id,                         -- 供应商ID（来自价格本）
+        sps.sku_id,                              -- 价格本中的材料SKU
+        sps.价格本采购价,
+        m.business_id,                           -- 采购订单主键（→ 关联采购订单表）
+        m.prices        AS 实际采购单价,         -- 材料清单中的实际采购价
+        m.amount        AS 材料采购金额,         -- 该行的采购金额
+        m.purchase_num  AS 采购数量,
+        m.id            AS material_id
+    FROM supplier_pricebook_skus sps
+    INNER JOIN meiju.ods_nebula_t_purchase_order_material m
+        ON m.sku_id = sps.sku_id                 -- ⭐ 核心关联：价格本SKU = 材料清单SKU
+        AND m.deleted = 0                         -- 未删除
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第⑤步：通过 business_id 找到采购订单，并过滤有效状态
+-- 说明：material的 business_id = 采购订单的 id
+--       这里同时获取 business_code（订单号）用来下一步查城市
+-- ────────────────────────────────────────────────────────────────────────────
+sku_order_valid AS (
+    SELECT 
+        som.*,
+        po.business_code,                        -- 业务编码/订单号（用于查城市）
+        po.amount_total  AS 订单总金额           -- 整张订单的总金额
+    FROM sku_order_material som
+    INNER JOIN meiju.ods_nebula_t_purchase_order po
+        ON po.id = som.business_id               -- business_id = 采购订单主键
+        AND po.status NOT IN (1, 2, 4, 8)        -- 排除：草稿/待接单/驳回/待审核
+        AND po.deleted = 0
+        AND po.order_remark = 0                   -- 正常订单
+        AND po.created_time >= '2026-01-01 00:00:00'  -- 只统计2026年的订单
+        AND po.created_time <  '2027-01-01 00:00:00'  -- 不含2027年
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第⑥步：用 business_code 查订单所在城市
+-- 说明：采购订单本身没有"城市"字段，需要用订单号
+--       去研选的平台订单/装修订单表里查
+-- ────────────────────────────────────────────────────────────────────────────
+city_lookup AS (
+    SELECT DISTINCT order_code, city_name AS 城市
+    FROM (
+        SELECT order_code, city_name
+        FROM yanxuan.dwd_platform_order_detail 
+        WHERE is_test = '否'
+        UNION ALL
+        SELECT order_code, city_name
+        FROM yanxuan.dwd_decoration_order_detail 
+        WHERE is_refund_order = '否' AND is_test = '否'
+    ) sub
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第⑦步：给每条记录打上城市标签
+-- ────────────────────────────────────────────────────────────────────────────
+sku_order_with_city AS (
+    SELECT 
+        sov.*,
+        cl.城市 AS 订单城市
+    FROM sku_order_valid sov
+    LEFT JOIN city_lookup cl ON cl.order_code = sov.business_code
+),
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 第⑧步：按"供应商+城市"聚合统计
+-- 说明：⚠️ 关键过滤 sm.清单城市 = soc.订单城市，确保只统计该城市的订单
+--       这里从人工清单出发 LEFT JOIN，保证每个清单行都出现在结果中
+-- ────────────────────────────────────────────────────────────────────────────
+order_stats AS (
+    SELECT
+        sm.匹配基准供应商,
+        sm.品牌,
+        sm.区域,
+        sm.清单城市,
+        sm.supplier_id,
+        sm.供应商名称,
+        -- 采购订单维度（去重统计，因为一张订单有多个材料行）
+        COUNT(DISTINCT soc.business_id)                   AS 采购订单数,
+        COALESCE(SUM(DISTINCT soc.订单总金额), 0)         AS 订单总金额,
+        -- 材料明细维度
+        COUNT(soc.material_id)                            AS 材料行数,
+        COALESCE(SUM(soc.材料采购金额), 0)                AS 材料采购总金额,
+        COUNT(DISTINCT soc.sku_id)                        AS 实际采购的价格本SKU数
+    FROM supplier_match sm
+    LEFT JOIN sku_order_with_city soc 
+        ON soc.supplier_id = sm.supplier_id
+        AND sm.清单城市 = soc.订单城市               -- ⚠️ 只匹配同城市的订单
+    GROUP BY 
+        sm.匹配基准供应商, sm.品牌, sm.区域, sm.清单城市,
+        sm.supplier_id, sm.供应商名称
+)
+
+-- ============================================================================
+-- 最终输出：每行 = 一个"供应商+城市"组合
+-- ============================================================================
 SELECT 
-    order_code, 
-    order_status,
-    city_name AS 城市,
-    '平台订单' AS 数据来源
-FROM 
-    yanxuan.dwd_platform_order_detail 
-WHERE 
-    is_test = '否' 
-    AND order_code = '4251220625037780111724544'
-    -- AND customer_mobile IN (
-    --     '15005598961',
-    --     '18256973868',
-    --     '17671099701',
-    --     '18715004517',
-    --     '15856953151',
-    --     '18119512842',
-    --     '15055105463',
-    --     '18755138753'
-    -- )
+    -- ◆ 人工清单信息
+    os.品牌,
+    os.区域,
+    os.清单城市                               AS 城市,
+    os.匹配基准供应商                         AS 供应商名称,
 
-UNION ALL
+    -- ◆ 系统匹配
+    os.supplier_id                            AS 系统供应商ID,
+    CASE WHEN os.supplier_id IS NOT NULL 
+         THEN '是' ELSE '否' 
+    END                                       AS 是否匹配到系统供应商,
 
-SELECT 
-    order_code, 
-    furnish_order_status,
-    city_name AS 城市,
-    '装修订单' AS 数据来源
-FROM 
-    yanxuan.dwd_decoration_order_detail 
-WHERE 
-    -- furnish_type != '维修' 
-    -- AND 
-    is_refund_order = '否' 
-    AND is_test = '否' 
-   AND order_code = '4251220625037780111724544'
-    -- AND customer_mobile IN (
-    --     '15005598961',
-    --     '18256973868',
-    --     '17671099701',
-    --     '18715004517',
-    --     '15856953151',
-    --     '18119512842',
-    --     '15055105463',
-    --     '18755138753'
-    -- )
+    -- ◆ 价格本情况（来自价格本主表 ods_diana_t_price_book）
+    CASE 
+        WHEN os.supplier_id IS NULL THEN '供应商未匹配'
+        WHEN pbs.supplier_id IS NULL THEN '否'           -- 价格本主表中没有该供应商
+        WHEN pbs.启用价格本数 > 0 THEN '是(启用)'        -- 有启用的价格本
+        ELSE '是(未启用)'                                 -- 有价格本但未启用
+    END                                       AS 是否在价格本中,
+    COALESCE(pbs.价格本总数, 0)               AS 价格本总数,
+    COALESCE(pbs.启用价格本数, 0)             AS 启用价格本数,
+    pbs.启用价格本编码                        AS 启用价格本编码,
 
+    -- ◆ 价格本SKU vs 实际采购SKU
+    COALESCE((SELECT MAX(该供应商价格本SKU总数) 
+              FROM supplier_pricebook_skus x 
+              WHERE x.supplier_id = os.supplier_id), 0)
+                                              AS 价格本中SKU种类数,  -- 价格本里登记了多少种SKU
+    os.实际采购的价格本SKU数                  AS 该城市实际采购的SKU数, -- 这些SKU中在该城市有多少被实际采购了
 
-CREATE TABLE meiju.ods_diana_t_price_book_detail (
-    id bigint NOT NULL,
-    book_code character varying(64) DEFAULT ''::character varying, -- 价格本编码
-    book_detail_code bigint DEFAULT 1::bigint, -- 价格本明细id(存量的材料数据这里存的是材料id)
-    sku_id bigint DEFAULT 0::bigint, -- 关联材料id
-    sku_code character varying(64) DEFAULT ''::character varying, -- 编码(这里字段只是为了兼容之前的材料中的)
-    purchase_price numeric(12,2), -- 采购价
-    supplier_invoicing_type smallint DEFAULT 0::smallint, -- 供应商开票类型：0=普票,1=专票
-    supplier_invoicing_tax_rate numeric(10,2) DEFAULT 0.00, -- 供应商开票税率, 这里存的单位是百分比
-    arrive_day bigint DEFAULT 0::bigint, -- 到货时间
-    status integer DEFAULT 0, -- 状态(0=正常,1=作废)
-    creator character varying(50) DEFAULT ''::character varying, -- 创建人
-    created_time timestamp without time zone DEFAULT now(), -- 创建时间
-    updator character varying(50) DEFAULT ''::character varying, -- 创建人
-    updated_time timestamp with time zone DEFAULT now(), -- 更新时间
-    deleted integer DEFAULT 0, -- 是否已删除 1：已删除 0：未删除
-    delivery_fee numeric(12,2) DEFAULT 0.00, -- 配送费
-    purchasing_unit character varying(50) -- 采购单位
-);
-COMMENT ON TABLE meiju.ods_diana_t_price_book_detail IS '采购价格本明细表';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.book_code IS '价格本编码';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.book_detail_code IS '价格本明细id(存量的材料数据这里存的是材料id)';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.sku_id IS '关联材料id';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.sku_code IS '编码(这里字段只是为了兼容之前的材料中的)';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.purchase_price IS '采购价';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.supplier_invoicing_type IS '供应商开票类型：0=普票,1=专票';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.supplier_invoicing_tax_rate IS '供应商开票税率, 这里存的单位是百分比';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.arrive_day IS '到货时间';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.status IS '状态(0=正常,1=作废)';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.creator IS '创建人';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.created_time IS '创建时间';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.updator IS '创建人';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.updated_time IS '更新时间';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.deleted IS '是否已删除 1：已删除 0：未删除';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.delivery_fee IS '配送费';
-COMMENT ON COLUMN meiju.ods_diana_t_price_book_detail.purchasing_unit IS '采购单位';
+    -- ◆ 采购订单统计（该城市下，只统计用了价格本SKU的订单）
+    os.采购订单数                             AS 该城市采购订单数,
+    os.订单总金额                             AS 该城市订单总金额,
+    os.材料行数                               AS 该城市材料明细行数,
+    os.材料采购总金额                         AS 该城市材料采购总金额
 
+FROM order_stats os
 
+-- 关联价格本主表汇总
+LEFT JOIN price_book_summary pbs 
+    ON pbs.supplier_id = os.supplier_id
 
-select * FROM 
-meiju.ods_diana_t_price_book_detail
-where sku_id = '21723'
+ORDER BY 
+    os.品牌,
+    os.区域,
+    os.清单城市,
+    os.匹配基准供应商;
 
-id	book_code	book_detail_code	sku_id	sku_code	purchase_price	supplier_invoicing_type	supplier_invoicing_tax_rate	arrive_day	status	creator	created_time	updator	updated_time	deleted	delivery_fee	purchasing_unit
-18730	PB00000068	21723	21723	12921723	16.60	1	13.00	7	0	12528922	2025-12-04 22:45:28		2025-12-04 22:45:28+08	0	0.00	片
-
-
-
-select 
--- *
-company_name,id
-from meiju.ods_diana_t_supplier
-where deleted = '0'
--- AND company_name ='易欧思系统门窗（山东）有限公司'
--- and supplier_biz_type ='1'
+-- Step 3: 清理临时表（执行完毕后释放资源）
+DROP TABLE IF EXISTS temp_dealer_list;

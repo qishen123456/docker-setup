@@ -13,6 +13,8 @@ Write-Host "SmartAsk Docker update script" -ForegroundColor Green
 Write-Host "Project root: $ProjectRoot"
 
 $envPath = Join-Path $ProjectRoot ".env"
+$bundlePath = Join-Path $ProjectRoot "backend\\imports\\bookshelf_bundle.json"
+$dataBundlePath = Join-Path $ProjectRoot "backend\\imports\\angel_group_data_bundle.json"
 
 Write-Step "Check Git"
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -36,6 +38,16 @@ git pull
 
 Write-Step "Rebuild and start containers"
 docker compose up -d --build
+
+if (Test-Path -LiteralPath $bundlePath) {
+    Write-Step "Sync Bookshelf metadata bundle"
+    docker compose exec -T backend python import_bookshelf_bundle.py /app/backend/imports/bookshelf_bundle.json
+}
+
+if (Test-Path -LiteralPath $dataBundlePath) {
+    Write-Step "Sync angel_group_data snapshot"
+    docker compose exec -T backend python import_angel_group_data.py /app/backend/imports/angel_group_data_bundle.json
+}
 
 Write-Step "Show container status"
 docker compose ps

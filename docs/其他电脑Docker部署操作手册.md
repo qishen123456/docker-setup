@@ -40,6 +40,31 @@
 - 后端和数据库一般不用手动点开
 - 项目的敏感信息放在 `.env` 文件里，**不要提交到 Git**
 
+另外还有一个很关键的文件：
+
+- `backend/imports/bookshelf_bundle.json`
+
+这个文件是“书架元数据打包文件”，里面放的是：
+
+- 数据集基本信息
+- 同义词
+- LLD
+- 数据字典
+- Golden SQL
+- Agent Prompt
+- 常见问题
+- 回归题
+
+如果这个文件存在，部署脚本会自动导入它。  
+如果这个文件不存在，部署脚本只会自动灌一套默认“商用事业部模板”。
+
+另外还支持一份业务数据快照文件：
+
+- `backend/imports/angel_group_data_bundle.json`
+
+这个文件里放的是 `angel_group_data` 的真实业务数据快照。  
+如果这个文件存在，部署脚本会自动把它导入数据库。
+
 ---
 
 ## 3. 用户机第一次部署前，需要准备什么
@@ -229,6 +254,15 @@ deploy.bat
 .\deploy.ps1
 ```
 
+脚本会自动做这些事：
+
+1. 检查 Docker Desktop
+2. 检查 `.env`
+3. 启动 `frontend/backend/postgres`
+4. 如果存在 `backend/imports/bookshelf_bundle.json`，自动导入完整书架元数据
+5. 如果没有 bundle，就自动灌入默认“商用事业部”模板
+6. 如果存在 `backend/imports/angel_group_data_bundle.json`，自动导入真实业务数据快照
+
 #### 方式 B：手动执行 Docker 命令
 
 在项目根目录执行：
@@ -360,6 +394,11 @@ update.bat
 .\update.ps1
 ```
 
+如果仓库里存在 `backend/imports/bookshelf_bundle.json`，更新脚本会同步把这个 bundle 重新导入一次。  
+这意味着用户机上的书架内容会和仓库里的 bundle 保持一致。
+
+如果仓库里存在 `backend/imports/angel_group_data_bundle.json`，更新脚本也会同步导入这份业务数据快照。
+
 ### 7.2 手动更新
 
 在项目根目录执行：
@@ -406,6 +445,37 @@ git push gitee main
 git pull
 docker compose up -d --build
 ```
+
+如果你不仅改了代码，还改了数据集书架内容，推荐你在开发机先执行一次 bundle 导出，再提交 Gitee。
+
+导出命令：
+
+```powershell
+py -3.11 .\backend\export_bookshelf_bundle.py
+```
+
+导出后会生成：
+
+```text
+backend\imports\bookshelf_bundle.json
+```
+
+然后把这个文件一起提交到 Gitee。  
+这样用户机更新时，才能拿到和你开发机一致的数据集元数据。
+
+如果你还想让用户机第一次部署就带上当前业务数据，再执行：
+
+```powershell
+python .\backend\export_angel_group_data.py
+```
+
+导出后会生成：
+
+```text
+backend\imports\angel_group_data_bundle.json
+```
+
+然后把这个文件也一起提交到 Gitee。
 
 ---
 
@@ -629,9 +699,26 @@ docker compose up -d --build
 
 建议顺序：
 
-1. 先在你的开发机把 Docker 方案跑通
-2. 确认 `docker compose up -d --build` 没问题
-3. 再把这份手册发给用户机使用
+1. 先在你的开发机维护好数据集书架和业务数据
+2. 执行：
+
+```powershell
+python .\backend\export_bookshelf_bundle.py
+```
+
+3. 再执行：
+
+```powershell
+python .\backend\export_angel_group_data.py
+```
+
+4. 把生成的：
+
+- `backend/imports/bookshelf_bundle.json`
+- `backend/imports/angel_group_data_bundle.json`
+
+一起提交到 Gitee
+5. 再让用户机执行 `deploy.bat` 或 `deploy.ps1`
 
 如果现在 Docker 方案还在 `docker-setup` 分支，就先按这个分支部署。  
 等你验证稳定后，再合并到主分支，后面用户机就更省事了。
