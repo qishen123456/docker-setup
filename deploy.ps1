@@ -1,5 +1,6 @@
 param(
-    [switch]$NoBuild
+    [switch]$NoBuild,
+    [switch]$ForceImport
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,38 +33,49 @@ function Read-EnvValue {
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $ProjectRoot
 
-Write-Host "SmartAsk Docker deploy script" -ForegroundColor Green
-Write-Host "Project root: $ProjectRoot"
+Write-Host "==============================================" -ForegroundColor Green
+Write-Host "  SmartAsk 智能问数 - 一键 Docker 部署脚本" -ForegroundColor Green
+Write-Host "==============================================" -ForegroundColor Green
+Write-Host "项目目录: $ProjectRoot"
 
 $envPath = Join-Path $ProjectRoot ".env"
 $envExamplePath = Join-Path $ProjectRoot ".env.example"
-$bundlePath = Join-Path $ProjectRoot "backend\\imports\\bookshelf_bundle.json"
-$dataBundlePath = Join-Path $ProjectRoot "backend\\imports\\angel_group_data_bundle.json"
 
-Write-Step "Check Docker Desktop"
+Write-Step "检查 Docker"
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw "docker command not found. Please install and start Docker Desktop first."
+    throw "未检测到 docker 命令。请先安装并启动 Docker Desktop。"
+}
+try {
+    docker info | Out-Null
+} catch {
+    throw "Docker 未启动或不可用。请先打开 Docker Desktop 并等待其完全启动。"
 }
 
-docker info | Out-Null
-
-Write-Step "Check environment file"
+Write-Step "检查 .env 文件"
 if (-not (Test-Path -LiteralPath $envPath)) {
     if (Test-Path -LiteralPath $envExamplePath) {
         Copy-Item -LiteralPath $envExamplePath -Destination $envPath -Force
-        throw ".env was missing. .env.example has been copied to .env. Fill in the real values and run deploy.ps1 again."
+        Write-Host "未发现 .env，已复制 .env.example 为 .env。" -ForegroundColor Yellow
+        Write-Host "请打开 .env 填入真实的 AI_API_KEY、数据库密码等，再次运行本脚本。" -ForegroundColor Yellow
+        exit 1
     }
-
-    throw ".env is missing and .env.example was not found."
+    throw ".env 缺失且未找到 .env.example，请向项目管理员索取 .env 文件。"
 }
 
-New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backend\\logs") | Out-Null
+# 创建必要的本地目录
+New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backend\logs") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "config") | Out-Null
 
 $frontendPort = Read-EnvValue -FilePath $envPath -Key "SMARTASK_FRONTEND_PORT" -DefaultValue "8080"
-$backendPort = Read-EnvValue -FilePath $envPath -Key "SMARTASK_BACKEND_PORT" -DefaultValue "5002"
-$pgPort = Read-EnvValue -FilePath $envPath -Key "SMARTASK_DOCKER_PG_PORT" -DefaultValue "5433"
+$backendPort  = Read-EnvValue -FilePath $envPath -Key "SMARTASK_BACKEND_PORT"  -DefaultValue "5002"
+$pgPort       = Read-EnvValue -FilePath $envPath -Key "SMARTASK_DOCKER_PG_PORT" -DefaultValue "5433"
 
-Write-Step "Start containers"
+if ($ForceImport) {
+    Write-Step "已开启 ForceImport：将覆盖已有元数据/业务数据"
+    $env:SMARTASK_BOOTSTRAP_FORCE_IMPORT = "1"
+}
+
+Write-Step "构建并启动容器（首次拉取镜像可能需要 3-8 分钟）"
 if ($NoBuild) {
     docker compose up -d
 }
@@ -71,32 +83,43 @@ else {
     docker compose up -d --build
 }
 
-Write-Step "Show container status"
+Write-Step "等待后端健康检查（最多 180 秒）"
+$ready = $false
+for ($i = 0; $i -lt 90; $i++) {
+    Start-Sleep -Seconds 2
+    try {
+        $resp = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://localhost:$backendPort/api/health" -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) {
+            $ready = $true
+            break
+        }
+    } catch {
+        # still starting
+    }
+}
+
+Write-Step "容器状态"
 docker compose ps
 
-if (Test-Path -LiteralPath $bundlePath) {
-    Write-Step "Import Bookshelf metadata bundle"
-    docker compose exec -T backend python import_bookshelf_bundle.py /app/backend/imports/bookshelf_bundle.json
+if ($ready) {
+    Write-Host ""
+    Write-Host "✅ 部署完成！数据初始化已由后端 bootstrap 自动完成。" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  前端访问:  http://localhost:$frontendPort" -ForegroundColor Yellow
+    Write-Host "  后端健康:  http://localhost:$backendPort/api/health"
+    Write-Host "  Postgres:  localhost:$pgPort (容器内 5432)"
+    Write-Host ""
+    Write-Host "常用命令:"
+    Write-Host "  查看后端日志:   docker compose logs -f backend"
+    Write-Host "  查看初始化日志: docker compose logs backend | findstr bootstrap"
+    Write-Host "  停止全部容器:   docker compose down"
+    Write-Host "  增量更新代码:   .\update.ps1"
+    Write-Host "  强制重新导入:   .\deploy.ps1 -ForceImport"
 }
 else {
-    Write-Step "Seed default dataset template"
-    docker compose exec -T backend python fill_syyb_dataset.py
+    Write-Host ""
+    Write-Host "⚠️ 后端未在限定时间内通过健康检查。" -ForegroundColor Red
+    Write-Host "请查看日志定位原因：" -ForegroundColor Red
+    Write-Host "  docker compose logs --tail=200 backend"
+    exit 2
 }
-
-if (Test-Path -LiteralPath $dataBundlePath) {
-    Write-Step "Import angel_group_data snapshot"
-    docker compose exec -T backend python import_angel_group_data.py /app/backend/imports/angel_group_data_bundle.json
-}
-
-Write-Host ""
-Write-Host "Deployment completed." -ForegroundColor Green
-Write-Host "Frontend: http://localhost:$frontendPort"
-Write-Host "Backend: http://localhost:$backendPort"
-Write-Host "PostgreSQL port: $pgPort"
-Write-Host "Metadata source: $(if (Test-Path -LiteralPath $bundlePath) { 'bookshelf_bundle.json imported' } else { 'default 商用事业部 template seeded' })"
-Write-Host "Business data source: $(if (Test-Path -LiteralPath $dataBundlePath) { 'angel_group_data snapshot imported' } else { 'no angel_group_data snapshot found' })"
-Write-Host ""
-Write-Host "Useful commands:"
-Write-Host "  Update project: .\\update.ps1"
-Write-Host "  Stop containers: docker compose down"
-Write-Host "  View logs: docker compose logs -f"

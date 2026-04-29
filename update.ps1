@@ -9,49 +9,56 @@ function Write-Step {
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $ProjectRoot
 
-Write-Host "SmartAsk Docker update script" -ForegroundColor Green
-Write-Host "Project root: $ProjectRoot"
+Write-Host "SmartAsk 智能问数 - Docker 增量更新" -ForegroundColor Green
+Write-Host "项目目录: $ProjectRoot"
 
 $envPath = Join-Path $ProjectRoot ".env"
-$bundlePath = Join-Path $ProjectRoot "backend\\imports\\bookshelf_bundle.json"
-$dataBundlePath = Join-Path $ProjectRoot "backend\\imports\\angel_group_data_bundle.json"
 
-Write-Step "Check Git"
+Write-Step "检查 Git"
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git command not found. Please install Git first."
+    throw "未检测到 git 命令，请先安装 Git。"
 }
 
-Write-Step "Check Docker Desktop"
+Write-Step "检查 Docker"
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw "docker command not found. Please install and start Docker Desktop first."
+    throw "未检测到 docker 命令，请先安装并启动 Docker Desktop。"
 }
-
 docker info | Out-Null
 
-Write-Step "Check .env"
+Write-Step "检查 .env"
 if (-not (Test-Path -LiteralPath $envPath)) {
-    throw ".env is missing. Put the environment file in the project root first."
+    throw ".env 缺失，请先把 .env 放到项目根目录。"
 }
 
-Write-Step "Pull latest code"
+Write-Step "拉取最新代码 (git pull)"
 git pull
 
-Write-Step "Rebuild and start containers"
+Write-Step "重新构建并启动容器"
 docker compose up -d --build
 
-if (Test-Path -LiteralPath $bundlePath) {
-    Write-Step "Sync Bookshelf metadata bundle"
-    docker compose exec -T backend python import_bookshelf_bundle.py /app/backend/imports/bookshelf_bundle.json
+Write-Step "等待后端健康检查"
+$backendPort = "5002"
+$envLine = Select-String -Path $envPath -Pattern "^SMARTASK_BACKEND_PORT=(.*)$" | Select-Object -First 1
+if ($envLine) { $backendPort = $envLine.Matches[0].Groups[1].Value.Trim() }
+
+$ready = $false
+for ($i = 0; $i -lt 60; $i++) {
+    Start-Sleep -Seconds 2
+    try {
+        $resp = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://localhost:$backendPort/api/health" -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) { $ready = $true; break }
+    } catch {}
 }
 
-if (Test-Path -LiteralPath $dataBundlePath) {
-    Write-Step "Sync angel_group_data snapshot"
-    docker compose exec -T backend python import_angel_group_data.py /app/backend/imports/angel_group_data_bundle.json
-}
-
-Write-Step "Show container status"
+Write-Step "容器状态"
 docker compose ps
 
-Write-Host ""
-Write-Host "Update completed." -ForegroundColor Green
-Write-Host "If the page does not refresh immediately, do a hard refresh in the browser."
+if ($ready) {
+    Write-Host ""
+    Write-Host "✅ 更新完成。如页面无变化，请在浏览器执行硬刷新 (Ctrl+F5)。" -ForegroundColor Green
+}
+else {
+    Write-Host ""
+    Write-Host "⚠️ 后端健康检查失败，请查看 docker compose logs --tail=200 backend" -ForegroundColor Red
+    exit 2
+}
