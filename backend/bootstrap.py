@@ -1,19 +1,17 @@
 """
-容器/本地一键启动引导脚本。
+SmartAsk container/local one-shot bootstrap.
 
-依次完成：
-1. 等待 PostgreSQL 可达
-2. 应用基础 schema 迁移（bookshelf_schema.sql + agent1_prompt_upgrade.sql）
-3. 首次启动时（bs_datasets 为空）自动导入 metadata bundle 与 angel_group_data 数据
-4. 启动 Flask 主应用 (app.py)
+Order of operations (each step is best-effort and idempotent):
+    1. Wait for PostgreSQL (default datasource)
+    2. Apply schema migrations under backend/migrations (BEGIN/COMMIT-stripped, dollar-quote-aware)
+    3. Restore runtime config bundle into config/*.json (only fills missing keys, never clobbers user edits)
+    4. First boot only: import bookshelf_bundle.json + angel_group_data_bundle.json
+    5. Hand off to app.py via os.execv
 
-设计原则：
-- 幂等：可被多次重启而不破坏已有用户数据
-- 容错：导入失败不阻止后端启动，便于用户在管理界面排查
-- 友好日志：所有关键步骤前后都有清晰的中文日志
-
-运行方式：
-    python bootstrap.py
+Env switches:
+    SMARTASK_BOOTSTRAP_SKIP_DB=1            -> skip DB step entirely, only start Flask
+    SMARTASK_BOOTSTRAP_FORCE_IMPORT=1       -> import bundles even if bs_datasets is non-empty
+    SMARTASK_BOOTSTRAP_FORCE_CONFIG=1       -> overwrite existing config files from runtime bundle
 """
 from __future__ import annotations
 
@@ -27,7 +25,6 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-# 让 backend 内的模块可被 import
 BASE_DIR = os.path.dirname(CURRENT_DIR)
 
 try:
@@ -44,60 +41,27 @@ MIGRATIONS = [
     "20260330_bookshelf_agent1_prompt_upgrade.sql",
 ]
 
-BOOKSHELF_BUNDLE = os.path.join(CURRENT_DIR, "imports", "bookshelf_bundle.json")
-ANGEL_BUNDLE = os.path.join(CURRENT_DIR, "imports", "angel_group_data_bundle.json")
+IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
+BOOKSHELF_BUNDLE = os.path.join(IMPORTS_DIR, "bookshelf_bundle.json")
+ANGEL_BUNDLE = os.path.join(IMPORTS_DIR, "angel_group_data_bundle.json")
+RUNTIME_CONFIG_BUNDLE = os.path.join(IMPORTS_DIR, "runtime_config_bundle.json")
 
 
 def log(msg: str) -> None:
     print(f"[bootstrap] {msg}", flush=True)
 
 
-def _wait_for_postgres(max_wait_seconds: int = 90) -> bool:
-    """轮询直到 PostgreSQL 可连接。"""
+def _datasource_kwargs() -> dict:
+    """Resolve PG connection params from default datasource + env fallback."""
     try:
-        from config_manager import get_default_datasource, decode_secret  # noqa: F401
-        import psycopg2
+        from config_manager import get_default_datasource
+
+        ds = get_default_datasource() or {}
     except Exception as exc:
-        log(f"无法加载 psycopg2/config_manager：{exc}")
-        return False
+        log(f"无法读取默认数据源: {exc}; 仅用环境变量")
+        ds = {}
 
-    start = time.time()
-    last_error: Optional[str] = None
-    while time.time() - start < max_wait_seconds:
-        try:
-            ds = get_default_datasource() or {}
-            host = ds.get("host") or os.getenv("SMARTASK_DB_HOST", "postgres")
-            port = int(ds.get("port") or os.getenv("SMARTASK_DB_PORT", "5432") or 5432)
-            db = ds.get("database_name") or os.getenv("SMARTASK_DB_DATABASE", "postgres")
-            user = ds.get("username") or os.getenv("SMARTASK_DB_USERNAME", "postgres")
-            password = ds.get("password") or os.getenv("SMARTASK_DB_PASSWORD", "postgres")
-            conn = psycopg2.connect(
-                host=host, port=port, database=db, user=user, password=password,
-                connect_timeout=4,
-            )
-            conn.close()
-            log(f"PostgreSQL 已就绪 ({host}:{port}/{db})")
-            return True
-        except Exception as exc:
-            last_error = str(exc)
-            time.sleep(2)
-    log(f"等待 PostgreSQL 超时：{last_error}")
-    return False
-
-
-def _run_migration(filename: str) -> None:
-    """执行迁移文件。脚本本身使用 IF NOT EXISTS / DO 块，幂等可重复。"""
-    import psycopg2
-
-    from config_manager import get_default_datasource
-
-    path = os.path.join(CURRENT_DIR, "migrations", filename)
-    if not os.path.exists(path):
-        log(f"跳过迁移（文件缺失）: {filename}")
-        return
-
-    ds = get_default_datasource() or {}
-    conn = psycopg2.connect(
+    return dict(
         host=ds.get("host") or os.getenv("SMARTASK_DB_HOST", "postgres"),
         port=int(ds.get("port") or os.getenv("SMARTASK_DB_PORT", "5432") or 5432),
         database=ds.get("database_name") or os.getenv("SMARTASK_DB_DATABASE", "postgres"),
@@ -105,26 +69,62 @@ def _run_migration(filename: str) -> None:
         password=ds.get("password") or os.getenv("SMARTASK_DB_PASSWORD", "postgres"),
         connect_timeout=8,
     )
+
+
+def _wait_for_postgres(max_wait_seconds: int = 120) -> bool:
+    try:
+        import psycopg2
+    except Exception as exc:
+        log(f"未安装 psycopg2: {exc}")
+        return False
+
+    start = time.time()
+    last_error: Optional[str] = None
+    while time.time() - start < max_wait_seconds:
+        try:
+            conn = psycopg2.connect(**_datasource_kwargs())
+            conn.close()
+            kw = _datasource_kwargs()
+            log(f"PostgreSQL 已就绪 ({kw['host']}:{kw['port']}/{kw['database']})")
+            return True
+        except Exception as exc:
+            last_error = str(exc)
+            time.sleep(2)
+    log(f"等待 PostgreSQL 超时: {last_error}")
+    return False
+
+
+def _strip_transaction_keywords(raw_sql: str) -> str:
+    """Remove top-level BEGIN; / COMMIT; while keeping them inside dollar-quoted blocks."""
+    cleaned: list[str] = []
+    in_dollar_quote = False
+    for line in raw_sql.splitlines():
+        occurrences = line.count("$$")
+        if not in_dollar_quote:
+            stripped = line.strip().upper()
+            if stripped in ("BEGIN;", "COMMIT;", "START TRANSACTION;"):
+                if occurrences % 2 == 1:
+                    in_dollar_quote = True
+                continue
+        if occurrences % 2 == 1:
+            in_dollar_quote = not in_dollar_quote
+        cleaned.append(line)
+    return "\n".join(cleaned)
+
+
+def _run_migration(filename: str) -> None:
+    import psycopg2
+
+    path = os.path.join(CURRENT_DIR, "migrations", filename)
+    if not os.path.exists(path):
+        log(f"跳过迁移（文件缺失）: {filename}")
+        return
+
+    conn = psycopg2.connect(**_datasource_kwargs())
     try:
         conn.autocommit = True
         with open(path, "r", encoding="utf-8") as fh:
-            raw_sql = fh.read()
-        # 仅剥离迁移脚本顶层、并且不在 dollar-quoted ($$...$$) 块内的 BEGIN; / COMMIT;。
-        cleaned_lines = []
-        in_dollar_quote = False
-        for line in raw_sql.splitlines():
-            # 一行内 $$ 出现奇数次则切换状态
-            occurrences = line.count("$$")
-            if not in_dollar_quote:
-                stripped = line.strip().upper()
-                if stripped in ("BEGIN;", "COMMIT;", "START TRANSACTION;"):
-                    if occurrences % 2 == 1:
-                        in_dollar_quote = True
-                    continue
-            if occurrences % 2 == 1:
-                in_dollar_quote = not in_dollar_quote
-            cleaned_lines.append(line)
-        sql = "\n".join(cleaned_lines)
+            sql = _strip_transaction_keywords(fh.read())
         with conn.cursor() as cur:
             cur.execute(sql)
         log(f"迁移已应用: {filename}")
@@ -133,33 +133,37 @@ def _run_migration(filename: str) -> None:
 
 
 def _bs_dataset_count() -> int:
-    """读取当前 bs_datasets 行数，用于判断是否首次启动。"""
     import psycopg2
 
-    from config_manager import get_default_datasource
-
-    ds = get_default_datasource() or {}
     try:
-        with psycopg2.connect(
-            host=ds.get("host") or os.getenv("SMARTASK_DB_HOST", "postgres"),
-            port=int(ds.get("port") or os.getenv("SMARTASK_DB_PORT", "5432") or 5432),
-            database=ds.get("database_name") or os.getenv("SMARTASK_DB_DATABASE", "postgres"),
-            user=ds.get("username") or os.getenv("SMARTASK_DB_USERNAME", "postgres"),
-            password=ds.get("password") or os.getenv("SMARTASK_DB_PASSWORD", "postgres"),
-            connect_timeout=8,
-        ) as conn:
+        with psycopg2.connect(**_datasource_kwargs()) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM bs_datasets;")
                 row = cur.fetchone()
                 return int(row[0]) if row else 0
     except Exception as exc:
-        log(f"无法统计 bs_datasets 行数：{exc}")
+        log(f"无法统计 bs_datasets 行数: {exc}")
         return -1
+
+
+def _import_runtime_config() -> None:
+    if not os.path.exists(RUNTIME_CONFIG_BUNDLE):
+        log("未找到 runtime_config_bundle.json，跳过运行时配置恢复")
+        return
+    try:
+        from import_runtime_config import import_bundle
+
+        force = os.getenv("SMARTASK_BOOTSTRAP_FORCE_CONFIG", "").lower() in {"1", "true", "yes"}
+        result = import_bundle(RUNTIME_CONFIG_BUNDLE, force_overwrite=force)
+        log(f"运行时配置恢复: {result.get('written_files')}")
+    except Exception as exc:
+        log(f"运行时配置恢复失败（非致命）: {exc}")
+        traceback.print_exc()
 
 
 def _import_bookshelf_bundle() -> None:
     if not os.path.exists(BOOKSHELF_BUNDLE):
-        log("未找到 bookshelf_bundle.json，跳过自动导入")
+        log("未找到 bookshelf_bundle.json，跳过元数据导入")
         return
     try:
         from import_bookshelf_bundle import import_bundle
@@ -190,38 +194,38 @@ def main() -> None:
 
     skip_db = os.getenv("SMARTASK_BOOTSTRAP_SKIP_DB", "").lower() in {"1", "true", "yes"}
 
-    if not skip_db:
-        if not _wait_for_postgres():
-            log("⚠️ 跳过迁移与首次导入（PostgreSQL 不可达）。后端仍将启动。")
-        else:
-            try:
-                from config_manager import init_default_configs
-
-                init_default_configs()
-            except Exception as exc:
-                log(f"初始化默认配置失败（非致命）: {exc}")
-
-            for migration in MIGRATIONS:
-                try:
-                    _run_migration(migration)
-                except Exception as exc:
-                    log(f"迁移 {migration} 失败（非致命）: {exc}")
-                    traceback.print_exc()
-
-            existing = _bs_dataset_count()
-            force_import = os.getenv("SMARTASK_BOOTSTRAP_FORCE_IMPORT", "").lower() in {"1", "true", "yes"}
-            if existing == 0 or force_import:
-                log(f"检测到 bs_datasets={existing} 或强制导入={force_import}，开始首次数据导入...")
-                _import_bookshelf_bundle()
-                _import_angel_bundle()
-            else:
-                log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
-    else:
+    if skip_db:
         log("环境变量 SMARTASK_BOOTSTRAP_SKIP_DB=1，跳过 DB 初始化")
+    elif not _wait_for_postgres():
+        log("⚠️ PostgreSQL 不可达，跳过迁移与首次导入；后端仍将启动以便排错。")
+    else:
+        try:
+            from config_manager import init_default_configs
+
+            init_default_configs()
+        except Exception as exc:
+            log(f"初始化默认 JSON 配置失败（非致命）: {exc}")
+
+        # 1) 优先恢复 runtime_config_bundle，让后续步骤用到的数据源/AI 配置已正确
+        _import_runtime_config()
+
+        for migration in MIGRATIONS:
+            try:
+                _run_migration(migration)
+            except Exception as exc:
+                log(f"迁移 {migration} 失败（非致命）: {exc}")
+                traceback.print_exc()
+
+        existing = _bs_dataset_count()
+        force_import = os.getenv("SMARTASK_BOOTSTRAP_FORCE_IMPORT", "").lower() in {"1", "true", "yes"}
+        if existing == 0 or force_import:
+            log(f"检测到 bs_datasets={existing}，开始首次数据导入...（force={force_import}）")
+            _import_bookshelf_bundle()
+            _import_angel_bundle()
+        else:
+            log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
 
     log("========== Bootstrap 完成，启动 Flask ==========")
-
-    # 直接 exec 到 app.py，避免子进程
     app_path = os.path.join(CURRENT_DIR, "app.py")
     os.execv(sys.executable, [sys.executable, app_path])
 

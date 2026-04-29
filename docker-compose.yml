@@ -7,17 +7,19 @@ services:
       POSTGRES_DB: ${SMARTASK_DB_DATABASE:-postgres}
       POSTGRES_USER: ${SMARTASK_DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${SMARTASK_DB_PASSWORD:-postgres}
+      TZ: Asia/Shanghai
     ports:
       - "${SMARTASK_DOCKER_PG_PORT:-5433}:5432"
     volumes:
       - smartask_pg_data:/var/lib/postgresql/data
-      - ./backend/migrations/20260330_bookshelf_schema.sql:/docker-entrypoint-initdb.d/001_bookshelf_schema.sql:ro
-      - ./docker/postgres/init/002_angel_group_data.sql:/docker-entrypoint-initdb.d/002_angel_group_data.sql:ro
+      # Directory mount: every *.sql in docker/postgres/init runs in alphabetical order
+      # ONLY the first time the data volume is empty (i.e. fresh DB).
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SMARTASK_DB_USERNAME:-postgres} -d ${SMARTASK_DB_DATABASE:-postgres}"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
 
   backend:
     build:
@@ -32,6 +34,9 @@ services:
       SMARTASK_DB_HOST: postgres
       SMARTASK_DB_PORT: 5432
       SMARTASK_CHROMA_PATH: /app/chroma_db
+      SMARTASK_CONFIG_DIR: /app/config
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: "1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +46,13 @@ services:
       - smartask_chroma:/app/chroma_db
       - ./backend/logs:/app/backend/logs
       - ./config:/app/config
+      - ./backend/imports:/app/backend/imports
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5002/api/health', timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   frontend:
     build:
@@ -49,10 +61,13 @@ services:
     container_name: smartask-frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     ports:
       - "${SMARTASK_FRONTEND_PORT:-8080}:80"
 
 volumes:
   smartask_pg_data:
+    name: smartask_pg_data
   smartask_chroma:
+    name: smartask_chroma
