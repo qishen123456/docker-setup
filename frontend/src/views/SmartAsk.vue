@@ -359,7 +359,7 @@
                         <span class="sa-btn-label">放大查看</span>
                       </button>
                     </div>
-                    <div class="sa-office-overview-chart" :ref="el => initPreviewChart(el, businessDrillReport.officeCompareSpec, 'side-office-overview')"></div>
+                    <div class="sa-office-overview-chart" :ref="el => el && businessDrillReport?.officeCompareSpec && initPreviewChart(el, businessDrillReport.officeCompareSpec, 'side-office-overview')"></div>
                   </div>
                   <div class="sa-office-card-list">
                     <article
@@ -575,7 +575,7 @@
                 </div>
                 <button class="sa-ghost-btn" @click="openChartViewer(dialogBusinessDrillReport.officeCompareSpec, `各${dialogBusinessDrillReport.compareLevelLabel}对比分析`)">放大查看</button>
               </div>
-              <div class="sa-report-chart-canvas" :ref="el => initPreviewChart(el, dialogBusinessDrillReport.officeCompareSpec, 'dialog-office-overview')"></div>
+              <div class="sa-report-chart-canvas" :ref="el => el && dialogBusinessDrillReport?.officeCompareSpec && initPreviewChart(el, dialogBusinessDrillReport.officeCompareSpec, 'dialog-office-overview')"></div>
             </div>
             <div class="sa-office-report-grid">
               <article
@@ -1143,7 +1143,57 @@ const hasBusinessDrillDataset = (datasets) => (
   (datasets || []).some(dataset => Boolean(buildBusinessDrillReport(dataset)))
 )
 
+const buildBusinessDrillReportFromSpec = (dataset) => {
+  const spec = dataset?.report_spec
+  if (!spec || spec.version !== '2.0') return null
+  const overviewChart = Array.isArray(spec.charts) ? spec.charts[0] : null
+  const accordions = Array.isArray(spec.accordions) ? spec.accordions : []
+  if (!overviewChart && !accordions.length) return null
+
+  const compareLevelLabel = spec.scope?.compareLevelLabel || '下一层级'
+  const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
+  const offices = accordions.map((item) => {
+    const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
+    return {
+      id: item.id || item.title,
+      name: item.title || '未命名节点',
+      parentName: item.parentName || item.levelLabel || '',
+      tone: item.tone || 'neutral',
+      rate: toNumber(rateKpi?.value),
+      rateLabel: rateKpi?.value || '-',
+      childCount: Array.isArray(item.chart?.rows) ? item.chart.rows.length : 0,
+      kpis: item.kpis || [],
+      summary: item.narrative || '',
+      chartText: item.narrative || '',
+      chartSpec: item.chart,
+    }
+  })
+  const riskCount = offices.filter(item => item.tone === 'danger').length
+  const summary = Array.isArray(spec.narrative) && spec.narrative.length
+    ? spec.narrative.join('；')
+    : spec.sections?.find(section => section.key === 'overview')?.narrative || `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。`
+
+  return {
+    dataset,
+    kpis: (spec.kpis || []).map(item => ({
+      label: item.label || item.key,
+      value: item.displayValue ?? formatDisplayValue(item.value),
+    })).filter(item => item.label),
+    offices,
+    compareLevelLabel,
+    detailLevelLabel,
+    officeCompareSpec: overviewChart,
+    officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '柱形图对比关键金额指标，折线图对比达成率。',
+    summary,
+    riskTone: riskCount ? 'danger' : 'good',
+    riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
+  }
+}
+
 const buildBusinessDrillReport = (dataset) => {
+  const specReport = buildBusinessDrillReportFromSpec(dataset)
+  if (specReport) return specReport
+
   const model = getDatasetTreeModel(dataset)
   if (!model?.flatNodes?.length) return null
   const config = model.config || getDatasetReportConfig(dataset)

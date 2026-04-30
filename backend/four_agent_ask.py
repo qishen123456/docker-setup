@@ -22,6 +22,7 @@ from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile
 import dataset_report_config as report_config_store
+from report_spec_builder import build_report_spec
 from memory import ShortTermMemoryStore
 
 
@@ -2204,6 +2205,15 @@ Agent3 复核结果：
 
             step_started = time.time()
             analysis_text = self._agent4_analysis(question, context, review, result, trace=trace)
+            report_spec = build_report_spec(
+                question=question,
+                dataset=context["dataset"],
+                rows=result.get("rows") or [],
+                columns=result.get("columns") or [],
+                report_config=report_config,
+                sql=final_sql,
+                review=review,
+            )
             self._append_trace(
                 trace,
                 "pipeline.agent4_result",
@@ -2211,6 +2221,7 @@ Agent3 复核结果：
                 dataset_id=dataset_id,
                 dataset_name=dataset_meta.get("dataset_name"),
                 analysis_preview=self._truncate_text(analysis_text, 4000),
+                report_spec_mode=report_spec.get("analysisMode"),
             )
             steps.append(
                 {
@@ -2231,6 +2242,7 @@ Agent3 复核结果：
                     "columns": result["columns"],
                     "rows": result["rows"],
                     "row_count": result["row_count"],
+                    "report_spec": report_spec,
                     "analysis": analysis_text,
                     "sql": final_sql,
                 }
@@ -2255,6 +2267,7 @@ Agent3 复核结果：
                 if item.get("dataset_id") is not None and item.get("report_config")
             },
             "report_config": primary.get("report_config"),
+            "report_spec": primary.get("report_spec"),
             "data_source": primary["dataset_name"] if len(dataset_results) == 1 else f"跨 {len(dataset_results)} 个数据集",
             "sql": primary["sql"],
             "columns": primary["columns"],
