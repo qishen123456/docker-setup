@@ -1,113 +1,135 @@
 <template>
-  <div class="ai-models-page" v-loading="loading">
-    <!-- Channel 通道卡片列表 -->
-    <div class="ch-grid">
-      <div v-for="ch in channels" :key="ch.key" class="ch-card">
+  <div class="cs-page" v-loading="loading">
+    <div class="cs-layout">
+      <!-- ===== LEFT: Channel List ===== -->
+      <aside class="cs-sidebar">
+        <div class="cs-sidebar-scroll">
+          <div
+            v-for="ch in channels" :key="ch.key"
+            class="cs-ch-item"
+            :class="{ 'is-active': selectedChannelKey === ch.key }"
+            @click="selectChannel(ch.key)"
+          >
+            <span class="cs-ch-icon">{{ providerEmoji(ch.provider) }}</span>
+            <span class="cs-ch-name">{{ channelDisplayName(ch) }}</span>
+            <el-switch
+              v-model="ch._hasActive"
+              size="small"
+              class="cs-ch-switch"
+              @click.stop
+              @change="toggleChannelActive(ch, $event)"
+            />
+          </div>
+        </div>
+        <div class="cs-sidebar-footer">
+          <el-button class="cs-add-btn" @click="openAddChannel">
+            <el-icon><Plus /></el-icon>
+            <span>添加</span>
+          </el-button>
+        </div>
+      </aside>
+
+      <!-- ===== RIGHT: Channel Detail ===== -->
+      <main class="cs-main" v-if="activeChannel">
         <!-- Provider Header -->
-        <div class="ch-head">
-          <div class="ch-head-left">
-            <div class="ch-icon">{{ providerEmoji(ch.provider) }}</div>
-            <div class="ch-meta">
-              <div class="ch-name">{{ providerLabel(ch.provider) }}</div>
-              <div class="ch-url">{{ ch.base_url }}</div>
-            </div>
-          </div>
-          <div class="ch-head-right">
-            <span class="ch-badge">{{ ch.models.length }} 模型</span>
-            <span
-              class="ch-status"
-              :class="channelTestResult[ch.key] === 'success' ? 'is-ok' : channelTestResult[ch.key] === 'error' ? 'is-err' : ch.models.some(m => m.is_active) ? 'is-ok' : 'is-off'"
-            >
-              <template v-if="channelTestResult[ch.key] === 'success'">✓</template>
-              <template v-else-if="channelTestResult[ch.key] === 'error'">✗</template>
-            </span>
-            <el-button size="small" circle :icon="Edit" @click="openEditChannel(ch)" />
-            <el-icon class="ch-arrow" :class="{ 'is-open': expandedChannel === ch.key }" @click="toggleChannel(ch.key)"><ArrowDown /></el-icon>
+        <div class="cs-provider-header">
+          <div class="cs-provider-icon">{{ providerEmoji(activeChannel.provider) }}</div>
+          <div class="cs-provider-title">{{ channelDisplayName(activeChannel) }}</div>
+          <span class="cs-provider-url-sub">{{ activeChannel.base_url }}</span>
+        </div>
+
+        <!-- API Key Section -->
+        <div class="cs-section">
+          <div class="cs-section-label">API 密钥</div>
+          <div class="cs-key-row">
+            <el-input
+              v-model="editableApiKey"
+              :type="showApiKey ? 'text' : 'password'"
+              placeholder="sk-..."
+              class="cs-key-input"
+              @change="onApiKeyChange"
+            />
+            <el-button text @click="showApiKey = !showApiKey">
+              <el-icon><View v-if="!showApiKey" /><Hide v-else /></el-icon>
+            </el-button>
+            <el-button
+              round size="small"
+              :loading="channelTesting === activeChannel.key"
+              @click="testChannel(activeChannel)"
+            >检 测</el-button>
           </div>
         </div>
 
-        <!-- API Key Row -->
-        <div class="ch-key-row">
-          <div class="ch-key-group">
-            <span class="ch-key-label">API 密钥</span>
-            <span class="ch-key-dots">{{ ch.apiKeyMasked }}</span>
+        <!-- API URL Section -->
+        <div class="cs-section">
+          <div class="cs-section-label">API 地址</div>
+          <div class="cs-url-row">
+            <el-input v-model="editableBaseUrl" class="cs-url-input" @change="onBaseUrlChange" />
           </div>
-          <el-button
-            size="small"
-            round
-            :loading="channelTesting === ch.key"
-            @click="testChannel(ch)"
-          >检 测</el-button>
-        </div>
-
-        <!-- API URL Row -->
-        <div class="ch-url-row">
-          <span class="ch-url-label">API 地址</span>
-          <span class="ch-url-value">{{ ch.base_url }}</span>
         </div>
 
         <!-- Models Section -->
-        <div class="ch-models-head">
-          <span class="ch-models-title">模型</span>
-          <span class="ch-models-count">{{ ch.models.length }}</span>
-          <div class="ch-models-spacer"></div>
-          <el-button text size="small" @click="testAllModels(ch)">全部检测</el-button>
+        <div class="cs-models-header">
+          <span class="cs-models-label">模型</span>
+          <span class="cs-models-count">{{ activeChannel.models.length }}</span>
+          <div class="cs-models-spacer"></div>
+          <el-button text size="small" @click="testAllModels(activeChannel)">全部检测</el-button>
         </div>
 
-        <transition name="ch-expand">
-          <div v-if="expandedChannel === ch.key" class="ch-model-list">
-            <div
-              v-for="model in ch.models"
-              :key="model.id"
-              class="ch-model-row"
-              :class="{ 'is-inactive': !model.is_active, 'is-default': model.is_default }"
-            >
-              <div class="ch-model-info">
-                <span class="ch-model-name">{{ model.name || model.model }}</span>
-                <el-tag v-if="model.is_default" type="warning" size="small" round effect="plain">默认</el-tag>
-                <el-tag v-if="!model.is_active" type="info" size="small" round effect="plain">禁用</el-tag>
-                <span
-                  v-if="testResults[model.id]"
-                  class="ch-model-test-dot"
-                  :class="testResults[model.id] === 'success' ? 'is-ok' : 'is-err'"
-                ></span>
-              </div>
-              <div class="ch-model-id">{{ model.model }}</div>
-              <div class="ch-model-actions">
-                <el-button
-                  v-if="!model.is_default && model.is_active"
-                  text size="small" @click="setDefault(model)"
-                >设默认</el-button>
-                <el-button
-                  text size="small"
-                  :loading="testingId === model.id"
-                  @click="testModel(model)"
-                >测试</el-button>
-                <el-button text size="small" :icon="Edit" @click="openEditModel(model)" />
-                <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
-                  <template #reference>
-                    <el-button text size="small" class="ch-model-remove">—</el-button>
-                  </template>
-                </el-popconfirm>
-              </div>
-            </div>
+        <div class="cs-model-list">
+          <div
+            v-for="model in activeChannel.models"
+            :key="model.id"
+            class="cs-model-row"
+            :class="{ 'is-default': model.is_default, 'is-inactive': !model.is_active }"
+          >
+            <span class="cs-model-emoji">{{ providerEmoji(activeChannel.provider) }}</span>
+            <span class="cs-model-name">{{ model.name || model.model }}</span>
+            <el-tag v-if="model.is_default" type="warning" size="small" round effect="plain">默认</el-tag>
+            <el-tag v-if="!model.is_active" type="info" size="small" round effect="plain">禁用</el-tag>
+            <span
+              v-if="testResults[model.id]"
+              class="cs-model-dot"
+              :class="testResults[model.id] === 'success' ? 'is-ok' : 'is-err'"
+            ></span>
+            <div class="cs-model-spacer"></div>
+            <span class="cs-model-id">{{ model.model }}</span>
+            <el-button
+              v-if="!model.is_default && model.is_active"
+              text size="small" @click="setDefault(model)"
+            >设默认</el-button>
+            <el-button
+              text size="small"
+              :loading="testingId === model.id"
+              @click="testModel(model)"
+            >测试</el-button>
+            <el-button text size="small" @click="openEditModel(model)">
+              <el-icon><Setting /></el-icon>
+            </el-button>
+            <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
+              <template #reference>
+                <el-button text size="small" class="cs-model-del">—</el-button>
+              </template>
+            </el-popconfirm>
           </div>
-        </transition>
-
-        <!-- Bottom Actions -->
-        <div class="ch-bottom">
-          <el-button text type="primary" size="small" @click="openAddModelInChannel(ch)">+ 添加</el-button>
         </div>
-      </div>
+
+        <!-- Add Model Row -->
+        <div class="cs-add-model-bar">
+          <el-button text type="primary" @click="openAddModelInChannel(activeChannel)">
+            <el-icon><Plus /></el-icon> 添加模型
+          </el-button>
+        </div>
+      </main>
+
+      <!-- Empty State -->
+      <main class="cs-main cs-empty" v-else>
+        <div class="cs-empty-text">请在左侧选择或添加一个通道</div>
+      </main>
     </div>
 
-    <!-- 底部操作栏 -->
-    <div class="ch-footer-bar">
-      <el-button round @click="openAddChannel">+ 新建通道</el-button>
-    </div>
-
-    <!-- 通道编辑弹窗 -->
-    <el-dialog v-model="channelDialogVisible" :title="channelDialogIsNew ? '新建供应商通道' : '编辑通道配置'" width="520px" @close="resetChannelForm">
+    <!-- ===== Channel Dialog ===== -->
+    <el-dialog v-model="channelDialogVisible" :title="channelDialogIsNew ? '新建供应商通道' : '编辑通道'" width="480px" @close="resetChannelForm">
       <el-form ref="channelFormRef" :model="channelForm" :rules="channelRules" label-width="80px">
         <el-form-item label="供应商" prop="provider">
           <el-select v-model="channelForm.provider" style="width:100%" @change="onChannelProviderChange" allow-create filterable :disabled="!channelDialogIsNew && channelForm._existingProvider">
@@ -133,45 +155,29 @@
       </template>
     </el-dialog>
 
-    <!-- 添加模型弹窗（CherryStudio 风格：只填 名称+ID） -->
-    <el-dialog v-model="modelDialogVisible" :title="modelDialogIsEdit ? '编辑模型' : '添加模型'" width="520px" @close="resetModelForm">
+    <!-- ===== Model Dialog ===== -->
+    <el-dialog v-model="modelDialogVisible" :title="modelDialogIsEdit ? '编辑模型' : '添加模型'" width="480px" @close="resetModelForm">
       <el-form ref="modelFormRef" :model="modelForm" :rules="modelRules" label-width="80px">
-        <el-form-item label="所属通道" prop="provider">
-          <el-select v-model="modelForm.provider" style="width:100%" @change="onModelProviderChange" filterable>
-            <el-option
-              v-for="ch in channels"
-              :key="ch.key"
-              :label="`${providerEmoji(ch.provider)} ${providerLabel(ch.provider)}`"
-              :value="ch.provider"
-            />
-          </el-select>
-        </el-form-item>
         <el-form-item label="模型名称" prop="name">
-          <el-input v-model="modelForm.name" placeholder="自定义名称，如：DeepSeek V3">
-            <template #suffix>
-              <span class="ch-form-hint">请输入模型名称</span>
-            </template>
-          </el-input>
+          <el-input v-model="modelForm.name" placeholder="自定义名称，如 DeepSeek V3" />
         </el-form-item>
         <el-form-item label="模型 ID" prop="model">
-          <el-input v-model="modelForm.model" placeholder="如：qwen-max / deepseek-chat / gpt-4">
-            <template #suffix>
-              <span class="ch-form-hint">请输入模型 ID</span>
-            </template>
-          </el-input>
+          <el-input v-model="modelForm.model" placeholder="如 qwen-max / deepseek-chat / gpt-4" />
         </el-form-item>
-        <el-form-item v-if="modelDialogIsEdit" label="API 地址">
-          <el-input v-model="modelForm.base_url" placeholder="继承自通道，可单独覆盖" />
-        </el-form-item>
-        <el-form-item v-if="modelDialogIsEdit" label="API Key">
-          <el-input v-model="modelForm.api_key" type="password" show-password placeholder="留空则继承通道 Key" />
-        </el-form-item>
+        <template v-if="modelDialogIsEdit">
+          <el-form-item label="API 地址">
+            <el-input v-model="modelForm.base_url" placeholder="继承自通道，可单独覆盖" />
+          </el-form-item>
+          <el-form-item label="API Key">
+            <el-input v-model="modelForm.api_key" type="password" show-password placeholder="留空则继承通道 Key" />
+          </el-form-item>
+        </template>
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="启用"><el-switch v-model="modelForm.is_active" /></el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="设为默认"><el-switch v-model="modelForm.is_default" /></el-form-item>
+            <el-form-item label="默认"><el-switch v-model="modelForm.is_default" /></el-form-item>
           </el-col>
         </el-row>
       </el-form>
@@ -184,18 +190,21 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, ArrowDown, Setting, View, Hide } from '@element-plus/icons-vue'
 import { getAIModels, createAIModel, updateAIModel, deleteAIModel, testAIModel, setDefaultAIModel } from '../api/index.js'
 
 const models = ref([])
 const loading = ref(false)
 const testingId = ref(null)
 const testResults = reactive({})
-const expandedChannel = ref(null)
+const selectedChannelKey = ref(null)
 const channelTesting = ref(null)
 const channelTestResult = reactive({})
+const showApiKey = ref(false)
+const editableApiKey = ref('')
+const editableBaseUrl = ref('')
 
 // Channel dialog
 const channelDialogVisible = ref(false)
@@ -217,7 +226,6 @@ const modelForm = ref({ name: '', provider: '', model: '', base_url: '', api_key
 const modelRules = {
   name: [{ required: true, message: '请输入模型名称' }],
   model: [{ required: true, message: '请输入模型 ID' }],
-  provider: [{ required: true, message: '请选择所属通道' }],
 }
 
 const PROVIDER_URLS = {
@@ -228,7 +236,7 @@ const PROVIDER_URLS = {
   custom: ''
 }
 
-// Channel = provider + base_url combination (like CherryStudio)
+// Channel = provider + base_url (CherryStudio: one url + one key = one channel)
 const channels = computed(() => {
   const map = {}
   for (const m of models.value) {
@@ -237,17 +245,30 @@ const channels = computed(() => {
     const key = `${p}||${url}`
     if (!map[key]) {
       map[key] = {
-        key,
-        provider: p,
-        base_url: url,
-        apiKeyMasked: m.api_key || '••••••••••••••••••••',
-        models: []
+        key, provider: p, base_url: url,
+        apiKeyRaw: m.api_key || '',
+        apiKeyMasked: m.api_key ? '***已保存***' : '',
+        models: [],
+        _hasActive: false,
       }
     }
     map[key].models.push(m)
   }
+  for (const ch of Object.values(map)) {
+    ch._hasActive = ch.models.some(m => m.is_active)
+  }
   return Object.values(map)
 })
+
+const activeChannel = computed(() => channels.value.find(c => c.key === selectedChannelKey.value) || null)
+
+const channelDisplayName = (ch) => {
+  const label = providerLabel(ch.provider)
+  // Shorten for sidebar
+  const host = ch.base_url ? new URL(ch.base_url).hostname : ''
+  if (host && label === '自定义 API') return host
+  return label
+}
 
 const providerLabel = (p) => ({
   dashscope: '阿里通义 · DashScope',
@@ -265,26 +286,65 @@ const providerEmoji = (p) => ({
   custom: '⚙️'
 }[p] || '🔌')
 
-const toggleChannel = (key) => { expandedChannel.value = expandedChannel.value === key ? null : key }
+const selectChannel = (key) => {
+  selectedChannelKey.value = key
+  showApiKey.value = false
+  const ch = channels.value.find(c => c.key === key)
+  editableApiKey.value = ch?.apiKeyRaw || ''
+  editableBaseUrl.value = ch?.base_url || ''
+}
+
+// When active channel changes, sync editable fields
+watch(activeChannel, (ch) => {
+  if (ch) {
+    editableApiKey.value = ch.apiKeyRaw || ''
+    editableBaseUrl.value = ch.base_url || ''
+  }
+})
+
+const toggleChannelActive = async (ch, val) => {
+  for (const m of ch.models) {
+    await updateAIModel(m.id, { is_active: val })
+  }
+  ElMessage.success(val ? '通道已启用' : '通道已禁用')
+  loadData()
+}
+
+const onApiKeyChange = async () => {
+  const ch = activeChannel.value
+  if (!ch || !editableApiKey.value) return
+  for (const m of ch.models) {
+    await updateAIModel(m.id, { api_key: editableApiKey.value })
+  }
+  ElMessage.success('API Key 已保存')
+  loadData()
+}
+
+const onBaseUrlChange = async () => {
+  const ch = activeChannel.value
+  if (!ch || !editableBaseUrl.value) return
+  for (const m of ch.models) {
+    await updateAIModel(m.id, { base_url: editableBaseUrl.value })
+  }
+  ElMessage.success('API 地址已保存')
+  loadData()
+}
 
 const loadData = async () => {
   loading.value = true
   try {
     const data = await getAIModels()
     models.value = data.models || []
-    if (channels.value.length > 0 && !expandedChannel.value) expandedChannel.value = channels.value[0].key
+    if (channels.value.length > 0 && !selectedChannelKey.value) {
+      selectChannel(channels.value[0].key)
+    }
   } finally { loading.value = false }
 }
 
-// --- Channel CRUD ---
+// Channel CRUD
 const openAddChannel = () => {
   channelDialogIsNew.value = true
   channelForm.value = { provider: 'custom', base_url: '', api_key: '', _existingProvider: false, _modelIds: [] }
-  channelDialogVisible.value = true
-}
-const openEditChannel = (ch) => {
-  channelDialogIsNew.value = false
-  channelForm.value = { provider: ch.provider, base_url: ch.base_url, api_key: '', _existingProvider: true, _modelIds: ch.models.map(m => m.id) }
   channelDialogVisible.value = true
 }
 const onChannelProviderChange = (p) => { channelForm.value.base_url = PROVIDER_URLS[p] || channelForm.value.base_url || '' }
@@ -335,7 +395,7 @@ const testAllModels = async (ch) => {
     testingId.value = model.id
     testResults[model.id] = null
     try {
-      const r = await testAIModel(model.id)
+      await testAIModel(model.id)
       testResults[model.id] = 'success'
     } catch {
       testResults[model.id] = 'error'
@@ -347,7 +407,7 @@ const testAllModels = async (ch) => {
   ElMessage.info(`检测完成：${ok} 通过，${fail} 失败`)
 }
 
-// --- Model CRUD ---
+// Model CRUD
 const openAddModelInChannel = (ch) => {
   modelDialogIsEdit.value = false
   modelForm.value = { name: '', provider: ch.provider, model: '', base_url: ch.base_url, api_key: '', is_active: true, is_default: false }
@@ -358,10 +418,6 @@ const openEditModel = (row) => {
   modelForm.value = { ...row, api_key: '' }
   modelDialogVisible.value = true
 }
-const onModelProviderChange = (p) => {
-  const ch = channels.value.find(c => c.provider === p)
-  modelForm.value.base_url = ch?.base_url || PROVIDER_URLS[p] || ''
-}
 const resetModelForm = () => modelFormRef.value?.resetFields()
 
 const submitModelForm = async () => {
@@ -369,11 +425,11 @@ const submitModelForm = async () => {
   modelSaving.value = true
   try {
     const payload = { ...modelForm.value }
-    // Inherit channel key/url for new models
     if (!modelDialogIsEdit.value) {
-      const ch = channels.value.find(c => c.provider === payload.provider)
+      const ch = activeChannel.value
       if (!payload.base_url && ch) payload.base_url = ch.base_url
       if (!payload.api_key && ch) payload.api_key = 'inherit-channel'
+      if (!payload.provider && ch) payload.provider = ch.provider
     }
     if (modelDialogIsEdit.value) {
       await updateAIModel(payload.id, payload)
@@ -393,135 +449,142 @@ const testModel = async (row) => {
   finally { testingId.value = null }
 }
 
-const deleteModel = async (id) => { await deleteAIModel(id); ElMessage.success('已删除'); loadData() }
+const deleteModel = async (id) => {
+  await deleteAIModel(id)
+  ElMessage.success('已删除')
+  loadData()
+}
 const setDefault = async (row) => { await setDefaultAIModel(row.id); ElMessage.success(`${row.name} 已设为默认`); loadData() }
 
 onMounted(loadData)
 </script>
 
 <style scoped>
-.ai-models-page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 4px 0 32px;
-}
+.cs-page { height: 100%; display: flex; flex-direction: column; }
 
-/* ========== Channel Card (CherryStudio Style) ========== */
-.ch-grid { display: flex; flex-direction: column; gap: 16px; }
-
-.ch-card {
-  border-radius: 16px;
-  background: #fff;
-  border: 1px solid rgba(29, 33, 41, 0.06);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+.cs-layout {
+  flex: 1; display: flex; min-height: 0;
+  background: #f7f8fa;
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid rgba(229,230,235,0.6);
 }
 
-/* --- Header --- */
-.ch-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px 12px;
+/* ===== LEFT SIDEBAR ===== */
+.cs-sidebar {
+  width: 240px; min-width: 240px;
+  background: #fff;
+  border-right: 1px solid rgba(229,230,235,0.6);
+  display: flex; flex-direction: column;
 }
-.ch-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
-.ch-head-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.ch-icon {
-  width: 38px; height: 38px; border-radius: 12px;
-  background: #f7f8fa; border: 1px solid rgba(29,33,41,0.05);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; flex-shrink: 0;
+.cs-sidebar-scroll {
+  flex: 1; overflow-y: auto; padding: 8px;
 }
-.ch-meta { min-width: 0; }
-.ch-name { font-size: 14px; font-weight: 700; color: #1d2129; }
-.ch-url { font-size: 11px; color: #86909c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
-.ch-badge {
-  font-size: 11px; font-weight: 600; color: #4e5969;
-  background: #f2f3f5; padding: 2px 8px; border-radius: 999px;
+.cs-ch-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 10px;
+  cursor: pointer; transition: all 0.15s ease;
+  margin-bottom: 2px; user-select: none;
 }
-.ch-status {
-  width: 24px; height: 24px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
+.cs-ch-item:hover { background: rgba(22,93,255,0.04); }
+.cs-ch-item.is-active {
+  background: rgba(22,93,255,0.08);
+  box-shadow: inset 3px 0 0 #165dff;
 }
-.ch-status.is-ok { background: #00b42a; color: #fff; }
-.ch-status.is-err { background: #f53f3f; color: #fff; }
-.ch-status.is-off { background: #e5e6eb; color: #86909c; }
-.ch-arrow {
-  cursor: pointer; color: #86909c; font-size: 14px;
-  transition: transform 0.2s ease; padding: 4px;
-}
-.ch-arrow.is-open { transform: rotate(180deg); }
-
-/* --- API Key Row --- */
-.ch-key-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 20px; margin-bottom: 8px;
-}
-.ch-key-group { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ch-key-label { font-size: 12px; font-weight: 600; color: #4e5969; white-space: nowrap; }
-.ch-key-dots {
-  font-size: 12px; color: #86909c; font-family: monospace;
+.cs-ch-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+.cs-ch-name {
+  flex: 1; font-size: 13px; font-weight: 500; color: #1d2129;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.cs-ch-switch { flex-shrink: 0; }
 
-/* --- API URL Row --- */
-.ch-url-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 0 20px; margin-bottom: 12px;
+.cs-sidebar-footer {
+  padding: 12px; border-top: 1px solid rgba(229,230,235,0.5);
 }
-.ch-url-label { font-size: 12px; font-weight: 600; color: #4e5969; white-space: nowrap; }
-.ch-url-value { font-size: 12px; color: #86909c; font-family: 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-add-btn {
+  width: 100%; border-radius: 8px; height: 36px;
+  font-size: 13px; font-weight: 500;
+}
 
-/* --- Models Section --- */
-.ch-models-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 20px 6px;
-  border-top: 1px solid rgba(229, 230, 235, 0.5);
+/* ===== RIGHT MAIN ===== */
+.cs-main {
+  flex: 1; overflow-y: auto; padding: 24px 32px;
 }
-.ch-models-title { font-size: 12px; font-weight: 700; color: #1d2129; }
-.ch-models-count {
+.cs-empty {
+  display: flex; align-items: center; justify-content: center;
+}
+.cs-empty-text { color: #86909c; font-size: 14px; }
+
+/* Provider Header */
+.cs-provider-header {
+  text-align: center; margin-bottom: 24px;
+}
+.cs-provider-icon {
+  font-size: 40px; margin-bottom: 8px;
+}
+.cs-provider-title {
+  font-size: 18px; font-weight: 700; color: #1d2129;
+}
+.cs-provider-url-sub {
+  display: block; font-size: 12px; color: #86909c; margin-top: 4px;
+}
+
+/* Sections */
+.cs-section { margin-bottom: 20px; }
+.cs-section-label {
+  font-size: 13px; font-weight: 700; color: #1d2129;
+  margin-bottom: 8px;
+}
+
+.cs-key-row { display: flex; align-items: center; gap: 8px; }
+.cs-key-input { flex: 1; }
+.cs-url-row { display: flex; align-items: center; gap: 8px; }
+.cs-url-input { flex: 1; }
+
+/* Models */
+.cs-models-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; padding-top: 8px;
+  border-top: 1px solid rgba(229,230,235,0.5);
+}
+.cs-models-label { font-size: 13px; font-weight: 700; color: #1d2129; }
+.cs-models-count {
   font-size: 10px; font-weight: 700; color: #fff; background: #165dff;
   min-width: 18px; height: 18px; border-radius: 999px;
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
 }
-.ch-models-spacer { flex: 1; }
+.cs-models-spacer { flex: 1; }
 
-.ch-model-list { padding: 0 12px 4px; }
-.ch-model-row {
+.cs-model-list { display: flex; flex-direction: column; gap: 2px; }
+
+.cs-model-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; border-radius: 10px;
+  padding: 10px 12px; border-radius: 10px;
   transition: background 0.15s ease;
+  background: rgba(255,255,255,0.7);
 }
-.ch-model-row:hover { background: rgba(247, 248, 250, 0.7); }
-.ch-model-row.is-inactive { opacity: 0.45; }
-.ch-model-row.is-default { background: rgba(255, 250, 235, 0.6); }
+.cs-model-row:hover { background: rgba(22,93,255,0.03); }
+.cs-model-row.is-inactive { opacity: 0.4; }
+.cs-model-row.is-default { background: rgba(255,250,235,0.6); }
 
-.ch-model-info { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-.ch-model-name { font-size: 13px; font-weight: 600; color: #1d2129; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-model-id { font-size: 10px; color: #86909c; font-family: 'SF Mono', monospace; white-space: nowrap; }
-.ch-model-test-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.ch-model-test-dot.is-ok { background: #00b42a; }
-.ch-model-test-dot.is-err { background: #f53f3f; }
-
-.ch-model-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-.ch-model-remove { color: #86909c !important; font-weight: 700; }
-
-/* --- Bottom --- */
-.ch-bottom {
-  padding: 6px 20px 12px;
-  border-top: 1px solid rgba(229, 230, 235, 0.3);
+.cs-model-emoji { font-size: 16px; flex-shrink: 0; }
+.cs-model-name {
+  font-size: 13px; font-weight: 600; color: #1d2129;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-
-.ch-footer-bar {
-  display: flex; justify-content: center;
-  padding: 20px 0 0;
+.cs-model-id {
+  font-size: 10px; color: #86909c; font-family: 'SF Mono', monospace;
+  white-space: nowrap; flex-shrink: 0;
 }
+.cs-model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cs-model-dot.is-ok { background: #00b42a; }
+.cs-model-dot.is-err { background: #f53f3f; }
+.cs-model-spacer { flex: 1; }
+.cs-model-del { color: #86909c !important; font-weight: 700; }
 
-/* --- Expand transition --- */
-.ch-expand-enter-active, .ch-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
-.ch-expand-enter-from, .ch-expand-leave-to { opacity: 0; max-height: 0; }
-.ch-expand-enter-to, .ch-expand-leave-from { opacity: 1; max-height: 2000px; }
-
-/* --- Dialog hint --- */
-.ch-form-hint { font-size: 10px; color: #c9cdd4; white-space: nowrap; }
+.cs-add-model-bar {
+  padding: 8px 0; text-align: center;
+  border-top: 1px solid rgba(229,230,235,0.3);
+  margin-top: 4px;
+}
 </style>
