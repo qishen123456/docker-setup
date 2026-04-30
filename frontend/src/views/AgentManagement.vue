@@ -117,15 +117,16 @@ onMounted(loadAgents)
 }
 
 .glass-card {
-  border: 1px solid rgba(118, 124, 133, 0.18);
-  background: rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--border, #e5e6eb);
+  background: var(--bg-card, #ffffff);
+  border-radius: var(--radius-card, 12px);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
 }
 
 .panel-title {
   font-size: 18px;
   font-weight: 700;
-  color: #252a31;
+  color: var(--text-title, #1d2129);
 }
 
 .header-row {
@@ -137,39 +138,48 @@ onMounted(loadAgents)
 .agent-card {
   padding: 16px;
   margin-bottom: 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-card, 12px);
   cursor: pointer;
-  border: 1px solid #d7dbe1;
-  background: linear-gradient(135deg, #fcfcfd, #eef1f5);
-  transition: all 0.22s ease;
+  border: 1px solid var(--border, #e5e6eb);
+  background: var(--bg-card, #fff);
+  transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
+}
+
+.agent-card:hover {
+  border-color: var(--border-hover, #c9cdd4);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.04));
+  transform: translateY(-1px);
 }
 
 .agent-card.active {
-  border-color: #7f8792;
-  box-shadow: 0 12px 26px rgba(93, 100, 110, 0.12);
+  border-color: var(--color-primary, #3370ff);
+  background: var(--color-primary-light, #f0f5ff);
+  box-shadow: var(--shadow-md, 0 2px 4px rgba(0,0,0,0.03));
 }
 
 .agent-card-title {
   font-weight: 700;
   margin-bottom: 6px;
+  color: var(--text-title, #1d2129);
 }
 
 .agent-card-desc {
   font-size: 13px;
-  color: #707783;
-  line-height: 1.5;
+  color: var(--text-muted, #86909c);
+  line-height: 1.6;
 }
 
 .knowledge-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 18px 0 10px;
+  margin: 20px 0 12px;
 }
 
 .subheading {
   font-size: 15px;
   font-weight: 700;
+  color: var(--text-title, #1d2129);
 }
 
 .knowledge-item {

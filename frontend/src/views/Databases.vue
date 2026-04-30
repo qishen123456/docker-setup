@@ -234,4 +234,11 @@ onMounted(loadData)
 <style scoped>
 .card-header { display:flex; justify-content:space-between; align-items:center; }
 .mini-stat .el-statistic { padding: 4px 0; }
+:deep(.el-card) {
+  border-radius: var(--radius-card, 12px) !important;
+  border: 1px solid var(--border, #e5e6eb) !important;
+  box-shadow: var(--shadow-xs) !important;
+  transition: box-shadow var(--duration-normal, 220ms) ease;
+}
+:deep(.el-card:hover) { box-shadow: var(--shadow-sm) !important; }
 </style>

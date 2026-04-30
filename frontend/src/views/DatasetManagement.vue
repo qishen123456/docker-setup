@@ -710,31 +710,31 @@ onMounted(async () => {
 
 <style scoped>
 .dataset-page { min-height: calc(100vh - 150px); }
-.glass-card { border: 1px solid rgba(118, 124, 133, 0.18); background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(14px); }
+.glass-card { border: 1px solid var(--border, #e5e6eb); background: var(--bg-card, #fff); border-radius: var(--radius-card, 12px); box-shadow: var(--shadow-xs); }
 .sidebar-card { min-height: calc(100vh - 150px); }
-.panel-title { font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.panel-title { font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; color: var(--text-title, #1d2129); }
 .header-row { display: flex; align-items: center; justify-content: space-between; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .toolbar-col { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-.dataset-tile { padding: 12px 14px; border-radius: 14px; margin-bottom: 8px; border: 1px solid #d7dbe1; background: linear-gradient(135deg, #fcfcfd, #edf1f5); cursor: pointer; transition: all 0.18s ease; }
-.dataset-tile:hover { border-color: #b0b5be; }
-.dataset-tile.active { border-color: #7f8792; box-shadow: 0 8px 20px rgba(93, 100, 110, 0.12); }
-.dataset-tile-title { font-weight: 700; font-size: 14px; }
-.dataset-tile-meta { margin-top: 3px; font-size: 11px; color: #707783; }
-.dataset-tile-sub { margin-top: 4px; font-size: 11px; color: #6d7480; }
+.dataset-tile { padding: 12px 14px; border-radius: var(--radius-card, 12px); margin-bottom: 8px; border: 1px solid var(--border, #e5e6eb); background: var(--bg-card, #fff); cursor: pointer; transition: all var(--duration-normal, 220ms) var(--ease-out); }
+.dataset-tile:hover { border-color: var(--border-hover, #c9cdd4); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.dataset-tile.active { border-color: var(--color-primary, #3370ff); background: var(--color-primary-light, #f0f5ff); box-shadow: var(--shadow-md); }
+.dataset-tile-title { font-weight: 700; font-size: 14px; color: var(--text-title, #1d2129); }
+.dataset-tile-meta { margin-top: 3px; font-size: 11px; color: var(--text-muted, #86909c); }
+.dataset-tile-sub { margin-top: 4px; font-size: 11px; color: var(--text-muted, #86909c); }
 .base-form { margin-bottom: 10px; }
 .quality-alert { margin-bottom: 14px; }
 .quality-overview { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
 .quality-checks { display: flex; flex-wrap: wrap; gap: 8px; }
-.quality-gaps { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #6b7280; line-height: 1.5; }
+.quality-gaps { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-body, #4e5969); line-height: 1.6; }
 .toolbar { margin-bottom: 10px; display: flex; gap: 8px; }
-.section-title { margin: 16px 0 8px; font-weight: 700; font-size: 14px; }
-.text-preview { font-size: 12px; color: #5f6775; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
-.schema-name-cell { font-weight: 600; color: #2d3440; }
-.ddl-preview-line { font-family: Consolas, Monaco, monospace; font-size: 12px; line-height: 1.4; color: #4b5563; word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }
+.section-title { margin: 18px 0 10px; font-weight: 700; font-size: 14px; color: var(--text-title, #1d2129); }
+.text-preview { font-size: 12px; color: var(--text-body, #4e5969); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
+.schema-name-cell { font-weight: 600; color: var(--text-title, #1d2129); }
+.ddl-preview-line { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 12px; line-height: 1.4; color: var(--text-body, #4e5969); word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }
 .schema-editor-shell { display: flex; flex-direction: column; gap: 18px; height: 100%; }
 .schema-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.schema-editor-subtitle { margin-top: 6px; color: #6d7480; font-size: 13px; }
+.schema-editor-subtitle { margin-top: 6px; color: var(--text-muted, #86909c); font-size: 13px; }
 .schema-editor-form { flex: 1; }
-.mono-textarea :deep(textarea) { font-family: Consolas, Monaco, 'Courier New', monospace; font-size: 13px; line-height: 1.6; }
+.mono-textarea :deep(textarea) { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 13px; line-height: 1.6; }
 </style>

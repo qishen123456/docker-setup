@@ -11,7 +11,7 @@
             @click="selectChannel(ch.key)"
           >
             <span class="cs-ch-icon">{{ providerEmoji(ch.provider) }}</span>
-            <span class="cs-ch-name">{{ channelDisplayName(ch) }}</span>
+            <span class="cs-ch-name">{{ ch._displayName || channelDisplayName(ch) }}</span>
             <el-switch
               v-model="ch._hasActive"
               size="small"
@@ -34,7 +34,22 @@
         <!-- Provider Header -->
         <div class="cs-provider-header">
           <div class="cs-provider-icon">{{ providerEmoji(activeChannel.provider) }}</div>
-          <div class="cs-provider-title">{{ channelDisplayName(activeChannel) }}</div>
+          <div class="cs-provider-title-row" v-if="!editingProviderName">
+            <div class="cs-provider-title">{{ activeChannel._displayName || channelDisplayName(activeChannel) }}</div>
+            <el-button text size="small" class="cs-provider-edit-btn" @click="startEditProviderName">
+              <el-icon><Edit /></el-icon>
+            </el-button>
+          </div>
+          <div class="cs-provider-title-row" v-else>
+            <el-input
+              v-model="editProviderNameValue"
+              size="default"
+              class="cs-provider-name-input"
+              @keyup.enter="saveProviderName"
+              @blur="saveProviderName"
+              ref="providerNameInputRef"
+            />
+          </div>
           <span class="cs-provider-url-sub">{{ activeChannel.base_url }}</span>
         </div>
 
@@ -190,7 +205,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete, ArrowDown, Setting, View, Hide } from '@element-plus/icons-vue'
 import { getAIModels, createAIModel, updateAIModel, deleteAIModel, testAIModel, setDefaultAIModel } from '../api/index.js'
@@ -205,6 +220,11 @@ const channelTestResult = reactive({})
 const showApiKey = ref(false)
 const editableApiKey = ref('')
 const editableBaseUrl = ref('')
+const editingProviderName = ref(false)
+const editProviderNameValue = ref('')
+const providerNameInputRef = ref()
+// Custom display names per channel stored locally
+const channelCustomNames = ref(JSON.parse(localStorage.getItem('sa_channel_names') || '{}'))
 
 // Channel dialog
 const channelDialogVisible = ref(false)
@@ -256,6 +276,7 @@ const channels = computed(() => {
   }
   for (const ch of Object.values(map)) {
     ch._hasActive = ch.models.some(m => m.is_active)
+    ch._displayName = channelCustomNames.value[ch.key] || ''
   }
   return Object.values(map)
 })
@@ -328,6 +349,27 @@ const onBaseUrlChange = async () => {
   }
   ElMessage.success('API 地址已保存')
   loadData()
+}
+
+const startEditProviderName = () => {
+  const ch = activeChannel.value
+  if (!ch) return
+  editProviderNameValue.value = ch._displayName || channelDisplayName(ch)
+  editingProviderName.value = true
+  nextTick(() => providerNameInputRef.value?.focus())
+}
+
+const saveProviderName = () => {
+  const ch = activeChannel.value
+  if (!ch) return
+  const name = editProviderNameValue.value.trim()
+  if (name && name !== channelDisplayName(ch)) {
+    channelCustomNames.value[ch.key] = name
+  } else {
+    delete channelCustomNames.value[ch.key]
+  }
+  localStorage.setItem('sa_channel_names', JSON.stringify(channelCustomNames.value))
+  editingProviderName.value = false
 }
 
 const loadData = async () => {
@@ -464,17 +506,18 @@ onMounted(loadData)
 
 .cs-layout {
   flex: 1; display: flex; min-height: 0;
-  background: #f7f8fa;
-  border-radius: 12px;
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-card, 12px);
   overflow: hidden;
-  border: 1px solid rgba(229,230,235,0.6);
+  border: 1px solid var(--border, #e5e6eb);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
 }
 
 /* ===== LEFT SIDEBAR ===== */
 .cs-sidebar {
   width: 240px; min-width: 240px;
-  background: #fff;
-  border-right: 1px solid rgba(229,230,235,0.6);
+  background: var(--bg-muted, #f2f3f5);
+  border-right: 1px solid var(--border, #e5e6eb);
   display: flex; flex-direction: column;
 }
 .cs-sidebar-scroll {
@@ -482,58 +525,67 @@ onMounted(loadData)
 }
 .cs-ch-item {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: 10px;
-  cursor: pointer; transition: all 0.15s ease;
+  padding: 10px 12px; border-radius: var(--radius-md, 8px);
+  cursor: pointer; transition: all var(--duration-fast, 150ms) ease;
   margin-bottom: 2px; user-select: none;
 }
-.cs-ch-item:hover { background: rgba(22,93,255,0.04); }
+.cs-ch-item:hover { background: rgba(51,112,255,0.04); }
 .cs-ch-item.is-active {
-  background: rgba(22,93,255,0.08);
-  box-shadow: inset 3px 0 0 #165dff;
+  background: var(--color-primary-light, #f0f5ff);
+  box-shadow: inset 3px 0 0 var(--color-primary, #3370ff);
 }
 .cs-ch-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
 .cs-ch-name {
-  flex: 1; font-size: 13px; font-weight: 500; color: #1d2129;
+  flex: 1; font-size: 13px; font-weight: 500; color: var(--text-title, #1d2129);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cs-ch-switch { flex-shrink: 0; }
 
 .cs-sidebar-footer {
-  padding: 12px; border-top: 1px solid rgba(229,230,235,0.5);
+  padding: 12px; border-top: 1px solid var(--border, #e5e6eb);
 }
 .cs-add-btn {
-  width: 100%; border-radius: 8px; height: 36px;
+  width: 100%; border-radius: var(--radius-md, 8px); height: 36px;
   font-size: 13px; font-weight: 500;
 }
 
 /* ===== RIGHT MAIN ===== */
 .cs-main {
-  flex: 1; overflow-y: auto; padding: 24px 32px;
+  flex: 1; overflow-y: auto; padding: 28px 36px;
+  background: var(--bg-card, #fff);
 }
 .cs-empty {
   display: flex; align-items: center; justify-content: center;
 }
-.cs-empty-text { color: #86909c; font-size: 14px; }
+.cs-empty-text { color: var(--text-muted, #86909c); font-size: 14px; }
 
 /* Provider Header */
 .cs-provider-header {
-  text-align: center; margin-bottom: 24px;
+  text-align: center; margin-bottom: 28px;
 }
 .cs-provider-icon {
-  font-size: 40px; margin-bottom: 8px;
+  font-size: 36px; margin-bottom: 8px;
+}
+.cs-provider-title-row {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
 }
 .cs-provider-title {
-  font-size: 18px; font-weight: 700; color: #1d2129;
+  font-size: 18px; font-weight: 700; color: var(--text-title, #1d2129);
 }
+.cs-provider-edit-btn {
+  opacity: 0.4; transition: opacity 0.15s;
+}
+.cs-provider-header:hover .cs-provider-edit-btn { opacity: 1; }
+.cs-provider-name-input { max-width: 260px; }
 .cs-provider-url-sub {
-  display: block; font-size: 12px; color: #86909c; margin-top: 4px;
+  display: block; font-size: 12px; color: var(--text-muted, #86909c); margin-top: 4px;
 }
 
 /* Sections */
 .cs-section { margin-bottom: 20px; }
 .cs-section-label {
-  font-size: 13px; font-weight: 700; color: #1d2129;
-  margin-bottom: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969);
+  margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em;
 }
 
 .cs-key-row { display: flex; align-items: center; gap: 8px; }
@@ -544,13 +596,13 @@ onMounted(loadData)
 /* Models */
 .cs-models-header {
   display: flex; align-items: center; gap: 8px;
-  margin-bottom: 12px; padding-top: 8px;
-  border-top: 1px solid rgba(229,230,235,0.5);
+  margin-bottom: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border, #e5e6eb);
 }
-.cs-models-label { font-size: 13px; font-weight: 700; color: #1d2129; }
+.cs-models-label { font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969); text-transform: uppercase; letter-spacing: 0.04em; }
 .cs-models-count {
-  font-size: 10px; font-weight: 700; color: #fff; background: #165dff;
-  min-width: 18px; height: 18px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; color: #fff; background: var(--color-primary, #3370ff);
+  min-width: 18px; height: 18px; border-radius: var(--radius-pill, 999px);
   display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
 }
 .cs-models-spacer { flex: 1; }
@@ -559,21 +611,22 @@ onMounted(loadData)
 
 .cs-model-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: 10px;
-  transition: background 0.15s ease;
-  background: rgba(255,255,255,0.7);
+  padding: 10px 14px; border-radius: var(--radius-md, 8px);
+  transition: all var(--duration-fast, 150ms) ease;
+  background: var(--gray-50, #f9fafb);
+  border: 1px solid transparent;
 }
-.cs-model-row:hover { background: rgba(22,93,255,0.03); }
+.cs-model-row:hover { background: var(--color-primary-light, #f0f5ff); border-color: var(--border, #e5e6eb); }
 .cs-model-row.is-inactive { opacity: 0.4; }
-.cs-model-row.is-default { background: rgba(255,250,235,0.6); }
+.cs-model-row.is-default { background: var(--warning-bg, #fff7e8); border-color: rgba(255,125,0,0.12); }
 
 .cs-model-emoji { font-size: 16px; flex-shrink: 0; }
 .cs-model-name {
-  font-size: 13px; font-weight: 600; color: #1d2129;
+  font-size: 13px; font-weight: 600; color: var(--text-title, #1d2129);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cs-model-id {
-  font-size: 10px; color: #86909c; font-family: 'SF Mono', monospace;
+  font-size: 10px; color: var(--text-muted, #86909c); font-family: 'JetBrains Mono', 'SF Mono', monospace;
   white-space: nowrap; flex-shrink: 0;
 }
 .cs-model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -583,8 +636,8 @@ onMounted(loadData)
 .cs-model-del { color: #86909c !important; font-weight: 700; }
 
 .cs-add-model-bar {
-  padding: 8px 0; text-align: center;
-  border-top: 1px solid rgba(229,230,235,0.3);
-  margin-top: 4px;
+  padding: 12px 0; text-align: center;
+  border-top: 1px solid var(--border-light, #f0f1f3);
+  margin-top: 8px;
 }
 </style>

@@ -345,8 +345,10 @@ onMounted(async () => {
 }
 .panel-card {
   height: 100%;
-  border: 1px solid #d7d9dc;
-  background: linear-gradient(180deg, #fbfbfc, #f1f2f4);
+  border: 1px solid var(--border, #e5e6eb);
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-card, 12px);
+  box-shadow: var(--shadow-xs);
 }
 .panel-header {
   display: flex;
@@ -355,23 +357,29 @@ onMounted(async () => {
 }
 .dataset-item {
   padding: 10px 12px;
-  border: 1px solid #d9dbe0;
-  border-radius: 8px;
+  border: 1px solid var(--border, #e5e6eb);
+  border-radius: var(--radius-md, 8px);
   margin-bottom: 8px;
   cursor: pointer;
-  background: #f8f9fb;
+  background: var(--bg-card, #fff);
+  transition: all var(--duration-normal, 220ms) var(--ease-out);
+}
+.dataset-item:hover {
+  border-color: var(--border-hover, #c9cdd4);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 .dataset-item.active {
-  border-color: #667085;
-  background: #eef0f4;
+  border-color: var(--color-primary, #3370ff);
+  background: var(--color-primary-light, #f0f5ff);
 }
 .dataset-name {
   font-weight: 600;
-  color: #2f3440;
+  color: var(--text-title, #1d2129);
 }
 .dataset-meta {
   margin-top: 4px;
-  color: #717784;
+  color: var(--text-muted, #86909c);
   font-size: 12px;
 }
 .basic-form {
@@ -384,10 +392,10 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 .block-card {
-  border: 1px solid #d8dbe1;
-  border-radius: 8px;
-  padding: 10px;
+  border: 1px solid var(--border, #e5e6eb);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
   margin-bottom: 10px;
-  background: #fafbfc;
+  background: var(--gray-50, #f9fafb);
 }
 </style>
