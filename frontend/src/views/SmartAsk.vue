@@ -1461,7 +1461,7 @@ const buildReportHtml = (title, report) => `<!doctype html>
   <title>${title}</title>
   <style>
     @page { size: A4; margin: 16mm 14mm; }
-    body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f7f8fa; color: #1d2129; }
+    body { margin: 0; font-family: var(--font-sans, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif); background: #f7f8fa; color: #1d2129; }
     .page { max-width: 960px; margin: 0 auto; padding: 40px 24px 72px; }
     .card { background: #fff; border: 1px solid #e5e6eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05); }
     .eyebrow { font-size: 12px; color: #165dff; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -2019,7 +2019,7 @@ onUnmounted(() => {
     radial-gradient(circle at top left, rgba(22, 93, 255, 0.12), transparent 30%),
     linear-gradient(180deg, #f7f9fc 0%, #eef2f8 100%);
   overflow: hidden;
-  font-family: 'PingFang SC', 'Helvetica Neue', 'Inter', Arial, sans-serif;
+  font-family: var(--font-sans, 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif);
   font-size: 14px;
   color: var(--text-title);
   padding: 16px;

@@ -1,7 +1,15 @@
 <template>
-  <div>
+  <div class="db-page admin-workspace">
+    <div class="admin-page-head">
+      <div>
+        <div class="admin-kicker">DATA SOURCES</div>
+        <h2>数据源管理</h2>
+        <p>维护问数系统可访问的数据连接、默认库与连通性状态。</p>
+      </div>
+      <el-button type="primary" :icon="Plus" @click="openAdd">添加数据源</el-button>
+    </div>
     <!-- 统计卡片 -->
-    <el-row :gutter="20" style="margin-bottom:20px">
+    <el-row :gutter="16" class="admin-stat-grid">
       <el-col :span="6">
         <el-card class="mini-stat"><el-statistic title="数据源总数" :value="connections.length"><template #prefix><el-icon color="#409EFF"><Coin /></el-icon></template></el-statistic></el-card>
       </el-col>
@@ -16,11 +24,11 @@
       </el-col>
     </el-row>
 
-    <el-card>
+    <el-card class="admin-table-card">
       <template #header>
         <div class="card-header">
-          <span>🗄️ 数据源管理</span>
-          <el-button type="primary" :icon="Plus" @click="openAdd">添加数据源</el-button>
+          <span>连接清单</span>
+          <el-button plain :icon="Connection" :disabled="!connections.length" @click="testActiveConnections">批量测试活跃连接</el-button>
         </div>
       </template>
 
@@ -228,12 +236,25 @@ const testConn = async (row) => {
   } finally { testingId.value = null }
 }
 
+const testActiveConnections = async () => {
+  const activeConnections = connections.value.filter(connection => connection.is_active)
+  if (!activeConnections.length) {
+    ElMessage.info('暂无活跃数据源可测试')
+    return
+  }
+  for (const connection of activeConnections) {
+    await testConn(connection)
+  }
+}
+
 onMounted(loadData)
 </script>
 
 <style scoped>
 .card-header { display:flex; justify-content:space-between; align-items:center; }
 .mini-stat .el-statistic { padding: 4px 0; }
+.admin-table-card :deep(.el-card__body) { padding: 0; }
+.admin-table-card :deep(.el-table) { border-radius: 0 !important; }
 :deep(.el-card) {
   border-radius: var(--radius-card, 12px) !important;
   border: 1px solid var(--border, #e5e6eb) !important;

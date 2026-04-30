@@ -18,19 +18,19 @@
               </div>
             </div>
             <el-select
-              v-model="modelDatasetId"
+              v-model="datasetSelectValue"
               placeholder="自动路由数据集"
               size="small"
               class="sa-ds-select"
               popper-class="sa-ds-popper"
-              @change="$emit('datasetChange', $event)"
+              @change="$emit('datasetChange', $event || null)"
             >
               <template #prefix>
                 <span class="sa-ds-icon" aria-hidden="true"></span>
               </template>
               <el-option
                 label="自动路由数据集"
-                :value="null"
+                value=""
               >
                 <div class="sa-ds-option sa-ds-option-auto">
                   <div class="sa-ds-option-main">
@@ -74,7 +74,7 @@
               </div>
             </div>
             <el-select
-              v-model="modelModelId"
+              v-model="modelSelectValue"
               placeholder="Auto"
               size="small"
               class="sa-model-select"
@@ -85,7 +85,7 @@
               </template>
               <el-option
                 label="Auto"
-                :value="null"
+                value=""
               >
                 <div class="sa-ds-option sa-ds-option-auto">
                   <div class="sa-ds-option-main">
@@ -178,6 +178,14 @@ const props = defineProps({
 defineEmits(['send', 'stop', 'datasetChange'])
 
 const inputRef = ref(null)
+const datasetSelectValue = computed({
+  get: () => modelDatasetId.value ?? '',
+  set: value => { modelDatasetId.value = value === '' ? null : value },
+})
+const modelSelectValue = computed({
+  get: () => modelModelId.value ?? '',
+  set: value => { modelModelId.value = value === '' ? null : value },
+})
 const selectedDatasetMeta = computed(() => (
   (props.datasets || []).find(item => Number(item?.id) === Number(modelDatasetId.value)) || null
 ))

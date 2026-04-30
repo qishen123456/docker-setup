@@ -46,6 +46,7 @@
                 <el-tag v-if="isDirty" type="warning" size="small" effect="plain" style="margin-left:8px">有未保存修改</el-tag>
               </div>
               <div class="header-actions">
+                <el-button plain :disabled="!selectedDatasetId" @click="autofillSyybDataset">自动补齐商用事业部</el-button>
                 <el-button type="danger" plain @click="removeDataset" :disabled="!selectedDatasetId">删除</el-button>
                 <el-button type="primary" :disabled="!isDirty" @click="saveFull">保存书架内容</el-button>
               </div>
@@ -492,6 +493,336 @@ const qualityAlertType = computed(() => {
   return qualitySummary.value.level === 'healthy' ? 'success' : qualitySummary.value.level === 'warning' ? 'warning' : 'error'
 })
 const qualityCheckTagType = (status) => (status === 'healthy' ? 'success' : status === 'warning' ? 'warning' : 'danger')
+const isSyybDataset = computed(() => {
+  const text = [datasetForm.dataset_name, datasetForm.dataset_code, datasetForm.business_domain].filter(Boolean).join(' ')
+  return /商用事业部|安吉尔商用|angel_business/i.test(text)
+})
+
+const SYYB_DEFAULT_DDL = `CREATE TABLE angel_group_data (
+  id BIGINT,
+  fields JSONB
+);`
+
+const createSyybTemplate = (sourceId) => ({
+  common_questions: [
+    { question_text: '商用事业部当前年整体达成率是多少？', sort_order: 10, is_active: true },
+    { question_text: '东部分公司当前年达成率和剩余任务是多少？', sort_order: 20, is_active: true },
+    { question_text: '哪些代表处达成率最低？', sort_order: 30, is_active: true },
+    { question_text: '各业务部当前年开单金额排名如何？', sort_order: 40, is_active: true },
+  ],
+  regression_cases: [
+    {
+      case_type: 'summary',
+      question_text: '商用事业部当前年整体达成率是多少？',
+      expected_focus: '应命中商用事业部数据集，并输出事业部层级汇总达成率。',
+      expected_intent: 'generate_sql',
+      sort_order: 10,
+      is_active: true,
+    },
+    {
+      case_type: 'trend',
+      question_text: '东部分公司今年任务和开单差距大吗？',
+      expected_focus: '应保留东部分公司过滤意图，并给出剩余任务金额判断。',
+      expected_intent: 'generate_sql',
+      sort_order: 20,
+      is_active: true,
+    },
+    {
+      case_type: 'confirmation',
+      question_text: '分公司和代表处分别怎么看业绩？',
+      expected_focus: '应触发层级口径确认，避免把下级明细汇总进上级。',
+      expected_intent: 'requires_confirmation',
+      sort_order: 30,
+      is_active: true,
+    },
+  ],
+  synonyms: [
+    { synonym: '商用事业部', normalized_synonym: '商用事业部', weight: 10 },
+    { synonym: '安吉尔商用', normalized_synonym: '商用事业部', weight: 9 },
+    { synonym: '东部分公司', normalized_synonym: '东部分公司', weight: 8 },
+    { synonym: '销售业绩', normalized_synonym: '销售业绩', weight: 7 },
+  ],
+  lld_documents: [
+    {
+      version: 1,
+      title: '商用事业部飞书销售表问数规则',
+      content: '核心约束：数据来自 angel_group_data，业务字段位于 fields(JSONB)，年份口径固定为 2026。统计分公司、代表处、业务部等上级层级时，必须排除下级明细行，避免重复累计。金额字段统一先清洗非数字字符后再转 NUMERIC。',
+      redline_rules: ['仅允许只读SQL', '必须按2026过滤', '必须执行层级隔离', '默认LIMIT 100'],
+      is_active: true,
+    },
+  ],
+  data_dictionary: [
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '事业部',
+      semantic_name: '事业部',
+      data_type: 'text',
+      enum_mapping: {},
+      extraction_rule: "CASE WHEN jsonb_typeof(fields->'事业部')='array' THEN fields->'事业部'->0->>'text' ELSE fields->>'事业部' END",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '分公司',
+      semantic_name: '分公司',
+      data_type: 'text',
+      enum_mapping: {},
+      extraction_rule: "CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '代表处',
+      semantic_name: '代表处',
+      data_type: 'text',
+      enum_mapping: {},
+      extraction_rule: "CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '业务代表',
+      semantic_name: '业务代表',
+      data_type: 'text',
+      enum_mapping: {},
+      extraction_rule: "CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '当前年',
+      semantic_name: '当前年',
+      data_type: 'text',
+      enum_mapping: {},
+      extraction_rule: "CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '总任务（金额）',
+      semantic_name: '总任务金额',
+      data_type: 'numeric',
+      enum_mapping: {},
+      extraction_rule: "COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END,'[^0-9.-]','','g'),''),'0')::NUMERIC",
+      is_active: true,
+    },
+    {
+      table_name: 'angel_group_data',
+      column_name: 'fields',
+      jsonb_key: '年度开单金额',
+      semantic_name: '年度开单金额',
+      data_type: 'numeric',
+      enum_mapping: {},
+      extraction_rule: "COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END,'[^0-9.-]','','g'),''),'0')::NUMERIC",
+      is_active: true,
+    },
+  ],
+  schema_definition: [
+    {
+      table_name: 'angel_group_data',
+      ddl_sql: SYYB_DEFAULT_DDL,
+      description: '飞书多维表格落库主表，业务字段位于 fields(JSONB)。',
+      source_id: sourceId,
+      is_active: true,
+    },
+  ],
+  table_relations: [],
+  golden_sql_samples: [
+    {
+      intent_type: 'summary',
+      question: '商用事业部当前年整体达成率是多少？',
+      sql_text: `WITH 字段提取 AS (
+  SELECT
+    CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年,
+    CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,
+    CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,
+    CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
+  FROM angel_group_data
+), 事业部汇总 AS (
+  SELECT 任务金额, 开单金额
+  FROM 字段提取
+  WHERE 当前年='2026'
+    AND 分公司 IS NOT NULL AND 分公司<>''
+    AND (代表处 IS NULL OR 代表处='')
+    AND (业务代表 IS NULL OR 业务代表='')
+)
+SELECT
+  SUM(任务金额) AS 总任务金额,
+  SUM(开单金额) AS 年度开单金额,
+  CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100,2) ELSE 0 END AS 达成率,
+  ROUND(SUM(任务金额)-SUM(开单金额),2) AS 剩余任务金额
+FROM 事业部汇总
+LIMIT 100`,
+      tags: ['商用事业部', '达成率', '汇总'],
+      quality_score: 95,
+      is_active: true,
+    },
+    {
+      intent_type: 'detail',
+      question: '东部分公司当前年达成率和剩余任务是多少？',
+      sql_text: `WITH 字段提取 AS (
+  SELECT
+    CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年,
+    CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,
+    CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,
+    CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
+  FROM angel_group_data
+)
+SELECT
+  '东部分公司' AS 节点名称,
+  SUM(任务金额) AS 总任务金额,
+  SUM(开单金额) AS 年度开单金额,
+  CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100,2) ELSE 0 END AS 达成率,
+  ROUND(SUM(任务金额)-SUM(开单金额),2) AS 剩余任务金额
+FROM 字段提取
+WHERE 当前年='2026'
+  AND 分公司='东部分公司'
+  AND (代表处 IS NULL OR 代表处='')
+  AND (业务代表 IS NULL OR 业务代表='')
+LIMIT 100`,
+      tags: ['东部分公司', '分公司', '达成率'],
+      quality_score: 92,
+      is_active: true,
+    },
+    {
+      intent_type: 'ranking',
+      question: '哪些代表处达成率最低？',
+      sql_text: `WITH 字段提取 AS (
+  SELECT
+    CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年,
+    CASE WHEN jsonb_typeof(fields->'分公司')='array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,
+    CASE WHEN jsonb_typeof(fields->'代表处')='array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,
+    CASE WHEN jsonb_typeof(fields->'业务代表')='array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
+    COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
+  FROM angel_group_data
+), 代表处汇总 AS (
+  SELECT 分公司, 代表处, SUM(任务金额) AS 总任务金额, SUM(开单金额) AS 年度开单金额
+  FROM 字段提取
+  WHERE 当前年='2026'
+    AND 代表处 IS NOT NULL AND 代表处<>''
+    AND (业务代表 IS NULL OR 业务代表='')
+  GROUP BY 分公司, 代表处
+)
+SELECT
+  分公司,
+  代表处,
+  总任务金额,
+  年度开单金额,
+  CASE WHEN 总任务金额>0 THEN ROUND(年度开单金额/总任务金额*100,2) ELSE 0 END AS 达成率
+FROM 代表处汇总
+ORDER BY 达成率 ASC, 总任务金额 DESC
+LIMIT 100`,
+      tags: ['代表处', '排行', '低达成率'],
+      quality_score: 90,
+      is_active: true,
+    },
+  ],
+  agent_prompts: [
+    {
+      agent_no: 1,
+      prompt_key: 'default',
+      prompt_content: '你是 Agent1（语义路由与口径守卫）。识别商用事业部问题对应的数据集与统计口径；涉及分公司、代表处、业务部、业务代表等层级时，优先检查是否存在统计歧义，必要时先确认口径。所有当前年相关问题统一按 2026 处理。',
+      is_active: true,
+    },
+    {
+      agent_no: 2,
+      prompt_key: 'default',
+      prompt_content: '你是 Agent2（SQL 生成专家），仅允许输出 PostgreSQL 只读 SQL。表为 angel_group_data，业务字段位于 fields(JSONB)。金额字段必须清洗为 NUMERIC，年份固定过滤 2026，统计上级层级时必须排除下级明细行。',
+      is_active: true,
+    },
+    {
+      agent_no: 3,
+      prompt_key: 'default',
+      prompt_content: '你是 Agent3（SQL 复核官）。复核 SQL 是否只读、安全、可执行，是否正确使用 JSONB 提取、金额清洗、2026 年过滤、层级隔离和 LIMIT 100；若不满足，直接修正并返回 final_sql。',
+      is_active: true,
+    },
+    {
+      agent_no: 4,
+      prompt_key: 'default',
+      prompt_content: '你是 Agent4（业务解读官），面向商用事业部管理层输出结论。先给出整体达成、风险和动作建议，再按事业部、条线、分公司或代表处分层展开，避免空话。',
+      is_active: true,
+    },
+  ],
+  external_configs: [
+    {
+      config_type: 'dataset_meta',
+      config_key: 'sql_generation_profile',
+      config_value: {
+        year_fixed: '2026',
+        main_table: 'angel_group_data',
+        db_type: 'postgresql',
+        jsonb_column: 'fields',
+        readonly: true,
+      },
+      is_active: true,
+    },
+  ],
+})
+
+const mergeCollection = (collectionName, items, keyFn) => {
+  items.forEach((item) => {
+    const key = keyFn(item)
+    const list = full[collectionName]
+    const index = list.findIndex(existing => keyFn(existing) === key)
+    const copy = JSON.parse(JSON.stringify(item))
+    if (index >= 0) list[index] = { ...list[index], ...copy }
+    else list.push(copy)
+  })
+}
+
+const autofillSyybDataset = async () => {
+  if (!selectedDatasetId.value) return
+  if (!isSyybDataset.value) {
+    ElMessage.warning('当前选中的不是商用事业部数据集，未执行自动补齐。')
+    return
+  }
+  const sourceId = datasetForm.source_id || newDatasetSourceId.value || dataSources.value[0]?.id || null
+  if (!sourceId) {
+    ElMessage.warning('请先为当前数据集选择一个数据源。')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('将为当前商用事业部数据集自动补齐 LLD、字典、DDL、Golden SQL 与 Agent Prompt，并立即保存。确认继续？', '自动补齐商用事业部', {
+      type: 'info',
+      confirmButtonText: '开始补齐',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+
+  const template = createSyybTemplate(sourceId)
+  if (!datasetForm.dataset_name) datasetForm.dataset_name = '商用事业部'
+  if (!datasetForm.dataset_code) datasetForm.dataset_code = 'angel_business_2026'
+  if (!datasetForm.business_domain) datasetForm.business_domain = '安吉尔商用事业部销售业绩分析'
+  if (!datasetForm.description) datasetForm.description = '商用事业部（飞书多维表格）四 Agent 模板'
+  if (!datasetForm.source_id) datasetForm.source_id = sourceId
+
+  mergeCollection('common_questions', template.common_questions, item => item.question_text)
+  mergeCollection('regression_cases', template.regression_cases, item => `${item.case_type}|${item.question_text}`)
+  mergeCollection('synonyms', template.synonyms, item => item.synonym)
+  mergeCollection('lld_documents', template.lld_documents, item => `${item.version}|${item.title}`)
+  mergeCollection('data_dictionary', template.data_dictionary, item => `${item.table_name}|${item.column_name}|${item.jsonb_key}`)
+  mergeCollection('schema_definition', template.schema_definition, item => item.table_name)
+  mergeCollection('golden_sql_samples', template.golden_sql_samples, item => item.question)
+  mergeCollection('agent_prompts', template.agent_prompts, item => `${item.agent_no}|${item.prompt_key}`)
+  mergeCollection('external_configs', template.external_configs, item => `${item.config_type}|${item.config_key}`)
+
+  activeTab.value = 'golden'
+  markDirty()
+  await saveFull()
+}
 
 // ========== 左侧:搜索+筛选 ==========
 const filteredDatasets = computed(() => {
@@ -523,6 +854,18 @@ const COLLECTIONS = {
   dict: 'data_dictionary', relation: 'table_relations', golden: 'golden_sql_samples',
   prompt: 'agent_prompts', extcfg: 'external_configs'
 }
+const FULL_COLLECTION_KEYS = [
+  'common_questions',
+  'regression_cases',
+  'synonyms',
+  'lld_documents',
+  'data_dictionary',
+  'schema_definition',
+  'table_relations',
+  'golden_sql_samples',
+  'agent_prompts',
+  'external_configs',
+]
 const DEFAULTS = {
   question: () => ({ question_text: '', sort_order: (full.common_questions.length + 1) * 10, is_active: true }),
   regression: () => ({
@@ -599,7 +942,7 @@ const applyDataset = (d) => {
   datasetForm.business_domain = d?.business_domain || ''; datasetForm.source_id = d?.source_id || null
   datasetForm.description = d?.description || ''; datasetForm.is_active = d?.is_active !== false
 }
-const resetFull = () => { Object.keys(full).forEach(k => { full[k] = [] }); qualitySummary.value = null }
+const resetFull = () => { FULL_COLLECTION_KEYS.forEach(key => { full[key] = [] }); qualitySummary.value = null }
 
 const loadDatasets = async () => { datasets.value = (await getBookshelfDatasets()).datasets || [] }
 const loadDataSources = async () => {
@@ -611,7 +954,7 @@ const selectDataset = async (dataset) => {
   selectedDatasetId.value = dataset.id
   applyDataset(dataset)
   const r = await getBookshelfDatasetFull(dataset.id)
-  Object.keys(COLLECTIONS).forEach(type => { full[COLLECTIONS[type]] = r[COLLECTIONS[type]] || [] })
+  FULL_COLLECTION_KEYS.forEach(key => { full[key] = r[key] || [] })
   qualitySummary.value = r.quality_summary || null
   isDirty.value = false
 }
@@ -640,12 +983,16 @@ const removeDataset = async () => {
 
 const saveFull = async () => {
   if (!selectedDatasetId.value) return
-  const payload = {}; Object.keys(COLLECTIONS).forEach(type => { payload[COLLECTIONS[type]] = full[COLLECTIONS[type]] })
+  const payload = {}
+  FULL_COLLECTION_KEYS.forEach(key => { payload[key] = full[key] })
   try {
     await updateBookshelfDataset(selectedDatasetId.value, { ...datasetForm })
     await saveBookshelfDatasetFull(selectedDatasetId.value, payload)
     ElMessage.success('书架内容已保存'); isDirty.value = false
     await loadDatasets()
+    const currentDataset = datasets.value.find(item => Number(item.id) === Number(selectedDatasetId.value))
+    if (currentDataset) await selectDataset(currentDataset)
+    return true
   } catch (err) {
     const details = err?.response?.data?.details
     if (Array.isArray(details) && details.length) {
@@ -654,9 +1001,10 @@ const saveFull = async () => {
         dangerouslyUseHTMLString: true,
         type: 'warning',
       })
-      return
+      return false
     }
     ElMessage.error(err?.response?.data?.error || err?.message || '保存失败')
+    return false
   }
 }
 

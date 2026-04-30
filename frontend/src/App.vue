@@ -57,10 +57,6 @@
             <el-icon><Connection /></el-icon>
             <template #title>飞书同步</template>
           </el-menu-item>
-          <el-menu-item index="/" data-tooltip="仪表盘">
-            <el-icon><Odometer /></el-icon>
-            <template #title>仪表盘</template>
-          </el-menu-item>
         </el-menu>
 
         <transition name="history-panel">
@@ -188,7 +184,6 @@ const historyPanelRef = ref(null)
 const historyPanelHighlighted = ref(false)
 
 const titleMap = {
-  '/': '仪表盘',
   '/smart-ask': '经营问答台',
   '/agents': 'AGENT管理',
   '/datasets': '数据集管理',
@@ -199,7 +194,6 @@ const titleMap = {
 }
 
 const subtitleMap = {
-  '/': '系统概览与运行状态',
   '/smart-ask': '',
   '/agents': '维护四个核心Agent的系统提示词与知识规则',
   '/datasets': '维护每个数据集的书架元数据与Golden SQL',
@@ -352,7 +346,7 @@ body,
   margin: 0;
   height: 100%;
   background: var(--bg-page, #f9fafb);
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-sans, 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif);
   color: var(--ink-strong);
 }
 

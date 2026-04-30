@@ -1,6 +1,18 @@
 ﻿<template>
-  <div>
-    <el-row :gutter="20" style="margin-bottom: 20px">
+  <div class="fs-page admin-workspace">
+    <div class="admin-page-head">
+      <div>
+        <div class="admin-kicker">FEISHU PIPELINE</div>
+        <h2>飞书同步</h2>
+        <p>集中管理多维表格到本地数据表的同步任务、运行状态和日志。</p>
+      </div>
+      <div class="fs-head-actions">
+        <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="openAdd">添加同步配置</el-button>
+      </div>
+    </div>
+
+    <el-row :gutter="16" class="admin-stat-grid">
       <el-col :span="6">
         <el-card class="mini-stat">
           <el-statistic title="同步配置总数" :value="syncConfigs.length" />
@@ -23,13 +35,13 @@
       </el-col>
     </el-row>
 
-    <el-card>
+    <el-card class="admin-table-card">
       <template #header>
         <div class="card-header">
           <span>飞书多维表格同步配置</span>
-          <div style="display: flex; gap: 8px; align-items: center">
-            <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-            <el-button type="primary" :icon="Plus" @click="openAdd">添加同步配置</el-button>
+          <div class="card-actions">
+            <el-tag type="info" effect="plain">{{ syncConfigs.length }} 个任务</el-tag>
+            <el-tag type="success" effect="plain">{{ syncConfigs.filter((c) => c.is_active).length }} 个启用</el-tag>
           </div>
         </div>
       </template>
@@ -442,9 +454,19 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.fs-head-actions,
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .mini-stat {
   text-align: center;
 }
+
+.admin-table-card :deep(.el-card__body) { padding: 0; }
+.admin-table-card :deep(.el-table) { border-radius: 0 !important; }
 
 :deep(.el-card) {
   border-radius: var(--radius-card, 12px) !important;

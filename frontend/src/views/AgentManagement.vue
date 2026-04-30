@@ -1,5 +1,17 @@
 <template>
   <div class="agent-page">
+    <div class="admin-page-head agent-head">
+      <div>
+        <div class="admin-kicker">AGENT ORCHESTRATION</div>
+        <h2>AGENT 管理</h2>
+        <p>维护路由、SQL 生成、复核和业务解读四个核心角色的提示词与知识片段。</p>
+      </div>
+      <div class="agent-head-metrics">
+        <span>{{ agents.length }} 个 Agent</span>
+        <span>{{ form.knowledge_base.length }} 条知识片段</span>
+      </div>
+    </div>
+
     <el-row :gutter="18">
       <el-col :span="7">
         <el-card class="glass-card">
@@ -114,6 +126,22 @@ onMounted(loadAgents)
 <style scoped>
 .agent-page {
   min-height: calc(100vh - 150px);
+}
+
+.agent-head { margin-bottom: 16px; }
+
+.agent-head-metrics {
+  display: flex;
+  gap: 8px;
+  color: var(--text-body, #4e5969);
+  font-size: 13px;
+}
+
+.agent-head-metrics span {
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e5e6eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-card, #fff);
 }
 
 .glass-card {

@@ -1,5 +1,8 @@
 /* ===== 火山引擎设计系统 v2 — Industrial SaaS ===== */
 :root {
+  --font-sans: 'HarmonyOS Sans SC', 'MiSans', 'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', 'PingFang SC', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+
   /* ── 品牌色系（低饱和度专业色盘） ── */
   --color-primary: #3370ff;
   --color-primary-hover: #2860e1;
@@ -91,12 +94,97 @@
 
 /* 全局字体 */
 * {
-  font-family: 'PingFang SC', 'Helvetica Neue', 'Inter', Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* 代码块字体 */
 code, pre {
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-family: var(--font-mono);
+}
+
+html, body, #app, .el-popper, .el-overlay {
+  font-family: var(--font-sans);
+}
+
+/* ===== 企业后台页面骨架 ===== */
+.admin-workspace,
+.agent-page,
+.dataset-page,
+.cs-page,
+.rc-page {
+  color: var(--text-title);
+}
+
+.admin-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+  box-shadow: var(--shadow-xs);
+}
+
+.admin-page-head h2 {
+  margin: 4px 0 6px;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 750;
+  color: var(--text-title);
+  letter-spacing: 0;
+}
+
+.admin-page-head p {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.admin-kicker {
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.admin-stat-grid {
+  margin-bottom: 16px;
+}
+
+.admin-stat-grid .el-card,
+.admin-table-card,
+.agent-page .glass-card,
+.dataset-page .glass-card,
+.cs-layout,
+.rc-layout {
+  border-color: rgba(51, 112, 255, 0.12) !important;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04), 0 12px 30px rgba(51, 112, 255, 0.05) !important;
+}
+
+.admin-table-card .el-card__header,
+.agent-page .el-card__header,
+.dataset-page .el-card__header {
+  background: linear-gradient(180deg, #fff 0%, #f9fbff 100%);
+}
+
+.admin-stat-grid .mini-stat {
+  min-height: 86px;
+}
+
+.admin-stat-grid .el-statistic__head {
+  color: var(--text-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-stat-grid .el-statistic__number {
+  font-size: 24px;
+  font-weight: 760;
+  color: var(--text-title);
 }
 
 /* ===== Element Plus 全局覆写 ===== */
