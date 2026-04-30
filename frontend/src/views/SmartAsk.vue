@@ -627,6 +627,7 @@ import { marked } from 'marked'
 import * as echarts from 'echarts'
 import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
+import { getSessionCache, setSessionCache } from '../state/sessionCache'
 import ChatHeader from '../components/smartask/ChatHeader.vue'
 import WelcomeScreen from '../components/smartask/WelcomeScreen.vue'
 import UserBubble from '../components/smartask/UserBubble.vue'
@@ -1621,7 +1622,7 @@ const quickAsk = (text) => {
       textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     }
   })
-  ElMessage.success('常用问题已填入输入框，请确认后发送')
+  ElMessage({ message: '已填入，按 Enter 发送', type: 'success', duration: 1800, showClose: false, customClass: 'sa-toast-modern' })
 }
 
 const handleExternalFreshChat = () => {
@@ -1943,6 +1944,13 @@ watch(() => pendingRestoreId.value, (historyId) => {
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadHistory()
+
+  // 从 sessionStorage 还原输入状态
+  const cached = getSessionCache()
+  if (cached.query) query.value = cached.query
+  if (cached.datasetId !== undefined) datasetId.value = cached.datasetId
+  if (cached.modelId !== undefined) modelId.value = cached.modelId
+
   try {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
@@ -1961,6 +1969,11 @@ onMounted(async () => {
     session.clearRecoveredSessionResult()
   }
 })
+
+// 将关键输入状态持久化到 sessionStorage，页面跳转后还原
+watch([query, datasetId, modelId], ([q, d, m]) => {
+  setSessionCache({ query: q, datasetId: d, modelId: m })
+}, { flush: 'post' })
 
 onUnmounted(() => {
   window.removeEventListener('smartask-create-fresh-chat', handleExternalFreshChat)

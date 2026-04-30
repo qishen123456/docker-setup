@@ -3,6 +3,8 @@
 > Flask + Vue 3 + PostgreSQL + Vanna(Chroma) + 通义千问/DeepSeek 等多模型，按 **数据集隔离 + 4-Agent 协作** 范式生成可执行 SQL。
 >
 > **新增**：前端支持 **模型选择器**（Auto / 手动指定），可在问数前实时切换 AI 模型。
+>
+> **v2.3 升级**：顶部导航 Brand→Workspace 极简设计、AI 模型配置页卡片式重构、SessionStorage 状态持久化、侧边栏居中修复、Docker UTF-8 编码修复。
 
 ## 一键部署（推荐：Docker 全家桶）
 

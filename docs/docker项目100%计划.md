@@ -4,11 +4,11 @@
 > **范围**：所有前后端功能点、所有数据流、所有配置项  
 > **验证**：每个功能点都有对应的测试方案
 
-## 当前状态（v2.2 — 100% 就绪 ✅）
+## 当前状态（v2.3 — 100% 就绪 ✅）
 
 > **最终验证日期**: 2026-04-30  
 > **部署就绪度**: 100%  
-> **验证方式**: verify_deployment.py 全部 PASS + 4-Agent 流水线端到端验证 + 多模型切换验证
+> **验证方式**: verify_deployment.py 全部 PASS + 4-Agent 流水线端到端验证 + 多模型切换验证 + UI/UX 升级验证
 
 ### 已完成的全部改造项
 
@@ -28,6 +28,12 @@
 | CRUD 全链路验证 | ✅ | AI 模型 Create/Read/Update/Delete/Set-default、数据源、数据集列表 全部 200 |
 | **前端模型选择器** | ✅ | ComposerArea 支持 Auto / 手动指定模型，`/api/ai-models/active` 端点已注册 |
 | **多模型 4-Agent 验证** | ✅ | qwen-max ✅、deepseek ✅、MiniMax ✅；gpt-5.2 已禁用（内网不可达） |
+| **v2.3 顶部导航极简化** | ✅ | Brand→Workspace 结构，消除重复文字，现代 SaaS 品牌感 |
+| **v2.3 AI 模型配置页卡片式重构** | ✅ | 供应商卡片 → 模型列表 → 一键测试（带 Loading 状态） |
+| **v2.3 SessionStorage 状态持久化** | ✅ | 输入内容 + 数据集 + 模型选择跨页面不丢失 |
+| **v2.3 Docker UTF-8 编码修复** | ✅ | Dockerfile 添加 `LANG=C.UTF-8`、`LC_ALL=C.UTF-8` |
+| **v2.3 侧边栏居中修复** | ✅ | 收起态图标与 footer 绝对中心对齐 |
+| **v2.3 底部输入区精简** | ✅ | 标签精简 + Tooltip + 现代 Toast 通知 |
 
 ### 计划与实际的关键差异修正
 

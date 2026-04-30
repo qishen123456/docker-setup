@@ -159,3 +159,19 @@ docker compose exec backend bash  # 进入后端容器
 | AI 模型 401 | 检查 `config/ai_settings.json` 中 API Key 是否正确，检查 .env 是否覆盖了默认模型 |
 | 数据库连接失败 | Docker 中 DB_HOST 应为 `postgres`（服务名），本地应为 `localhost` |
 | SSE 流断开 | 检查 nginx 是否有 buffering（当前配置无 buffering 设置，如需长连接加 `proxy_buffering off`） |
+| 飞书配置乱码 | Dockerfile 已添加 `LANG=C.UTF-8`，config_manager `read_json` 支持 UTF-8/GBK 自动检测 |
+| 页面跳转输入丢失 | v2.3 已通过 sessionStorage 持久化输入内容、数据集、模型选择 |
+
+---
+
+## 8. v2.3 UI/UX 升级清单
+
+| 改进项 | 落地方式 |
+|--------|---------|
+| 顶部导航极简化 | 移除重复 icon/副标题，改为 "Data Agent | 页面名" 的 Brand→Workspace 结构 |
+| AI 模型配置页重构 | 表格 → 供应商卡片 → 模型列表 → 一键测试，CherryStudio 风格 |
+| 输入区精简 | 描述文字缩短为精简标签 + Tooltip，chip 增加 hover 交互 |
+| Toast 通知 | 常用问题填入 → 现代化圆角 Toast 替代粗糙 ElMessage |
+| SessionStorage 持久化 | query + datasetId + modelId 跨页面不丢失 |
+| 侧边栏居中 | 收起态图标/footer 绝对居中对齐 |
+| Docker UTF-8 | Dockerfile 添加 `LANG=C.UTF-8`、`LC_ALL=C.UTF-8` |

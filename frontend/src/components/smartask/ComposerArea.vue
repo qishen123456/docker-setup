@@ -7,12 +7,14 @@
             <div class="sa-composer-label-block">
               <div class="sa-composer-label-row">
                 <div class="sa-composer-label">选择数据集</div>
-                <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
-                  {{ selectedDatasetMeta ? '已锁定口径' : '自动路由' }}
-                </span>
+                <el-tooltip content="不预选时会按问题自动匹配最合适的数据集" placement="top" :show-after="300">
+                  <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
+                    {{ selectedDatasetMeta ? '已锁定' : '自动路由' }}
+                  </span>
+                </el-tooltip>
               </div>
               <div class="sa-composer-caption">
-                {{ selectedDatasetMeta ? `当前数据集：${selectedDatasetMeta.dataset_name}` : '不预选时会按问题自动匹配最合适的数据集' }}
+                {{ selectedDatasetMeta ? selectedDatasetMeta.dataset_name : '按问题自动匹配' }}
               </div>
             </div>
             <el-select
@@ -61,12 +63,14 @@
             <div class="sa-composer-label-block">
               <div class="sa-composer-label-row">
                 <div class="sa-composer-label">AI 模型</div>
-                <span class="sa-model-mode-chip" :class="{ active: !!selectedModelMeta }">
-                  {{ selectedModelMeta ? selectedModelMeta.name : 'AUTO' }}
-                </span>
+                <el-tooltip content="自动选择默认模型，失败时自动切换备用" placement="top" :show-after="300">
+                  <span class="sa-model-mode-chip" :class="{ active: !!selectedModelMeta }">
+                    {{ selectedModelMeta ? selectedModelMeta.name : 'AUTO' }}
+                  </span>
+                </el-tooltip>
               </div>
               <div class="sa-composer-caption">
-                {{ selectedModelMeta ? `指定模型：${selectedModelMeta.model}` : '自动选择默认模型，失败时切换备用' }}
+                {{ selectedModelMeta ? selectedModelMeta.model : '默认模型 · 自动切换' }}
               </div>
             </div>
             <el-select
@@ -281,11 +285,21 @@ onMounted(() => {
   font-weight: 700;
   display: inline-flex;
   align-items: center;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.sa-ds-mode-chip:hover {
+  background: #eaecf0;
 }
 
 .sa-ds-mode-chip.active {
   background: #edf4ff;
   color: #165dff;
+}
+
+.sa-ds-mode-chip.active:hover {
+  background: #dde9ff;
 }
 
 .sa-composer-caption {
@@ -699,11 +713,21 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.sa-model-mode-chip:hover {
+  background: #eaecf0;
 }
 
 .sa-model-mode-chip.active {
   background: #e8f3ff;
   color: #165dff;
+}
+
+.sa-model-mode-chip.active:hover {
+  background: #dae5ff;
 }
 
 .sa-model-default-badge {

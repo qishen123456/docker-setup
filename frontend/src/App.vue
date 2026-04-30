@@ -132,21 +132,13 @@
       <el-header class="topbar" :class="{ 'topbar-smart': isSmartAskRoute }">
         <div class="topbar-heading">
           <div class="topbar-title-row">
-            <div class="topbar-mark" aria-hidden="true">
-              <span class="topbar-mark-ring"></span>
-              <span class="topbar-mark-core"></span>
-              <span class="topbar-mark-dot topbar-mark-dot-top"></span>
-              <span class="topbar-mark-dot topbar-mark-dot-right"></span>
-              <span class="topbar-mark-dot topbar-mark-dot-bottom"></span>
-              <span class="topbar-mark-dot topbar-mark-dot-left"></span>
-            </div>
-            <div class="topbar-title">{{ currentTitle }}</div>
+            <div class="topbar-brand">Data Agent</div>
+            <span class="topbar-divider"></span>
+            <div class="topbar-workspace">{{ currentTitle }}</div>
           </div>
-          <div v-if="currentSubtitle" class="topbar-subtitle">{{ currentSubtitle }}</div>
         </div>
         <div class="topbar-right">
-          <el-button v-if="!isSmartAskRoute" size="small" @click="refreshCurrentPage">刷新页面</el-button>
-          <el-tag :type="backendOk ? 'success' : 'danger'" effect="plain" round>
+          <el-tag :type="backendOk ? 'success' : 'danger'" effect="plain" round size="small">
             {{ backendOk ? '后端在线' : '后端异常' }}
           </el-tag>
           <div class="clock">{{ currentTime }}</div>
@@ -579,13 +571,14 @@ body,
   align-items: center;
   justify-content: center;
   line-height: 44px;
+  text-align: center;
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item .el-icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   margin: 0 !important;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
@@ -969,8 +962,10 @@ body,
   margin: 8px auto 0;
   border-radius: 14px;
   justify-content: center;
+  align-items: center;
   align-self: center;
   gap: 0;
+  display: flex;
 }
 
 .sidebar-footer:hover {
@@ -1000,65 +995,41 @@ body,
 
 .topbar-heading {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
   min-width: 0;
 }
 
 .topbar-title-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: baseline;
+  gap: 0;
   min-width: 0;
 }
 
-.topbar-mark {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  flex-shrink: 0;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.9), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 243, 248, 0.95));
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-
-.topbar-mark-ring {
-  inset: 8px;
-  border-color: rgba(87, 113, 173, 0.22);
-}
-
-.topbar-mark-core {
-  width: 10px;
-  height: 10px;
-  box-shadow:
-    0 0 0 3px rgba(110, 153, 255, 0.14),
-    0 0 12px rgba(79, 140, 255, 0.24);
-}
-
-.topbar-mark-dot {
-  width: 5px;
-  height: 5px;
-}
-
-.topbar-title {
-  font-size: 24px;
-  font-weight: 700;
+.topbar-brand {
+  font-size: 20px;
+  font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.1;
   color: #171a20;
+  white-space: nowrap;
 }
 
-.topbar-subtitle {
-  color: #6f7681;
-  font-size: 12px;
-  line-height: 1.45;
+.topbar-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  margin: 0 14px;
+  background: rgba(29, 33, 41, 0.12);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.topbar-workspace {
+  font-size: 14px;
+  font-weight: 400;
+  color: #888;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .topbar-right {
