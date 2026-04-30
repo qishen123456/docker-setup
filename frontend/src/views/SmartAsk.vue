@@ -332,7 +332,7 @@
                       <span class="sa-btn-label">全屏报告</span>
                     </button>
                   </div>
-                  <p class="sa-side-report-desc">按代表处拆分关键 KPI，展开后查看业务员完成情况和对应文字说明。</p>
+                  <p class="sa-side-report-desc">按{{ businessDrillReport?.compareLevelLabel || '下一层级' }}拆分关键 KPI，展开后查看{{ businessDrillReport?.detailLevelLabel || '明细层级' }}完成情况和对应文字说明。</p>
                 </div>
 
                 <section v-if="businessDrillReport" class="sa-side-section sa-business-report">
@@ -349,16 +349,28 @@
                       <div class="sa-kpi-label">{{ metric.label }}</div>
                     </div>
                   </div>
+                  <div v-if="businessDrillReport.officeCompareSpec" class="sa-office-overview-card">
+                    <div class="sa-office-overview-head">
+                      <div>
+                        <div class="sa-side-section-title">各{{ businessDrillReport.compareLevelLabel }}对比分析</div>
+                        <p class="sa-chart-copy">{{ businessDrillReport.officeCompareText }}</p>
+                      </div>
+                      <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(businessDrillReport.officeCompareSpec, `各${businessDrillReport.compareLevelLabel}对比分析`)" type="button">
+                        <span class="sa-btn-label">放大查看</span>
+                      </button>
+                    </div>
+                    <div class="sa-office-overview-chart" :ref="el => initPreviewChart(el, businessDrillReport.officeCompareSpec, 'side-office-overview')"></div>
+                  </div>
                   <div class="sa-office-card-list">
                     <article
-                      v-for="office in businessDrillReport.offices.slice(0, 4)"
+                      v-for="office in businessDrillReport.offices"
                       :key="`side-office-${office.id}`"
                       class="sa-office-card"
                     >
                       <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
                         <div>
                           <div class="sa-office-name">{{ office.name }}</div>
-                          <div class="sa-office-subtitle">{{ office.childCount }} 个业务员 · {{ office.parentName || '当前口径' }}</div>
+                          <div class="sa-office-subtitle">{{ office.childCount }} 个{{ businessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                         </div>
                         <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
                       </button>
@@ -369,7 +381,7 @@
                       <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
                         <p class="sa-chart-copy">{{ office.chartText }}</p>
                         <div class="sa-office-drill-actions">
-                          <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}业务员达成率`)" type="button">
+                          <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${businessDrillReport.detailLevelLabel}达成率`)" type="button">
                             <span class="sa-btn-label">放大查看</span>
                           </button>
                         </div>
@@ -377,9 +389,6 @@
                       </div>
                     </article>
                   </div>
-                  <button v-if="businessDrillReport.offices.length > 4" class="sa-secondary-btn sa-wide-btn" @click="openFullScreenReport">
-                    <span class="sa-btn-label">查看全部 {{ businessDrillReport.offices.length }} 个代表处</span>
-                  </button>
                 </section>
 
                 <div
@@ -557,7 +566,17 @@
           </div>
 
           <section v-if="dialogBusinessDrillReport" class="sa-report-stage-section sa-office-report-stage">
-            <div class="sa-report-stage-title">代表处下钻分析</div>
+            <div class="sa-report-stage-title">{{ dialogBusinessDrillReport.compareLevelLabel }}下钻分析</div>
+            <div v-if="dialogBusinessDrillReport.officeCompareSpec" class="sa-report-chart-card sa-office-overview-dialog">
+              <div class="sa-report-chart-head">
+                <div>
+                  <div class="sa-report-chart-title">各{{ dialogBusinessDrillReport.compareLevelLabel }}对比分析</div>
+                  <div class="sa-report-chart-subtitle">{{ dialogBusinessDrillReport.officeCompareText }}</div>
+                </div>
+                <button class="sa-ghost-btn" @click="openChartViewer(dialogBusinessDrillReport.officeCompareSpec, `各${dialogBusinessDrillReport.compareLevelLabel}对比分析`)">放大查看</button>
+              </div>
+              <div class="sa-report-chart-canvas" :ref="el => initPreviewChart(el, dialogBusinessDrillReport.officeCompareSpec, 'dialog-office-overview')"></div>
+            </div>
             <div class="sa-office-report-grid">
               <article
                 v-for="office in dialogBusinessDrillReport.offices"
@@ -567,7 +586,7 @@
                 <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
                   <div>
                     <div class="sa-office-name">{{ office.name }}</div>
-                    <div class="sa-office-subtitle">{{ office.childCount }} 个业务员 · {{ office.parentName || '当前口径' }}</div>
+                    <div class="sa-office-subtitle">{{ office.childCount }} 个{{ dialogBusinessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                   </div>
                   <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
                 </button>
@@ -578,7 +597,7 @@
                 <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
                   <p class="sa-chart-copy">{{ office.chartText }}</p>
                   <div class="sa-office-drill-actions">
-                    <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}业务员达成率`)" type="button">
+                    <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${dialogBusinessDrillReport.detailLevelLabel}达成率`)" type="button">
                       <span class="sa-btn-label">放大查看</span>
                     </button>
                   </div>
@@ -1087,14 +1106,37 @@ const getDescendantNodes = (node) => {
   return output
 }
 
-const isPersonalNode = (node) => {
-  const text = `${node?.levelValue || ''}${node?.levelName || ''}${node?.name || ''}`
-  return /业务代表|业务员|个人|员工/.test(text) && !/代表处/.test(text)
+const isLeafNode = (node) => !Array.isArray(node?.children) || node.children.length === 0
+
+const getLevelLabelFromNodes = (nodes = [], fallback = '层级') => {
+  const values = Array.from(new Set(nodes.map(node => node?.levelValue || node?.levelName).filter(Boolean)))
+  if (values.length === 1) return values[0]
+  if (values.length > 1) return values.join(' / ')
+  return fallback
 }
 
-const isOfficeNode = (node) => {
-  const text = `${node?.levelValue || ''}${node?.levelName || ''}${node?.name || ''}`
-  return /代表处|办事处/.test(text) && !/分公司|事业部|业务部/.test(text) && !isPersonalNode(node)
+const findQuestionFocusNode = (nodes = []) => {
+  const questionText = String(session.state.question || query.value || '').trim()
+  if (!questionText) return null
+  return [...nodes]
+    .filter(node => node?.name && questionText.includes(node.name) && Array.isArray(node.children) && node.children.length > 0)
+    .sort((a, b) => String(b.name).length - String(a.name).length)[0] || null
+}
+
+const getComparisonNodes = (model) => {
+  const focusNode = findQuestionFocusNode(model.flatNodes || [])
+  if (focusNode?.children?.length) return focusNode.children
+  const singleRoot = model.tree?.length === 1 ? model.tree[0] : null
+  if (singleRoot?.children?.length) return singleRoot.children
+  const parentNodes = (model.flatNodes || []).filter(node => Array.isArray(node.children) && node.children.length > 0)
+  const maxParentDepth = Math.max(...parentNodes.map(node => Number(node.depth) || 0), 0)
+  return parentNodes.filter(node => Number(node.depth) === maxParentDepth)
+}
+
+const getDetailNodes = (node) => {
+  const descendants = getDescendantNodes(node)
+  const leafDescendants = descendants.filter(isLeafNode)
+  return leafDescendants.length ? leafDescendants : descendants
 }
 
 const hasBusinessDrillDataset = (datasets) => (
@@ -1111,14 +1153,15 @@ const buildBusinessDrillReport = (dataset) => {
   const remainMetric = getMetricDefinition(config, 'remain', item => /剩余|缺口|差额/i.test(item.label || item.column || ''))
   if (!rateMetric) return null
 
-  const officeNodes = model.flatNodes
-    .filter(node => isOfficeNode(node))
-    .filter(node => getDescendantNodes(node).some(isPersonalNode))
+  const officeNodes = getComparisonNodes(model)
+    .filter(node => node?.name)
 
   if (!officeNodes.length) return null
+  const compareLevelLabel = getLevelLabelFromNodes(officeNodes, '下一层级')
+  const detailLevelLabel = getLevelLabelFromNodes(officeNodes.flatMap(getDetailNodes), '明细层级')
 
   const offices = officeNodes.map((office) => {
-    const people = getDescendantNodes(office).filter(isPersonalNode)
+    const people = getDetailNodes(office)
     const directChildren = people.length ? people : office.children || []
     const sortedPeople = [...directChildren]
       .filter(item => item?.name)
@@ -1162,12 +1205,12 @@ const buildBusinessDrillReport = (dataset) => {
       rateLabel: formatMetricByDefinition(rate, rateMetric),
       childCount: sortedPeople.length,
       kpis: officeKpis,
-      summary: `${office.name}当前达成率为${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；开单${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}，任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'}${remainMetric ? `，剩余缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${riskPeople.length ? `其中 ${riskPeople.length} 个业务员低于风险线，需要优先跟进金额缺口和项目转化。` : '当前暂无明显低达成风险人员。'}`,
-      chartText: `${office.name}下钻到业务员层：${bestPerson ? `最高为${describePerson(bestPerson)}` : '暂无业务员明细'}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
+      summary: `${office.name}当前达成率为${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；开单${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}，任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'}${remainMetric ? `，剩余缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${riskPeople.length ? `其中 ${riskPeople.length} 个${detailLevelLabel}低于风险线，需要优先跟进金额缺口和项目转化。` : `当前暂无明显低达成风险${detailLevelLabel}。`}`,
+      chartText: `${office.name}下钻到${detailLevelLabel}层：${bestPerson ? `最高为${describePerson(bestPerson)}` : `暂无${detailLevelLabel}明细`}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
       chartSpec: {
-        chartType: 'bar',
-        title: `${office.name}业务员达成率`,
-        columns: ['名称', rateMetric.label || rateMetric.column || '达成率', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余'].filter(Boolean),
+        chartType: 'combo',
+        title: `${office.name}${detailLevelLabel}达成率`,
+        columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
         rows: chartRows,
       },
     }
@@ -1180,11 +1223,28 @@ const buildBusinessDrillReport = (dataset) => {
   const worstOffice = offices[0]
   const bestOffice = [...offices].sort((a, b) => (b.rate || 0) - (a.rate || 0))[0]
   const riskCount = offices.filter(item => item.tone === 'danger').length
+  const officeCompareRows = offices.map(office => ({
+    名称: office.name,
+    [actualMetric?.label || actualMetric?.column || '完成']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), actualMetric) || 0,
+    [taskMetric?.label || taskMetric?.column || '任务']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), taskMetric) || 0,
+    ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), remainMetric) || 0 } : {}),
+    [rateMetric.label || rateMetric.column || '达成率']: office.rate || 0,
+  })).sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
+  const officeCompareSpec = {
+    chartType: 'combo',
+    title: `各${compareLevelLabel}任务、开单与达成率对比`,
+    columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
+    rows: officeCompareRows,
+  }
   return {
     dataset,
     kpis: kpis.slice(0, 6),
     offices,
-    summary: `本次结果覆盖 ${offices.length} 个代表处。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
+    compareLevelLabel,
+    detailLevelLabel,
+    officeCompareSpec,
+    officeCompareText: `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。柱形图对比开单、任务和缺口，折线图对比达成率。`,
+    summary: `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
   }
@@ -2180,7 +2240,7 @@ const renderChartSpec = (chart, data) => {
   if (data.chartType === 'combo') {
     const categoryRows = data.rows.slice(0, 12)
     const rateColumn = numericColumns.find(column => /率|percent|rate/i.test(column)) || numericColumns[numericColumns.length - 1]
-    const barColumns = numericColumns.filter(column => column !== rateColumn).slice(0, 2)
+    const barColumns = numericColumns.filter(column => column !== rateColumn).slice(0, 3)
     chart.setOption({
       backgroundColor: 'transparent',
       color: colorPalette,
@@ -3578,6 +3638,31 @@ onUnmounted(() => {
 .sa-kpi-shelf-compact .sa-kpi-card {
   min-width: calc(50% - 4px);
   padding: 10px;
+}
+
+.sa-office-overview-card {
+  padding: 12px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.sa-office-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sa-office-overview-chart {
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+}
+
+.sa-office-overview-dialog {
+  margin-bottom: 16px;
 }
 
 .sa-office-card-list,
