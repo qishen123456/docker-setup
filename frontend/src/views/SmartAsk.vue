@@ -621,13 +621,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
 import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
+
+defineOptions({ name: 'SmartAsk' })
 import ChatHeader from '../components/smartask/ChatHeader.vue'
 import WelcomeScreen from '../components/smartask/WelcomeScreen.vue'
 import UserBubble from '../components/smartask/UserBubble.vue'
@@ -1970,10 +1972,29 @@ onMounted(async () => {
   }
 })
 
+// keep-alive 重新激活时刷新引用数据（数据集、模型可能在其他页面被修改）
+onActivated(async () => {
+  try {
+    const res = await getBookshelfDatasets()
+    datasets.value = res.datasets || []
+  } catch {}
+  try {
+    const modelRes = await getActiveAIModels()
+    aiModels.value = modelRes.models || []
+  } catch {}
+  loadHistory()
+})
+
 // 将关键输入状态持久化到 sessionStorage，页面跳转后还原
 watch([query, datasetId, modelId], ([q, d, m]) => {
   setSessionCache({ query: q, datasetId: d, modelId: m })
 }, { flush: 'post' })
+
+onDeactivated(() => {
+  // keep-alive 停用时的轻量清理（不销毁组件状态）
+  if (chatScrollTimer) clearTimeout(chatScrollTimer)
+  if (panelScrollTimer) clearTimeout(panelScrollTimer)
+})
 
 onUnmounted(() => {
   window.removeEventListener('smartask-create-fresh-chat', handleExternalFreshChat)

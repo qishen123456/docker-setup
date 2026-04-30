@@ -146,7 +146,11 @@
       </el-header>
 
       <el-main class="page-wrap" :class="{ 'page-wrap-smart': isSmartAskRoute }">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <keep-alive :include="['SmartAsk']">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
