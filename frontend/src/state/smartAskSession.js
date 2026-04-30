@@ -293,6 +293,9 @@ const appendLog = (entry) => {
   persist()
 }
 
+const wait = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
+const MIN_ANALYSIS_VISIBLE_MS = 4200
+
 const beginPhaseStreaming = () => {
   stopPhaseTimer()
   replaceLogs([
@@ -685,6 +688,16 @@ const buildRouteEvent = (question, route, datasetResults, routeSteps) => {
   const matchedNames = datasetResults.map(item => item.dataset_name).filter(Boolean)
   const matchedIds = Array.isArray(route?.dataset_ids) ? route.dataset_ids : []
   const routeStep = routeSteps[0]
+  const candidateIds = Array.isArray(route?.candidate_dataset_ids) ? route.candidate_dataset_ids : matchedIds
+  const matchScore = Number(route?.match_score || 0)
+  const routeMargin = Number(route?.route_margin || 0)
+  const needsCaution = Boolean(route?.requires_confirmation) || matchScore < 82 || (candidateIds.length > 1 && routeMargin < 18)
+  const routeEvidence = [
+    matchScore ? `路由匹配分数：${matchScore}` : '',
+    candidateIds.length ? `候选数据集数量：${candidateIds.length}` : '',
+    routeMargin ? `第一候选领先分：${routeMargin}` : '',
+    route?.arbiter_reason ? `仲裁依据：${route.arbiter_reason}` : '',
+  ].filter(Boolean)
   const details = [
     `开始执行任务：${route?.refined_query || question || '围绕当前业务问题生成数据分析结论。'}`,
     route?.intent ? `已识别任务类型：${route.intent}` : '',
@@ -693,20 +706,23 @@ const buildRouteEvent = (question, route, datasetResults, routeSteps) => {
       : matchedIds.length > 0
         ? `已命中数据集 ID：${matchedIds.join('、')}`
         : '',
-    route?.decision === 'direct_execute'
-      ? '当前问题命中高匹配执行路径，可直接进入查询。'
-      : '当前问题无需进一步拆解，可直接进入查询执行。',
+    ...routeEvidence,
+    route?.requires_confirmation
+      ? '当前只是相似或候选接近，已暂停等待老板确认。'
+      : route?.decision === 'direct_execute'
+        ? '当前命中通过高分样例和候选差距复核，才进入直连执行。'
+        : '当前命中已完成语义复核，仍将继续经过 SQL 生成和 SQL 复核，不直接下结论。',
     routeStep?.duration ? `语义路由耗时 ${formatDuration(routeStep.duration)}` : '',
   ]
 
   return {
     key: 'route-event',
-    title: '选择数据表并确认分析口径',
+    title: needsCaution ? '复核相似命中与统计口径' : '复核数据集命中与统计口径',
     kind: 'tool',
     toolType: 'dataset',
-    status: 'success',
-    summary: `已完成问题理解与数据集匹配。`,
-    thought: route?.matched_reason || '',
+    status: needsCaution ? 'warning' : 'success',
+    summary: needsCaution ? '已完成路由复核，当前命中需要谨慎处理。' : '已完成问题理解、候选比较与数据集匹配。',
+    thought: route?.matched_reason || route?.arbiter_reason || '',
     detailLines: details,
   }
 }
@@ -1083,6 +1099,21 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
     )
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')
+    }
+    if (!finalPayload?.requires_confirmation) {
+      const elapsedMs = Date.now() - new Date(state.startedAt).getTime()
+      appendLog({
+        key: 'result-final-check',
+        title: '核对指标与报告口径',
+        kind: 'report-stage',
+        toolType: 'report',
+        status: 'running',
+        summary: '正在核对数据标签、指标口径和图表展示结构。',
+        detailLines: ['已收到查询结果。', '正在核对指标标签、层级关系和图表结构。'],
+      })
+      if (elapsedMs < MIN_ANALYSIS_VISIBLE_MS) {
+        await wait(MIN_ANALYSIS_VISIBLE_MS - elapsedMs)
+      }
     }
     const data = finalPayload
     finalizeFromResult(data)

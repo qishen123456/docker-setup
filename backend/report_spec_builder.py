@@ -196,11 +196,12 @@ def build_report_spec(
     leaf_nodes = [node for node in detail_nodes if not node.get("children")]
     detail_label = _level_label(leaf_nodes or detail_nodes, "明细层级")
 
+    chart_metrics = [metric for metric in [actual_metric, task_metric, rate_metric] if metric]
+
     def chart_row(node: Dict[str, Any]) -> Dict[str, Any]:
         row = {"名称": node["name"]}
-        for metric in [actual_metric, task_metric, remain_metric, rate_metric]:
-            if metric:
-                row[metric.get("label") or metric.get("column") or metric.get("key")] = _row_value(node["raw"], metric) or 0
+        for metric in chart_metrics:
+            row[metric.get("label") or metric.get("column") or metric.get("key")] = _row_value(node["raw"], metric) or 0
         return row
 
     compare_rows = sorted(
@@ -208,11 +209,7 @@ def build_report_spec(
         key=lambda item: item.get(rate_metric.get("label") or rate_metric.get("column") or "达成率", 0) if rate_metric else 0,
         reverse=True,
     )
-    compare_columns = ["名称"] + [
-        metric.get("label") or metric.get("column") or metric.get("key")
-        for metric in [actual_metric, task_metric, remain_metric, rate_metric]
-        if metric
-    ]
+    compare_columns = ["名称"] + [metric.get("label") or metric.get("column") or metric.get("key") for metric in chart_metrics]
 
     kpis = []
     root_source = focus_node or (tree["roots"][0] if tree["roots"] else (nodes[0] if nodes else None))

@@ -40,6 +40,7 @@ def main() -> None:
     assert spec["scope"]["detailLevelLabel"] == "业务代表"
     assert spec["kpis"]
     assert spec["charts"] and spec["charts"][0]["rows"]
+    assert "剩余任务金额" not in spec["charts"][0]["columns"]
     assert len(spec["accordions"]) == 2
     assert spec["accordions"][0]["parentName"] == "东部分公司"
     assert all(token in spec["accordions"][0]["narrative"] for token in ["开单", "任务", "达成率", "剩余缺口"])

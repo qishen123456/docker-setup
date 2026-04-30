@@ -333,6 +333,17 @@
                     </button>
                   </div>
                   <p class="sa-side-report-desc">按{{ businessDrillReport?.compareLevelLabel || '下一层级' }}拆分关键 KPI，展开后查看{{ businessDrillReport?.detailLevelLabel || '明细层级' }}完成情况和对应文字说明。</p>
+                  <div v-if="sideConfidenceBadges.length" class="sa-side-confidence" aria-label="路由与结果可信度">
+                    <span
+                      v-for="badge in sideConfidenceBadges"
+                      :key="badge.label"
+                      class="sa-side-confidence-chip"
+                      :class="`is-${badge.tone}`"
+                    >
+                      {{ badge.label }}：{{ badge.value }}
+                    </span>
+                  </div>
+                  <p v-if="sideConfidenceNote" class="sa-route-review-note">{{ sideConfidenceNote }}</p>
                 </div>
 
                 <section v-if="businessDrillReport" class="sa-side-section sa-business-report">
@@ -935,6 +946,17 @@ const sideConfidenceBadges = computed(() => {
       }
     : buildResultConfidenceMeta(session.state.result?.route || {}, latestDatasets.value)
   return [routeMeta, resultMeta].filter(item => item?.score > 0)
+})
+
+const sideConfidenceNote = computed(() => {
+  const routeConfidence = session.state.result?.confidence?.route
+  if (routeConfidence?.summary) return routeConfidence.summary
+  const route = session.state.result?.route || {}
+  if (!route?.match_score) return ''
+  const candidateCount = Array.isArray(route.candidate_dataset_ids) ? route.candidate_dataset_ids.length : 0
+  if (route.requires_confirmation) return '当前命中仍存在不确定性，系统已暂停并等待确认。'
+  if (candidateCount > 1) return `已比较 ${candidateCount} 个候选数据集，继续保留路由复核记录。`
+  return '当前命中已完成语义复核，后续仍经过 SQL 生成、SQL 复核和报告口径核对。'
 })
 
 const detailPanelState = computed(() => {
@@ -2255,6 +2277,12 @@ const renderChartSpec = (chart, data) => {
   const labelColumn = data.columns?.[0]
   const numericColumns = data.columns?.slice(1) || []
   const colorPalette = ['#165dff', '#00b42a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+  const shortSeriesName = (name) => String(name || '')
+    .replace(/^年度/, '')
+    .replace(/^总/, '')
+    .replace('任务金额', '任务')
+    .replace('开单金额', '开单')
+    .replace('剩余任务金额', '剩余缺口')
 
   if (data.chartType === 'trend') {
     chart.setOption({
@@ -2290,29 +2318,39 @@ const renderChartSpec = (chart, data) => {
   if (data.chartType === 'combo') {
     const categoryRows = data.rows.slice(0, 12)
     const rateColumn = numericColumns.find(column => /率|percent|rate/i.test(column)) || numericColumns[numericColumns.length - 1]
-    const barColumns = numericColumns.filter(column => column !== rateColumn).slice(0, 3)
+    const barColumns = numericColumns
+      .filter(column => column !== rateColumn && !/剩余|缺口|remain/i.test(column))
+      .slice(0, 2)
     chart.setOption({
       backgroundColor: 'transparent',
       color: colorPalette,
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { top: 0, textStyle: { color: '#4e5969', fontSize: 11 } },
-      grid: { left: 46, right: 42, top: 40, bottom: 54, containLabel: true },
+      legend: {
+        type: 'scroll',
+        top: 2,
+        left: 8,
+        right: 8,
+        itemWidth: 10,
+        itemHeight: 8,
+        icon: 'roundRect',
+        formatter: shortSeriesName,
+        textStyle: { color: '#4e5969', fontSize: 10 },
+      },
+      grid: { left: 42, right: 38, top: 68, bottom: 44, containLabel: true },
       xAxis: {
         type: 'category',
         data: categoryRows.map(row => row[labelColumn]),
-        axisLabel: { color: '#86909c', fontSize: 11, interval: 0, rotate: categoryRows.length > 5 ? 22 : 0, hideOverlap: true },
+        axisLabel: { color: '#86909c', fontSize: 11, interval: 0, rotate: categoryRows.length > 4 ? 24 : 0, hideOverlap: true, margin: 12 },
         axisLine: { lineStyle: { color: '#e5e6eb' } },
       },
       yAxis: [
         {
           type: 'value',
-          name: '金额',
           axisLabel: { color: '#86909c', fontSize: 11, formatter: value => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : value },
           splitLine: { lineStyle: { color: '#f2f3f5', type: 'dashed' } },
         },
         {
           type: 'value',
-          name: '达成率',
           axisLabel: { color: '#86909c', fontSize: 11, formatter: '{value}%' },
           splitLine: { show: false },
         },
@@ -2330,12 +2368,13 @@ const renderChartSpec = (chart, data) => {
           type: 'line',
           yAxisIndex: 1,
           smooth: true,
-          symbolSize: 7,
+          symbolSize: 6,
           label: {
             show: true,
             position: 'top',
             color: '#4e5969',
             fontSize: 10,
+            distance: 6,
             formatter: ({ value }) => `${formatDisplayValue(value)}%`,
           },
           data: categoryRows.map(row => row[rateColumn]),
@@ -3608,6 +3647,16 @@ onUnmounted(() => {
   color: #ff7d00;
 }
 
+.sa-route-review-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(22, 93, 255, 0.06);
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .sa-side-report-kicker {
   font-size: 11px;
   font-weight: 700;
@@ -3707,7 +3756,7 @@ onUnmounted(() => {
 
 .sa-office-overview-chart {
   width: 100%;
-  height: 280px;
+  height: 320px;
   overflow: hidden;
 }
 
@@ -3821,7 +3870,7 @@ onUnmounted(() => {
 
 .sa-office-chart {
   width: 100%;
-  height: 220px;
+  height: 260px;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid rgba(29, 33, 41, 0.08);

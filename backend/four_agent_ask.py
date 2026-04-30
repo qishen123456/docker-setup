@@ -778,12 +778,16 @@ class FourAgentAskService:
         level = "high" if score >= 82 else "medium" if score >= 65 else "low"
         label = "高" if score >= 82 else "中" if score >= 65 else "待确认"
 
-        if candidate_count > 1:
+        if route.get("requires_confirmation"):
+            summary = "当前命中仍存在不确定性，已暂停并等待确认统计口径。"
+        elif score < 70:
+            summary = "当前更像相似命中，系统不会把它当作确定命中直接下结论。"
+        elif candidate_count > 1:
             summary = f"当前存在 {candidate_count} 个候选口径，后续执行仍需关注范围锁定。"
         elif route.get("preferred_dataset_override"):
             summary = "当前按人工指定数据集执行，路由方向相对明确。"
         else:
-            summary = "当前问题与目标数据集的语义匹配较为明确。"
+            summary = "当前问题经过语义匹配与候选复核后，目标数据集较为明确。"
 
         return {
             "score": score,
@@ -792,6 +796,7 @@ class FourAgentAskService:
             "summary": summary,
             "candidate_count": candidate_count,
             "match_score": int(route.get("match_score") or 0),
+            "route_margin": route_margin,
         }
 
     def _select_sql_strategy(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1390,6 +1395,34 @@ class FourAgentAskService:
         best_sample_score = int(best_sample.get("match_score", 0))
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
         route_margin = best_score - runner_up_score
+        if best_score < 70:
+            best_dataset_name = best_dataset.get("dataset_name") or f"数据集 {best_dataset['id']}"
+            options = self._normalize_confirmation_options(
+                [
+                    {
+                        "dataset_id": best_dataset["id"],
+                        "label": best_dataset_name,
+                        "reason": f"当前只是相似命中，路由分数 {best_score}，还不足以自动执行。",
+                    }
+                ],
+                [best_dataset["id"]],
+                [best_dataset_name],
+            )
+            return {
+                "dataset_ids": [best_dataset["id"]],
+                "intent": "confirm",
+                "refined_query": arbiter_result.get("refined_query") or question,
+                "requires_confirmation": True,
+                "decision": "wait_boss_confirm",
+                "match_score": best_score,
+                "route_margin": route_margin,
+                "confirmation_role": "boss",
+                "confirmation_type": "dataset_similarity_confirm",
+                "confirmation_question": f"我只找到一个相似数据集：{best_dataset_name}。这个命中还不够确定，是否按它继续分析？",
+                "confirmation_options": options,
+                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                "arbiter_reason": "low_similarity_requires_boss_confirm",
+            }
         direct_execute = (
             best_score >= 92
             and best_sample_score >= (70 if len(candidate_contexts) == 1 else 95)
