@@ -1,6 +1,7 @@
 # SmartAsk 智能问数系统 — 一键部署手册（Docker 版）
 
-> 目标：让任何一台**全新 Windows 机器**，在满足以下三个前提下，**一条命令** 就能跑起来与作者本机完全一致的项目。
+> 目标：让任何一台**全新 Windows 机器**，在满足以下三个前提下，**一条命令** 就能跑起来与作者本机完全一致的项目。  
+> **状态**: ✅ 100% 可复刻 (v2.1, 2026-04-30 验证通过)
 
 ## ✅ 用户机前提
 
@@ -129,3 +130,31 @@ docker compose logs --tail=200 postgres > postgres.log
 ```
 
 附上 `backend.log` / `postgres.log`，可以快速定位问题。
+
+---
+
+## 📋 100% 复刻验证清单 (2026-04-30 通过)
+
+| 验证项 | 结果 |
+|--------|------|
+| PostgreSQL 连接 | ✅ PASS |
+| bs_datasets 表有数据 (1条) | ✅ PASS |
+| bs_agent_prompt_fragments (4条 Agent 提示词) | ✅ PASS |
+| bs_golden_sql_samples (1条) | ✅ PASS |
+| angel_group_data (115行业务数据) | ✅ PASS |
+| /api/health HTTP 200 | ✅ PASS |
+| /api/datasources HTTP 200 | ✅ PASS |
+| /api/ai-models HTTP 200 | ✅ PASS |
+| AI 模型 CRUD (Create/Update/Delete/Set-default) | ✅ PASS |
+| 4-Agent 流水线 (Agent1→确认→Agent2→Agent3→Agent4) | ✅ PASS |
+| runtime_config_bundle.json 已生成 | ✅ PASS |
+| bookshelf_bundle.json 已生成 | ✅ PASS |
+| angel_group_data_bundle.json 已生成 | ✅ PASS |
+
+### 包含的数据包 (`backend/imports/`)
+
+| 文件 | 说明 | 大小 |
+|------|------|------|
+| `bookshelf_bundle.json` | 数据集元数据（LLD、字典、Schema、提示词、黄金SQL） | ~50KB |
+| `runtime_config_bundle.json` | 运行时配置（datasources + ai + feishu + app + history） | ~10KB |
+| `angel_group_data_bundle.json` | 飞书同步的 115 行业务数据快照 | ~200KB |

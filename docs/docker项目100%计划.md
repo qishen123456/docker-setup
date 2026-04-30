@@ -4,20 +4,28 @@
 > **范围**：所有前后端功能点、所有数据流、所有配置项  
 > **验证**：每个功能点都有对应的测试方案
 
-## 当前状态（v2.0 已落地）
+## 当前状态（v2.1 — 100% 就绪 ✅）
 
-### 已完成的 v2.0 优化方案
+> **最终验证日期**: 2026-04-30  
+> **部署就绪度**: 100%  
+> **验证方式**: verify_deployment.py 全部 PASS + 4-Agent 流水线端到端验证
+
+### 已完成的全部改造项
 
 | 项目 | 状态 | 实际落地 |
 |------|------|---------|
 | Docker Compose 目录挂载 init SQL | ✅ | `docker/postgres/init/001~003` 已接管首次 PG 初始化 |
 | backend bootstrap 全链路启动 | ✅ | `backend/bootstrap.py` 已实现 wait PG → init config → import runtime config → migrations → import bundles → exec app |
 | runtime config 导出/导入 | ✅ | `backend/export_runtime_config.py` / `backend/import_runtime_config.py` 已完成 |
+| **runtime_config_bundle.json 已生成** | ✅ | `backend/imports/runtime_config_bundle.json` 已导出（含 datasources + ai_settings + feishu + sql_prompts + app_config + query_history） |
 | 用户机一键部署增强 | ✅ | `deploy.ps1` 已支持 `-ForceImport`、`-ForceConfig`、`-RunTests` |
 | 完整备份脚本 | ✅ | `scripts/backup_all.py` 已完成 |
 | 真实接口集成测试 | ✅ | `scripts/integration_test.py` 已按已注册蓝图落地 |
-| 部署自检脚本 | ✅ | `scripts/verify_deployment.py` 已落地 |
-| 文档化部署流程 | ✅ | `README.md`、`DEPLOY.md` 已切到 v2.0 流程 |
+| 部署自检脚本 | ✅ | `backend/verify_deployment.py` + `scripts/verify_deployment.py` shim 均已落地 |
+| 文档化部署流程 | ✅ | `README.md`、`DEPLOY.md` 已切到 v2.1 流程 |
+| AI 模型 test 兼容 choices=None | ✅ | `vanna_core.py` 兼容 modelscope deepseek 返回空 choices 的情况 |
+| 4-Agent 流水线验证 | ✅ | Agent1 语义路由 → 老板确认 → Agent2 SQL 生成 → Agent3 复核 → Agent4 业务解读 全部 success |
+| CRUD 全链路验证 | ✅ | AI 模型 Create/Read/Update/Delete/Set-default、数据源、数据集列表 全部 200 |
 
 ### 计划与实际的关键差异修正
 
@@ -947,6 +955,6 @@ docker compose exec postgres psql -U postgres
 
 ---
 
-**文档版本**: v2.0  
-**最后更新**: 2026-04-29  
-**状态**: v2.0 已落地并完成文档回写
+**文档版本**: v2.1  
+**最后更新**: 2026-04-30  
+**状态**: ✅ 100% 就绪 — 全链路验证通过，可一键复刻部署
