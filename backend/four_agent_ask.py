@@ -40,6 +40,7 @@ class FourAgentAskService:
         self.repository = BookshelfRepository()
         self._llm_client: Optional[OpenAI] = None
         self._llm_model: Optional[str] = None
+        self._preferred_model_id: Optional[int] = None
         self._pending_confirmations: Dict[str, Dict[str, Any]] = {}
         self._pending_ttl_seconds = 30 * 60
         self._trace_file_path = os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl")
@@ -178,10 +179,27 @@ class FourAgentAskService:
             base_url=config.get("base_url", "https://api.openai.com/v1"),
         )
 
-    def _candidate_llm_configs(self) -> List[Dict[str, Any]]:
+    def _candidate_llm_configs(self, preferred_model_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Build ordered candidate list. If preferred_model_id is given, put that model first."""
         candidates: List[Dict[str, Any]] = []
         seen = set()
 
+        # If a specific model is requested, put it first
+        if preferred_model_id is not None:
+            for item in get_ai_models():
+                if item.get("id") == preferred_model_id and item.get("is_active"):
+                    config = dict(item)
+                    config["api_key"] = decode_secret(config.pop("api_key_b64", ""))
+                    signature = (
+                        str(config.get("model") or ""),
+                        str(config.get("base_url") or ""),
+                        str(config.get("api_key") or ""),
+                    )
+                    seen.add(signature)
+                    candidates.append(config)
+                    break
+
+        # Then add default model
         default_config = get_default_ai_model()
         if default_config:
             signature = (
@@ -189,9 +207,11 @@ class FourAgentAskService:
                 str(default_config.get("base_url") or ""),
                 str(default_config.get("api_key") or ""),
             )
-            seen.add(signature)
-            candidates.append(default_config)
+            if signature not in seen:
+                seen.add(signature)
+                candidates.append(default_config)
 
+        # Then add remaining active models
         for item in get_ai_models():
             if not item.get("is_active"):
                 continue
@@ -650,7 +670,7 @@ class FourAgentAskService:
         agent_name: str = "",
     ) -> str:
         self._load_llm()
-        candidate_configs = self._candidate_llm_configs()
+        candidate_configs = self._candidate_llm_configs(preferred_model_id=self._preferred_model_id)
         if not candidate_configs:
             raise RuntimeError("Default AI model is not configured.")
         last_error: Optional[Exception] = None
@@ -1822,10 +1842,12 @@ Agent3 复核结果：
         question: str,
         preferred_dataset_ids: Optional[List[int]] = None,
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        model_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         question = (question or "").strip()
         started = time.time()
         steps: List[Dict[str, Any]] = []
+        self._preferred_model_id = model_id
         trace = self._new_trace(question, "ask", live_callback=live_callback)
         self._append_trace(
             trace,

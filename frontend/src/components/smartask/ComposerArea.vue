@@ -2,58 +2,112 @@
   <div class="sa-composer">
     <div class="sa-composer-inner">
       <div class="sa-composer-top">
-        <div class="sa-composer-dataset-bar">
-          <div class="sa-composer-label-block">
-            <div class="sa-composer-label-row">
-              <div class="sa-composer-label">选择数据集</div>
-              <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
-                {{ selectedDatasetMeta ? '已锁定口径' : '自动路由' }}
-              </span>
-            </div>
-            <div class="sa-composer-caption">
-              {{ selectedDatasetMeta ? `当前数据集：${selectedDatasetMeta.dataset_name}` : '不预选时会按问题自动匹配最合适的数据集' }}
-            </div>
-          </div>
-          <el-select
-            v-model="modelDatasetId"
-            placeholder="自动路由数据集"
-            size="small"
-            class="sa-ds-select"
-            popper-class="sa-ds-popper"
-            @change="$emit('datasetChange', $event)"
-          >
-            <template #prefix>
-              <span class="sa-ds-icon" aria-hidden="true"></span>
-            </template>
-            <el-option
-              label="自动路由数据集"
-              :value="null"
-            >
-              <div class="sa-ds-option sa-ds-option-auto">
-                <div class="sa-ds-option-main">
-                  <div class="sa-ds-option-title">自动路由数据集</div>
-                  <div class="sa-ds-option-meta">根据问题内容自动匹配业务口径</div>
-                </div>
+        <div class="sa-composer-selectors">
+          <div class="sa-composer-dataset-bar">
+            <div class="sa-composer-label-block">
+              <div class="sa-composer-label-row">
+                <div class="sa-composer-label">选择数据集</div>
+                <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
+                  {{ selectedDatasetMeta ? '已锁定口径' : '自动路由' }}
+                </span>
               </div>
-            </el-option>
-            <el-option
-              v-for="d in datasets"
-              :key="d.id"
-              :label="d.dataset_name"
-              :value="d.id"
+              <div class="sa-composer-caption">
+                {{ selectedDatasetMeta ? `当前数据集：${selectedDatasetMeta.dataset_name}` : '不预选时会按问题自动匹配最合适的数据集' }}
+              </div>
+            </div>
+            <el-select
+              v-model="modelDatasetId"
+              placeholder="自动路由数据集"
+              size="small"
+              class="sa-ds-select"
+              popper-class="sa-ds-popper"
+              @change="$emit('datasetChange', $event)"
             >
-              <div class="sa-ds-option">
-                <div class="sa-ds-option-main">
-                  <div class="sa-ds-option-title">{{ d.dataset_name }}</div>
-                  <div class="sa-ds-option-meta">
-                    {{ d.business_domain || '未设置业务域' }}
-                    <span v-if="d.dataset_code" class="sa-ds-option-sep">·</span>
-                    <span v-if="d.dataset_code">{{ d.dataset_code }}</span>
+              <template #prefix>
+                <span class="sa-ds-icon" aria-hidden="true"></span>
+              </template>
+              <el-option
+                label="自动路由数据集"
+                :value="null"
+              >
+                <div class="sa-ds-option sa-ds-option-auto">
+                  <div class="sa-ds-option-main">
+                    <div class="sa-ds-option-title">自动路由数据集</div>
+                    <div class="sa-ds-option-meta">根据问题内容自动匹配业务口径</div>
                   </div>
                 </div>
+              </el-option>
+              <el-option
+                v-for="d in datasets"
+                :key="d.id"
+                :label="d.dataset_name"
+                :value="d.id"
+              >
+                <div class="sa-ds-option">
+                  <div class="sa-ds-option-main">
+                    <div class="sa-ds-option-title">{{ d.dataset_name }}</div>
+                    <div class="sa-ds-option-meta">
+                      {{ d.business_domain || '未设置业务域' }}
+                      <span v-if="d.dataset_code" class="sa-ds-option-sep">·</span>
+                      <span v-if="d.dataset_code">{{ d.dataset_code }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-option>
+            </el-select>
+          </div>
+
+          <div class="sa-composer-model-bar">
+            <div class="sa-composer-label-block">
+              <div class="sa-composer-label-row">
+                <div class="sa-composer-label">AI 模型</div>
+                <span class="sa-model-mode-chip" :class="{ active: !!selectedModelMeta }">
+                  {{ selectedModelMeta ? selectedModelMeta.name : 'AUTO' }}
+                </span>
               </div>
-            </el-option>
-          </el-select>
+              <div class="sa-composer-caption">
+                {{ selectedModelMeta ? `指定模型：${selectedModelMeta.model}` : '自动选择默认模型，失败时切换备用' }}
+              </div>
+            </div>
+            <el-select
+              v-model="modelModelId"
+              placeholder="Auto"
+              size="small"
+              class="sa-model-select"
+              popper-class="sa-ds-popper"
+            >
+              <template #prefix>
+                <span class="sa-model-icon" aria-hidden="true">⚡</span>
+              </template>
+              <el-option
+                label="Auto"
+                :value="null"
+              >
+                <div class="sa-ds-option sa-ds-option-auto">
+                  <div class="sa-ds-option-main">
+                    <div class="sa-ds-option-title">Auto</div>
+                    <div class="sa-ds-option-meta">自动选择默认模型，失败时切换备用</div>
+                  </div>
+                </div>
+              </el-option>
+              <el-option
+                v-for="m in aiModels"
+                :key="m.id"
+                :label="m.name"
+                :value="m.id"
+              >
+                <div class="sa-ds-option">
+                  <div class="sa-ds-option-main">
+                    <div class="sa-ds-option-title">{{ m.name }}</div>
+                    <div class="sa-ds-option-meta">
+                      {{ m.model }}
+                      <span v-if="m.is_default" class="sa-model-default-badge">默认</span>
+                    </div>
+                  </div>
+                </div>
+              </el-option>
+            </el-select>
+          </div>
         </div>
       </div>
 
@@ -100,9 +154,14 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 const modelQuery = defineModel('query', { type: String, default: '' })
 const modelDatasetId = defineModel('datasetId', { default: null })
+const modelModelId = defineModel('modelId', { default: null })
 
 const props = defineProps({
   datasets: {
+    type: Array,
+    default: () => []
+  },
+  aiModels: {
     type: Array,
     default: () => []
   },
@@ -117,6 +176,9 @@ defineEmits(['send', 'stop', 'datasetChange'])
 const inputRef = ref(null)
 const selectedDatasetMeta = computed(() => (
   (props.datasets || []).find(item => Number(item?.id) === Number(modelDatasetId.value)) || null
+))
+const selectedModelMeta = computed(() => (
+  (props.aiModels || []).find(item => Number(item?.id) === Number(modelModelId.value)) || null
 ))
 
 const resizeTextarea = () => {
@@ -167,9 +229,22 @@ onMounted(() => {
   border-bottom: 1px solid rgba(229, 230, 235, 0.76);
 }
 
+.sa-composer-selectors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
 .sa-composer-dataset-bar {
   display: grid;
-  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 140px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.sa-composer-model-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
 }
@@ -552,9 +627,95 @@ onMounted(() => {
     margin: 14px 16px 16px;
   }
 
-  .sa-composer-dataset-bar {
+  .sa-composer-selectors {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .sa-composer-dataset-bar,
+  .sa-composer-model-bar {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
+}
+
+.sa-model-select {
+  width: 100%;
+}
+
+.sa-model-select :deep(.el-select__wrapper) {
+  min-height: 38px;
+  padding-left: 30px;
+  padding-right: 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.98) 0%, rgba(243, 247, 255, 0.94) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.sa-model-select :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 3px rgba(22, 93, 255, 0.1);
+}
+
+.sa-model-select :deep(.el-select__selected-item) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #324055;
+}
+
+.sa-model-select :deep(.el-select__placeholder) {
+  font-size: 12px;
+  color: #9aa3b2;
+}
+
+.sa-model-select :deep(.el-select__caret) {
+  color: #7b8798;
+}
+
+.sa-model-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.sa-model-mode-chip {
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f2f3f5;
+  color: #7f8796;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-model-mode-chip.active {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.sa-model-default-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  height: 14px;
+  line-height: 14px;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 9px;
+  font-weight: 700;
 }
 </style>

@@ -109,11 +109,19 @@ def smart_chat_stream():
     payload = request.get_json() or {}
     question = (payload.get("question") or "").strip()
     selected_dataset_ids = payload.get("selected_dataset_ids")
+    model_id = payload.get("model_id")  # None = AUTO (use default)
 
     if not question:
         return jsonify({"error": "Question cannot be empty."}), 400
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+
+    # Normalize model_id
+    if model_id is not None:
+        try:
+            model_id = int(model_id)
+        except (ValueError, TypeError):
+            model_id = None
 
     def event_stream():
         event_queue: "queue.Queue[dict]" = queue.Queue()
@@ -128,6 +136,7 @@ def smart_chat_stream():
                     question,
                     preferred_dataset_ids=selected_dataset_ids,
                     live_callback=emit,
+                    model_id=model_id,
                 )
                 result["total_duration"] = round(time.time() - started, 2)
                 event_queue.put({"type": "result", "result": result})

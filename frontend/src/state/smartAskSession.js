@@ -1030,7 +1030,7 @@ const finalizeFromResult = (data) => {
   persist()
 }
 
-const startAsk = async (question, selectedDatasetInput) => {
+const startAsk = async (question, selectedDatasetInput, modelId) => {
   const normalizedQuestion = String(question || '').trim()
   if (!normalizedQuestion) return null
   const selectedIds = normalizeSelectedDatasetIds(selectedDatasetInput)
@@ -1068,6 +1068,7 @@ const startAsk = async (question, selectedDatasetInput) => {
           finalPayload = payload
         }
       },
+      modelId || undefined,
     )
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')

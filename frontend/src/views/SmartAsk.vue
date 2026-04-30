@@ -254,7 +254,9 @@
           <ComposerArea
             v-model:query="query"
             v-model:dataset-id="datasetId"
+            v-model:model-id="modelId"
             :datasets="datasets"
+            :ai-models="aiModels"
             :is-running="isRunning"
             @send="handleSend"
             @stop="handleStop"
@@ -623,7 +625,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
-import { getBookshelfDatasets, getCommonQuestions } from '../api/index'
+import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import ChatHeader from '../components/smartask/ChatHeader.vue'
 import WelcomeScreen from '../components/smartask/WelcomeScreen.vue'
@@ -652,7 +654,9 @@ const {
 } = useSmartAskHistory()
 const query = ref('')
 const datasetId = ref(null)
+const modelId = ref(null)
 const datasets = ref([])
+const aiModels = ref([])
 const commonQuestions = ref([])
 const messages = reactive([])
 const confirmationDrafts = reactive({})
@@ -1374,7 +1378,7 @@ const handleSend = async () => {
   startTimer()
 
   try {
-    const res = await session.startAsk(text, datasetId.value)
+    const res = await session.startAsk(text, datasetId.value, modelId.value)
     aiMsg.loading = false
     aiMsg.data = res || { aborted: true }
     query.value = ''
@@ -1943,6 +1947,11 @@ onMounted(async () => {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
     await loadQuestions()
+  } catch {}
+
+  try {
+    const modelRes = await getActiveAIModels()
+    aiModels.value = modelRes.models || []
   } catch {}
 
   if (session.state.selectedDatasetId) datasetId.value = session.state.selectedDatasetId

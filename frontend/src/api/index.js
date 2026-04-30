@@ -28,6 +28,7 @@ export const deleteDataSource = (id) => api.delete(`/datasources/${id}`)
 export const testDataSource = (id) => api.post(`/datasources/${id}/test`)
 
 export const getAIModels = () => api.get('/ai-models')
+export const getActiveAIModels = () => api.get('/ai-models/active')
 export const createAIModel = (data) => api.post('/ai-models', data)
 export const updateAIModel = (id, data) => api.put(`/ai-models/${id}`, data)
 export const deleteAIModel = (id) => api.delete(`/ai-models/${id}`)
@@ -64,9 +65,9 @@ export const getAgents = () => api.get('/agents')
 export const getAgent = (agentNo) => api.get(`/agents/${agentNo}`)
 export const updateAgent = (agentNo, data) => api.put(`/agents/${agentNo}`, data)
 
-export const sendSmartChat = (question, signal, selectedDatasetIds) =>
-  api.post('/smart-chat', { question, selected_dataset_ids: selectedDatasetIds || undefined }, { signal })
-export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent) => {
+export const sendSmartChat = (question, signal, selectedDatasetIds, modelId) =>
+  api.post('/smart-chat', { question, selected_dataset_ids: selectedDatasetIds || undefined, model_id: modelId || undefined }, { signal })
+export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent, modelId) => {
   const response = await fetch('/api/smart-chat/stream', {
     method: 'POST',
     headers: {
@@ -76,6 +77,7 @@ export const sendSmartChatStream = async (question, signal, selectedDatasetIds, 
     body: JSON.stringify({
       question,
       selected_dataset_ids: selectedDatasetIds || undefined,
+      model_id: modelId || undefined,
     }),
     signal,
   })

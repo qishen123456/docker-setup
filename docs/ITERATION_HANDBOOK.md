@@ -129,6 +129,27 @@ docker compose exec backend bash  # 进入后端容器
 | bookshelf | controllers/bookshelf.py | /api/bookshelf |
 | agents | controllers/agents.py | /api/agents |
 
+## 7. AI 模型选择机制
+
+### 7.1 模型选择器
+
+前端 ComposerArea 组件提供模型选择下拉框，用户可在发起问数前选择：
+- **Auto（默认）**：使用 `config/ai_settings.json` 中标记为 `is_default` 的模型，失败时自动切换备用模型
+- **指定模型**：直接使用选中的模型，失败时仍可 fallback 到其他活跃模型
+
+### 7.2 后端实现
+
+- `POST /api/smart-chat/stream` 接受 `model_id` 参数（可选，null = Auto）
+- `GET /api/ai-models/active` 返回所有启用的模型（供前端选择器使用）
+- `four_agent_ask.py` 的 `_candidate_llm_configs(preferred_model_id)` 方法按优先级排序候选模型
+- 模型调用失败时自动 fallback（支持 AuthenticationError、APITimeoutError 等可重试异常）
+
+### 7.3 Fallback 顺序
+
+1. 用户指定模型（如果有）
+2. 默认模型（`is_default: true`）
+3. 其余活跃模型（按配置顺序）
+
 ## 7. 故障排查
 
 | 问题 | 排查步骤 |

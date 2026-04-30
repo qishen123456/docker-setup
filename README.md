@@ -1,6 +1,8 @@
 # SmartAsk 智能问数系统
 
 > Flask + Vue 3 + PostgreSQL + Vanna(Chroma) + 通义千问/DeepSeek 等多模型，按 **数据集隔离 + 4-Agent 协作** 范式生成可执行 SQL。
+>
+> **新增**：前端支持 **模型选择器**（Auto / 手动指定），可在问数前实时切换 AI 模型。
 
 ## 一键部署（推荐：Docker 全家桶）
 

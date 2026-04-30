@@ -118,3 +118,18 @@ def set_default_model(model_id):
         return jsonify({"message": "已设为默认模型"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@ai_models_bp.route('/api/ai-models/active', methods=['GET'])
+def list_active_models():
+    """返回所有启用的模型（供前端模型选择器使用，不含敏感字段）"""
+    try:
+        models = get_ai_models_safe()
+        active = [
+            {"id": m["id"], "name": m["name"], "model": m.get("model", ""), "is_default": m.get("is_default", False)}
+            for m in models
+            if m.get("is_active")
+        ]
+        return jsonify({"models": active})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
