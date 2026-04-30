@@ -373,10 +373,15 @@ def test_ai_model(model_config: dict) -> tuple[bool, str, float]:
         response = client.chat.completions.create(
             model=model_config.get('model', 'gpt-3.5-turbo'),
             messages=[{"role": "user", "content": "回复数字1，不要其他内容"}],
-            max_tokens=10
+            max_tokens=50
         )
         elapsed = round((time.time() - start) * 1000)
-        content = response.choices[0].message.content
+        if response.choices:
+            content = response.choices[0].message.content
+        elif hasattr(response, 'id') and response.id:
+            content = "(模型已响应，choices为空)"
+        else:
+            return False, "模型返回空响应", elapsed
         return True, f"模型响应正常，返回：{content}", elapsed
     except Exception as e:
         return False, f"模型测试失败：{str(e)}", 0
