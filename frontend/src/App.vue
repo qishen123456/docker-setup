@@ -572,16 +572,18 @@ body,
   width: 44px !important;
   min-width: 44px !important;
   max-width: 44px !important;
-  height: 44px;
+  height: 44px !important;
   margin: 4px auto !important;
   padding: 0 !important;
   border-radius: 12px;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
   background: var(--bg-card, #fff);
   border: 1px solid var(--border-light, #f0f1f3);
+  overflow: visible !important;
+  line-height: 44px !important;
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
 }
 
@@ -656,15 +658,19 @@ body,
   transform: translateY(-50%) translateX(0);
 }
 
-/* Override Element Plus el-menu--collapse internal padding */
-.sidebar.sidebar-collapsed :deep(.el-menu--collapse) {
+/* Override Element Plus el-menu--collapse internal structure */
+/* 注意：<style> 非 scoped，:deep() 无效，必须用普通选择器 */
+.sidebar.sidebar-collapsed .el-menu--collapse {
   width: 100% !important;
 }
-.sidebar.sidebar-collapsed :deep(.el-menu--collapse .el-menu-item) {
+
+/* 菜单项外壳 */
+.sidebar.sidebar-collapsed .el-menu--collapse .el-menu-item {
   position: relative;
   width: 44px !important;
   min-width: 44px !important;
   max-width: 44px !important;
+  height: 44px !important;
   margin: 4px auto !important;
   padding: 0 !important;
   display: flex !important;
@@ -673,13 +679,47 @@ body,
   background: var(--bg-card, #fff);
   border: 1px solid var(--border-light, #f0f1f3);
   border-radius: 12px;
+  line-height: 44px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
 }
 
-/* Suppress Element Plus built-in tooltip for collapsed menu */
-.sidebar.sidebar-collapsed :deep(.el-menu--collapse .el-tooltip__trigger) {
+/* ★ 关键：el-tooltip__trigger 是导致偏移的元凶 —— 强制它也 flex 居中且无 padding */
+.sidebar.sidebar-collapsed .el-menu--collapse .el-menu-item .el-tooltip__trigger {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+}
+
+/* ★ 图标层：确保无任何干扰 */
+.sidebar.sidebar-collapsed .el-menu--collapse .el-menu-item .el-icon {
+  width: 20px !important;
+  height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+/* ★ 图标内的 SVG 确保不溢出 */
+.sidebar.sidebar-collapsed .el-menu--collapse .el-menu-item .el-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* 隐藏折叠态的文字 span（Element Plus 内部会生成一个 span 放 title） */
+.sidebar.sidebar-collapsed .el-menu--collapse .el-menu-item span:not(.el-icon) {
+  display: none !important;
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item > * {
