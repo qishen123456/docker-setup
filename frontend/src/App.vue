@@ -49,6 +49,10 @@
             <el-icon><MagicStick /></el-icon>
             <template #title>AI模型配置</template>
           </el-menu-item>
+          <el-menu-item index="/report-config">
+            <el-icon><Document /></el-icon>
+            <template #title>报告配置</template>
+          </el-menu-item>
           <el-menu-item index="/feishu-sync">
             <el-icon><Connection /></el-icon>
             <template #title>飞书同步</template>
@@ -190,6 +194,7 @@ const titleMap = {
   '/datasets': '数据集管理',
   '/databases': '数据源管理',
   '/ai-models': 'AI模型配置',
+  '/report-config': '报告配置',
   '/feishu-sync': '飞书同步'
 }
 
@@ -200,6 +205,7 @@ const subtitleMap = {
   '/datasets': '维护每个数据集的书架元数据与Golden SQL',
   '/databases': '管理PostgreSQL与其他连接源',
   '/ai-models': '配置默认模型与模型连接',
+  '/report-config': '为数据集配置独立的报告渲染规则',
   '/feishu-sync': '飞书多维表格同步、日志与任务控制'
 }
 
@@ -546,8 +552,8 @@ body,
 }
 
 .sidebar.sidebar-collapsed .nav-menu {
-  width: 44px;
-  margin: 0 auto;
+  width: 100% !important;
+  margin: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -565,28 +571,46 @@ body,
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item {
-  width: 44px;
-  min-width: 44px;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
   height: 44px;
-  margin: 6px auto;
+  margin: 6px auto !important;
   padding: 0 !important;
   border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   line-height: 44px;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item .el-icon {
   width: 20px;
   height: 20px;
   margin: 0 !important;
+  padding: 0 !important;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   font-size: 17px;
+}
+
+/* Override Element Plus el-menu--collapse internal padding */
+.sidebar.sidebar-collapsed :deep(.el-menu--collapse) {
+  width: 100% !important;
+}
+.sidebar.sidebar-collapsed :deep(.el-menu--collapse .el-menu-item) {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  margin: 6px auto !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item > * {

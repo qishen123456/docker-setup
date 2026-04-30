@@ -46,6 +46,12 @@ const routes = [
     meta: { title: 'AI模型配置' }
   },
   {
+    path: '/report-config',
+    name: 'DatasetReportConfig',
+    component: () => import('../views/DatasetReportConfig.vue'),
+    meta: { title: '报告配置' }
+  },
+  {
     path: '/feishu-sync',
     name: 'FeishuSync',
     component: () => import('../views/FeishuSync.vue'),

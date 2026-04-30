@@ -35,6 +35,12 @@ export const deleteAIModel = (id) => api.delete(`/ai-models/${id}`)
 export const testAIModel = (id) => api.post(`/ai-models/${id}/test`)
 export const setDefaultAIModel = (id) => api.post(`/ai-models/${id}/set-default`)
 
+// Report Config
+export const getReportConfig = (datasetId) => api.get(`/datasets/${datasetId}/report-config`)
+export const upsertReportConfig = (datasetId, config) => api.put(`/datasets/${datasetId}/report-config`, { config })
+export const deleteReportConfig = (datasetId) => api.delete(`/datasets/${datasetId}/report-config`)
+export const getDefaultReportConfig = () => api.get('/report-config/default')
+
 export const getFeishuSyncConfigs = () => api.get('/feishu-sync')
 export const createFeishuSyncConfig = (data) => api.post('/feishu-sync', data)
 export const updateFeishuSyncConfig = (id, data) => api.put(`/feishu-sync/${id}`, data)

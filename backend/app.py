@@ -42,6 +42,7 @@ from controllers.dashboard import dashboard_bp
 from controllers.datasources import datasources_bp
 from controllers.feishu_sync import feishu_bp
 from controllers.smart_chat import smart_chat_bp
+from controllers.report_config import report_config_bp
 
 
 init_default_configs()
@@ -71,6 +72,7 @@ app.register_blueprint(feishu_bp)
 app.register_blueprint(smart_chat_bp)
 app.register_blueprint(bookshelf_bp)
 app.register_blueprint(agents_bp)
+app.register_blueprint(report_config_bp)
 
 
 @app.route("/api/health", methods=["GET"])

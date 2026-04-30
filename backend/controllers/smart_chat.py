@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datasource_router import router as legacy_router
 from four_agent_ask import four_agent_ask_service
+import dataset_report_config as drc
 
 
 smart_chat_bp = Blueprint("smart_chat", __name__)
@@ -139,6 +140,12 @@ def smart_chat_stream():
                     model_id=model_id,
                 )
                 result["total_duration"] = round(time.time() - started, 2)
+                # Attach report_config if dataset was identified
+                ds_id = result.get("dataset_id")
+                if ds_id:
+                    rc = drc.get_config(int(ds_id))
+                    if rc:
+                        result["report_config"] = rc
                 event_queue.put({"type": "result", "result": result})
             except Exception as exc:
                 event_queue.put(

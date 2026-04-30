@@ -1,141 +1,114 @@
 <template>
   <div class="ai-models-page" v-loading="loading">
-    <!-- 统计栏 -->
-    <div class="aim-stat-bar">
-      <div class="aim-stat-item">
-        <span class="aim-stat-value">{{ channels.length }}</span>
-        <span class="aim-stat-label">供应商通道</span>
-      </div>
-      <div class="aim-stat-sep"></div>
-      <div class="aim-stat-item">
-        <span class="aim-stat-value">{{ models.length }}</span>
-        <span class="aim-stat-label">模型总数</span>
-      </div>
-      <div class="aim-stat-sep"></div>
-      <div class="aim-stat-item">
-        <span class="aim-stat-value aim-stat-active">{{ models.filter(m => m.is_active).length }}</span>
-        <span class="aim-stat-label">已启用</span>
-      </div>
-      <div class="aim-stat-sep"></div>
-      <div class="aim-stat-item">
-        <span class="aim-stat-value aim-stat-default">{{ defaultModelName || '未设置' }}</span>
-        <span class="aim-stat-label">默认模型</span>
-      </div>
-      <div class="aim-stat-spacer"></div>
-      <el-button round @click="openAddChannel">+ 新建通道</el-button>
-      <el-button type="primary" :icon="Plus" round @click="openAddModel">添加模型</el-button>
-    </div>
-
-    <!-- Channel 通道卡片 -->
-    <div class="aim-channel-grid">
-      <div
-        v-for="ch in channels"
-        :key="ch.key"
-        class="aim-channel-card"
-        :class="{ 'aim-channel-expanded': expandedChannel === ch.key }"
-      >
-        <!-- Channel Header -->
-        <div class="aim-channel-head" @click="toggleChannel(ch.key)">
-          <div class="aim-channel-icon">{{ providerEmoji(ch.provider) }}</div>
-          <div class="aim-channel-info">
-            <div class="aim-channel-name">{{ providerLabel(ch.provider) }}</div>
-            <div class="aim-channel-url">{{ ch.base_url }}</div>
+    <!-- Channel 通道卡片列表 -->
+    <div class="ch-grid">
+      <div v-for="ch in channels" :key="ch.key" class="ch-card">
+        <!-- Provider Header -->
+        <div class="ch-head">
+          <div class="ch-head-left">
+            <div class="ch-icon">{{ providerEmoji(ch.provider) }}</div>
+            <div class="ch-meta">
+              <div class="ch-name">{{ providerLabel(ch.provider) }}</div>
+              <div class="ch-url">{{ ch.base_url }}</div>
+            </div>
           </div>
-          <div class="aim-channel-badges">
-            <span class="aim-channel-count">{{ ch.models.length }} 模型</span>
-            <span v-if="ch.models.some(m => m.is_active)" class="aim-channel-status aim-channel-online">在线</span>
-            <span v-else class="aim-channel-status aim-channel-offline">离线</span>
-          </div>
-          <div class="aim-channel-actions" @click.stop>
-            <el-tooltip content="测试通道连接" placement="top" :show-after="300">
-              <el-button
-                size="small"
-                circle
-                :loading="channelTesting === ch.key"
-                :type="channelTestResult[ch.key] === 'success' ? 'success' : channelTestResult[ch.key] === 'error' ? 'danger' : ''"
-                @click="testChannel(ch)"
-              >
-                <template v-if="!channelTesting || channelTesting !== ch.key">
-                  <span v-if="channelTestResult[ch.key] === 'success'">✓</span>
-                  <span v-else-if="channelTestResult[ch.key] === 'error'">✗</span>
-                  <span v-else>⚡</span>
-                </template>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="编辑通道 Key/URL" placement="top" :show-after="300">
-              <el-button size="small" circle :icon="Edit" @click="openEditChannel(ch)" />
-            </el-tooltip>
-          </div>
-          <div class="aim-channel-expand-arrow" :class="{ 'is-expanded': expandedChannel === ch.key }">
-            <el-icon><ArrowDown /></el-icon>
+          <div class="ch-head-right">
+            <span class="ch-badge">{{ ch.models.length }} 模型</span>
+            <span
+              class="ch-status"
+              :class="channelTestResult[ch.key] === 'success' ? 'is-ok' : channelTestResult[ch.key] === 'error' ? 'is-err' : ch.models.some(m => m.is_active) ? 'is-ok' : 'is-off'"
+            >
+              <template v-if="channelTestResult[ch.key] === 'success'">✓</template>
+              <template v-else-if="channelTestResult[ch.key] === 'error'">✗</template>
+            </span>
+            <el-button size="small" circle :icon="Edit" @click="openEditChannel(ch)" />
+            <el-icon class="ch-arrow" :class="{ 'is-open': expandedChannel === ch.key }" @click="toggleChannel(ch.key)"><ArrowDown /></el-icon>
           </div>
         </div>
 
-        <!-- Channel Body: Model List -->
-        <transition name="aim-expand">
-          <div v-if="expandedChannel === ch.key" class="aim-channel-body">
-            <div class="aim-channel-key-row">
-              <span class="aim-channel-key-label">API Key</span>
-              <span class="aim-channel-key-value">{{ ch.apiKeyMasked }}</span>
-              <span class="aim-channel-key-label" style="margin-left: 16px">Endpoint</span>
-              <span class="aim-channel-key-value aim-channel-key-mono">{{ ch.base_url }}</span>
-            </div>
+        <!-- API Key Row -->
+        <div class="ch-key-row">
+          <div class="ch-key-group">
+            <span class="ch-key-label">API 密钥</span>
+            <span class="ch-key-dots">{{ ch.apiKeyMasked }}</span>
+          </div>
+          <el-button
+            size="small"
+            round
+            :loading="channelTesting === ch.key"
+            @click="testChannel(ch)"
+          >检 测</el-button>
+        </div>
 
-            <div class="aim-model-list">
-              <div
-                v-for="model in ch.models"
-                :key="model.id"
-                class="aim-model-card"
-                :class="{
-                  'aim-model-inactive': !model.is_active,
-                  'aim-model-default': model.is_default
-                }"
-              >
-                <div class="aim-model-top">
-                  <div class="aim-model-name-row">
-                    <span class="aim-model-name">{{ model.name }}</span>
-                    <el-tag v-if="model.is_default" type="warning" size="small" effect="plain" round>默认</el-tag>
-                    <el-tag v-if="!model.is_active" type="info" size="small" effect="plain" round>禁用</el-tag>
-                  </div>
-                  <div class="aim-model-id">{{ model.model }}</div>
-                </div>
+        <!-- API URL Row -->
+        <div class="ch-url-row">
+          <span class="ch-url-label">API 地址</span>
+          <span class="ch-url-value">{{ ch.base_url }}</span>
+        </div>
 
-                <div class="aim-model-actions">
-                  <el-button
-                    size="small"
-                    round
-                    :loading="testingId === model.id"
-                    :type="testResults[model.id] === 'success' ? 'success' : testResults[model.id] === 'error' ? 'danger' : ''"
-                    @click="testModel(model)"
-                  >
-                    <template v-if="testResults[model.id] === 'success'">✓ 通过</template>
-                    <template v-else-if="testResults[model.id] === 'error'">✗ 失败</template>
-                    <template v-else>测试</template>
-                  </el-button>
-                  <el-button v-if="!model.is_default && model.is_active" size="small" round @click="setDefault(model)">设默认</el-button>
-                  <el-button size="small" round :icon="Edit" @click="openEditModel(model)">编辑</el-button>
-                  <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
-                    <template #reference>
-                      <el-button size="small" round type="danger" plain :icon="Delete" />
-                    </template>
-                  </el-popconfirm>
-                </div>
+        <!-- Models Section -->
+        <div class="ch-models-head">
+          <span class="ch-models-title">模型</span>
+          <span class="ch-models-count">{{ ch.models.length }}</span>
+          <div class="ch-models-spacer"></div>
+          <el-button text size="small" @click="testAllModels(ch)">全部检测</el-button>
+        </div>
+
+        <transition name="ch-expand">
+          <div v-if="expandedChannel === ch.key" class="ch-model-list">
+            <div
+              v-for="model in ch.models"
+              :key="model.id"
+              class="ch-model-row"
+              :class="{ 'is-inactive': !model.is_active, 'is-default': model.is_default }"
+            >
+              <div class="ch-model-info">
+                <span class="ch-model-name">{{ model.name || model.model }}</span>
+                <el-tag v-if="model.is_default" type="warning" size="small" round effect="plain">默认</el-tag>
+                <el-tag v-if="!model.is_active" type="info" size="small" round effect="plain">禁用</el-tag>
+                <span
+                  v-if="testResults[model.id]"
+                  class="ch-model-test-dot"
+                  :class="testResults[model.id] === 'success' ? 'is-ok' : 'is-err'"
+                ></span>
               </div>
-            </div>
-
-            <div class="aim-channel-add-model">
-              <el-button text type="primary" @click="openAddModelInChannel(ch)">
-                + 在此通道下添加模型
-              </el-button>
+              <div class="ch-model-id">{{ model.model }}</div>
+              <div class="ch-model-actions">
+                <el-button
+                  v-if="!model.is_default && model.is_active"
+                  text size="small" @click="setDefault(model)"
+                >设默认</el-button>
+                <el-button
+                  text size="small"
+                  :loading="testingId === model.id"
+                  @click="testModel(model)"
+                >测试</el-button>
+                <el-button text size="small" :icon="Edit" @click="openEditModel(model)" />
+                <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
+                  <template #reference>
+                    <el-button text size="small" class="ch-model-remove">—</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
           </div>
         </transition>
+
+        <!-- Bottom Actions -->
+        <div class="ch-bottom">
+          <el-button text type="primary" size="small" @click="openAddModelInChannel(ch)">+ 添加</el-button>
+        </div>
       </div>
     </div>
 
+    <!-- 底部操作栏 -->
+    <div class="ch-footer-bar">
+      <el-button round @click="openAddChannel">+ 新建通道</el-button>
+    </div>
+
     <!-- 通道编辑弹窗 -->
-    <el-dialog v-model="channelDialogVisible" :title="channelDialogIsNew ? '新建供应商通道' : '编辑通道配置'" width="560px" @close="resetChannelForm">
-      <el-form ref="channelFormRef" :model="channelForm" :rules="channelRules" label-width="90px">
+    <el-dialog v-model="channelDialogVisible" :title="channelDialogIsNew ? '新建供应商通道' : '编辑通道配置'" width="520px" @close="resetChannelForm">
+      <el-form ref="channelFormRef" :model="channelForm" :rules="channelRules" label-width="80px">
         <el-form-item label="供应商" prop="provider">
           <el-select v-model="channelForm.provider" style="width:100%" @change="onChannelProviderChange" allow-create filterable :disabled="!channelDialogIsNew && channelForm._existingProvider">
             <el-option label="dashscope（阿里通义）" value="dashscope" />
@@ -146,9 +119,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="API 地址" prop="base_url">
-          <el-input v-model="channelForm.base_url" placeholder="https://api.example.com/v1">
-            <template #prepend>URL</template>
-          </el-input>
+          <el-input v-model="channelForm.base_url" placeholder="https://api.example.com/v1" />
         </el-form-item>
         <el-form-item label="API Key" prop="api_key">
           <el-input v-model="channelForm.api_key" type="password" show-password placeholder="将应用到此通道下所有模型" />
@@ -157,41 +128,42 @@
       <template #footer>
         <el-button @click="channelDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="channelSaving" @click="submitChannelForm">
-          {{ channelDialogIsNew ? '创建通道' : '保存通道' }}
+          {{ channelDialogIsNew ? '创建' : '保存' }}
         </el-button>
       </template>
     </el-dialog>
 
-    <!-- 模型编辑弹窗 -->
-    <el-dialog v-model="modelDialogVisible" :title="modelDialogIsEdit ? '编辑模型' : '添加模型'" width="560px" @close="resetModelForm">
-      <el-form ref="modelFormRef" :model="modelForm" :rules="modelRules" label-width="90px">
+    <!-- 添加模型弹窗（CherryStudio 风格：只填 名称+ID） -->
+    <el-dialog v-model="modelDialogVisible" :title="modelDialogIsEdit ? '编辑模型' : '添加模型'" width="520px" @close="resetModelForm">
+      <el-form ref="modelFormRef" :model="modelForm" :rules="modelRules" label-width="80px">
         <el-form-item label="所属通道" prop="provider">
-          <el-select v-model="modelForm.provider" style="width:100%" @change="onModelProviderChange" allow-create filterable>
+          <el-select v-model="modelForm.provider" style="width:100%" @change="onModelProviderChange" filterable>
             <el-option
               v-for="ch in channels"
-              :key="ch.provider"
-              :label="providerLabel(ch.provider)"
+              :key="ch.key"
+              :label="`${providerEmoji(ch.provider)} ${providerLabel(ch.provider)}`"
               :value="ch.provider"
             />
-            <el-option label="dashscope（阿里通义）" value="dashscope" />
-            <el-option label="deepseek" value="deepseek" />
-            <el-option label="openai" value="openai" />
-            <el-option label="ollama（本地）" value="ollama" />
-            <el-option label="custom（自定义）" value="custom" />
           </el-select>
         </el-form-item>
         <el-form-item label="模型名称" prop="name">
-          <el-input v-model="modelForm.name" placeholder="自定义名称，如：DeepSeek V3" />
-        </el-form-item>
-        <el-form-item label="模型 ID" prop="model">
-          <el-input v-model="modelForm.model" placeholder="如：qwen-max / deepseek-chat / gpt-4" />
-        </el-form-item>
-        <el-form-item label="API 地址" prop="base_url">
-          <el-input v-model="modelForm.base_url" placeholder="继承自通道，可单独覆盖">
-            <template #prepend>URL</template>
+          <el-input v-model="modelForm.name" placeholder="自定义名称，如：DeepSeek V3">
+            <template #suffix>
+              <span class="ch-form-hint">请输入模型名称</span>
+            </template>
           </el-input>
         </el-form-item>
-        <el-form-item label="API Key" prop="api_key">
+        <el-form-item label="模型 ID" prop="model">
+          <el-input v-model="modelForm.model" placeholder="如：qwen-max / deepseek-chat / gpt-4">
+            <template #suffix>
+              <span class="ch-form-hint">请输入模型 ID</span>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item v-if="modelDialogIsEdit" label="API 地址">
+          <el-input v-model="modelForm.base_url" placeholder="继承自通道，可单独覆盖" />
+        </el-form-item>
+        <el-form-item v-if="modelDialogIsEdit" label="API Key">
           <el-input v-model="modelForm.api_key" type="password" show-password placeholder="留空则继承通道 Key" />
         </el-form-item>
         <el-row :gutter="12">
@@ -222,8 +194,6 @@ const loading = ref(false)
 const testingId = ref(null)
 const testResults = reactive({})
 const expandedChannel = ref(null)
-
-// Channel test
 const channelTesting = ref(null)
 const channelTestResult = reactive({})
 
@@ -243,12 +213,11 @@ const modelDialogVisible = ref(false)
 const modelDialogIsEdit = ref(false)
 const modelSaving = ref(false)
 const modelFormRef = ref()
-const modelForm = ref({ name: '', provider: 'dashscope', model: '', base_url: '', api_key: '', is_active: true, is_default: false })
+const modelForm = ref({ name: '', provider: '', model: '', base_url: '', api_key: '', is_active: true, is_default: false })
 const modelRules = {
   name: [{ required: true, message: '请输入模型名称' }],
   model: [{ required: true, message: '请输入模型 ID' }],
   provider: [{ required: true, message: '请选择所属通道' }],
-  base_url: [{ required: true, message: '请输入 API 地址' }],
 }
 
 const PROVIDER_URLS = {
@@ -259,28 +228,25 @@ const PROVIDER_URLS = {
   custom: ''
 }
 
-// Computed: group models into channels
+// Channel = provider + base_url combination (like CherryStudio)
 const channels = computed(() => {
   const map = {}
   for (const m of models.value) {
     const p = m.provider || 'custom'
-    if (!map[p]) {
-      map[p] = {
-        key: p,
+    const url = m.base_url || ''
+    const key = `${p}||${url}`
+    if (!map[key]) {
+      map[key] = {
+        key,
         provider: p,
-        base_url: m.base_url || '',
-        apiKeyMasked: m.api_key || '***已保存***',
+        base_url: url,
+        apiKeyMasked: m.api_key || '••••••••••••••••••••',
         models: []
       }
     }
-    map[p].models.push(m)
+    map[key].models.push(m)
   }
   return Object.values(map)
-})
-
-const defaultModelName = computed(() => {
-  const m = models.value.find(m => m.is_default)
-  return m ? m.name : ''
 })
 
 const providerLabel = (p) => ({
@@ -299,48 +265,29 @@ const providerEmoji = (p) => ({
   custom: '⚙️'
 }[p] || '🔌')
 
-const toggleChannel = (key) => {
-  expandedChannel.value = expandedChannel.value === key ? null : key
-}
+const toggleChannel = (key) => { expandedChannel.value = expandedChannel.value === key ? null : key }
 
-// Load data
 const loadData = async () => {
   loading.value = true
   try {
     const data = await getAIModels()
     models.value = data.models || []
-    // Auto-expand first channel
-    if (channels.value.length > 0 && !expandedChannel.value) {
-      expandedChannel.value = channels.value[0].key
-    }
-  } finally {
-    loading.value = false
-  }
+    if (channels.value.length > 0 && !expandedChannel.value) expandedChannel.value = channels.value[0].key
+  } finally { loading.value = false }
 }
 
-// Channel operations
+// --- Channel CRUD ---
 const openAddChannel = () => {
   channelDialogIsNew.value = true
   channelForm.value = { provider: 'custom', base_url: '', api_key: '', _existingProvider: false, _modelIds: [] }
   channelDialogVisible.value = true
 }
-
 const openEditChannel = (ch) => {
   channelDialogIsNew.value = false
-  channelForm.value = {
-    provider: ch.provider,
-    base_url: ch.base_url,
-    api_key: '',
-    _existingProvider: true,
-    _modelIds: ch.models.map(m => m.id)
-  }
+  channelForm.value = { provider: ch.provider, base_url: ch.base_url, api_key: '', _existingProvider: true, _modelIds: ch.models.map(m => m.id) }
   channelDialogVisible.value = true
 }
-
-const onChannelProviderChange = (p) => {
-  channelForm.value.base_url = PROVIDER_URLS[p] || channelForm.value.base_url || ''
-}
-
+const onChannelProviderChange = (p) => { channelForm.value.base_url = PROVIDER_URLS[p] || channelForm.value.base_url || '' }
 const resetChannelForm = () => channelFormRef.value?.resetFields()
 
 const submitChannelForm = async () => {
@@ -348,89 +295,73 @@ const submitChannelForm = async () => {
   channelSaving.value = true
   try {
     if (channelDialogIsNew.value) {
-      // Create a placeholder model for this new channel
       await createAIModel({
         name: `${providerLabel(channelForm.value.provider)} 默认`,
         provider: channelForm.value.provider,
         model: channelForm.value.provider === 'dashscope' ? 'qwen-max' : 'default',
         base_url: channelForm.value.base_url,
-        api_key: channelForm.value.api_key || 'placeholder',
-        is_active: true,
-        is_default: false
+        api_key: channelForm.value.api_key || 'sk-placeholder',
+        is_active: true, is_default: false
       })
-      ElMessage({ message: '通道已创建', type: 'success', customClass: 'sa-toast-modern' })
+      ElMessage.success('通道已创建')
     } else {
-      // Update all models in this channel with new key/url
       const updates = {}
       if (channelForm.value.base_url) updates.base_url = channelForm.value.base_url
       if (channelForm.value.api_key) updates.api_key = channelForm.value.api_key
-
-      for (const modelId of channelForm.value._modelIds) {
-        await updateAIModel(modelId, { ...updates, provider: channelForm.value.provider })
-      }
-      ElMessage({ message: '通道配置已更新，已应用到所有模型', type: 'success', customClass: 'sa-toast-modern' })
+      for (const id of channelForm.value._modelIds) await updateAIModel(id, updates)
+      ElMessage.success('通道配置已更新')
     }
-    channelDialogVisible.value = false
-    loadData()
-  } finally {
-    channelSaving.value = false
-  }
+    channelDialogVisible.value = false; loadData()
+  } finally { channelSaving.value = false }
 }
 
 const testChannel = async (ch) => {
-  const firstActive = ch.models.find(m => m.is_active) || ch.models[0]
-  if (!firstActive) return
+  const target = ch.models.find(m => m.is_active) || ch.models[0]
+  if (!target) return
   channelTesting.value = ch.key
   channelTestResult[ch.key] = null
   try {
-    const r = await testAIModel(firstActive.id)
+    const r = await testAIModel(target.id)
     channelTestResult[ch.key] = 'success'
-    ElMessage({ message: `通道连接正常（${r.response_time}ms）`, type: 'success', customClass: 'sa-toast-modern' })
+    ElMessage.success(`通道连接正常（${r.response_time}ms）`)
   } catch {
     channelTestResult[ch.key] = 'error'
-    ElMessage({ message: '通道连接失败，请检查 Key 和 URL', type: 'error', customClass: 'sa-toast-modern' })
-  } finally {
-    channelTesting.value = null
-  }
+    ElMessage.error('通道连接失败')
+  } finally { channelTesting.value = null }
 }
 
-// Model operations
-const openAddModel = () => {
-  modelDialogIsEdit.value = false
-  const firstChannel = channels.value[0]
-  modelForm.value = {
-    name: '', provider: firstChannel?.provider || 'dashscope', model: '',
-    base_url: firstChannel?.base_url || PROVIDER_URLS.dashscope,
-    api_key: '', is_active: true, is_default: false
+const testAllModels = async (ch) => {
+  for (const model of ch.models) {
+    testingId.value = model.id
+    testResults[model.id] = null
+    try {
+      const r = await testAIModel(model.id)
+      testResults[model.id] = 'success'
+    } catch {
+      testResults[model.id] = 'error'
+    }
   }
-  modelDialogVisible.value = true
+  testingId.value = null
+  const ok = ch.models.filter(m => testResults[m.id] === 'success').length
+  const fail = ch.models.filter(m => testResults[m.id] === 'error').length
+  ElMessage.info(`检测完成：${ok} 通过，${fail} 失败`)
 }
 
+// --- Model CRUD ---
 const openAddModelInChannel = (ch) => {
   modelDialogIsEdit.value = false
-  modelForm.value = {
-    name: '', provider: ch.provider, model: '',
-    base_url: ch.base_url, api_key: '',
-    is_active: true, is_default: false
-  }
+  modelForm.value = { name: '', provider: ch.provider, model: '', base_url: ch.base_url, api_key: '', is_active: true, is_default: false }
   modelDialogVisible.value = true
 }
-
 const openEditModel = (row) => {
   modelDialogIsEdit.value = true
   modelForm.value = { ...row, api_key: '' }
   modelDialogVisible.value = true
 }
-
 const onModelProviderChange = (p) => {
   const ch = channels.value.find(c => c.provider === p)
-  if (ch) {
-    modelForm.value.base_url = ch.base_url
-  } else {
-    modelForm.value.base_url = PROVIDER_URLS[p] || ''
-  }
+  modelForm.value.base_url = ch?.base_url || PROVIDER_URLS[p] || ''
 }
-
 const resetModelForm = () => modelFormRef.value?.resetFields()
 
 const submitModelForm = async () => {
@@ -438,357 +369,159 @@ const submitModelForm = async () => {
   modelSaving.value = true
   try {
     const payload = { ...modelForm.value }
-    // If no api_key provided for new model, it's required
-    if (!modelDialogIsEdit.value && !payload.api_key) {
-      // Try to inherit from channel
+    // Inherit channel key/url for new models
+    if (!modelDialogIsEdit.value) {
       const ch = channels.value.find(c => c.provider === payload.provider)
-      if (!ch) {
-        ElMessage.error('新模型必须提供 API Key 或选择已有通道')
-        return
-      }
+      if (!payload.base_url && ch) payload.base_url = ch.base_url
+      if (!payload.api_key && ch) payload.api_key = 'inherit-channel'
     }
     if (modelDialogIsEdit.value) {
       await updateAIModel(payload.id, payload)
-      ElMessage({ message: '模型已更新', type: 'success', customClass: 'sa-toast-modern' })
+      ElMessage.success('模型已更新')
     } else {
       await createAIModel(payload)
-      ElMessage({ message: '模型已添加', type: 'success', customClass: 'sa-toast-modern' })
+      ElMessage.success('模型已添加')
     }
-    modelDialogVisible.value = false
-    loadData()
-  } finally {
-    modelSaving.value = false
-  }
+    modelDialogVisible.value = false; loadData()
+  } finally { modelSaving.value = false }
 }
 
 const testModel = async (row) => {
-  testingId.value = row.id
-  testResults[row.id] = null
-  try {
-    const r = await testAIModel(row.id)
-    testResults[row.id] = 'success'
-    ElMessage({ message: `✓ ${row.name} 连接正常（${r.response_time}ms）`, type: 'success', customClass: 'sa-toast-modern' })
-  } catch {
-    testResults[row.id] = 'error'
-    ElMessage({ message: `✗ ${row.name} 连接失败`, type: 'error', customClass: 'sa-toast-modern' })
-  } finally {
-    testingId.value = null
-  }
+  testingId.value = row.id; testResults[row.id] = null
+  try { const r = await testAIModel(row.id); testResults[row.id] = 'success'; ElMessage.success(`✓ ${row.name}（${r.response_time}ms）`) }
+  catch { testResults[row.id] = 'error'; ElMessage.error(`✗ ${row.name} 连接失败`) }
+  finally { testingId.value = null }
 }
 
-const deleteModel = async (id) => {
-  await deleteAIModel(id)
-  ElMessage({ message: '已删除', type: 'success', customClass: 'sa-toast-modern' })
-  loadData()
-}
-
-const setDefault = async (row) => {
-  await setDefaultAIModel(row.id)
-  ElMessage({ message: `${row.name} 已设为默认模型`, type: 'success', customClass: 'sa-toast-modern' })
-  loadData()
-}
+const deleteModel = async (id) => { await deleteAIModel(id); ElMessage.success('已删除'); loadData() }
+const setDefault = async (row) => { await setDefaultAIModel(row.id); ElMessage.success(`${row.name} 已设为默认`); loadData() }
 
 onMounted(loadData)
 </script>
 
 <style scoped>
 .ai-models-page {
-  max-width: 960px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 4px 0 32px;
 }
 
-/* 统计栏 */
-.aim-stat-bar {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 14px 22px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(29, 33, 41, 0.06);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
-  margin-bottom: 20px;
-}
+/* ========== Channel Card (CherryStudio Style) ========== */
+.ch-grid { display: flex; flex-direction: column; gap: 16px; }
 
-.aim-stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.aim-stat-value {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1d2129;
-}
-
-.aim-stat-active { color: #00b42a; }
-.aim-stat-default { font-size: 12px; font-weight: 600; color: #e6a23c; }
-
-.aim-stat-label {
-  font-size: 10px;
-  color: #86909c;
-}
-
-.aim-stat-sep {
-  width: 1px;
-  height: 26px;
-  background: rgba(29, 33, 41, 0.08);
-}
-
-.aim-stat-spacer { flex: 1; }
-
-/* Channel Grid */
-.aim-channel-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.aim-channel-card {
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(29, 33, 41, 0.06);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
-  overflow: hidden;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.aim-channel-card:hover {
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
-}
-
-.aim-channel-expanded {
-  border-color: rgba(22, 93, 255, 0.12);
-  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.06);
-}
-
-/* Channel Header */
-.aim-channel-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  user-select: none;
-}
-
-.aim-channel-head:hover {
-  background: rgba(247, 248, 250, 0.6);
-}
-
-.aim-channel-icon {
-  font-size: 22px;
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 13px;
+.ch-card {
+  border-radius: 16px;
   background: #fff;
   border: 1px solid rgba(29, 33, 41, 0.06);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-  flex-shrink: 0;
-}
-
-.aim-channel-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.aim-channel-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1d2129;
-}
-
-.aim-channel-url {
-  margin-top: 2px;
-  font-size: 11px;
-  color: #86909c;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.aim-channel-badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+/* --- Header --- */
+.ch-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 12px;
+}
+.ch-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+.ch-head-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ch-icon {
+  width: 38px; height: 38px; border-radius: 12px;
+  background: #f7f8fa; border: 1px solid rgba(29,33,41,0.05);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.ch-meta { min-width: 0; }
+.ch-name { font-size: 14px; font-weight: 700; color: #1d2129; }
+.ch-url { font-size: 11px; color: #86909c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.ch-badge {
+  font-size: 11px; font-weight: 600; color: #4e5969;
+  background: #f2f3f5; padding: 2px 8px; border-radius: 999px;
+}
+.ch-status {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.ch-status.is-ok { background: #00b42a; color: #fff; }
+.ch-status.is-err { background: #f53f3f; color: #fff; }
+.ch-status.is-off { background: #e5e6eb; color: #86909c; }
+.ch-arrow {
+  cursor: pointer; color: #86909c; font-size: 14px;
+  transition: transform 0.2s ease; padding: 4px;
+}
+.ch-arrow.is-open { transform: rotate(180deg); }
+
+/* --- API Key Row --- */
+.ch-key-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; margin-bottom: 8px;
+}
+.ch-key-group { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ch-key-label { font-size: 12px; font-weight: 600; color: #4e5969; white-space: nowrap; }
+.ch-key-dots {
+  font-size: 12px; color: #86909c; font-family: monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.aim-channel-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: #4e5969;
-  background: #f2f3f5;
-  padding: 2px 8px;
-  border-radius: 999px;
+/* --- API URL Row --- */
+.ch-url-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 20px; margin-bottom: 12px;
 }
+.ch-url-label { font-size: 12px; font-weight: 600; color: #4e5969; white-space: nowrap; }
+.ch-url-value { font-size: 12px; color: #86909c; font-family: 'SF Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.aim-channel-status {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-.aim-channel-online {
-  background: #e8ffea;
-  color: #00b42a;
-}
-
-.aim-channel-offline {
-  background: #f2f3f5;
-  color: #86909c;
-}
-
-.aim-channel-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.aim-channel-expand-arrow {
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #86909c;
-  flex-shrink: 0;
-}
-
-.aim-channel-expand-arrow.is-expanded {
-  transform: rotate(180deg);
-}
-
-/* Channel Body */
-.aim-channel-body {
-  padding: 0 20px 16px;
+/* --- Models Section --- */
+.ch-models-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 20px 6px;
   border-top: 1px solid rgba(229, 230, 235, 0.5);
 }
+.ch-models-title { font-size: 12px; font-weight: 700; color: #1d2129; }
+.ch-models-count {
+  font-size: 10px; font-weight: 700; color: #fff; background: #165dff;
+  min-width: 18px; height: 18px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 5px;
+}
+.ch-models-spacer { flex: 1; }
 
-.aim-channel-key-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  margin: 12px 0;
-  border-radius: 10px;
-  background: rgba(247, 248, 250, 0.7);
-  font-size: 11px;
-  flex-wrap: wrap;
+.ch-model-list { padding: 0 12px 4px; }
+.ch-model-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.ch-model-row:hover { background: rgba(247, 248, 250, 0.7); }
+.ch-model-row.is-inactive { opacity: 0.45; }
+.ch-model-row.is-default { background: rgba(255, 250, 235, 0.6); }
+
+.ch-model-info { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.ch-model-name { font-size: 13px; font-weight: 600; color: #1d2129; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-model-id { font-size: 10px; color: #86909c; font-family: 'SF Mono', monospace; white-space: nowrap; }
+.ch-model-test-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ch-model-test-dot.is-ok { background: #00b42a; }
+.ch-model-test-dot.is-err { background: #f53f3f; }
+
+.ch-model-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.ch-model-remove { color: #86909c !important; font-weight: 700; }
+
+/* --- Bottom --- */
+.ch-bottom {
+  padding: 6px 20px 12px;
+  border-top: 1px solid rgba(229, 230, 235, 0.3);
 }
 
-.aim-channel-key-label {
-  color: #86909c;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.ch-footer-bar {
+  display: flex; justify-content: center;
+  padding: 20px 0 0;
 }
 
-.aim-channel-key-value {
-  color: #4e5969;
-  font-weight: 500;
-}
+/* --- Expand transition --- */
+.ch-expand-enter-active, .ch-expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
+.ch-expand-enter-from, .ch-expand-leave-to { opacity: 0; max-height: 0; }
+.ch-expand-enter-to, .ch-expand-leave-from { opacity: 1; max-height: 2000px; }
 
-.aim-channel-key-mono {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 10px;
-}
-
-/* Model List */
-.aim-model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.aim-model-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(29, 33, 41, 0.05);
-  background: #fff;
-  transition: all 0.2s ease;
-}
-
-.aim-model-card:hover {
-  border-color: rgba(22, 93, 255, 0.1);
-  box-shadow: 0 3px 12px rgba(22, 93, 255, 0.05);
-  transform: translateY(-1px);
-}
-
-.aim-model-inactive { opacity: 0.5; }
-
-.aim-model-default {
-  border-color: rgba(230, 162, 60, 0.16);
-  background: linear-gradient(180deg, #fffef8 0%, #fff 100%);
-}
-
-.aim-model-top {
-  min-width: 0;
-  flex: 1;
-}
-
-.aim-model-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.aim-model-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1d2129;
-}
-
-.aim-model-id {
-  margin-top: 2px;
-  font-size: 10px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  color: #4e5969;
-  background: #f2f3f5;
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.aim-model-actions {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
-}
-
-.aim-channel-add-model {
-  padding: 8px 0 0;
-  text-align: center;
-}
-
-/* Expand transition */
-.aim-expand-enter-active,
-.aim-expand-leave-active {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-}
-
-.aim-expand-enter-from,
-.aim-expand-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.aim-expand-enter-to,
-.aim-expand-leave-from {
-  opacity: 1;
-  max-height: 1200px;
-}
+/* --- Dialog hint --- */
+.ch-form-hint { font-size: 10px; color: #c9cdd4; white-space: nowrap; }
 </style>
