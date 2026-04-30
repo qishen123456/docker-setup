@@ -150,7 +150,7 @@
                       class="sa-result-chain"
                     >
                     <ResultDigestCard
-                      v-if="getReport(msg) || getPrimaryDataset(msg)"
+                      v-if="!hasBusinessDrillDataset(getDatasets(msg)) && (getReport(msg) || getPrimaryDataset(msg))"
                       :title="getResultTitle(msg)"
                       :report="getReport(msg)"
                       :dataset="getPrimaryDataset(msg)"
@@ -203,7 +203,7 @@
 
                     <!-- 最终报告摘要-->
                     <ReportSummary
-                      v-if="getReport(msg)"
+                      v-if="getReport(msg) && !hasBusinessDrillDataset(getDatasets(msg))"
                       :report="getReport(msg)"
                       :question="msg.data?.question"
                       @download="downloadReportForMessage(msg)"
@@ -211,7 +211,7 @@
                     />
 
                     <ArtifactStrip
-                      v-if="getReport(msg)"
+                      v-if="getReport(msg) && !hasBusinessDrillDataset(getDatasets(msg))"
                       :title="getResultTitle(msg)"
                       :dataset-name="getPrimaryDataset(msg)?.dataset_name || ''"
                       @download="downloadReportForMessage(msg)"
@@ -282,6 +282,7 @@
 
             <div class="sa-panel-content" ref="panelRef">
               <LogTimeline
+                v-if="!hasSideReport"
                 :logs="session.state.logs"
                 :open-state="logOpen"
                 @toggle="toggleLog"
@@ -322,12 +323,67 @@
 
               <section v-if="hasSideReport" class="sa-side-report">
                 <div class="sa-side-report-head">
-                  <span class="sa-side-report-kicker">执行结果汇总</span>
-                  <h3 class="sa-side-report-title">{{ sideReportHeading }}</h3>
-                  <p class="sa-side-report-desc">汇总当前任务的关键指标、图表预览、结果数据和完整报告内容。</p>
+                  <div class="sa-side-report-titlebar">
+                    <div>
+                      <span class="sa-side-report-kicker">经营分析报告</span>
+                      <h3 class="sa-side-report-title">{{ sideReportHeading }}</h3>
+                    </div>
+                    <button class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
+                      <span class="sa-btn-label">全屏报告</span>
+                    </button>
+                  </div>
+                  <p class="sa-side-report-desc">按代表处拆分关键 KPI，展开后查看业务员完成情况和对应文字说明。</p>
                 </div>
 
+                <section v-if="businessDrillReport" class="sa-side-section sa-business-report">
+                  <div class="sa-business-summary">
+                    <div>
+                      <div class="sa-side-section-title">核心业绩看板</div>
+                      <p class="sa-business-summary-text">{{ businessDrillReport.summary }}</p>
+                    </div>
+                    <span class="sa-business-risk-pill" :class="businessDrillReport.riskTone">{{ businessDrillReport.riskLabel }}</span>
+                  </div>
+                  <div class="sa-kpi-shelf sa-kpi-shelf-compact">
+                    <div v-for="metric in businessDrillReport.kpis" :key="metric.label" class="sa-kpi-card">
+                      <div class="sa-kpi-value">{{ metric.value }}</div>
+                      <div class="sa-kpi-label">{{ metric.label }}</div>
+                    </div>
+                  </div>
+                  <div class="sa-office-card-list">
+                    <article
+                      v-for="office in businessDrillReport.offices.slice(0, 4)"
+                      :key="`side-office-${office.id}`"
+                      class="sa-office-card"
+                    >
+                      <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
+                        <div>
+                          <div class="sa-office-name">{{ office.name }}</div>
+                          <div class="sa-office-subtitle">{{ office.childCount }} 个业务员 · {{ office.parentName || '当前口径' }}</div>
+                        </div>
+                        <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                      </button>
+                      <div class="sa-office-kpis">
+                        <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
+                      </div>
+                      <p class="sa-office-copy">{{ office.summary }}</p>
+                      <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
+                        <p class="sa-chart-copy">{{ office.chartText }}</p>
+                        <div class="sa-office-drill-actions">
+                          <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}业务员达成率`)" type="button">
+                            <span class="sa-btn-label">放大查看</span>
+                          </button>
+                        </div>
+                        <div class="sa-office-chart" :ref="el => initPreviewChart(el, office.chartSpec, `side-office-${office.id}`)"></div>
+                      </div>
+                    </article>
+                  </div>
+                  <button v-if="businessDrillReport.offices.length > 4" class="sa-secondary-btn sa-wide-btn" @click="openFullScreenReport">
+                    <span class="sa-btn-label">查看全部 {{ businessDrillReport.offices.length }} 个代表处</span>
+                  </button>
+                </section>
+
                 <div
+                  v-if="!businessDrillReport"
                   v-for="preview in resultPreviews"
                   :key="preview.key"
                   class="sa-side-section"
@@ -395,7 +451,7 @@
                   </div>
                 </div>
 
-                <div v-if="latestReport" class="sa-side-section sa-report-view">
+                <div v-if="latestReport && !businessDrillReport" class="sa-side-section sa-report-view">
                   <div class="sa-side-section-title">完整报告</div>
                   <div class="sa-chart-actions">
                     <button class="sa-ghost-btn" @click="openReportViewer">全屏查看</button>
@@ -459,7 +515,8 @@
     <el-dialog
       v-model="reportViewerVisible"
       title="完整报告"
-      width="min(1100px, 92vw)"
+      :fullscreen="reportDialogFullscreen"
+      :width="reportDialogFullscreen ? undefined : 'min(1280px, 94vw)'"
       top="4vh"
       class="sa-report-dialog"
       destroy-on-close
@@ -471,6 +528,9 @@
             <h3 class="sa-report-dialog-title">{{ reportViewerTitle || sideReportHeading }}</h3>
           </div>
           <div class="sa-report-dialog-actions">
+            <button class="sa-secondary-btn" @click="reportDialogFullscreen = !reportDialogFullscreen">
+              <span class="sa-btn-label">{{ reportDialogFullscreen ? '退出全屏' : '全屏查看' }}</span>
+            </button>
             <button class="sa-secondary-btn" @click="downloadLatestReport">
               <span class="sa-btn-label">导出 PDF</span>
             </button>
@@ -496,7 +556,39 @@
             </section>
           </div>
 
-          <section v-if="reportDialogCharts.length" class="sa-report-stage-section">
+          <section v-if="dialogBusinessDrillReport" class="sa-report-stage-section sa-office-report-stage">
+            <div class="sa-report-stage-title">代表处下钻分析</div>
+            <div class="sa-office-report-grid">
+              <article
+                v-for="office in dialogBusinessDrillReport.offices"
+                :key="`dialog-office-${office.id}`"
+                class="sa-office-card sa-office-card-dialog"
+              >
+                <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
+                  <div>
+                    <div class="sa-office-name">{{ office.name }}</div>
+                    <div class="sa-office-subtitle">{{ office.childCount }} 个业务员 · {{ office.parentName || '当前口径' }}</div>
+                  </div>
+                  <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                </button>
+                <div class="sa-office-kpis">
+                  <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
+                </div>
+                <p class="sa-office-copy">{{ office.summary }}</p>
+                <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
+                  <p class="sa-chart-copy">{{ office.chartText }}</p>
+                  <div class="sa-office-drill-actions">
+                    <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}业务员达成率`)" type="button">
+                      <span class="sa-btn-label">放大查看</span>
+                    </button>
+                  </div>
+                  <div class="sa-office-chart sa-office-chart-dialog" :ref="el => initPreviewChart(el, office.chartSpec, `dialog-office-${office.id}`)"></div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section v-else-if="reportDialogCharts.length" class="sa-report-stage-section">
             <div class="sa-report-stage-title">图表分析</div>
             <div class="sa-report-chart-grid">
               <article v-for="block in reportDialogCharts" :key="block.key" class="sa-report-chart-card">
@@ -516,7 +608,7 @@
             </div>
           </section>
 
-          <section v-if="reportTableBlocks.length" class="sa-report-stage-section">
+          <section v-if="!dialogBusinessDrillReport && reportTableBlocks.length" class="sa-report-stage-section">
             <div class="sa-report-stage-title">数据表洞察</div>
             <div class="sa-report-table-grid">
               <article
@@ -546,7 +638,7 @@
             </div>
           </section>
 
-          <section class="sa-report-stage-section">
+          <section v-if="!dialogBusinessDrillReport" class="sa-report-stage-section">
             <div class="sa-report-stage-title">完整解读</div>
             <div class="sa-report-sections">
               <article
@@ -644,6 +736,7 @@ import ComposerArea from '../components/smartask/ComposerArea.vue'
 import LogTimeline from '../components/smartask/LogTimeline.vue'
 import SqlBlock from '../components/smartask/SqlBlock.vue'
 import { useSmartAskHistory } from '../state/smartAskHistory'
+import { buildOrgTree, getDefaultConfig as getDefaultReportTreeConfig } from '../composables/useOrgTree'
 import '../styles/volcano-design.css'
 
 const session = useSmartAskSession()
@@ -674,10 +767,12 @@ const reportViewerVisible = ref(false)
 const reportViewerTitle = ref('')
 const reportViewerReport = ref('')
 const reportViewerDatasets = ref([])
+const reportDialogFullscreen = ref(false)
 const chartViewerVisible = ref(false)
 const chartViewerTitle = ref('图表预览')
 const chartViewerSpec = ref(null)
 const chartViewerMode = ref('chart')
+const officeDrillOpen = reactive({})
 let activePrintFrame = null
 let msgCounter = 0
 let elapsed = ref(0)
@@ -877,6 +972,10 @@ const getNumericColumns = (dataset) => {
 const getMetricCards = (dataset) => {
   const rows = dataset?.rows || []
   if (!rows.length) return []
+
+  const businessCards = getBusinessMetricCards(dataset)
+  if (businessCards.length) return businessCards
+
   const firstRow = rows[0]
   const numericColumns = getNumericColumns(dataset)
   const cards = []
@@ -897,9 +996,263 @@ const getMetricCards = (dataset) => {
   return cards.slice(0, 3)
 }
 
+const toNumber = (value) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const cleaned = String(value ?? '').replace(/[^0-9.-]/g, '')
+  if (!cleaned) return null
+  const numeric = Number(cleaned)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const pickColumn = (dataset, names) => {
+  const columns = dataset?.columns || []
+  return names.find(name => columns.includes(name)) || ''
+}
+
+const getDatasetReportConfig = (dataset) => (
+  dataset?.report_config
+  || session.state.result?.report_configs?.[String(dataset?.dataset_id)]
+  || session.state.result?.report_config
+  || getDefaultReportTreeConfig()
+)
+
+const getDatasetTreeModel = (dataset) => {
+  const rows = Array.isArray(dataset?.rows) ? dataset.rows : []
+  if (!rows.length) return null
+  return buildOrgTree(rows, getDatasetReportConfig(dataset))
+}
+
+const sumBusinessColumn = (rows, column) => {
+  if (!column) return null
+  const values = rows.map(row => toNumber(row?.[column])).filter(value => value !== null)
+  if (!values.length) return null
+  return values.reduce((sum, value) => sum + value, 0)
+}
+
+const calcBusinessRate = (rows, taskCol, actualCol, rateCol) => {
+  const task = sumBusinessColumn(rows, taskCol)
+  const actual = sumBusinessColumn(rows, actualCol)
+  if (task && actual !== null && task > 0) return Number((actual / task * 100).toFixed(2))
+  const rates = rows.map(row => toNumber(row?.[rateCol])).filter(value => value !== null)
+  if (!rates.length) return null
+  return Number((rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(2))
+}
+
+const formatBusinessAmount = (value) => {
+  if (value === null || value === undefined) return '-'
+  if (Math.abs(value) >= 10000) return `${(value / 10000).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}万`
+  return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+}
+
+const formatMetricByDefinition = (value, metric = {}) => {
+  if (value === null || value === undefined) return '-'
+  if (metric.format === 'percent') return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`
+  if (metric.format === 'amount') return formatBusinessAmount(value)
+  return formatDisplayValue(value)
+}
+
+const getMetricDefinition = (config, key, matcher) => {
+  const metrics = config?.metrics || []
+  return metrics.find(item => item.key === key)
+    || metrics.find(item => matcher?.(item))
+    || null
+}
+
+const getNodeMetricValue = (node, metric) => {
+  if (!node || !metric) return null
+  const direct = toNumber(node.metrics?.[metric.key])
+  if (direct !== null) return direct
+  return toNumber(node.raw?.[metric.column])
+}
+
+const getRateTone = (rate) => {
+  const value = toNumber(rate)
+  if (value === null) return 'neutral'
+  if (value >= 100) return 'good'
+  if (value >= 80) return 'warn'
+  return 'danger'
+}
+
+const getToneLabel = (tone) => ({ good: '表现优秀', warn: '接近目标', danger: '风险偏高' }[tone] || '待观察')
+
+const getDescendantNodes = (node) => {
+  const output = []
+  const walk = (current) => {
+    ;(current?.children || []).forEach((child) => {
+      output.push(child)
+      walk(child)
+    })
+  }
+  walk(node)
+  return output
+}
+
+const isPersonalNode = (node) => {
+  const text = `${node?.levelValue || ''}${node?.levelName || ''}${node?.name || ''}`
+  return /业务代表|业务员|个人|员工/.test(text) && !/代表处/.test(text)
+}
+
+const isOfficeNode = (node) => {
+  const text = `${node?.levelValue || ''}${node?.levelName || ''}${node?.name || ''}`
+  return /代表处|办事处/.test(text) && !/分公司|事业部|业务部/.test(text) && !isPersonalNode(node)
+}
+
+const hasBusinessDrillDataset = (datasets) => (
+  (datasets || []).some(dataset => Boolean(buildBusinessDrillReport(dataset)))
+)
+
+const buildBusinessDrillReport = (dataset) => {
+  const model = getDatasetTreeModel(dataset)
+  if (!model?.flatNodes?.length) return null
+  const config = model.config || getDatasetReportConfig(dataset)
+  const taskMetric = getMetricDefinition(config, 'task', item => /任务|目标/i.test(item.label || item.column || ''))
+  const actualMetric = getMetricDefinition(config, 'actual', item => /开单|完成|实际/i.test(item.label || item.column || ''))
+  const rateMetric = getMetricDefinition(config, 'rate', item => item.format === 'percent' || /率|rate/i.test(item.label || item.column || ''))
+  const remainMetric = getMetricDefinition(config, 'remain', item => /剩余|缺口|差额/i.test(item.label || item.column || ''))
+  if (!rateMetric) return null
+
+  const officeNodes = model.flatNodes
+    .filter(node => isOfficeNode(node))
+    .filter(node => getDescendantNodes(node).some(isPersonalNode))
+
+  if (!officeNodes.length) return null
+
+  const offices = officeNodes.map((office) => {
+    const people = getDescendantNodes(office).filter(isPersonalNode)
+    const directChildren = people.length ? people : office.children || []
+    const sortedPeople = [...directChildren]
+      .filter(item => item?.name)
+      .sort((a, b) => (getNodeMetricValue(a, rateMetric) || 0) - (getNodeMetricValue(b, rateMetric) || 0))
+    const rate = getNodeMetricValue(office, rateMetric)
+    const tone = getRateTone(rate)
+    const riskPeople = sortedPeople.filter(item => getRateTone(getNodeMetricValue(item, rateMetric)) === 'danger')
+    const bestPerson = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))[0]
+    const worstPerson = sortedPeople[0]
+    const formatPersonMetric = (person, metric) => (
+      metric ? formatMetricByDefinition(getNodeMetricValue(person, metric), metric) : '-'
+    )
+    const describePerson = (person) => {
+      if (!person) return ''
+      const actualText = formatPersonMetric(person, actualMetric)
+      const taskText = formatPersonMetric(person, taskMetric)
+      const remainText = formatPersonMetric(person, remainMetric)
+      const rateText = formatPersonMetric(person, rateMetric)
+      return `${person.name}开单${actualText} / 任务${taskText}，达成率${rateText}${remainMetric ? `，剩余缺口${remainText}` : ''}`
+    }
+    const chartRows = sortedPeople.map(person => ({
+      名称: person.name,
+      [rateMetric.label || rateMetric.column || '达成率']: getNodeMetricValue(person, rateMetric) || 0,
+      [actualMetric?.label || actualMetric?.column || '完成']: getNodeMetricValue(person, actualMetric) || 0,
+      [taskMetric?.label || taskMetric?.column || '任务']: getNodeMetricValue(person, taskMetric) || 0,
+      ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(person, remainMetric) || 0 } : {}),
+    }))
+    const officeKpis = [
+      taskMetric ? { label: taskMetric.label || taskMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) } : null,
+      actualMetric ? { label: actualMetric.label || actualMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) } : null,
+      { label: rateMetric.label || rateMetric.column || '达成率', value: formatMetricByDefinition(rate, rateMetric) },
+      remainMetric ? { label: remainMetric.label || remainMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric) } : null,
+    ].filter(Boolean)
+
+    return {
+      id: office.id || office.name,
+      name: office.name,
+      parentName: office.parentName,
+      tone,
+      rate,
+      rateLabel: formatMetricByDefinition(rate, rateMetric),
+      childCount: sortedPeople.length,
+      kpis: officeKpis,
+      summary: `${office.name}当前达成率为${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；开单${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}，任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'}${remainMetric ? `，剩余缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${riskPeople.length ? `其中 ${riskPeople.length} 个业务员低于风险线，需要优先跟进金额缺口和项目转化。` : '当前暂无明显低达成风险人员。'}`,
+      chartText: `${office.name}下钻到业务员层：${bestPerson ? `最高为${describePerson(bestPerson)}` : '暂无业务员明细'}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
+      chartSpec: {
+        chartType: 'bar',
+        title: `${office.name}业务员达成率`,
+        columns: ['名称', rateMetric.label || rateMetric.column || '达成率', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余'].filter(Boolean),
+        rows: chartRows,
+      },
+    }
+  }).sort((a, b) => (a.rate || 0) - (b.rate || 0))
+
+  const kpis = (config.metrics || []).map(metric => ({
+    label: metric.label || metric.column || metric.key,
+    value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric),
+  })).filter(item => item.value !== '-')
+  const worstOffice = offices[0]
+  const bestOffice = [...offices].sort((a, b) => (b.rate || 0) - (a.rate || 0))[0]
+  const riskCount = offices.filter(item => item.tone === 'danger').length
+  return {
+    dataset,
+    kpis: kpis.slice(0, 6),
+    offices,
+    summary: `本次结果覆盖 ${offices.length} 个代表处。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
+    riskTone: riskCount ? 'danger' : 'good',
+    riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
+  }
+}
+
+const getBusinessMetricCards = (dataset) => {
+  const model = getDatasetTreeModel(dataset)
+  if (!model?.levelSections?.length) return []
+  const config = model.config || getDatasetReportConfig(dataset)
+  const cards = []
+  ;(config.metrics || []).forEach((metric) => {
+    const value = model.rootMetrics?.[metric.key]
+    if (value !== null && value !== undefined) {
+      cards.push({ label: metric.label || metric.column || metric.key, value: formatMetricByDefinition(value, metric) })
+    }
+  })
+  model.levelSections.slice(0, 2).forEach((section) => {
+    cards.push({ label: `${section.levelName}数量`, value: formatDisplayValue(section.nodes.length) })
+  })
+  return cards.slice(0, 6)
+}
+
+const buildLayeredBusinessCharts = (dataset) => {
+  const model = getDatasetTreeModel(dataset)
+  if (!model?.levelSections?.length) return []
+  const config = model.config || getDatasetReportConfig(dataset)
+  const taskMetric = config.metrics?.find(item => item.key === 'task')
+  const actualMetric = config.metrics?.find(item => item.key === 'actual')
+  const rateMetric = config.metrics?.find(item => item.key === 'rate') || config.metrics?.find(item => item.format === 'percent')
+  if (!rateMetric) return []
+
+  return model.levelSections
+    .map((section) => {
+      const rows = section.nodes
+        .map(node => ({
+          名称: node.name,
+          [taskMetric?.label || taskMetric?.column || '目标']: toNumber(node.raw?.[taskMetric?.column]) ?? 0,
+          [actualMetric?.label || actualMetric?.column || '完成']: toNumber(node.raw?.[actualMetric?.column]) ?? 0,
+          [rateMetric?.label || rateMetric?.column || '达成率']: toNumber(node.raw?.[rateMetric?.column]) ?? 0,
+          signalTone: section.riskNodes.some(item => item.id === node.id) ? 'danger' : section.topNodes.some(item => item.id === node.id) ? 'good' : 'neutral',
+        }))
+        .filter(row => row.名称)
+        .sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
+        .slice(0, 12)
+      if (!rows.length) return null
+      const titlePrefix = section.trackNames.length ? `${section.trackNames.join(' / ')}：` : ''
+      const columns = [
+        '名称',
+        taskMetric?.label || taskMetric?.column,
+        actualMetric?.label || actualMetric?.column,
+        rateMetric?.label || rateMetric?.column,
+      ].filter(Boolean)
+      return {
+        chartType: taskMetric && actualMetric ? 'combo' : 'bar',
+        title: `${titlePrefix}${section.levelName}完成情况`,
+        columns,
+        rows,
+      }
+    })
+    .filter(Boolean)
+}
+
 const inferChartSpec = (dataset) => {
   const rows = dataset?.rows || []
   if (!rows.length) return null
+
+  const layeredCharts = buildLayeredBusinessCharts(dataset)
+  if (layeredCharts.length) return layeredCharts[0]
 
   const labelColumn = getLabelColumn(dataset)
   const numericColumns = getNumericColumns(dataset)
@@ -1034,13 +1387,15 @@ const buildReportTableBlocks = (datasets = []) => {
 
 const resultPreviews = computed(() => (
   datasetResults.value.slice(0, 4).map((dataset, index) => {
-    const derivedCharts = buildSingleRowMetricCharts(dataset)
-      .map(item => item.chartSpec)
+    const derivedCharts = [
+      ...buildLayeredBusinessCharts(dataset).slice(1),
+      ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
+    ]
       .filter(Boolean)
 
     return {
       key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
-      caption: index === 0 ? '主结果视图' : 结果视图 ,
+      caption: index === 0 ? '主结果视图' : '结果视图',
       dataset,
       metricCards: getMetricCards(dataset),
       chartSpec: inferChartSpec(dataset),
@@ -1054,12 +1409,19 @@ const reportDialogCharts = computed(() => {
     ? reportViewerDatasets.value.slice(0, 4).flatMap((dataset, index) => {
         const primary = {
           key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
-          caption: index === 0 ? '主结果视图' : 结果视图 ,
+          caption: index === 0 ? '主结果视图' : '结果视图',
           dataset,
           metricCards: getMetricCards(dataset),
           chartSpec: inferChartSpec(dataset),
         }
-        return [primary, ...buildSingleRowMetricCharts(dataset)]
+        const layered = buildLayeredBusinessCharts(dataset).slice(1).map((chartSpec, chartIndex) => ({
+          key: `${dataset.dataset_id || index}-layer-${chartIndex}`,
+          caption: `层级图表 ${chartIndex + 2}`,
+          dataset,
+          metricCards: getMetricCards(dataset),
+          chartSpec,
+        }))
+        return [primary, ...layered, ...buildSingleRowMetricCharts(dataset)]
       })
     : resultPreviews.value.flatMap(item => (
         item?.dataset ? [item, ...buildSingleRowMetricCharts(item.dataset)] : [item]
@@ -1087,6 +1449,15 @@ const reportDialogMetricCards = computed(() => (
 const reportTableBlocks = computed(() => (
   buildReportTableBlocks(reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value)
 ))
+
+const businessDrillReport = computed(() => (
+  latestDatasets.value.map(buildBusinessDrillReport).find(Boolean) || null
+))
+
+const dialogBusinessDrillReport = computed(() => {
+  const source = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
+  return source.map(buildBusinessDrillReport).find(Boolean) || null
+})
 
 const reportSummaryBullets = computed(() => {
   const bullets = []
@@ -1176,7 +1547,12 @@ const openReportViewer = (report = latestReport.value, title = sideReportHeading
   reportViewerReport.value = report
   reportViewerTitle.value = title || '经营分析报告'
   reportViewerDatasets.value = Array.isArray(datasetsForReport) ? datasetsForReport : []
+  reportDialogFullscreen.value = false
   reportViewerVisible.value = true
+}
+const openFullScreenReport = () => {
+  openReportViewer(latestReport.value, sideReportHeading.value, latestDatasets.value)
+  reportDialogFullscreen.value = true
 }
 const openReportViewerForMessage = (msg) => openReportViewer(getReport(msg), getPrimaryDataset(msg)?.dataset_name || getResultTitle(msg), getDatasets(msg))
 const openChartViewer = (spec, title = '图表预览') => {
@@ -1185,6 +1561,20 @@ const openChartViewer = (spec, title = '图表预览') => {
   chartViewerTitle.value = title
   chartViewerMode.value = 'chart'
   chartViewerVisible.value = true
+}
+
+const isOfficeExpanded = (id) => officeDrillOpen[String(id)] === true
+const toggleOfficeDrill = (id) => {
+  const key = String(id)
+  officeDrillOpen[key] = !isOfficeExpanded(key)
+  nextTick(() => {
+    window.setTimeout(() => {
+      Object.values(document.querySelectorAll('.sa-office-chart')).forEach((el) => {
+        const chart = echarts.getInstanceByDom(el)
+        if (chart) chart.resize()
+      })
+    }, 40)
+  })
 }
 
 const chartViewerTableRows = computed(() => (
@@ -1289,13 +1679,12 @@ const isCurrentSessionMessage = (msg) => {
 }
 
 const shouldShowLiveFeed = (msg) => {
-  return Boolean(session.state.logs.length > 0 && (msg?.loading || isCurrentSessionMessage(msg)))
+  return Boolean(msg?.loading && session.state.logs.length > 0)
 }
 
 const shouldShowThinkingCard = (msg) => {
   if (msg?.loading) return !session.state.logs.length
-  if (!msg?.data) return false
-  return !shouldShowLiveFeed(msg)
+  return false
 }
 
 const shouldShowConfirmationCard = (msg) => Boolean(
@@ -1355,7 +1744,7 @@ const getMessageElapsedLabel = (msg) => {
 }
 
 const getVisualPreviews = (msg) => (
-  getDatasets(msg)
+  hasBusinessDrillDataset(getDatasets(msg)) ? [] : getDatasets(msg)
     .slice(0, 3)
     .map((dataset, index) => ({
       key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
@@ -1763,7 +2152,7 @@ const renderChartSpec = (chart, data) => {
       color: colorPalette,
       tooltip: { trigger: 'axis' },
       legend: { top: 0, textStyle: { color: '#4e5969', fontSize: 11 } },
-      grid: { left: 34, right: 18, top: 34, bottom: 28 },
+      grid: { left: 34, right: 18, top: 34, bottom: 28, containLabel: true },
       xAxis: {
         type: 'category',
         data: data.rows.map(row => row[labelColumn]),
@@ -1788,13 +2177,71 @@ const renderChartSpec = (chart, data) => {
     return
   }
 
+  if (data.chartType === 'combo') {
+    const categoryRows = data.rows.slice(0, 12)
+    const rateColumn = numericColumns.find(column => /率|percent|rate/i.test(column)) || numericColumns[numericColumns.length - 1]
+    const barColumns = numericColumns.filter(column => column !== rateColumn).slice(0, 2)
+    chart.setOption({
+      backgroundColor: 'transparent',
+      color: colorPalette,
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { top: 0, textStyle: { color: '#4e5969', fontSize: 11 } },
+      grid: { left: 46, right: 42, top: 40, bottom: 54, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: categoryRows.map(row => row[labelColumn]),
+        axisLabel: { color: '#86909c', fontSize: 11, interval: 0, rotate: categoryRows.length > 5 ? 22 : 0, hideOverlap: true },
+        axisLine: { lineStyle: { color: '#e5e6eb' } },
+      },
+      yAxis: [
+        {
+          type: 'value',
+          name: '金额',
+          axisLabel: { color: '#86909c', fontSize: 11, formatter: value => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : value },
+          splitLine: { lineStyle: { color: '#f2f3f5', type: 'dashed' } },
+        },
+        {
+          type: 'value',
+          name: '达成率',
+          axisLabel: { color: '#86909c', fontSize: 11, formatter: '{value}%' },
+          splitLine: { show: false },
+        },
+      ],
+      series: [
+        ...barColumns.map((column) => ({
+          name: column,
+          type: 'bar',
+          barMaxWidth: 18,
+          itemStyle: { borderRadius: [4, 4, 0, 0] },
+          data: categoryRows.map(row => row[column]),
+        })),
+        {
+          name: rateColumn,
+          type: 'line',
+          yAxisIndex: 1,
+          smooth: true,
+          symbolSize: 7,
+          label: {
+            show: true,
+            position: 'top',
+            color: '#4e5969',
+            fontSize: 10,
+            formatter: ({ value }) => `${formatDisplayValue(value)}%`,
+          },
+          data: categoryRows.map(row => row[rateColumn]),
+        },
+      ],
+    })
+    return
+  }
+
   if (data.chartType === 'bar') {
     const valueColumn = numericColumns[0]
     chart.setOption({
       backgroundColor: 'transparent',
       color: [colorPalette[0]],
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid: { left: 34, right: 18, top: 18, bottom: 48 },
+      grid: { left: 34, right: 18, top: 18, bottom: 48, containLabel: true },
       xAxis: {
         type: 'category',
         data: data.rows.slice(0, 8).map(row => row[labelColumn]),
@@ -3000,6 +3447,19 @@ onUnmounted(() => {
   gap: 5px;
 }
 
+.sa-side-report-titlebar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sa-side-fullscreen-btn {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+}
+
 .sa-side-confidence {
   display: flex;
   flex-wrap: wrap;
@@ -3058,6 +3518,187 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.65;
   color: #4e5969;
+}
+
+.sa-business-report {
+  gap: 12px;
+}
+
+.sa-business-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sa-business-summary-text {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: #1d2129;
+}
+
+.sa-business-risk-pill,
+.sa-office-rate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sa-business-risk-pill.good,
+.sa-office-rate.good {
+  color: #00b42a;
+  background: #e8ffea;
+}
+
+.sa-business-risk-pill.warn,
+.sa-office-rate.warn {
+  color: #ff7d00;
+  background: #fff7e8;
+}
+
+.sa-business-risk-pill.danger,
+.sa-office-rate.danger {
+  color: #f53f3f;
+  background: #ffece8;
+}
+
+.sa-business-risk-pill.neutral,
+.sa-office-rate.neutral {
+  color: #4e5969;
+  background: #f2f3f5;
+}
+
+.sa-kpi-shelf-compact .sa-kpi-card {
+  min-width: calc(50% - 4px);
+  padding: 10px;
+}
+
+.sa-office-card-list,
+.sa-office-report-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sa-office-report-grid {
+  gap: 14px;
+}
+
+.sa-office-card {
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.sa-office-card-dialog {
+  border-radius: 14px;
+}
+
+.sa-office-card-head {
+  width: 100%;
+  min-height: 58px;
+  border: none;
+  background: #fbfcff;
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sa-office-card-head:hover {
+  background: #f7faff;
+}
+
+.sa-office-name {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #1d2129;
+}
+
+.sa-office-subtitle {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #86909c;
+}
+
+.sa-office-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.sa-office-kpis span {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: #f7f8fa;
+  color: #4e5969;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-office-copy,
+.sa-chart-copy {
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.sa-office-copy {
+  padding: 10px 12px 12px;
+}
+
+.sa-office-drill {
+  margin: 0 12px 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(29, 33, 41, 0.1);
+}
+
+.sa-office-drill-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+
+.sa-office-chart-open {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.sa-office-chart {
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: #fff;
+}
+
+.sa-office-chart-dialog {
+  height: 320px;
+}
+
+.sa-wide-btn {
+  width: 100%;
 }
 
 .sa-side-section {

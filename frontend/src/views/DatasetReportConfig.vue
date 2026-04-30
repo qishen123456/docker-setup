@@ -44,6 +44,7 @@
               <div class="rc-card">
                 <div class="rc-card-title">列映射</div>
                 <div class="rc-card-body">
+                  <div class="rc-help-text">这里是 SQL 结果的标准列名，不要求源表物理存在。Agent2 会按下方 SQL 输出契约把源字段投影成这些列。</div>
                   <div class="rc-field-grid">
                     <div class="rc-field">
                       <label>节点名称列</label>
@@ -62,6 +63,72 @@
                       <el-input v-model="configForm.levelColumn" size="small" placeholder="层级" />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div class="rc-card rc-card-wide">
+                <div class="rc-card-title">源数据结构与报告意图</div>
+                <div class="rc-card-body">
+                  <div class="rc-field">
+                    <label>业务背景 / Agent 参考口径</label>
+                    <el-input v-model="configForm.businessContext" type="textarea" :rows="3" size="small" placeholder="例如：源数据没有父子字段，组织链路由 SQL 从分公司/代表处/业务代表字段生成。" />
+                  </div>
+                  <div class="rc-field" style="margin-top:12px">
+                    <label>Agent4 写作口径</label>
+                    <el-input v-model="configForm.agentReportGuidance" type="textarea" :rows="2" size="small" placeholder="例如：结构由系统生成，Agent4 只补洞察、风险解释和建议。" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="rc-card rc-card-wide">
+                <div class="rc-card-title">SQL 标准输出契约</div>
+                <div class="rc-card-body">
+                  <div class="rc-help-text">用于约束 Agent2：无论源表字段如何，最终 SQL 应输出这些报告标准列，前端再用 rows + 上级名称动态建树。</div>
+                  <div class="rc-field-grid">
+                    <div class="rc-field">
+                      <label>必需结构列</label>
+                      <el-input v-model="requiredColumnsText" size="small" placeholder="条线, 层级, 节点名称, 上级名称" />
+                    </div>
+                    <div class="rc-field">
+                      <label>指标输出列</label>
+                      <el-input v-model="metricColumnsText" size="small" placeholder="总任务金额, 年度开单金额, 达成率, 剩余任务金额" />
+                    </div>
+                  </div>
+                  <div class="rc-field" style="margin-top:12px">
+                    <label>SQL 投影规则</label>
+                    <el-input v-model="sqlContractNotesText" type="textarea" :rows="5" size="small" placeholder="每行一条，例如：源表没有节点名称时，用 SELECT 别名生成。" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="rc-card rc-card-wide">
+                <div class="rc-card-title">
+                  分析维度 / 管理链路
+                  <el-button text type="primary" size="small" @click="addAnalysisDimension">+ 添加</el-button>
+                </div>
+                <div class="rc-card-body">
+                  <el-table :data="configForm.analysisDimensions" size="small" border stripe>
+                    <el-table-column label="Key" width="130">
+                      <template #default="{ row }"><el-input v-model="row.key" size="small" /></template>
+                    </el-table-column>
+                    <el-table-column label="显示名" width="140">
+                      <template #default="{ row }"><el-input v-model="row.label" size="small" /></template>
+                    </el-table-column>
+                    <el-table-column label="链路" min-width="220">
+                      <template #default="{ row }"><el-input :model-value="(row.path || []).join(' -> ')" size="small" @update:model-value="value => row.path = splitList(value, '->')" /></template>
+                    </el-table-column>
+                    <el-table-column label="源字段" min-width="180">
+                      <template #default="{ row }"><el-input :model-value="(row.sourceFields || []).join(', ')" size="small" @update:model-value="value => row.sourceFields = splitList(value)" /></template>
+                    </el-table-column>
+                    <el-table-column label="用途" min-width="220">
+                      <template #default="{ row }"><el-input v-model="row.purpose" size="small" /></template>
+                    </el-table-column>
+                    <el-table-column label="" width="50">
+                      <template #default="{ $index }">
+                        <el-button text type="danger" size="small" @click="configForm.analysisDimensions.splice($index, 1)">×</el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
                 </div>
               </div>
 
@@ -227,7 +294,36 @@ const configForm = ref({
   nameColumn: '', parentColumn: '', trackColumn: '', levelColumn: '',
   reportTitle: '', riskThreshold: 80,
   metrics: [], signalRules: [], sections: ['core', 'group', 'risk', 'strategy'],
-  levels: [], trackValues: {}
+  levels: [], trackValues: {},
+  businessContext: '', agentReportGuidance: '', sourceFields: {},
+  sqlOutputContract: { requiredColumns: [], metricColumns: [], notes: [] },
+  analysisDimensions: []
+})
+
+const splitList = (value, delimiter = ',') => String(value || '')
+  .split(delimiter)
+  .map(item => item.trim())
+  .filter(Boolean)
+
+const requiredColumnsText = computed({
+  get: () => (configForm.value.sqlOutputContract?.requiredColumns || []).join(', '),
+  set: (value) => {
+    configForm.value.sqlOutputContract = { ...(configForm.value.sqlOutputContract || {}), requiredColumns: splitList(value) }
+  },
+})
+
+const metricColumnsText = computed({
+  get: () => (configForm.value.sqlOutputContract?.metricColumns || []).join(', '),
+  set: (value) => {
+    configForm.value.sqlOutputContract = { ...(configForm.value.sqlOutputContract || {}), metricColumns: splitList(value) }
+  },
+})
+
+const sqlContractNotesText = computed({
+  get: () => (configForm.value.sqlOutputContract?.notes || []).join('\n'),
+  set: (value) => {
+    configForm.value.sqlOutputContract = { ...(configForm.value.sqlOutputContract || {}), notes: splitList(value, '\n') }
+  },
 })
 
 const selectedDatasetName = computed(() => {
@@ -237,6 +333,7 @@ const selectedDatasetName = computed(() => {
 
 const addMetric = () => configForm.value.metrics.push({ key: '', label: '', column: '', format: 'amount' })
 const addSignalRule = () => configForm.value.signalRules.push({ key: '', op: '>=', value: 0, tone: 'good', label: '' })
+const addAnalysisDimension = () => configForm.value.analysisDimensions.push({ key: '', label: '', path: [], sourceFields: [], purpose: '' })
 
 const loadDatasets = async () => {
   try {
@@ -276,6 +373,11 @@ const loadConfig = async (dsId) => {
       sections: cfg.sections || ['core', 'group', 'risk', 'strategy'],
       levels: cfg.levels || [],
       trackValues: cfg.trackValues || {},
+      businessContext: cfg.businessContext || '',
+      agentReportGuidance: cfg.agentReportGuidance || '',
+      sourceFields: cfg.sourceFields || {},
+      sqlOutputContract: cfg.sqlOutputContract || { requiredColumns: [], metricColumns: [], notes: [] },
+      analysisDimensions: cfg.analysisDimensions || [],
     })
     jsonText.value = JSON.stringify(configForm.value, null, 2)
   } finally { loading.value = false }
@@ -424,6 +526,12 @@ onMounted(loadDatasets)
   display: flex; align-items: center; justify-content: space-between;
 }
 .rc-card-body { padding: 16px; }
+.rc-help-text {
+  margin-bottom: 12px;
+  color: var(--text-muted, #86909c);
+  font-size: 12px;
+  line-height: 1.6;
+}
 
 .rc-field-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;

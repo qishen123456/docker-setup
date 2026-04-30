@@ -3,6 +3,11 @@ import { confirmByBoss, sendSmartChatStream } from '../api/index.js'
 
 const STORAGE_KEY = 'smart-ask-session-v1'
 
+const createSessionId = () => {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID()
+  return `sa-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 const phaseTemplates = [
   {
     key: 'submit',
@@ -208,6 +213,7 @@ const state = reactive({
   startedAt: '',
   updatedAt: '',
   currentSessionId: '',
+  conversationSessionId: '',
 })
 
 let phaseTimer = null
@@ -223,6 +229,7 @@ const snapshot = () => ({
   startedAt: state.startedAt,
   updatedAt: state.updatedAt,
   currentSessionId: state.currentSessionId,
+  conversationSessionId: state.conversationSessionId,
 })
 
 const persist = () => {
@@ -237,6 +244,7 @@ const hydrate = () => {
     // Only restore the question for convenience; never restore old results/logs
     // to avoid the illusion of "cached instant answers"
     if (parsed.question) state.question = parsed.question
+    if (parsed.conversationSessionId) state.conversationSessionId = parsed.conversationSessionId
   } catch {
     // ignore broken cache
   }
@@ -1004,6 +1012,7 @@ const finalizeFromResult = (data) => {
 
   state.result = data
   state.currentSessionId = data?.session_id || state.currentSessionId
+  state.conversationSessionId = data?.conversation_session_id || state.conversationSessionId || createSessionId()
   state.updatedAt = new Date().toISOString()
 
   if (data?.error) {
@@ -1048,6 +1057,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
   state.startedAt = new Date().toISOString()
   state.updatedAt = state.startedAt
   state.currentSessionId = ''
+  state.conversationSessionId = state.conversationSessionId || createSessionId()
 
   beginRealtimeStreaming(normalizedQuestion)
   persist()
@@ -1069,6 +1079,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
         }
       },
       modelId || undefined,
+      state.conversationSessionId,
     )
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')
@@ -1212,7 +1223,9 @@ const resetSession = () => {
   state.startedAt = ''
   state.updatedAt = ''
   state.currentSessionId = ''
+  state.conversationSessionId = createSessionId()
   localStorage.removeItem(STORAGE_KEY)
+  persist()
 }
 
 const stopAsk = () => {
@@ -1233,6 +1246,7 @@ const clearRecoveredSessionResult = () => {
   state.startedAt = ''
   state.updatedAt = ''
   state.currentSessionId = ''
+  state.conversationSessionId = state.conversationSessionId || createSessionId()
   persist()
 }
 

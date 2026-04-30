@@ -71,9 +71,15 @@ export const getAgents = () => api.get('/agents')
 export const getAgent = (agentNo) => api.get(`/agents/${agentNo}`)
 export const updateAgent = (agentNo, data) => api.put(`/agents/${agentNo}`, data)
 
-export const sendSmartChat = (question, signal, selectedDatasetIds, modelId) =>
-  api.post('/smart-chat', { question, selected_dataset_ids: selectedDatasetIds || undefined, model_id: modelId || undefined }, { signal })
-export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent, modelId) => {
+export const sendSmartChat = (question, signal, selectedDatasetIds, modelId, sessionId, conversationHistory) =>
+  api.post('/smart-chat', {
+    question,
+    selected_dataset_ids: selectedDatasetIds || undefined,
+    model_id: modelId || undefined,
+    session_id: sessionId || undefined,
+    conversation_history: conversationHistory || undefined,
+  }, { signal })
+export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent, modelId, sessionId, conversationHistory) => {
   const response = await fetch('/api/smart-chat/stream', {
     method: 'POST',
     headers: {
@@ -84,6 +90,8 @@ export const sendSmartChatStream = async (question, signal, selectedDatasetIds, 
       question,
       selected_dataset_ids: selectedDatasetIds || undefined,
       model_id: modelId || undefined,
+      session_id: sessionId || undefined,
+      conversation_history: conversationHistory || undefined,
     }),
     signal,
   })

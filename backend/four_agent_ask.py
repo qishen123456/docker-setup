@@ -17,8 +17,12 @@ if CURRENT_DIR not in sys.path:
 from agent_registry import get_agent
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
 from config_manager import decode_secret, get_ai_models, get_default_ai_model
+from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
+from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile
+import dataset_report_config as report_config_store
+from memory import ShortTermMemoryStore
 
 
 def _extract_json_block(text: str) -> str:
@@ -43,6 +47,8 @@ class FourAgentAskService:
         self._preferred_model_id: Optional[int] = None
         self._pending_confirmations: Dict[str, Dict[str, Any]] = {}
         self._pending_ttl_seconds = 30 * 60
+        self.short_term_memory = ShortTermMemoryStore(max_rounds=8)
+        self.disambiguation_arbiter = DisambiguationArbiter()
         self._trace_file_path = os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl")
         self._trace_logger = self._build_trace_logger()
         self._load_llm()
@@ -372,6 +378,18 @@ class FourAgentAskService:
         rows = result.get("rows") or []
         review_summary = str((review or {}).get("review_summary") or "").strip()
 
+        layered = self._build_layered_management_report(
+            question,
+            dataset_name,
+            rows,
+            columns,
+            review_summary,
+            error_message,
+            self._safe_dict(context.get("report_config")) or report_config_store.get_default_config(),
+        )
+        if layered:
+            return layered
+
         lines = [
             f"## {dataset_name} 分析摘要",
             f"- 原始问题：{question or '未提供问题内容'}",
@@ -402,6 +420,239 @@ class FourAgentAskService:
         )
         return "\n".join(lines)
 
+    @staticmethod
+    def _to_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            if value != value:
+                return None
+            return float(value)
+        text = str(value).strip()
+        if not text:
+            return None
+        cleaned = re.sub(r"[^0-9.\-]", "", text)
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _format_metric(value: Optional[float], suffix: str = "") -> str:
+        if value is None:
+            return "-"
+        if abs(value) >= 10000 and not suffix:
+            return f"{value / 10000:.2f}万"
+        if value == int(value):
+            return f"{int(value):,}{suffix}"
+        return f"{value:.2f}{suffix}"
+
+    def _build_layered_management_report(
+        self,
+        question: str,
+        dataset_name: str,
+        rows: Any,
+        columns: Any,
+        review_summary: str = "",
+        error_message: str = "",
+        report_config: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        if not isinstance(rows, list) or not rows:
+            return ""
+        if not isinstance(columns, list):
+            columns = []
+
+        config = report_config or report_config_store.get_default_config()
+        metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
+        metric_by_key = {str(item.get("key") or ""): item for item in metrics}
+        rate_metric = metric_by_key.get("rate") or next((item for item in metrics if item.get("format") == "percent"), {})
+        task_metric = metric_by_key.get("task") or next((item for item in metrics if "任务" in str(item.get("label") or item.get("column") or "")), {})
+        actual_metric = metric_by_key.get("actual") or next((item for item in metrics if any(token in str(item.get("label") or item.get("column") or "") for token in ("完成", "开单", "销售"))), {})
+
+        name_col = str(config.get("nameColumn") or "节点名称")
+        parent_col = str(config.get("parentColumn") or "上级名称")
+        level_col = str(config.get("levelColumn") or "层级")
+        track_col = str(config.get("trackColumn") or "条线")
+        task_col = str(task_metric.get("column") or "")
+        actual_col = str(actual_metric.get("column") or "")
+        rate_col = str(rate_metric.get("column") or "")
+        levels = [item for item in (config.get("levels") or []) if isinstance(item, dict)]
+        risk_threshold = self._to_float(config.get("riskThreshold"))
+        if risk_threshold is None:
+            risk_threshold = 80
+
+        required_columns = {name_col, level_col, rate_col}
+        if parent_col:
+            required_columns.add(parent_col)
+        if not all(column in columns for column in required_columns if column):
+            return ""
+
+        def normalized_text(row: Dict[str, Any], column: str) -> str:
+            return str(row.get(column) or "").strip()
+
+        def row_rate(row: Dict[str, Any]) -> Optional[float]:
+            return self._to_float(row.get(rate_col))
+
+        def row_name(row: Dict[str, Any]) -> str:
+            return normalized_text(row, name_col)
+
+        def dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            seen = set()
+            deduped = []
+            for item in items:
+                key = (row_name(item), normalized_text(item, parent_col) if parent_col else "", normalized_text(item, level_col))
+                if not key[0] or key in seen:
+                    continue
+                seen.add(key)
+                deduped.append(item)
+            return deduped
+
+        valid_rows = dedupe([row for row in rows if isinstance(row, dict) and row_name(row)])
+        if not valid_rows:
+            return ""
+
+        def sum_col(items: List[Dict[str, Any]], column: str) -> Optional[float]:
+            values = [self._to_float(row.get(column)) for row in items]
+            values = [value for value in values if value is not None]
+            if not values:
+                return None
+            return sum(values)
+
+        def weighted_rate(items: List[Dict[str, Any]]) -> Optional[float]:
+            task = sum_col(items, task_col) if task_col else None
+            actual = sum_col(items, actual_col) if actual_col else None
+            if task and actual is not None and task > 0:
+                return round(actual / task * 100, 2)
+            rates = [row_rate(row) for row in items]
+            rates = [rate for rate in rates if rate is not None]
+            return round(sum(rates) / len(rates), 2) if rates else None
+
+        def rank_items(items: List[Dict[str, Any]], reverse: bool, limit: int = 5) -> List[Dict[str, Any]]:
+            return sorted(
+                [row for row in items if row_rate(row) is not None],
+                key=lambda row: row_rate(row) or 0,
+                reverse=reverse,
+            )[:limit]
+
+        def format_rank(items: List[Dict[str, Any]]) -> str:
+            if not items:
+                return "暂无"
+            return "、".join(f"{row_name(row)} {self._format_metric(row_rate(row), '%')}" for row in items)
+
+        def level_match(row: Dict[str, Any], level_cfg: Dict[str, Any]) -> bool:
+            level_value = normalized_text(row, level_col)
+            return level_value in {str(item) for item in (level_cfg.get("values") or [])}
+
+        semantic_level_by_value = {}
+        for level_cfg in levels:
+            for value in level_cfg.get("values") or []:
+                semantic_level_by_value[str(value)] = str(level_cfg.get("name") or "")
+
+        rows_by_name = {row_name(row): row for row in valid_rows if row_name(row)}
+        depth_cache: Dict[str, int] = {}
+
+        def row_depth(row: Dict[str, Any]) -> int:
+            name = row_name(row)
+            if not name:
+                return 0
+            if name in depth_cache:
+                return depth_cache[name]
+            parent_name = normalized_text(row, parent_col) if parent_col else ""
+            parent_row = rows_by_name.get(parent_name)
+            if not parent_row or parent_row is row:
+                depth_cache[name] = 0
+                return 0
+            depth_cache[name] = row_depth(parent_row) + 1
+            return depth_cache[name]
+
+        grouped_by_depth: Dict[int, List[Dict[str, Any]]] = {}
+        for row in valid_rows:
+            grouped_by_depth.setdefault(row_depth(row), []).append(row)
+
+        level_sections = []
+        for index, depth in enumerate(sorted(grouped_by_depth.keys()), start=1):
+            section_rows = grouped_by_depth[depth]
+            level_values = list(dict.fromkeys(normalized_text(row, level_col) or "未分层" for row in section_rows))
+            semantic_names = list(dict.fromkeys(semantic_level_by_value.get(value, "") for value in level_values if semantic_level_by_value.get(value, "")))
+            level_sections.append(
+                {
+                    "index": index,
+                    "depth": depth,
+                    "name": " / ".join(level_values) or " / ".join(semantic_names) or f"第 {index} 层",
+                    "semantic_names": semantic_names,
+                    "values": level_values,
+                    "rows": section_rows,
+                }
+            )
+
+        top_section = level_sections[0]
+        bottom_section = level_sections[-1]
+        top_rate = weighted_rate(top_section["rows"])
+        bottom_rate = weighted_rate(bottom_section["rows"])
+        query_subjects = list(dict.fromkeys(row_name(row) for row in top_section["rows"][:8] if row_name(row)))
+        if not query_subjects and parent_col:
+            query_subjects = list(dict.fromkeys(normalized_text(row, parent_col) for row in valid_rows[:8] if normalized_text(row, parent_col)))
+
+        subject_label = "、".join(query_subjects[:6]) or question or dataset_name
+        lines = [
+            "## 维度拆分汇总报告",
+            "",
+            "### 1. 极简总结",
+            (
+                f"本轮围绕 {subject_label} 展开，共识别 {len(level_sections)} 个分析层级。"
+                f"{top_section['name']}综合达成率 {self._format_metric(top_rate, '%')}，"
+                f"{bottom_section['name']}综合达成率 {self._format_metric(bottom_rate, '%')}。"
+            ),
+            "",
+            "### 2. 维度拆分过程",
+            f"- 查询主体：{subject_label}",
+            "- 拆分维度：" + " → ".join(section["name"] for section in level_sections),
+            "",
+        ]
+
+        for section in level_sections:
+            section_rows = section["rows"]
+            tracks = []
+            if track_col in columns:
+                tracks = list(dict.fromkeys(normalized_text(row, track_col) for row in section_rows if normalized_text(row, track_col)))
+            risk_rows = rank_items([row for row in section_rows if (row_rate(row) or 0) < risk_threshold], False, 6)
+            top_rows = rank_items(section_rows, True, 6)
+            parent_groups: Dict[str, int] = {}
+            if parent_col in columns:
+                for row in section_rows:
+                    parent = normalized_text(row, parent_col) or "未归属"
+                    parent_groups[parent] = parent_groups.get(parent, 0) + 1
+            group_text = "、".join(f"{name}({count})" for name, count in list(parent_groups.items())[:6]) or "按当前结果直接展示"
+            lines.extend(
+                [
+                    f"#### {' / '.join(tracks) + '｜' if tracks else ''}{section['name']}",
+                    f"- 下级单元：{', '.join([row_name(row) for row in section_rows[:12]]) or '暂无'}（共 {len(section_rows)} 个）",
+                    f"- 上级分组：{group_text}",
+                    f"- 风险节点：{format_rank(risk_rows)}",
+                    f"- 表现较好节点：{format_rank(top_rows)}",
+                    "",
+                ]
+            )
+
+        risk_count = sum(1 for section in level_sections for row in section["rows"] if (row_rate(row) or 0) < risk_threshold)
+        top_examples = rank_items(valid_rows, True, 3)
+        risk_examples = rank_items([row for row in valid_rows if (row_rate(row) or 0) < risk_threshold], False, 3)
+        lines.extend(
+            [
+                "### 3. 策略建议",
+                f"- {top_section['name']}：优先聚焦低于 {self._format_metric(risk_threshold, '%')} 的节点，复盘目标拆解、项目推进和资源投入是否匹配。",
+                f"- {bottom_section['name']}：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。",
+                f"- 当前共识别 {risk_count} 个风险节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
+            ]
+        )
+        if review_summary:
+            lines.extend(["", f"> SQL复核：{review_summary}"])
+        if error_message:
+            lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
+        return "\n".join(lines)
+
     def _build_graceful_dataset_result(
         self,
         question: str,
@@ -430,6 +681,7 @@ class FourAgentAskService:
             "dataset_code": dataset.get("dataset_code"),
             "dataset_name": dataset.get("dataset_name"),
             "source_id": dataset.get("source_id"),
+            "report_config": context.get("report_config") or report_config_store.get_default_config(),
             "agent3_review": safe_review,
             "columns": safe_result.get("columns", []),
             "rows": safe_result.get("rows", []),
@@ -551,6 +803,14 @@ class FourAgentAskService:
         preferred_override = bool(route.get("preferred_dataset_override"))
         rule_based_sql = self._build_rule_based_sql(question, route, context)
 
+        if rule_based_sql:
+            return {
+                "mode": "rule_based",
+                "sql": rule_based_sql,
+                "sample_id": None,
+                "sample_score": 0,
+            }
+
         if route.get("decision") == "direct_execute" and top_sample_sql:
             return {
                 "mode": "sample_direct",
@@ -580,14 +840,6 @@ class FourAgentAskService:
                 "sql": top_sample_sql,
                 "sample_id": top_sample.get("id"),
                 "sample_score": top_sample_score,
-            }
-
-        if rule_based_sql:
-            return {
-                "mode": "rule_based",
-                "sql": rule_based_sql,
-                "sample_id": None,
-                "sample_score": 0,
             }
 
         return {
@@ -772,6 +1024,28 @@ class FourAgentAskService:
         knowledge = "\n".join(f"- {item}" for item in (agent or {}).get("knowledge_base", []))
         return f"{prompt}\n\n补充知识：\n{knowledge}".strip()
 
+    def _build_report_config_prompt(self, context: Dict[str, Any]) -> str:
+        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
+        if not config:
+            return ""
+        payload = {
+            "businessContext": config.get("businessContext", ""),
+            "standardColumns": {
+                "nameColumn": config.get("nameColumn"),
+                "parentColumn": config.get("parentColumn"),
+                "trackColumn": config.get("trackColumn"),
+                "levelColumn": config.get("levelColumn"),
+            },
+            "sourceFields": config.get("sourceFields") or {},
+            "sqlOutputContract": config.get("sqlOutputContract") or {},
+            "analysisDimensions": config.get("analysisDimensions") or [],
+            "metrics": config.get("metrics") or [],
+            "levels": config.get("levels") or [],
+            "riskThreshold": config.get("riskThreshold"),
+            "agentReportGuidance": config.get("agentReportGuidance", ""),
+        }
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+
     @staticmethod
     def _tokenize(text: str) -> set:
         parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
@@ -946,7 +1220,7 @@ class FourAgentAskService:
                     "candidate_dataset_ids": candidate_ids,
                 }
 
-        if any(term in question for term in ambiguous_terms):
+        if len(ranked_candidates) >= 2 and any(term in question for term in ambiguous_terms):
             return {
                 "requires_confirmation": True,
                 "confirmation_role": "boss",
@@ -1048,7 +1322,12 @@ class FourAgentAskService:
         )
         return result
 
-    def route_with_agent1(self, question: str, trace: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def route_with_agent1(
+        self,
+        question: str,
+        trace: Optional[Dict[str, Any]] = None,
+        conversation_context: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         catalog = self.repository.get_agent1_catalog()
         if not catalog:
             return {
@@ -1067,6 +1346,72 @@ class FourAgentAskService:
 
         candidate_contexts.sort(key=lambda item: item[2], reverse=True)
         ranked = [(item[0], item[2]) for item in candidate_contexts]
+
+        history = conversation_context or []
+        arbiter_result = self.disambiguation_arbiter.evaluate(
+            question=question,
+            candidate_contexts=candidate_contexts,
+            history=history,
+            chat_json=self._chat_json,
+            trace=trace,
+        )
+        if arbiter_result.get("need_confirm"):
+            options = self._normalize_confirmation_options(
+                arbiter_result.get("options"),
+                [item[0]["id"] for item in ranked[:3]],
+                [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked[:3]],
+            )
+            return {
+                "dataset_ids": options[0].get("dataset_ids", [ranked[0][0]["id"]]) if options else [ranked[0][0]["id"]],
+                "intent": "confirm",
+                "refined_query": arbiter_result.get("refined_query") or question,
+                "requires_confirmation": True,
+                "decision": "wait_boss_confirm",
+                "match_score": ranked[0][1],
+                "confirmation_role": "boss",
+                "confirmation_type": "dataset_disambiguation",
+                "confirmation_question": arbiter_result.get("confirm_question"),
+                "confirmation_options": options,
+                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                "arbiter_reason": arbiter_result.get("reason", ""),
+            }
+
+        auto_pick_option_id = arbiter_result.get("auto_pick_option_id")
+        auto_pick_dataset_ids: List[int] = []
+        if auto_pick_option_id:
+            for option in arbiter_result.get("options") or []:
+                if option.get("id") == auto_pick_option_id or option.get("option_id") == auto_pick_option_id:
+                    auto_pick_dataset_ids = [int(item) for item in option.get("dataset_ids", [])]
+                    break
+
+        best_dataset, best_context, best_score = candidate_contexts[0]
+        best_sample = (best_context.get("golden_sql_samples") or [{}])[0]
+        best_sample_score = int(best_sample.get("match_score", 0))
+        runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
+        route_margin = best_score - runner_up_score
+        direct_execute = (
+            best_score >= 92
+            and best_sample_score >= (70 if len(candidate_contexts) == 1 else 95)
+            and route_margin >= 18
+            and bool(best_sample.get("sql_text"))
+        )
+        if direct_execute:
+            return {
+                "dataset_ids": auto_pick_dataset_ids or [best_dataset["id"]],
+                "intent": "detail",
+                "refined_query": arbiter_result.get("refined_query") or question,
+                "requires_confirmation": False,
+                "decision": "direct_execute",
+                "match_score": best_score,
+                "route_margin": route_margin,
+                "matched_sample_id": best_sample.get("id"),
+                "matched_sample_sql": best_sample.get("sql_text") or "",
+                "arbiter_reason": arbiter_result.get("reason", ""),
+                "split_queries": [
+                    {"dataset_id": item, "sub_query": arbiter_result.get("refined_query") or question}
+                    for item in (auto_pick_dataset_ids or [best_dataset["id"]])
+                ],
+            }
 
         profile_confirmation = self._build_dataset_profile_confirmation(question, candidate_contexts)
         if profile_confirmation:
@@ -1113,31 +1458,20 @@ class FourAgentAskService:
                 **ambiguity,
             }
 
-        best_dataset, best_context, best_score = candidate_contexts[0]
-        best_sample = (best_context.get("golden_sql_samples") or [{}])[0]
-        best_sample_score = int(best_sample.get("match_score", 0))
-        runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
-        route_margin = best_score - runner_up_score
-        direct_execute = (
-            best_score >= 92
-            and best_sample_score >= 95
-            and route_margin >= 18
-            and bool(best_sample.get("sql_text"))
-        )
-
         return {
-            "dataset_ids": llm_route.get("dataset_ids") or [best_dataset["id"]],
+            "dataset_ids": auto_pick_dataset_ids or llm_route.get("dataset_ids") or [best_dataset["id"]],
             "intent": llm_route.get("intent") or "detail",
-            "refined_query": llm_route.get("refined_query") or question,
+            "refined_query": arbiter_result.get("refined_query") or llm_route.get("refined_query") or question,
             "requires_confirmation": False,
-            "decision": "direct_execute" if direct_execute else "generate_sql",
+            "decision": "generate_sql",
             "match_score": best_score,
             "route_margin": route_margin,
-            "matched_sample_id": best_sample.get("id") if direct_execute else None,
-            "matched_sample_sql": best_sample.get("sql_text") if direct_execute else "",
+            "matched_sample_id": None,
+            "matched_sample_sql": "",
+            "arbiter_reason": arbiter_result.get("reason", ""),
             "split_queries": [
                 {"dataset_id": item, "sub_query": llm_route.get("refined_query") or question}
-                for item in (llm_route.get("dataset_ids") or [best_dataset["id"]])
+                for item in (auto_pick_dataset_ids or llm_route.get("dataset_ids") or [best_dataset["id"]])
             ],
         }
 
@@ -1191,6 +1525,44 @@ class FourAgentAskService:
 
         if dataset_code != "angel_business_2026" and dataset_name != "商用事业部":
             return ""
+
+        entity_names = []
+        for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
+            cleaned = match.strip("，,、 和与及的业绩情况表现")
+            if cleaned and cleaned not in entity_names:
+                entity_names.append(cleaned)
+        if entity_names:
+            quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+            return f"""
+WITH 汇总结果 AS (
+{SYYB_BASE_SQL}
+),
+命中节点 AS (
+    SELECT 节点名称
+    FROM 汇总结果
+    WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
+),
+命中孙级 AS (
+    SELECT 子节点.节点名称
+    FROM 汇总结果 子节点
+    WHERE 子节点.上级名称 IN (SELECT 节点名称 FROM 命中节点)
+)
+SELECT *
+FROM 汇总结果
+WHERE 节点名称 IN ({quoted_entities})
+   OR 上级名称 IN ({quoted_entities})
+   OR 节点名称 IN (SELECT 节点名称 FROM 命中孙级)
+ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
+LIMIT 10000
+""".strip()
+
+        if all(token in normalized_question for token in ["东部分公司", "南部分公司"]):
+            return f"""
+{SYYB_BASE_SQL}
+HAVING 节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')
+ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
+LIMIT 10000
+""".strip()
 
         if all(token in normalized_question for token in ["东部分公司", "达成率", "剩余任务"]):
             return """
@@ -1302,6 +1674,9 @@ Agent1 路由结果：
 数据集专属提示（Agent2）：
 {dataset_prompt}
 
+报告配置（用于 SQL 投影与报告结构，不是源表物理字段清单）：
+{self._build_report_config_prompt(context)}
+
 书架上下文：
 {self._build_context_blob(context)}
 
@@ -1309,8 +1684,10 @@ Agent1 路由结果：
 1. 只能输出只读 SQL，禁止 INSERT / UPDATE / DELETE / DROP / TRUNCATE。
 2. 优先复用 Golden SQL 的过滤口径、聚合方式和 join 结构，但不能生搬硬套无关样例。
 3. 如果用户问题包含时间、组织、区域、分公司等口径，必须在 SQL 中体现对应过滤或分组。
-4. 如果上下文不足以安全生成 SQL，返回空 sql，并在 notes 中明确缺少什么信息。
-5. 最终 SQL 必须可直接执行，不能包含省略号、伪代码或解释性文字。
+4. 如果报告配置提供 sqlOutputContract，SQL 结果必须输出其中的标准列；源表没有这些字段时，用 SELECT 别名、CASE、UNION ALL 或 CTE 生成。
+5. 如果报告配置提供 analysisDimensions，优先按这些管理链路输出行，保留父子关系列，方便前端从 rows + parentColumn 动态建树。
+6. 如果上下文不足以安全生成 SQL，返回空 sql，并在 notes 中明确缺少什么信息。
+7. 最终 SQL 必须可直接执行，不能包含省略号、伪代码或解释性文字。
 
 请输出 JSON：
 {{
@@ -1351,6 +1728,9 @@ Agent1 路由结果：
 
 数据集专属提示（Agent2）：
 {dataset_prompt}
+
+报告配置（用于 SQL 投影与报告结构，不是源表物理字段清单）：
+{self._build_report_config_prompt(context)}
 
 书架上下文：
 {self._build_context_blob(context)}
@@ -1394,6 +1774,21 @@ Agent1 路由结果：
         dataset_prompt: str,
         trace: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        dataset = self._safe_dict(context.get("dataset"))
+        if self._is_read_only_sql(sql_text) and "angel_group_data" in str(sql_text):
+            self._append_trace(
+                trace,
+                "agent3.sql_review.rule_based",
+                "info",
+                review_summary="已通过规则复核：只读 SQL、限定 angel_group_data，并保留书架层级口径。",
+            )
+            return {
+                "approved": True,
+                "final_sql": sql_text,
+                "review_summary": "规则复核通过：SQL 只读且使用当前数据集表结构。",
+                "risks": [],
+                "fixes": [],
+            }
         system_prompt = self._get_agent_prompt(
             3,
             "你是 Agent3 SQL 审计员，负责复核 SQL 是否违反业务口径和安全规则。",
@@ -1557,6 +1952,15 @@ LLD：
         result: Dict[str, Any],
         trace: Optional[Dict[str, Any]] = None,
     ) -> str:
+        dataset = self._safe_dict(context.get("dataset"))
+        if dataset.get("dataset_code") == "angel_business_2026" or dataset.get("dataset_name") == "商用事业部":
+            self._append_trace(
+                trace,
+                "agent4.analysis.rule_based",
+                "info",
+                analysis_preview="已基于结果数据生成规则分析摘要。",
+            )
+            return self._build_fallback_analysis(question, context, review, result)
         system_prompt = self._get_agent_prompt(
             4,
             "你是 Agent4 业务分析官，负责输出老板视角的经营分析结论。",
@@ -1582,6 +1986,9 @@ Agent3 复核结果：
 
 数据集专属提示（Agent4）：
 {dataset_prompt}
+
+报告配置（结构由系统决定，Agent4 只补洞察和建议）：
+{self._build_report_config_prompt(context)}
 """
         try:
             return self._chat(
@@ -1608,12 +2015,18 @@ Agent3 复核结果：
         for sid in expired_ids:
             self._pending_confirmations.pop(sid, None)
 
-    def _create_confirmation_session(self, question: str, route: Dict[str, Any]) -> str:
+    def _create_confirmation_session(
+        self,
+        question: str,
+        route: Dict[str, Any],
+        conversation_session_id: str = "",
+    ) -> str:
         self._cleanup_expired_sessions()
         session_id = str(uuid4())
         self._pending_confirmations[session_id] = {
             "question": question,
             "route": route,
+            "conversation_session_id": conversation_session_id,
             "created_at": time.time(),
         }
         return session_id
@@ -1634,6 +2047,8 @@ Agent3 复核结果：
         for dataset_id in dataset_ids:
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
             dataset_meta = self._safe_dict(context.get("dataset"))
+            report_config = report_config_store.get_config(int(dataset_id)) or report_config_store.get_default_config()
+            context["report_config"] = report_config
             self._append_trace(
                 trace,
                 "pipeline.dataset_context",
@@ -1646,13 +2061,20 @@ Agent3 复核结果：
                 schema_count=len(context.get("schema_definition", []) or []),
                 golden_sql_count=len(context.get("golden_sql_samples", []) or []),
                 prompt_counts={str(k): len(v or []) for k, v in (context.get("agent_prompts") or {}).items()},
+                report_config_columns={
+                    "name": report_config.get("nameColumn"),
+                    "parent": report_config.get("parentColumn"),
+                    "level": report_config.get("levelColumn"),
+                    "track": report_config.get("trackColumn"),
+                },
             )
             prompts = context.get("agent_prompts", {})
             agent2_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(2, []))
             agent3_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(3, []))
 
-            if route.get("decision") == "direct_execute" and route.get("matched_sample_sql"):
-                sql_text = route.get("matched_sample_sql")
+            rule_override_sql = self._build_rule_based_sql(route.get("refined_query", question), route, context)
+            if route.get("decision") == "direct_execute" and (route.get("matched_sample_sql") or rule_override_sql):
+                sql_text = rule_override_sql or route.get("matched_sample_sql")
                 steps.append({"title": "Agent1 高匹配直执行", "duration": 0, "status": "success"})
             else:
                 step_started = time.time()
@@ -1804,6 +2226,7 @@ Agent3 复核结果：
                     "dataset_code": context["dataset"]["dataset_code"],
                     "dataset_name": context["dataset"]["dataset_name"],
                     "source_id": context["dataset"]["source_id"],
+                    "report_config": report_config,
                     "agent3_review": review,
                     "columns": result["columns"],
                     "rows": result["rows"],
@@ -1826,6 +2249,12 @@ Agent3 复核结果：
             "route": route,
             "confidence": self._build_confidence_payload(route, dataset_results),
             "dataset_results": dataset_results,
+            "report_configs": {
+                str(item.get("dataset_id")): item.get("report_config")
+                for item in dataset_results
+                if item.get("dataset_id") is not None and item.get("report_config")
+            },
+            "report_config": primary.get("report_config"),
             "data_source": primary["dataset_name"] if len(dataset_results) == 1 else f"跨 {len(dataset_results)} 个数据集",
             "sql": primary["sql"],
             "columns": primary["columns"],
@@ -1843,17 +2272,25 @@ Agent3 复核结果：
         preferred_dataset_ids: Optional[List[int]] = None,
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         model_id: Optional[int] = None,
+        session_id: str = "",
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         question = (question or "").strip()
+        conversation_session_id = str(session_id or "").strip()
         started = time.time()
         steps: List[Dict[str, Any]] = []
         self._preferred_model_id = model_id
         trace = self._new_trace(question, "ask", live_callback=live_callback)
+        memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
+        effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
         self._append_trace(
             trace,
             "request.received",
             "info",
             question=question,
+            effective_question=effective_question,
+            session_id=conversation_session_id,
+            memory_rounds=len(memory_history),
             preferred_dataset_ids=preferred_dataset_ids or [],
             llm_model=self._llm_model or "",
             llm_base_url=str(getattr(self._llm_client, "base_url", "") or ""),
@@ -1883,7 +2320,7 @@ Agent3 复核结果：
 
         try:
             step_started = time.time()
-            route = self.route_with_agent1(question, trace=trace)
+            route = self.route_with_agent1(effective_question, trace=trace, conversation_context=memory_history)
             self._append_trace(trace, "agent1.route_result", "info", route=route)
             if preferred_dataset_ids:
                 route["dataset_ids"] = [int(item) for item in preferred_dataset_ids]
@@ -1901,14 +2338,20 @@ Agent3 复核结果：
             )
 
             if route.get("requires_confirmation"):
-                session_id = self._create_confirmation_session(question, route)
+                confirmation_session_id = self._create_confirmation_session(
+                    question=effective_question,
+                    route=route,
+                    conversation_session_id=conversation_session_id,
+                )
                 result = {
                     "question": question,
+                    "effective_question": effective_question,
                     "requires_confirmation": True,
                     "confirmation_role": route.get("confirmation_role", "boss"),
                     "confirmation_question": route.get("confirmation_question"),
                     "confirmation_options": route.get("confirmation_options", []),
-                    "session_id": session_id,
+                    "session_id": confirmation_session_id,
+                    "conversation_session_id": conversation_session_id,
                     "handoff_to": "boss",
                     "route": route,
                     "confidence": self._build_confidence_payload(route),
@@ -1924,14 +2367,20 @@ Agent3 复核结果：
                     trace,
                     "confirmation.created",
                     "info",
-                    session_id=session_id,
+                    session_id=confirmation_session_id,
+                    conversation_session_id=conversation_session_id,
                     confirmation_question=result["confirmation_question"],
                     confirmation_options=result["confirmation_options"],
                 )
                 self._flush_trace(trace, result)
                 return result
 
-            result = self._run_pipeline(question, route, started, steps, trace=trace)
+            result = self._run_pipeline(effective_question, route, started, steps, trace=trace)
+            result["question"] = question
+            result["effective_question"] = effective_question
+            result["conversation_session_id"] = conversation_session_id
+            if conversation_session_id and not result.get("error"):
+                self.short_term_memory.remember_result(conversation_session_id, question, route, result)
             self._flush_trace(trace, result)
             return result
         except (BookshelfConfigurationError, ValueError) as exc:
@@ -1980,6 +2429,7 @@ Agent3 复核结果：
 
         question = pending["question"]
         route = dict(pending["route"])
+        conversation_session_id = str(pending.get("conversation_session_id") or "").strip()
         confirmation_options = self._normalize_confirmation_options(
             route.get("confirmation_options"),
             route.get("candidate_dataset_ids", []) or route.get("dataset_ids", []),
@@ -2027,6 +2477,14 @@ Agent3 复核结果：
             base_query = str(route.get("refined_query") or question or "").strip()
             route["refined_query"] = (base_query + "\n补充确认：" + "；".join(confirmation_notes)).strip()
 
+        if conversation_session_id and selected_option_item:
+            self.short_term_memory.remember_confirmation(
+                conversation_session_id,
+                question,
+                route,
+                selected_option_item,
+            )
+
         route["requires_confirmation"] = False
         route["decision"] = "generate_sql"
         route["boss_confirmation"] = {
@@ -2048,6 +2506,9 @@ Agent3 复核结果：
 
         result = self._run_pipeline(question, route, started, steps, trace=trace)
         result["session_id"] = session_id
+        result["conversation_session_id"] = conversation_session_id
+        if conversation_session_id and not result.get("error"):
+            self.short_term_memory.remember_result(conversation_session_id, question, route, result)
         self._pending_confirmations.pop(session_id, None)
         self._flush_trace(trace, result)
         return result

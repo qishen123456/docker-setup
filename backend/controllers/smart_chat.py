@@ -68,6 +68,8 @@ def smart_chat():
                 }
             )
         question = (payload.get("question") or "").strip()
+        session_id = (payload.get("session_id") or "").strip()
+        conversation_history = payload.get("conversation_history")
         selected_dataset_ids = payload.get("selected_dataset_ids")
         if not question:
             _append_controller_debug("smart_chat.request.reject", reason="empty_question")
@@ -81,7 +83,12 @@ def smart_chat():
             question=question,
             selected_dataset_ids=selected_dataset_ids,
         )
-        result = four_agent_ask_service.ask(question, preferred_dataset_ids=selected_dataset_ids)
+        result = four_agent_ask_service.ask(
+            question,
+            preferred_dataset_ids=selected_dataset_ids,
+            session_id=session_id,
+            conversation_history=conversation_history if isinstance(conversation_history, list) else None,
+        )
         _append_controller_debug(
             "smart_chat.service.ask.done",
             has_error=bool(result.get("error")),
@@ -109,6 +116,8 @@ def smart_chat_stream():
     started = time.time()
     payload = request.get_json() or {}
     question = (payload.get("question") or "").strip()
+    session_id = (payload.get("session_id") or "").strip()
+    conversation_history = payload.get("conversation_history")
     selected_dataset_ids = payload.get("selected_dataset_ids")
     model_id = payload.get("model_id")  # None = AUTO (use default)
 
@@ -138,6 +147,8 @@ def smart_chat_stream():
                     preferred_dataset_ids=selected_dataset_ids,
                     live_callback=emit,
                     model_id=model_id,
+                    session_id=session_id,
+                    conversation_history=conversation_history if isinstance(conversation_history, list) else None,
                 )
                 result["total_duration"] = round(time.time() - started, 2)
                 # Attach report_config if dataset was identified

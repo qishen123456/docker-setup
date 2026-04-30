@@ -72,7 +72,8 @@ def get_config(dataset_id: int) -> dict | None:
             row = cur.fetchone()
             if row:
                 val = row["config_json"]
-                return json.loads(val) if isinstance(val, str) else val
+                config = json.loads(val) if isinstance(val, str) else val
+                return merge_with_default_config(config)
             return None
     except Exception as exc:
         logger.warning("Failed to get report config for dataset %s: %s", dataset_id, exc)
@@ -114,13 +115,80 @@ def delete_config(dataset_id: int) -> bool:
         return False
 
 
+def merge_with_default_config(config: dict | None) -> dict:
+    """Merge a saved config with the latest default shape.
+
+    Existing deployments may have only column mapping + metrics. Newer logic also
+    needs SQL projection contracts and analysis dimensions, so older configs should
+    inherit those defaults without forcing users to recreate them.
+    """
+    default = get_default_config()
+    if not isinstance(config, dict):
+        return default
+    merged = {**default, **config}
+    if isinstance(default.get("sqlOutputContract"), dict) or isinstance(config.get("sqlOutputContract"), dict):
+        merged["sqlOutputContract"] = {
+            **(default.get("sqlOutputContract") or {}),
+            **(config.get("sqlOutputContract") or {}),
+        }
+    if isinstance(default.get("sourceFields"), dict) or isinstance(config.get("sourceFields"), dict):
+        merged["sourceFields"] = {
+            **(default.get("sourceFields") or {}),
+            **(config.get("sourceFields") or {}),
+        }
+    return merged
+
+
 def get_default_config() -> dict:
-    """Return the syyb default config (equivalent to the current hardcoded constants)."""
+    """Return the syyb default config.
+
+    This config has two jobs:
+      1. Tell Agent2 how raw source fields should be projected into standard report columns.
+      2. Tell Agent4/frontend how rows with those standard columns should be interpreted.
+
+    The source table does not need to physically contain 节点名称/上级名称/层级/条线;
+    Agent2 should create them in SQL according to sqlOutputContract and analysisDimensions.
+    """
     return {
         "nameColumn": "节点名称",
         "parentColumn": "上级名称",
         "trackColumn": "条线",
         "levelColumn": "层级",
+        "businessContext": "商用事业部 2026 年经营分析。源数据来自 angel_group_data.fields JSONB，组织层级和父子关系由 SQL 投影生成，而不是源表物理列。",
+        "sourceFields": {
+            "organization": ["分公司", "代表处", "业务代表"],
+            "time": ["当前年"],
+            "metrics": ["总任务（金额）", "年度开单金额"],
+        },
+        "sqlOutputContract": {
+            "requiredColumns": ["条线", "层级", "节点名称", "上级名称"],
+            "metricColumns": ["总任务金额", "年度开单金额", "达成率", "剩余任务金额"],
+            "notes": [
+                "源表没有 节点名称/上级名称/层级/条线 时，必须在 SQL 中用 SELECT 别名生成这些标准列。",
+                "区域链路按 商用事业部 -> 分公司 -> 代表处 -> 业务代表 输出。",
+                "行业链路按 商用事业部 -> 业务部 -> 业务代表 输出。",
+                "统计上级节点时必须做层级隔离，不能把下级明细行重复累加到上级汇总行。",
+                "如用户查询某个分公司，应同时返回该分公司、其代表处、以及代表处下业务代表，方便前端动态下钻。",
+            ],
+        },
+        "analysisDimensions": [
+            {
+                "key": "regional_chain",
+                "label": "区域管理链条",
+                "path": ["商用事业部", "分公司", "代表处", "业务代表"],
+                "sourceFields": ["分公司", "代表处", "业务代表"],
+                "trackValue": "区域条线",
+                "purpose": "分析各区域市场覆盖深度、分公司/代表处任务完成、业务代表风险和优秀样本。",
+            },
+            {
+                "key": "industry_chain",
+                "label": "行业管理链条",
+                "path": ["商用事业部", "业务部", "业务代表"],
+                "sourceFields": ["分公司", "业务代表"],
+                "trackValue": "行业条线",
+                "purpose": "分析餐饮、工业医疗、公共办公等行业线专业产出和个人产能。",
+            },
+        ],
         "metrics": [
             {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
             {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
@@ -140,4 +208,5 @@ def get_default_config() -> dict:
         ],
         "sections": ["core", "group", "risk", "strategy"],
         "reportTitle": "经营分析报告",
+        "agentReportGuidance": "报告结构由 SQL 标准列和动态树决定。Agent4 不维护组织树，只基于指标、风险节点、优秀节点和 analysisDimensions 输出洞察、风险解释和建议。",
     }

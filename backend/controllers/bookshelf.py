@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
 from config_manager import get_default_datasource, get_datasource_by_id, read_json
+import dataset_report_config as report_config_store
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
@@ -596,6 +597,7 @@ def save_bookshelf_dataset_full(dataset_id: int):
         common_questions = payload.get("common_questions") or []
         regression_cases = payload.get("regression_cases") or []
         external_configs = payload.get("external_configs") or []
+        report_config = payload.get("report_config") or None
 
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             _ensure_optional_tables(cur)
@@ -867,6 +869,9 @@ def save_bookshelf_dataset_full(dataset_id: int):
                 )
 
             cur.execute("UPDATE bs_datasets SET updated_at = NOW() WHERE id = %s;", (dataset_id,))
+
+        if isinstance(report_config, dict) and report_config:
+            report_config_store.upsert_config(dataset_id, report_config)
 
         return jsonify({"message": "bookshelf content saved", "dataset_id": dataset_id})
     except BookshelfConfigurationError as exc:
