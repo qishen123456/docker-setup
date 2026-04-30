@@ -66,6 +66,85 @@ export const updateAgent = (agentNo, data) => api.put(`/agents/${agentNo}`, data
 
 export const sendSmartChat = (question, signal, selectedDatasetIds) =>
   api.post('/smart-chat', { question, selected_dataset_ids: selectedDatasetIds || undefined }, { signal })
+export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent) => {
+  const response = await fetch('/api/smart-chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({
+      question,
+      selected_dataset_ids: selectedDatasetIds || undefined,
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    let message = `请求失败 (${response.status})`
+    try {
+      const payload = await response.json()
+      message = payload?.error || message
+    } catch {
+      // ignore parse error
+    }
+    ElMessage.error(message)
+    const error = new Error(message)
+    error.response = { data: { error: message }, status: response.status }
+    throw error
+  }
+
+  if (!response.body) {
+    const error = new Error('浏览器当前无法建立实时执行流。')
+    ElMessage.error(error.message)
+    throw error
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  const emitBufferedFrames = () => {
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() || ''
+
+    frames.forEach((frame) => {
+      const lines = frame
+        .split('\n')
+        .map(line => line.replace(/\r$/, ''))
+        .filter(Boolean)
+      if (!lines.length) return
+
+      let eventName = 'message'
+      const dataLines = []
+      lines.forEach((line) => {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim())
+        }
+      })
+
+      if (!dataLines.length) return
+      try {
+        const payload = JSON.parse(dataLines.join('\n'))
+        onEvent?.(eventName, payload)
+      } catch {
+        // ignore malformed stream payload
+      }
+    })
+  }
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    emitBufferedFrames()
+  }
+
+  buffer += decoder.decode()
+  emitBufferedFrames()
+}
 export const confirmByBoss = (payload) => api.post('/smart-chat/confirm-by-boss', payload)
 export const getVannaStatus = () => api.get('/bookshelves/health')
 

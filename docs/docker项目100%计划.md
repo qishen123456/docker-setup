@@ -4,6 +4,41 @@
 > **范围**：所有前后端功能点、所有数据流、所有配置项  
 > **验证**：每个功能点都有对应的测试方案
 
+## 当前状态（v2.0 已落地）
+
+### 已完成的 v2.0 优化方案
+
+| 项目 | 状态 | 实际落地 |
+|------|------|---------|
+| Docker Compose 目录挂载 init SQL | ✅ | `docker/postgres/init/001~003` 已接管首次 PG 初始化 |
+| backend bootstrap 全链路启动 | ✅ | `backend/bootstrap.py` 已实现 wait PG → init config → import runtime config → migrations → import bundles → exec app |
+| runtime config 导出/导入 | ✅ | `backend/export_runtime_config.py` / `backend/import_runtime_config.py` 已完成 |
+| 用户机一键部署增强 | ✅ | `deploy.ps1` 已支持 `-ForceImport`、`-ForceConfig`、`-RunTests` |
+| 完整备份脚本 | ✅ | `scripts/backup_all.py` 已完成 |
+| 真实接口集成测试 | ✅ | `scripts/integration_test.py` 已按已注册蓝图落地 |
+| 部署自检脚本 | ✅ | `scripts/verify_deployment.py` 已落地 |
+| 文档化部署流程 | ✅ | `README.md`、`DEPLOY.md` 已切到 v2.0 流程 |
+
+### 计划与实际的关键差异修正
+
+1. 实际注册的不是 12 个控制器，而是 7 个 blueprint：`dashboard`、`datasources`、`ai_models`、`feishu_sync`、`smart_chat`、`bookshelf`、`agents`。
+2. 实际可用路由不是 `/api/bookshelf/*`，而是 `/api/bookshelves/*`。
+3. 飞书同步实际路由不是 `/api/feishu/*`，而是 `/api/feishu-sync/*`。
+4. 智能问答当前生产入口不是 `/api/chat`，而是 `/api/smart-chat`；并额外暴露 `/api/data-sources`。
+5. `config_manager.py` 已天然支持容器内 `/app/config`，无需重构。
+
+### 用户机器 100% 复刻标准流程（v2.0）
+
+```powershell
+git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+cd smartask
+Copy-Item .env.example .env
+# 编辑 .env，填入真实密钥
+.\deploy.ps1 -RunTests
+```
+
+如果管理员直接提供了可用 `.env`，则把它放到项目根目录后直接执行最后一步即可。
+
 ---
 
 ## 目录
@@ -42,17 +77,17 @@
 
 | 视图 | 文件 | 功能描述 | 依赖后端 API |
 |------|------|----------|-------------|
-| **SmartAsk** | `views/SmartAsk.vue` | 主智能问答界面 | `/api/chat/*`, `/api/smart-chat/*` |
-| **Chat** | `views/Chat.vue` | 聊天界面 | `/api/chat/*` |
-| **DatasetManagement** | `views/DatasetManagement.vue` | 数据集管理 | `/api/bookshelf/datasets`, `/api/bookshelf/import` |
-| **Bookshelves** | `views/Bookshelves.vue` | 知识库管理 | `/api/bookshelf/*` |
+| **SmartAsk** | `views/SmartAsk.vue` | 主智能问答界面 | `/api/smart-chat/*`, `/api/data-sources` |
+| **Chat** | `views/Chat.vue` | 聊天界面 | 未注册到当前 Docker v2 主路径 |
+| **DatasetManagement** | `views/DatasetManagement.vue` | 数据集管理 | `/api/bookshelves/datasets`, `/api/bookshelves/datasets/{id}/full` |
+| **Bookshelves** | `views/Bookshelves.vue` | 知识库管理 | `/api/bookshelves/*` |
 | **Databases** | `views/Databases.vue` | 数据源配置 | `/api/datasources/*` |
 | **AIModels** | `views/AIModels.vue` | AI 模型配置 | `/api/ai-models/*` |
 | **AgentManagement** | `views/AgentManagement.vue` | Agent 管理 | `/api/agents/*` |
-| **FeishuSync** | `views/FeishuSync.vue` | 飞书同步 | `/api/feishu/*` |
-| **Training** | `views/Training.vue` | 训练管理 | `/api/training/*` |
-| **AnalysisPrompts** | `views/AnalysisPrompts.vue` | 分析提示词 | `/api/analysis/*` |
-| **SqlPromptManager** | `views/SqlPromptManager.vue` | SQL 提示词 | `/api/sql-prompts/*` |
+| **FeishuSync** | `views/FeishuSync.vue` | 飞书同步 | `/api/feishu-sync/*` |
+| **Training** | `views/Training.vue` | 训练管理 | 未注册到当前 Docker v2 主路径 |
+| **AnalysisPrompts** | `views/AnalysisPrompts.vue` | 分析提示词 | 未注册到当前 Docker v2 主路径 |
+| **SqlPromptManager** | `views/SqlPromptManager.vue` | SQL 提示词 | 未注册到当前 Docker v2 主路径 |
 
 ### 1.3 核心数据流矩阵
 
@@ -60,13 +95,13 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         前端用户操作                               │
 ├─────────────────────────────────────────────────────────────────────┤
-│  1. 新建数据集     →  POST /api/bookshelf/datasets                   │
+│  1. 新建数据集     →  POST /api/bookshelves/datasets                  │
 │  2. 保存数据源     →  POST /api/datasources                        │
 │  3. 配置AI模型     →  POST /api/ai-models                          │
-│  4. 发起问答       →  POST /api/chat                               │
-│  5. 查看同步状态   →  GET  /api/feishu/sync-configs                  │
-│  6. 编辑提示词     →  PUT  /api/bookshelf/datasets/{id}/prompts      │
-│  7. 导入数据包     →  POST /api/bookshelf/import                     │
+│  4. 发起问答       →  POST /api/smart-chat                         │
+│  5. 查看同步状态   →  GET  /api/feishu-sync                         │
+│  6. 编辑数据集全量 →  PUT  /api/bookshelves/datasets/{id}/full       │
+│  7. 导入历史结构   →  POST /api/bookshelves/datasets/{id}/import-legacy│
 │  8. 导出数据包     →  前端触发后端 export 脚本                      │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
@@ -125,14 +160,14 @@
      ▼ (导出)
 ┌─────────────────────────────────────┐
 │ bookshelf_bundle.json              │
-│ config_bundle.json                 │
+│ runtime_config_bundle.json         │
 │ angel_group_data_bundle.json       │
 └─────────────────────────────────────┘
      │
      ▼ (Git 提交 / 手动复制)
 生产/新环境
      │
-     ▼ (deploy.ps1 自动导入)
+    ▼ (deploy.ps1 / bootstrap.py 自动导入)
 Docker 容器启动
      │
      ▼ (bootstrap.py 处理)
@@ -146,11 +181,12 @@ Config 恢复
 
 ### 3.1 Docker Compose 配置 (docker-compose.yml)
 
-**现状分析**:
+**现状分析（v2.0 已完成）**:
 - ✅ 已配置 3 服务 (postgres, backend, frontend)
 - ✅ 已配置健康检查
 - ✅ 已配置 depends_on
-- ⚠️ init-scripts 挂载需要优化为目录挂载
+- ✅ init-scripts 已优化为目录挂载
+- ✅ 已增加 `./config` 与 `./backend/imports` 挂载
 
 **改造步骤**:
 
@@ -254,13 +290,14 @@ SMARTASK_BOOTSTRAP_FORCE_IMPORT=0  # 设为1强制重新导入数据
 
 ### 4.1 启动引导脚本 (bootstrap.py)
 
-**职责清单**:
-- [ ] 等待 PostgreSQL 就绪 (轮询健康检查)
-- [ ] 执行数据库迁移 (migrations/*.sql)
-- [ ] 导入 Bookshelf 数据包 (幂等，存在则跳过)
-- [ ] 导入运行时配置包 (config_bundle.json)
-- [ ] 导入业务数据包 (angel_group_data)
-- [ ] 启动主应用 (app.py)
+**职责清单（v2.0 实际状态）**:
+- [x] 等待 PostgreSQL 就绪 (轮询健康检查)
+- [x] 初始化默认 JSON 配置
+- [x] 执行数据库迁移 (migrations/*.sql)
+- [x] 导入 Bookshelf 数据包 (幂等，存在则跳过)
+- [x] 导入运行时配置包 (runtime_config_bundle.json)
+- [x] 导入业务数据包 (angel_group_data)
+- [x] 启动主应用 (app.py)
 
 **关键代码结构**:
 ```python
@@ -271,22 +308,25 @@ def main():
     # 1. 等待 PG
     wait_for_postgres()
     
-    # 2. 执行迁移
+    # 2. 初始化默认配置
+    init_default_configs()
+
+    # 3. 导入运行时配置
+    import_runtime_config_if_present()
+
+    # 4. 执行迁移
     run_migrations()
     
-    # 3. 导入数据包 (按优先级)
+    # 5. 导入数据包 (按优先级)
     if bookshelf_bundle.exists():
         import_bookshelf_bundle()  # 幂等检查
     else:
         seed_default_dataset()
     
-    if config_bundle.exists():
-        import_runtime_config()  # 跳过已存在文件
-    
     if data_bundle.exists():
         import_angel_group_data()
-    
-    # 4. 启动应用
+
+    # 6. 启动应用
     start_app()
 ```
 
@@ -302,7 +342,7 @@ CMD ["python", "bootstrap.py"]
 |------|------|------|--------|---------|
 | `export_bookshelf_bundle.py` | 导出 PG 元数据 | `bookshelf_bundle.json` | - | 备份、迁移 |
 | `import_bookshelf_bundle.py` | 导入 PG 元数据 | - | ✅ (清表重建) | 部署初始化 |
-| `export_runtime_config.py` | 导出 JSON 配置 | `config_bundle.json` | - | 备份 |
+| `export_runtime_config.py` | 导出 JSON 配置 | `runtime_config_bundle.json` | - | 备份 |
 | `import_runtime_config.py` | 导入 JSON 配置 | - | ✅ (跳过已存在) | 部署初始化 |
 | `export_angel_group_data.py` | 导出业务数据 | `angel_group_data.json` | - | 备份 |
 | `import_angel_group_data.py` | 导入业务数据 | - | ✅ (UPSERT) | 部署初始化 |
@@ -352,22 +392,28 @@ curl http://localhost:5002/api/datasources  # 仍能看到 id=2
 
 | 端点 | 功能 | 测试要点 |
 |------|------|---------|
-| `GET /api/bookshelf/datasets` | 列表 | 返回含完整元数据 |
-| `POST /api/bookshelf/datasets` | 创建 | 创建后 PG 表有记录 |
-| `GET /api/bookshelf/datasets/{id}` | 详情 | 含 LLD、DDL、Golden SQL |
-| `PUT /api/bookshelf/datasets/{id}` | 更新 | 更新后前端能看到变化 |
-| `POST /api/bookshelf/import` | 导入 | 支持 bundle.json 导入 |
-| `GET /api/bookshelf/export/{id}` | 导出 | 导出文件可重新导入 |
-| `POST /api/bookshelf/{id}/prompts` | 保存提示词 | Agent 1-4 提示词持久化 |
-| `GET /api/bookshelf/{id}/quality` | 质量评分 | 返回完整评分报告 |
+| `GET /api/bookshelves/datasets` | 列表 | 返回含完整元数据 |
+| `POST /api/bookshelves/datasets` | 创建 | 创建后 PG 表有记录 |
+| `GET /api/bookshelves/datasets/{id}/full` | 详情 | 含 LLD、DDL、Golden SQL、提示词 |
+| `PUT /api/bookshelves/datasets/{id}` | 更新 | 更新后前端能看到变化 |
+| `PUT /api/bookshelves/datasets/{id}/full` | 全量更新 | 可一次更新完整元数据 |
+| `POST /api/bookshelves/datasets/{id}/import-legacy` | 导入 | 支持 legacy 结构导入 |
+| `POST /api/bookshelves/datasets/{id}/cleanup-legacy` | 清理 | 清理 legacy 数据 |
+| `GET /api/bookshelves/health` | 健康检查 | 返回 bookshelf readiness |
 
 **关键测试 - 提示词持久化**:
 ```bash
-# 1. 保存 Agent 提示词
-curl -X POST http://localhost:5002/api/bookshelf/1/prompts \
+# 1. 查看数据集列表
+curl http://localhost:5002/api/bookshelves/datasets
+
+# 2. 读取数据集全量详情（含 agent_prompt_fragments）
+curl http://localhost:5002/api/bookshelves/datasets/1/full
+
+# 3. 通过 full 更新接口保存 Agent 提示词
+curl -X PUT http://localhost:5002/api/bookshelves/datasets/1/full \
   -H "Content-Type: application/json" \
   -d '{
-    "agent_prompts": [
+    "agent_prompt_fragments": [
       {"agent_no": 1, "prompt_content": "自定义Agent1提示词"},
       {"agent_no": 2, "prompt_content": "自定义Agent2提示词"},
       {"agent_no": 3, "prompt_content": "自定义Agent3提示词"},
@@ -375,14 +421,14 @@ curl -X POST http://localhost:5002/api/bookshelf/1/prompts \
     ]
   }'
 
-# 2. 验证 PG 存储
+# 4. 验证 PG 存储
 docker compose exec postgres psql -U postgres -c \
   "SELECT agent_no, LENGTH(prompt_content) FROM bs_agent_prompt_fragments WHERE dataset_id=1;"
 
-# 3. 导出 bundle
+# 5. 导出 bundle
 python backend/export_bookshelf_bundle.py
 
-# 4. 验证 bundle 包含提示词
+# 6. 验证 bundle 包含提示词
 cat backend/imports/bookshelf_bundle.json | grep -A2 "agent_prompt_fragments"
 
 # 5. 模拟新环境部署
@@ -393,23 +439,23 @@ cat backend/imports/bookshelf_bundle.json | grep -A2 "agent_prompt_fragments"
 
 | 端点 | 功能 | 测试场景 | 关键验证 |
 |------|------|---------|---------|
-| `POST /api/chat` | 完整问答 | 1. 有效问题<br>2. 无效问题<br>3. 复杂多表 | SQL 正确性、执行结果 |
-| `POST /api/chat/generate-sql` | 仅生成SQL | 同上 | 返回 SQL 不执行 |
-| `GET /api/chat/history` | 历史记录 | 有/无历史 | 返回数组 |
-| `GET /api/chat/vanna-status` | 就绪检查 | Bookshelf 初始化前/后 | ready=true/false |
+| `POST /api/smart-chat` | 完整问答 | 1. 有效问题<br>2. 无效问题<br>3. 复杂多表 | 主问答入口是否可用 |
+| `POST /api/smart-chat/stream` | 流式问答 | 同上 | SSE/流式是否正常 |
+| `POST /api/smart-chat/confirm-by-boss` | 确认执行 | 管理确认流 | 返回状态 |
+| `GET /api/data-sources` | 问答侧数据源列表 | 有/无历史 | 返回数组 |
 
 **问答流程端到端测试**:
 ```bash
 # 前提：已有数据集，Vanna 就绪
 
-# 1. 检查就绪状态
-curl http://localhost:5002/api/chat/vanna-status
-# 预期：{"ready": true, ...}
+# 1. 检查 bookshelf 就绪状态
+curl http://localhost:5002/api/bookshelves/health
+# 预期：HTTP 200
 
 # 2. 发起问答
-curl -X POST http://localhost:5002/api/chat \
+curl -X POST http://localhost:5002/api/smart-chat \
   -H "Content-Type: application/json" \
-  -d '{"question": "查询上个月销售额"}'
+  -d '{"question": "查询上个月销售额", "skip_execute": true}'
 
 # 预期响应结构：
 # {
@@ -421,9 +467,8 @@ curl -X POST http://localhost:5002/api/chat \
 #   }
 # }
 
-# 3. 验证历史记录已保存
-curl http://localhost:5002/api/chat/history?limit=5
-# 预期：包含刚才的问答
+# 3. 验证问答侧数据源接口可读
+curl http://localhost:5002/api/data-sources
 ```
 
 #### 4.3.4 AI Models Controller (AI 配置)
@@ -488,11 +533,11 @@ EXPOSE 80
 
 | 页面 | API 调用点 | 失败处理 | 验证方法 |
 |------|-----------|---------|---------|
-| **SmartAsk.vue** | `/api/chat` (POST) | 显示错误提示 | 发送测试问题 |
-| | `/api/chat/history` (GET) | 空列表 | 查看历史面板 |
+| **SmartAsk.vue** | `/api/smart-chat` (POST) | 显示错误提示 | 发送测试问题 |
+| | `/api/data-sources` (GET) | 空列表 | 查看历史面板 |
 | | `/api/datasources` (GET) | 提示配置 | 数据源下拉框 |
-| **DatasetManagement.vue** | `/api/bookshelf/datasets` (CRUD) | 表单验证错误 | 增删改查测试 |
-| | `/api/bookshelf/import` (POST) | 解析错误 | 上传 bundle |
+| **DatasetManagement.vue** | `/api/bookshelves/datasets` (CRUD) | 表单验证错误 | 增删改查测试 |
+| | `/api/bookshelves/datasets/{id}/full` (GET/PUT) | 解析错误 | 上传 bundle |
 | **Databases.vue** | `/api/datasources` (CRUD) | 连接测试失败 | 添加 PG 连接 |
 | | `/api/datasources/{id}/test` (POST) | 错误详情 | 测试连接按钮 |
 | **AIModels.vue** | `/api/ai-models` (CRUD) | Key 无效 | 添加 AI 配置 |
@@ -507,12 +552,12 @@ EXPOSE 80
 2. 确认 SmartAsk 页面加载
 3. 输入问题: "查询销售额"
 4. 观察：
-   - 前端发送 POST /api/chat
-   - 后端返回 SQL + 数据
-   - 前端渲染结果表格
+  - 前端发送 POST /api/smart-chat
+  - 后端返回问答结果或可解释错误
+  - 前端渲染结果区域
    - 思考过程可展开
 5. 验证：
-   - 查询历史已保存 (GET /api/chat/history)
+  - `/api/data-sources` 可读
    - 数据源选择正确
 ```
 
@@ -525,13 +570,11 @@ EXPOSE 80
    - 数据集名称: "测试销售数据"
    - 业务域: "销售部"
    - 数据源: 选择已配置的 PG
-4. 上传 LLD 文档
-5. 维护 DDL
-6. 维护数据字典
-7. 添加 3+ Golden SQL
-8. 配置 4 个 Agent 提示词
-9. 保存
-10. 验证：
+4. 维护 LLD / DDL / 数据字典
+5. 添加 3+ Golden SQL
+6. 配置 4 个 Agent 提示词
+7. 通过 full 接口保存
+8. 验证：
     - PG bs_datasets 表有新记录
     - bs_agent_prompt_fragments 有 4 条记录
     - 导出 bundle 包含这些数据
@@ -574,7 +617,7 @@ EXPOSE 80
 │                    (JSON Bundle)                             │
 ├─────────────────────────────────────────────────────────────┤
 │  bookshelf_bundle_{timestamp}.json                         │
-│  config_bundle_{timestamp}.json                              │
+│  runtime_config_bundle_{timestamp}.json                     │
 │  angel_group_data_{timestamp}.json                         │
 └─────────────────────────────────────────────────────────────┘
                               ↓ 版本控制 / 传输
@@ -610,7 +653,7 @@ EXPOSE 80
 }
 ```
 
-#### 6.2.2 config_bundle.json 结构
+#### 6.2.2 runtime_config_bundle.json 结构
 ```json
 {
   "version": 1,
@@ -643,7 +686,7 @@ EXPOSE 80
 
 ### 7.1 自动化测试脚本
 
-创建 `scripts/integration_test.py`:
+当前仓库中的 `scripts/integration_test.py` 已按 Docker v2 的真实路由实现：
 
 ```python
 """
@@ -729,18 +772,15 @@ def test_datasources_crud():
     return True, "Full CRUD cycle passed"
 
 def test_chat_with_dataset():
-    """测试智能问答（需要已配置的数据集）"""
-    # 前提：已有数据集
-    r = requests.get(f"{BASE_URL}/api/bookshelf/datasets")
-    if r.status_code != 200 or not r.json().get("datasets"):
-        return False, "No datasets available"
-    
-    # 发起问答
-    question = {"question": "测试问题"}
-    r = requests.post(f"{BASE_URL}/api/chat", json=question)
-    
-    # 即使返回错误也算 API 通
-    return r.status_code in [200, 400], f"Status: {r.status_code}"
+  """测试智能问答（需要已配置的数据集）"""
+  r = requests.get(f"{BASE_URL}/api/bookshelves/datasets")
+  if r.status_code != 200 or not r.json().get("datasets"):
+    return False, "No datasets available"
+
+  question = {"question": "测试问题", "skip_execute": True}
+  r = requests.post(f"{BASE_URL}/api/smart-chat", json=question)
+
+  return r.status_code in [200, 400, 422, 503], f"Status: {r.status_code}"
 
 def test_config_persistence():
     """测试配置持久化（需要重启后端）"""
@@ -764,7 +804,7 @@ def run_all_tests():
     result.add("Datasources CRUD", *test_datasources_crud())
     
     # Phase 3: 核心功能
-    result.add("Chat with Dataset", *test_chat_with_dataset())
+    result.add("Smart Chat with Dataset", *test_chat_with_dataset())
     
     # Phase 4: 持久化
     result.add("Config Persistence", *test_config_persistence())
@@ -774,6 +814,17 @@ def run_all_tests():
 if __name__ == "__main__":
     sys.exit(0 if run_all_tests() else 1)
 ```
+
+当前脚本额外覆盖：
+
+- `/api/dashboard`
+- `/api/ai-models`
+- `/api/bookshelves/health`
+- `/api/bookshelves/datasets/<id>/full`
+- `/api/agents`
+- `/api/feishu-sync`
+- `/api/data-sources`
+- 前端首页可达性
 
 ### 7.2 手动测试清单
 
@@ -794,9 +845,9 @@ if __name__ == "__main__":
 
 ### 8.1 部署前检查 (Pre-Deploy)
 
-- [ ] `.env` 文件已创建并填写所有必填项
+- [ ] `.env` 文件已由 `.env.example` 复制并填写所有必填项
 - [ ] `backend/imports/bookshelf_bundle.json` 存在（如有历史数据）
-- [ ] `backend/imports/config_bundle.json` 存在（如有自定义配置）
+- [ ] `backend/imports/runtime_config_bundle.json` 存在（如有自定义配置）
 - [ ] Docker Desktop 已启动
 - [ ] 端口 8080, 5002, 5433 未被占用
 
@@ -807,6 +858,7 @@ if __name__ == "__main__":
 - [ ] 后端容器成功连接到 PG
 - [ ] 前端容器能访问后端 API
 - [ ] bootstrap.py 完成数据导入（如有 bundle）
+- [ ] `scripts/integration_test.py` 执行通过或仅出现 AI 依赖型 SKIP
 
 ### 8.3 部署后验证 (Post-Deploy)
 
@@ -814,7 +866,7 @@ if __name__ == "__main__":
 - [ ] http://localhost:5002/api/health 返回 `{"status": "running"}`
 - [ ] 数据源列表 API 返回预期数据
 - [ ] 数据集列表 API 返回预期数据
-- [ ] 智能问答功能正常
+- [ ] `/api/smart-chat` 主链路正常
 - [ ] 所有功能模块页面可访问
 
 ### 8.4 灾难恢复验证 (DR Test)
@@ -822,7 +874,7 @@ if __name__ == "__main__":
 - [ ] 执行 `docker compose down -v` 模拟数据丢失
 - [ ] 重新执行 `deploy.ps1`
 - [ ] 验证所有数据从 bundle 恢复
-- [ ] 验证配置文件从 config_bundle 恢复
+- [ ] 验证配置文件从 runtime_config_bundle 恢复
 - [ ] 验证智能问答功能正常
 
 ---
@@ -837,7 +889,7 @@ if __name__ == "__main__":
 | `backend/export_runtime_config.py` | 新增 | 运行时配置导出 |
 | `backend/import_runtime_config.py` | 新增 | 运行时配置导入 |
 | `scripts/backup_all.py` | 新增 | 一键完整备份 |
-| `scripts/verify_deployment.py` | 新增 | 6轮部署验证 |
+| `scripts/verify_deployment.py` | 新增 | 部署验证入口 |
 | `scripts/integration_test.py` | 新增 | 集成测试套件 |
 | `backend/Dockerfile` | 修改 | CMD 改为 bootstrap.py |
 | `docker-compose.yml` | 优化 | 目录挂载方式 |
@@ -849,8 +901,8 @@ if __name__ == "__main__":
 
 ```bash
 # 部署
-.\deploy.ps1                    # Windows
-./deploy.sh                     # Linux/macOS
+.\deploy.ps1 -RunTests          # Windows 推荐：部署 + 集成测试
+.\deploy.ps1                    # Windows 仅部署
 
 # 更新
 .\update.ps1
@@ -895,6 +947,6 @@ docker compose exec postgres psql -U postgres
 
 ---
 
-**文档版本**: v1.0  
+**文档版本**: v2.0  
 **最后更新**: 2026-04-29  
-**状态**: 完整改造计划
+**状态**: v2.0 已落地并完成文档回写

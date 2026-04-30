@@ -2,11 +2,13 @@
 Smart chat controller for dataset-isolated four-agent orchestration.
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 import json
 import inspect
 import os
+import queue
 import sys
+import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,6 +30,20 @@ def _append_controller_debug(event: str, **payload):
     line.update(payload)
     with open(os.path.join(log_dir, "smart_chat_controller.jsonl"), "a", encoding="utf-8") as fh:
         fh.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def _json_safe(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
+def _sse_frame(event_name: str, payload: dict) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(_json_safe(payload), ensure_ascii=False)}\n\n"
 
 
 @smart_chat_bp.route("/api/smart-chat", methods=["POST"])
@@ -85,6 +101,77 @@ def smart_chat():
                 "total_duration": round(time.time() - started, 2),
             }
         ), 500
+
+
+@smart_chat_bp.route("/api/smart-chat/stream", methods=["POST"])
+def smart_chat_stream():
+    started = time.time()
+    payload = request.get_json() or {}
+    question = (payload.get("question") or "").strip()
+    selected_dataset_ids = payload.get("selected_dataset_ids")
+
+    if not question:
+        return jsonify({"error": "Question cannot be empty."}), 400
+    if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
+        return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+
+    def event_stream():
+        event_queue: "queue.Queue[dict]" = queue.Queue()
+        completed = threading.Event()
+
+        def emit(payload: dict) -> None:
+            event_queue.put(payload)
+
+        def run_ask() -> None:
+            try:
+                result = four_agent_ask_service.ask(
+                    question,
+                    preferred_dataset_ids=selected_dataset_ids,
+                    live_callback=emit,
+                )
+                result["total_duration"] = round(time.time() - started, 2)
+                event_queue.put({"type": "result", "result": result})
+            except Exception as exc:
+                event_queue.put(
+                    {
+                        "type": "result",
+                        "result": {
+                            "error": f"smart-chat failed: {exc}",
+                            "total_duration": round(time.time() - started, 2),
+                        },
+                    }
+                )
+            finally:
+                completed.set()
+
+        worker = threading.Thread(target=run_ask, daemon=True)
+        worker.start()
+        yield _sse_frame("ready", {"ok": True, "question": question})
+
+        while not completed.is_set() or not event_queue.empty():
+            try:
+                item = event_queue.get(timeout=1.0)
+            except queue.Empty:
+                yield _sse_frame("heartbeat", {"time": time.time()})
+                continue
+
+            item_type = str(item.get("type") or "")
+            if item_type == "trace":
+                yield _sse_frame("trace", item)
+                continue
+            if item_type == "summary":
+                yield _sse_frame("summary", item)
+                continue
+            if item_type == "result":
+                yield _sse_frame("result", item.get("result") or {})
+                break
+
+        yield _sse_frame("done", {"ok": True})
+
+    response = Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
 
 
 @smart_chat_bp.route("/api/smart-chat/confirm-by-boss", methods=["POST"])

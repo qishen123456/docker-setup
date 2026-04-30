@@ -1947,15 +1947,9 @@ onMounted(async () => {
 
   if (session.state.selectedDatasetId) datasetId.value = session.state.selectedDatasetId
 
-  // 恢复上次结果
-  if (session.state.result && session.state.question) {
-    messages.push({ id: ++msgCounter, role: 'user', content: session.state.question })
-    messages.push({ id: ++msgCounter, role: 'ai', loading: false, data: session.state.result })
-    showPanel.value = true
-    nextTick(() => {
-      scrollChat('auto')
-      scrollPanel('auto')
-    })
+  // 页面重新打开时不自动回灌旧结果；历史恢复仍通过显式操作触发。
+  if (session.state.result || session.state.question || session.state.logs?.length) {
+    session.clearRecoveredSessionResult()
   }
 })
 

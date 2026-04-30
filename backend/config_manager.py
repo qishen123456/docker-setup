@@ -316,19 +316,36 @@ def _apply_env_ai_model_overrides(models: list) -> list:
         result = [_build_default_ai_model()]
 
     target = next((item for item in result if item.get('is_default')), None) or result[0]
+    env_api_key = _env_text('SMARTASK_AI_API_KEY', '')
+    env_label = _env_text('SMARTASK_AI_LABEL', '')
+    env_provider = _env_text('SMARTASK_AI_PROVIDER', '')
+    env_model = _env_text('SMARTASK_AI_MODEL', '')
+    env_base_url = _env_text('SMARTASK_AI_BASE_URL', '')
+    has_connection_override = any((env_provider, env_model, env_base_url))
+
     target.update({
-        "name": _env_text('SMARTASK_AI_LABEL', target.get('name', '默认模型')),
-        "provider": _env_text('SMARTASK_AI_PROVIDER', target.get('provider', 'custom')),
-        "model": _env_text('SMARTASK_AI_MODEL', target.get('model', '')),
-        "base_url": _env_text('SMARTASK_AI_BASE_URL', target.get('base_url', '')),
+        "name": env_label or target.get('name', '默认模型'),
         "is_active": True,
         "is_default": True,
         "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     })
 
-    env_api_key = _env_text('SMARTASK_AI_API_KEY', '')
+    # 只有在提供了完整凭证时才允许环境变量覆盖模型连接信息，
+    # 避免把旧 API Key 和新的 provider/base_url/model 拼成一组错误配置。
     if env_api_key:
+        target.update({
+            "provider": env_provider or target.get('provider', 'custom'),
+            "model": env_model or target.get('model', ''),
+            "base_url": env_base_url or target.get('base_url', ''),
+        })
         target['api_key_b64'] = encode_secret(env_api_key)
+    elif not has_connection_override:
+        target.update({
+            "provider": env_provider or target.get('provider', 'custom'),
+            "model": env_model or target.get('model', ''),
+            "base_url": env_base_url or target.get('base_url', ''),
+        })
+
 
     for item in result:
         if item is not target:

@@ -46,7 +46,7 @@ from controllers.smart_chat import smart_chat_bp
 
 init_default_configs()
 APP_CONFIG = get_app_config()
-BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", "5001"))
+BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", "5002"))
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False

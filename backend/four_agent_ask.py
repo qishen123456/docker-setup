@@ -5,7 +5,7 @@ import re
 import sys
 import time
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from openai import OpenAI
@@ -16,7 +16,7 @@ if CURRENT_DIR not in sys.path:
 
 from agent_registry import get_agent
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
-from config_manager import get_default_ai_model
+from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from datasource_router import router as datasource_router
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile
 
@@ -73,7 +73,12 @@ class FourAgentAskService:
             return text
         return text[:limit] + f"\n...[truncated {len(text) - limit} chars]"
 
-    def _new_trace(self, question: str, entry: str) -> Dict[str, Any]:
+    def _new_trace(
+        self,
+        question: str,
+        entry: str,
+        live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> Dict[str, Any]:
         return {
             "trace_id": str(uuid4()),
             "entry": entry,
@@ -82,6 +87,7 @@ class FourAgentAskService:
             "model": self._llm_model or "",
             "base_url": getattr(self._llm_client, "base_url", "") if self._llm_client else "",
             "events": [],
+            "_live_callback": live_callback,
         }
 
     def _write_trace_line(self, payload: Dict[str, Any]) -> None:
@@ -89,6 +95,28 @@ class FourAgentAskService:
             os.makedirs(os.path.dirname(self._trace_file_path), exist_ok=True)
             with open(self._trace_file_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+    @staticmethod
+    def _build_trace_snapshot(trace: Dict[str, Any], include_result: bool = False) -> Dict[str, Any]:
+        snapshot = {
+            key: value
+            for key, value in trace.items()
+            if not str(key).startswith("_") and (include_result or key != "result")
+        }
+        if not include_result:
+            snapshot.pop("result", None)
+        return snapshot
+
+    def _emit_live_trace(self, trace: Optional[Dict[str, Any]], payload: Dict[str, Any]) -> None:
+        if not trace:
+            return
+        callback = trace.get("_live_callback")
+        if not callback:
+            return
+        try:
+            callback(payload)
         except Exception:
             pass
 
@@ -113,13 +141,27 @@ class FourAgentAskService:
                 "event": event,
             }
         )
+        self._emit_live_trace(
+            trace,
+            {
+                "type": "trace",
+                "trace_id": trace.get("trace_id"),
+                "entry": trace.get("entry"),
+                "question": trace.get("question"),
+                "model": trace.get("model"),
+                "base_url": trace.get("base_url"),
+                "event": event,
+            },
+        )
 
     def _flush_trace(self, trace: Optional[Dict[str, Any]], result: Optional[Dict[str, Any]] = None) -> None:
         if not trace:
             return
         if result is not None:
             trace["result"] = result
-        self._write_trace_line({"type": "summary", **trace})
+        summary_payload = {"type": "summary", **self._build_trace_snapshot(trace, include_result=True)}
+        self._write_trace_line(summary_payload)
+        self._emit_live_trace(trace, summary_payload)
 
     def _load_llm(self):
         config = get_default_ai_model()
@@ -127,11 +169,56 @@ class FourAgentAskService:
             self._llm_client = None
             self._llm_model = None
             return
+        self._activate_llm(config)
+
+    def _activate_llm(self, config: Dict[str, Any]) -> None:
         self._llm_model = config.get("model")
         self._llm_client = OpenAI(
             api_key=config.get("api_key", ""),
             base_url=config.get("base_url", "https://api.openai.com/v1"),
         )
+
+    def _candidate_llm_configs(self) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+        seen = set()
+
+        default_config = get_default_ai_model()
+        if default_config:
+            signature = (
+                str(default_config.get("model") or ""),
+                str(default_config.get("base_url") or ""),
+                str(default_config.get("api_key") or ""),
+            )
+            seen.add(signature)
+            candidates.append(default_config)
+
+        for item in get_ai_models():
+            if not item.get("is_active"):
+                continue
+            config = dict(item)
+            config["api_key"] = decode_secret(config.pop("api_key_b64", ""))
+            signature = (
+                str(config.get("model") or ""),
+                str(config.get("base_url") or ""),
+                str(config.get("api_key") or ""),
+            )
+            if signature in seen:
+                continue
+            seen.add(signature)
+            candidates.append(config)
+
+        return candidates
+
+    @staticmethod
+    def _should_retry_with_another_model(exc: Exception) -> bool:
+        return exc.__class__.__name__ in {
+            "AuthenticationError",
+            "PermissionDeniedError",
+            "APITimeoutError",
+            "APIConnectionError",
+            "InternalServerError",
+            "RateLimitError",
+        }
 
     @staticmethod
     def _safe_dict(value: Any) -> Dict[str, Any]:
@@ -563,42 +650,69 @@ class FourAgentAskService:
         agent_name: str = "",
     ) -> str:
         self._load_llm()
-        if not self._llm_client or not self._llm_model:
+        candidate_configs = self._candidate_llm_configs()
+        if not candidate_configs:
             raise RuntimeError("Default AI model is not configured.")
+        last_error: Optional[Exception] = None
 
-        started = time.time()
-        self._append_trace(
-            trace,
-            stage or "llm.call",
-            "request",
-            agent=agent_name,
-            provider="openai-compatible",
-            model=self._llm_model,
-            endpoint=f"{getattr(self._llm_client, 'base_url', '')}chat.completions.create",
-            max_tokens=max_tokens,
-            system_prompt=self._truncate_text(system_prompt, 12000),
-            user_prompt=self._truncate_text(user_prompt, 16000),
-        )
-        response = self._llm_client.chat.completions.create(
-            model=self._llm_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.1,
-            max_tokens=max_tokens,
-            timeout=180,
-        )
-        content = (response.choices[0].message.content or "").strip()
-        self._append_trace(
-            trace,
-            stage or "llm.call",
-            "response",
-            agent=agent_name,
-            duration_seconds=round(time.time() - started, 2),
-            response_text=self._truncate_text(content, 16000),
-        )
-        return content
+        for index, config in enumerate(candidate_configs, start=1):
+            self._activate_llm(config)
+            started = time.time()
+            self._append_trace(
+                trace,
+                stage or "llm.call",
+                "request",
+                agent=agent_name,
+                provider="openai-compatible",
+                model=self._llm_model,
+                endpoint=f"{getattr(self._llm_client, 'base_url', '')}chat.completions.create",
+                candidate_index=index,
+                candidate_count=len(candidate_configs),
+                max_tokens=max_tokens,
+                system_prompt=self._truncate_text(system_prompt, 12000),
+                user_prompt=self._truncate_text(user_prompt, 16000),
+            )
+            try:
+                response = self._llm_client.chat.completions.create(
+                    model=self._llm_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=max_tokens,
+                    timeout=180,
+                )
+                content = (response.choices[0].message.content or "").strip()
+                self._append_trace(
+                    trace,
+                    stage or "llm.call",
+                    "response",
+                    agent=agent_name,
+                    duration_seconds=round(time.time() - started, 2),
+                    response_text=self._truncate_text(content, 16000),
+                )
+                return content
+            except Exception as exc:
+                last_error = exc
+                retryable = index < len(candidate_configs) and self._should_retry_with_another_model(exc)
+                self._append_trace(
+                    trace,
+                    stage or "llm.call",
+                    "retry" if retryable else "error",
+                    agent=agent_name,
+                    duration_seconds=round(time.time() - started, 2),
+                    error=str(exc),
+                    candidate_index=index,
+                    candidate_count=len(candidate_configs),
+                    retry_with_next_model=retryable,
+                )
+                if not retryable:
+                    raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("No active AI model is available.")
 
     def _chat_json(
         self,
@@ -1703,11 +1817,16 @@ Agent3 复核结果：
             "total_duration": round(time.time() - started, 2),
         }
 
-    def ask(self, question: str, preferred_dataset_ids: Optional[List[int]] = None) -> Dict[str, Any]:
+    def ask(
+        self,
+        question: str,
+        preferred_dataset_ids: Optional[List[int]] = None,
+        live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> Dict[str, Any]:
         question = (question or "").strip()
         started = time.time()
         steps: List[Dict[str, Any]] = []
-        trace = self._new_trace(question, "ask")
+        trace = self._new_trace(question, "ask", live_callback=live_callback)
         self._append_trace(
             trace,
             "request.received",

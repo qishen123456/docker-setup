@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue'
-import { confirmByBoss, sendSmartChat } from '../api/index.js'
+import { confirmByBoss, sendSmartChatStream } from '../api/index.js'
 
 const STORAGE_KEY = 'smart-ask-session-v1'
 
@@ -234,8 +234,9 @@ const hydrate = () => {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw)
-    Object.assign(state, parsed)
-    state.logs = Array.isArray(parsed.logs) ? parsed.logs.map(createTimelineEvent) : []
+    // Only restore the question for convenience; never restore old results/logs
+    // to avoid the illusion of "cached instant answers"
+    if (parsed.question) state.question = parsed.question
   } catch {
     // ignore broken cache
   }
@@ -332,6 +333,212 @@ const beginPhaseStreaming = () => {
       stopPhaseTimer()
     }
   }, 1200)
+}
+
+const beginRealtimeStreaming = (question) => {
+  stopPhaseTimer()
+  replaceLogs([
+    {
+      key: 'stream-connect',
+      title: '连接真实执行流',
+      kind: 'system',
+      toolType: 'default',
+      status: 'running',
+      summary: '正在连接后端实时执行链路。',
+      detailLines: [
+        `开始执行任务：${question}`,
+        '正在与后端建立实时执行事件通道。',
+      ],
+    },
+  ])
+}
+
+const normalizeTraceStageKey = (stage) => {
+  const text = String(stage || '')
+  if (text === 'request.received') return 'trace-submit'
+  if (text.startsWith('agent1.') || text === 'route.override') return 'trace-route'
+  if (text.startsWith('confirmation.')) return 'trace-confirmation'
+  if (text === 'pipeline.dataset_context') return 'trace-context'
+  if (text.startsWith('agent2.') || text === 'pipeline.agent2_result') return 'trace-agent2'
+  if (text.startsWith('agent3.') || text === 'pipeline.agent3_result') return 'trace-agent3'
+  if (text.startsWith('datasource.execute_sql') || text === 'pipeline.execute_sql') return 'trace-execute'
+  if (text.startsWith('agent4.') || text === 'pipeline.agent4_result') return 'trace-agent4'
+  if (text.startsWith('request.')) return 'trace-request'
+  return `trace-${text.replace(/[^a-z0-9_-]+/gi, '-') || 'event'}`
+}
+
+const getTraceStageMeta = (stage) => {
+  const text = String(stage || '')
+  if (text === 'request.received') {
+    return { title: '开始执行任务', kind: 'system', toolType: 'default' }
+  }
+  if (text.startsWith('agent1.') || text === 'route.override') {
+    return { title: '理解问题口径', kind: 'system', toolType: 'default' }
+  }
+  if (text.startsWith('confirmation.')) {
+    return { title: '确认统计口径', kind: 'confirmation', toolType: 'confirm' }
+  }
+  if (text === 'pipeline.dataset_context') {
+    return { title: '加载数据集上下文', kind: 'tool', toolType: 'dataset' }
+  }
+  if (text.startsWith('agent2.') || text === 'pipeline.agent2_result') {
+    return { title: '生成 SQL', kind: 'tool', toolType: 'sql' }
+  }
+  if (text.startsWith('agent3.') || text === 'pipeline.agent3_result') {
+    return { title: '校验 SQL', kind: 'tool', toolType: 'sql' }
+  }
+  if (text.startsWith('datasource.execute_sql') || text === 'pipeline.execute_sql') {
+    return { title: '执行 SQL', kind: 'tool', toolType: 'sql' }
+  }
+  if (text.startsWith('agent4.') || text === 'pipeline.agent4_result') {
+    return { title: '生成经营分析结论', kind: 'report-stage', toolType: 'report' }
+  }
+  if (text === 'request.error') {
+    return { title: '执行异常', kind: 'system', toolType: 'default' }
+  }
+  return { title: '执行节点', kind: 'tool', toolType: 'default' }
+}
+
+const normalizeTraceStatus = (status, stage) => {
+  const value = String(status || '').toLowerCase()
+  if (value === 'error') return 'error'
+  if (value === 'fallback') return 'warning'
+  if (stage === 'request.received') return 'success'
+  if (['request', 'processing'].includes(value)) return 'running'
+  if (['response', 'parsed', 'info'].includes(value)) return 'success'
+  return normalizeStatus(value)
+}
+
+const buildTraceDetailLines = (stage, status, payload = {}) => {
+  const lines = []
+  const text = String(stage || '')
+
+  if (text === 'request.received') {
+    lines.push(`开始执行任务：${payload.question || state.question || '当前业务问题'}`)
+    if (Array.isArray(payload.preferred_dataset_ids) && payload.preferred_dataset_ids.length > 0) {
+      lines.push(`已指定数据集 ID：${payload.preferred_dataset_ids.join('、')}`)
+    }
+  }
+
+  if (text === 'agent1.route_result' && payload.route) {
+    const route = payload.route || {}
+    if (route.refined_query) lines.push(`识别问题口径：${route.refined_query}`)
+    if (Array.isArray(route.dataset_ids) && route.dataset_ids.length > 0) {
+      lines.push(`候选数据集 ID：${route.dataset_ids.join('、')}`)
+    }
+    if (route.decision) lines.push(`当前执行决策：${route.decision}`)
+  }
+
+  if (text === 'route.override' && Array.isArray(payload.dataset_ids)) {
+    lines.push(`已按手动选择覆盖自动路由：${payload.dataset_ids.join('、')}`)
+  }
+
+  if (text === 'pipeline.dataset_context') {
+    if (payload.dataset_name) lines.push(`当前数据集：${payload.dataset_name}`)
+    if (Number.isFinite(Number(payload.golden_sql_count))) lines.push(`Golden SQL 样本：${payload.golden_sql_count} 条`)
+    if (Number.isFinite(Number(payload.dictionary_count))) lines.push(`数据字典条目：${payload.dictionary_count} 条`)
+  }
+
+  if (text.startsWith('agent2.') || text === 'pipeline.agent2_result') {
+    if (status === 'request') lines.push('正在结合书架上下文和业务口径生成 SQL。')
+    if (payload.notes) lines.push(`生成说明：${payload.notes}`)
+    if (payload.sample_id) lines.push(`已回退到样例 SQL：${payload.sample_id}`)
+  }
+
+  if (text.startsWith('agent3.') || text === 'pipeline.agent3_result') {
+    if (status === 'request') lines.push('正在复核 SQL 语义、统计口径与安全性。')
+    if (payload.review_summary) lines.push(`复核结论：${payload.review_summary}`)
+    if (Array.isArray(payload.risks) && payload.risks.length > 0) {
+      lines.push(`识别风险：${payload.risks.join('；')}`)
+    }
+  }
+
+  if (text.startsWith('datasource.execute_sql') || text === 'pipeline.execute_sql') {
+    if (status === 'response') {
+      const rowCount = Number(payload.row_count)
+      if (Number.isFinite(rowCount)) lines.push(`SQL 返回 ${rowCount} 行结果。`)
+      if (Array.isArray(payload.columns) && payload.columns.length > 0) {
+        lines.push(`返回字段：${payload.columns.join('、')}`)
+      }
+    } else if (status === 'error' && payload.error) {
+      lines.push(`执行失败：${payload.error}`)
+    } else {
+      lines.push('已提交 SQL，正在等待数据仓库执行结果。')
+    }
+  }
+
+  if (text.startsWith('agent4.') || text === 'pipeline.agent4_result') {
+    if (status === 'request') lines.push('正在生成经营分析摘要与最终报告。')
+    if (payload.analysis_preview) lines.push('已生成分析摘要预览。')
+  }
+
+  if (text.startsWith('confirmation.')) {
+    if (payload.confirmation_question) lines.push(payload.confirmation_question)
+    if (payload.selected_option) lines.push(`确认内容：${payload.selected_option}`)
+  }
+
+  if (text === 'request.error' && payload.error) {
+    lines.push(`执行失败：${payload.error}`)
+  }
+
+  if (payload.error && !lines.some(line => line.includes(payload.error))) {
+    lines.push(payload.error)
+  }
+
+  if (payload.duration_seconds) {
+    lines.push(`节点耗时 ${formatDuration(Number(payload.duration_seconds) * 1000)}。`)
+  }
+
+  return uniqueLines(lines)
+}
+
+const buildTraceThought = (stage, status, payload = {}) => {
+  const text = String(stage || '')
+  if (payload.response_text) return String(payload.response_text).trim()
+  if (payload.analysis_preview) return String(payload.analysis_preview).trim()
+  if (payload.review_summary) return String(payload.review_summary).trim()
+  if (status === 'request' && text.startsWith('agent2.')) return '模型正在根据业务问题、书架上下文和样例 SQL 组织查询语句。'
+  if (status === 'request' && text.startsWith('agent3.')) return '正在从统计口径、字段匹配和只读安全三个方向复核当前 SQL。'
+  if (status === 'request' && text.startsWith('agent4.')) return '正在基于结果数据生成经营分析摘要和建议动作。'
+  return ''
+}
+
+const applyTraceEvent = (payload = {}) => {
+  const event = payload?.event || {}
+  const stage = String(event.stage || '')
+  if (!stage) return
+
+  if (state.logs.some(item => item.key === 'stream-connect')) {
+    setLogStatus('stream-connect', 'success', '', {
+      summary: '后端实时执行链路已建立。',
+      detailLines: [
+        `开始执行任务：${state.question || '当前业务问题'}`,
+        '已连接后端实时事件通道，后续节点将按真实执行顺序推进。',
+      ],
+      time: nowText(),
+    })
+  }
+
+  const meta = getTraceStageMeta(stage)
+  const key = normalizeTraceStageKey(stage)
+  const normalizedStatus = normalizeTraceStatus(event.status, stage)
+  const detailLines = buildTraceDetailLines(stage, event.status, event)
+  const thought = buildTraceThought(stage, event.status, event)
+  const summary = detailLines[0] || `${meta.title}处理中`
+  const existing = state.logs.find(item => item.key === key)
+
+  appendLog({
+    key,
+    title: meta.title,
+    kind: meta.kind,
+    toolType: meta.toolType,
+    status: normalizedStatus,
+    summary,
+    thought,
+    detailLines,
+    time: event.time || nowText(),
+    duration: event.duration_seconds ? Number(event.duration_seconds) * 1000 : existing?.duration,
+  })
 }
 
 const formatDuration = (duration) => {
@@ -842,12 +1049,30 @@ const startAsk = async (question, selectedDatasetInput) => {
   state.updatedAt = state.startedAt
   state.currentSessionId = ''
 
-  beginPhaseStreaming()
+  beginRealtimeStreaming(normalizedQuestion)
   persist()
 
   try {
     const selected = selectedIds.length > 0 ? selectedIds : undefined
-    const data = await sendSmartChat(normalizedQuestion, activeAbortController.signal, selected)
+    let finalPayload = null
+    await sendSmartChatStream(
+      normalizedQuestion,
+      activeAbortController.signal,
+      selected,
+      (eventName, payload) => {
+        if (eventName === 'trace') {
+          applyTraceEvent(payload)
+          return
+        }
+        if (eventName === 'result') {
+          finalPayload = payload
+        }
+      },
+    )
+    if (!finalPayload) {
+      throw new Error('后端实时执行流已结束，但没有返回最终结果。')
+    }
+    const data = finalPayload
     finalizeFromResult(data)
     activeAbortController = null
     return data
@@ -997,6 +1222,19 @@ const stopAsk = () => {
   }
 }
 
+const clearRecoveredSessionResult = () => {
+  stopPhaseTimer()
+  state.question = ''
+  state.status = 'idle'
+  state.result = null
+  state.error = ''
+  state.logs = []
+  state.startedAt = ''
+  state.updatedAt = ''
+  state.currentSessionId = ''
+  persist()
+}
+
 hydrate()
 
 export const smartAskSession = state
@@ -1012,6 +1250,7 @@ export const useSmartAskSession = () => {
     startAsk,
     stopAsk,
     submitBossConfirmation,
+    clearRecoveredSessionResult,
     resetSession,
   }
 }

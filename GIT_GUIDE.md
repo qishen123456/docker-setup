@@ -101,16 +101,20 @@ git push                    # 推送到远程
 - `node_modules/` - 前端依赖
 - `__pycache__/` - Python缓存
 - `*.log` - 日志文件
-- `.env` - 环境变量
+- `.env` - 环境变量（敏感信息）
 - `dist/` - 构建产物
+- `_legacy/` - 归档的遗留代码
+- `chroma_db/` - 向量数据库
 - IDE配置文件
 
 ### 重要文件说明
-- `frontend/` - 前端Vue项目
-- `backend/` - 后端Flask项目
-- `config/` - 配置文件
-- `data/` - 数据文件
-- `start_*.bat` - 启动脚本
+- `frontend/` - Vue 3 前端项目
+- `backend/` - Flask 后端服务
+- `config/` - 运行时配置 (JSON)
+- `docker/` - Docker 初始化脚本
+- `scripts/` - 运维脚本（测试、备份、验证）
+- `deploy.ps1` / `deploy.bat` - 一键部署入口
+- `docker-compose.yml` - 服务编排
 
 ## 🔧 高级操作
 

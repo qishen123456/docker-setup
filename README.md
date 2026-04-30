@@ -9,8 +9,9 @@
 ```powershell
 git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
 cd smartask
-# 把项目管理员发的 .env 放到项目根目录
-.\deploy.ps1
+Copy-Item .env.example .env
+# 编辑 .env，填入 AI/飞书等真实密钥
+.\deploy.ps1 -RunTests
 ```
 
 打开浏览器访问 http://localhost:8080 即可。
@@ -18,7 +19,7 @@ cd smartask
 后端容器启动时会**自动**完成：
 - PostgreSQL 健康等待
 - schema 迁移（`backend/migrations/*.sql`）
-- 首次启动自动导入 `backend/imports/bookshelf_bundle.json` 与 `angel_group_data_bundle.json`
+- 首次启动自动导入 `backend/imports/bookshelf_bundle.json`、`runtime_config_bundle.json` 与 `angel_group_data_bundle.json`
 
 ---
 
@@ -40,18 +41,21 @@ cd smartask
 
 ## 文档索引
 
-- 🚀 **[DEPLOY.md](DEPLOY.md)** — 给业务用户/同事的部署手册（你现在最需要的那份）
-- 📚 [README_WINDOWS.md](README_WINDOWS.md) — 本地非 Docker 开发模式（仅老开发参考）
+- 🚀 **[DEPLOY.md](DEPLOY.md)** — Docker 一键部署手册
+- 📖 [docs/ITERATION_HANDBOOK.md](docs/ITERATION_HANDBOOK.md) — 开发迭代规范手册
+- 📚 [README_WINDOWS.md](README_WINDOWS.md) — Windows 本地开发模式
 - 📑 [GIT_GUIDE.md](GIT_GUIDE.md) — Git 工作流速查
-- 📋 [task.md](task.md) / [implementation_plan.md](implementation_plan.md) — 历史规划
+- 📋 [启动说明.md](启动说明.md) — 启动方式速览
 
 ---
 
 ## 常见命令速查
 
 ```powershell
+.\deploy.ps1 -RunTests               # 推荐：部署后顺手跑一轮真实集成测试
 .\deploy.ps1                         # 全量部署（构建 + 起容器 + 自动初始化）
 .\deploy.ps1 -ForceImport            # 强制重新导入元数据/业务数据
+.\deploy.ps1 -ForceConfig            # 强制覆盖写回 config/*.json
 .\update.ps1                         # git pull + 重新构建 + 起容器
 docker compose logs -f backend       # 看后端实时日志
 docker compose logs backend | Select-String bootstrap  # 看初始化引导日志

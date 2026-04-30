@@ -93,3 +93,104 @@ local_storage/
 # Backups
 *.bak
 *.backup
+
+# Legacy archive (cleanup artifacts, not needed in repo)
+_legacy/
+cleanup.ps1
+.gitignore.new
+test.db
+提示词.md
+
+# ---------------------------
+# Root-level legacy scripts (one-time dev utilities, not part of app)
+# ---------------------------
+add_pause_button_guide.py
+analysis_control_complete.py
+analysis_format_complete.py
+analysis_loading_optimization.py
+analysis_revert_complete.py
+analysis_scrollbar_complete.py
+check_backend_response.py
+check_frontend_syntax.py
+check_training.py
+clean_vue_file.py
+clear_cache_guide.py
+compact_sql_table_display.py
+compact_steps_display.py
+complete_steps_process.py
+debug_keywords.py
+debug_test_guide.py
+debug_thinking_filter.html
+diagnose_frontend_error.py
+diagnose_vanna_init.py
+error_logic_fix_complete.py
+final_test_report.py
+fix_analysis_cancel_and_style.py
+fix_regex_error.py
+fix_sql_data_buttons.py
+frontend_fix_complete.py
+git_setup_complete.py
+implementation_plan.md
+pause_feature_complete.py
+recover_datasources.py
+remove_thinking_expand.py
+restart_guide.py
+skipped_step_feature.py
+sql_data_inline_display.py
+sql_scrollbar_limit.py
+step_definition_fixed.py
+step_status_fixed.py
+streaming_fix_complete.py
+streaming_output_fixed.py
+test_filter.js
+test_guide.py
+test_thinking_filter.html
+text_steps_display.py
+thinking_process_filter.py
+thinking_process_improvements.py
+tmp_init_db.py
+vanna01.py
+task.md
+
+# Legacy directories (old React frontend, design docs)
+components/
+pages/
+data/
+火山引擎/
+火山引擎demo/
+
+# Backend legacy utilities (not part of running app)
+backend/add_dataset_columns.py
+backend/check_all_dbs.py
+backend/check_angel_structure.py
+backend/check_datasets.py
+backend/check_dataset_detail.py
+backend/check_fields_data.py
+backend/check_tables.py
+backend/check_table_structure.py
+backend/create_angel_table.py
+backend/drop_angel_table.py
+backend/dataset_dimension_profiles.py
+backend/fill_syyb_dataset.py
+backend/init_smart_training.py
+backend/update_dataset_config.py
+backend/update_dataset_content.py
+backend/test_*.py
+backend/requirements_utf8.txt
+backend/verify_deployment.py
+backend/*.log
+
+# Frontend legacy views (no active route)
+frontend/src/views/SmartAsk*副本*.vue
+frontend/src/views/AnalysisPrompts_simple.vue
+frontend/src/views/Training.vue
+frontend/src/views/AnalysisPrompts.vue
+frontend/src/views/SqlPromptManager.vue
+frontend/src/views/Chat.vue
+
+# Unregistered backend controllers (not loaded by app.py)
+backend/controllers/analysis.py
+backend/controllers/analysis_thinking.py
+backend/controllers/chat.py
+backend/controllers/sql_prompt.py
+backend/controllers/training.py
