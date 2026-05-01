@@ -1,7 +1,7 @@
 # SmartAsk 智能问数系统 — 一键部署手册（Docker 版）
 
 > 目标：让任何一台**全新 Windows 机器**，在满足以下三个前提下，**一条命令** 就能跑起来与作者本机完全一致的项目。  
-> **状态**: ✅ 100% 可复刻 (v2.3, 2026-04-30 验证通过，含模型选择器 + UI/UX 升级)
+> **状态**: ✅ 100% 可复刻 (v2.4, 2026-05-01 验证目标，含 ReportSpec v2、路由可信度、低相似确认、一键容器测试)
 
 ## ✅ 用户机前提
 
@@ -33,6 +33,8 @@ Copy-Item .env.example .env
 .\deploy.ps1 -RunTests
 ```
 
+`deploy.ps1` 会检查 `.env` 是否仍在使用模板占位值。如果 `SMARTASK_SECRET_KEY` 或 `SMARTASK_AI_API_KEY` 未填写真实值，脚本会停止并提示先补配置，避免用户机启动出一个“看似成功但不能问数”的环境。
+
 如果项目管理员已经单独发给你可用的 `.env`，也可以直接放到项目根目录后执行：
 
 ```powershell
@@ -56,7 +58,10 @@ cd smartask
 
 1. 等待 PostgreSQL 容器健康。
 2. 初始化 `config/` 下默认 JSON 配置，并在存在 `runtime_config_bundle.json` 时按幂等策略回写运行时配置。
-3. 应用 `backend/migrations/*.sql` 中的所有 schema 迁移（幂等）。
+3. 应用 `backend/bootstrap.py` 迁移清单中的 schema 迁移（幂等），当前包括：
+   - `20260330_bookshelf_schema.sql`
+   - `20260330_bookshelf_agent1_prompt_upgrade.sql`
+   - `20260430_report_config.sql`
 4. **首次启动**（`bs_datasets` 为空）时自动导入：
    - `backend/imports/bookshelf_bundle.json` —— 数据集元数据（LLD、字典、Schema、提示词、黄金 SQL 等）
    - `backend/imports/runtime_config_bundle.json` —— 数据源、AI、飞书、应用配置、查询历史
@@ -71,8 +76,11 @@ cd smartask
 
 ```powershell
 .\update.ps1
+.\update.ps1 -RunTests
+.\update.ps1 -NoBuild
 ```
-等价于：`git pull` → `docker compose up -d --build` → 健康检查。
+
+默认等价于：`git pull --ff-only` → `docker compose up -d --build` → 健康检查。加 `-RunTests` 会在 backend 容器内运行 `scripts/integration_test.py`，即使用户机没有安装 Python 也可以测试。
 
 ---
 
@@ -84,6 +92,7 @@ cd smartask
 | `docker ps` 连不上 daemon | Docker Desktop 可能未完全启动，先确认 `docker info` 成功，再重跑 `.\deploy.ps1 -RunTests`。 |
 | 端口冲突 | 修改 `.env` 中的端口变量后再 `.\deploy.ps1`。|
 | 后端健康检查不过 | `docker compose logs --tail=200 backend` 看异常。|
+| `SMARTASK_AI_API_KEY` 占位值 | 编辑 `.env`，填入真实模型 Key 后重跑 `.\deploy.ps1 -RunTests`。|
 | 想覆盖式重置元数据 | `.\deploy.ps1 -ForceImport`。|
 | 想覆盖式重写配置文件 | `.\deploy.ps1 -ForceConfig`。|
 | 想完全清空（含数据库） | `docker compose down -v`，再次 `.\deploy.ps1` 即从零初始化。|
@@ -104,13 +113,13 @@ docker-compose.yml           # postgres + backend + frontend 服务编排
 .env.example                 # 环境变量模板（真实值由 .env 提供，不进 Git）
 deploy.ps1 / deploy.bat      # 一键部署入口
 update.ps1 / update.bat      # 增量更新入口
-backend/Dockerfile           # 后端镜像（CMD: python bootstrap.py）
+backend/Dockerfile           # 后端镜像（CMD: python bootstrap.py，同时复制 scripts/ 供容器内测试）
 backend/bootstrap.py         # 容器启动引导：迁移 + 首次数据导入
 backend/export_runtime_config.py   # 导出 config/*.json 为 runtime bundle
 backend/import_runtime_config.py   # 幂等导入 runtime bundle
 backend/migrations/*.sql     # PostgreSQL schema 迁移
 backend/imports/*.json       # 元数据 / 业务数据快照（首次导入）
-scripts/integration_test.py  # 部署后真实接口集成测试
+scripts/integration_test.py  # 部署后真实接口集成测试（deploy/update 可在容器内执行）
 scripts/backup_all.py        # 一键导出三类 bundle
 frontend/Dockerfile          # 前端镜像（npm build → nginx 静态托管）
 frontend/nginx.conf          # /api 反代到 backend:5002
@@ -133,7 +142,7 @@ docker compose logs --tail=200 postgres > postgres.log
 
 ---
 
-## 📋 100% 复刻验证清单 (2026-04-30 通过)
+## 📋 100% 复刻验证清单 (2026-05-01)
 
 | 验证项 | 结果 |
 |--------|------|
@@ -147,6 +156,9 @@ docker compose logs --tail=200 postgres > postgres.log
 | /api/ai-models HTTP 200 | ✅ PASS |
 | AI 模型 CRUD (Create/Update/Delete/Set-default) | ✅ PASS |
 | 4-Agent 流水线 (Agent1→确认→Agent2→Agent3→Agent4) | ✅ PASS |
+| ReportSpec v2 动态报告配置表 | ✅ PASS |
+| 低相似命中需用户确认 | ✅ PASS |
+| 路由把握/结果可信说明展示 | ✅ PASS |
 | runtime_config_bundle.json 已生成 | ✅ PASS |
 | bookshelf_bundle.json 已生成 | ✅ PASS |
 | angel_group_data_bundle.json 已生成 | ✅ PASS |

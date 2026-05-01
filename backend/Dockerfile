@@ -14,11 +14,12 @@ RUN apt-get update \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /tmp/requirements.txt
+COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip \
     && pip install -r /tmp/requirements.txt
 
-COPY . /app/backend
+COPY backend /app/backend
+COPY scripts /app/scripts
 
 RUN mkdir -p /app/backend/logs /app/chroma_db /app/config
 

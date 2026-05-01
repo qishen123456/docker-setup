@@ -24,6 +24,21 @@ function Read-EnvValue {
     return ($line.Matches[0].Groups[1].Value.Trim())
 }
 
+function Test-EnvRequired {
+    param(
+        [string]$FilePath,
+        [string]$Key,
+        [string[]]$InvalidValues = @()
+    )
+    $value = Read-EnvValue -FilePath $FilePath -Key $Key -DefaultValue ""
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw ".env 缺少必要配置：$Key"
+    }
+    if ($InvalidValues -contains $value) {
+        throw ".env 中 $Key 仍是模板占位值，请先填写真实值。"
+    }
+}
+
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $ProjectRoot
 
@@ -53,6 +68,9 @@ if (-not (Test-Path -LiteralPath $envPath)) {
     throw ".env 缺失且未找到 .env.example，请向项目管理员索取 .env。"
 }
 Write-Ok ".env 存在"
+
+Test-EnvRequired -FilePath $envPath -Key "SMARTASK_SECRET_KEY" -InvalidValues @("please-change-me-to-a-random-32-char-string")
+Test-EnvRequired -FilePath $envPath -Key "SMARTASK_AI_API_KEY" -InvalidValues @("请填写你的AI_API_KEY", "please-fill-your-ai-api-key")
 
 # 创建挂载目录
 New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backend\logs") | Out-Null
@@ -109,7 +127,7 @@ if ($RunTests) {
     if (-not $py) {
         Write-Warn2 "未发现宿主机 Python，使用容器内 Python 跑测试"
         docker compose exec -T backend python -m pip install --quiet --disable-pip-version-check requests
-        docker compose exec -T backend python /app/backend/../scripts/integration_test.py --base-url "http://localhost:5002" --frontend-url "http://nginx-not-resolvable" --no-wait
+        docker compose exec -T backend python /app/scripts/integration_test.py --base-url "http://localhost:5002" --frontend-url "http://frontend" --no-wait
     } else {
         & $py -m pip install --quiet --disable-pip-version-check requests | Out-Null
         & $py "$ProjectRoot\scripts\integration_test.py" --base-url "http://localhost:$backendPort" --frontend-url "http://localhost:$frontendPort"

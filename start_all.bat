@@ -20,7 +20,7 @@ echo   Startup Commands Sent
 echo ========================================
 echo.
 echo Frontend: http://localhost:5173
-echo Backend : http://localhost:5000
+echo Backend : http://localhost:5002
 echo.
 echo Tip: Close service windows to stop services.
 echo.

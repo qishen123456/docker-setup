@@ -4,7 +4,7 @@
 >
 > **新增**：前端支持 **模型选择器**（Auto / 手动指定），可在问数前实时切换 AI 模型。
 >
-> **v2.3 升级**：顶部导航 Brand→Workspace 极简设计、AI 模型配置页卡片式重构、SessionStorage 状态持久化、侧边栏居中修复、Docker UTF-8 编码修复。
+> **v2.4 升级**：ReportSpec v2 动态报告、路由可信度说明、低相似命中确认、Docker 一键部署与容器内集成测试收口。
 
 ## 一键部署（推荐：Docker 全家桶）
 
@@ -46,6 +46,7 @@ Copy-Item .env.example .env
 ## 文档索引
 
 - 🚀 **[DEPLOY.md](DEPLOY.md)** — Docker 一键部署手册
+- 📘 **[项目说明书.md](项目说明书.md)** — 最终项目说明书与交付清单
 - 📖 [docs/ITERATION_HANDBOOK.md](docs/ITERATION_HANDBOOK.md) — 开发迭代规范手册
 - 📚 [README_WINDOWS.md](README_WINDOWS.md) — Windows 本地开发模式
 - 📑 [GIT_GUIDE.md](GIT_GUIDE.md) — Git 工作流速查

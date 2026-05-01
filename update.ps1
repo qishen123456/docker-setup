@@ -1,3 +1,8 @@
+param(
+    [switch]$NoBuild,
+    [switch]$RunTests
+)
+
 $ErrorActionPreference = 'Stop'
 
 function Write-Step {
@@ -30,11 +35,11 @@ if (-not (Test-Path -LiteralPath $envPath)) {
     throw ".env 缺失，请先把 .env 放到项目根目录。"
 }
 
-Write-Step "拉取最新代码 (git pull)"
-git pull
+Write-Step "拉取最新代码 (git pull --ff-only)"
+git pull --ff-only
 
 Write-Step "重新构建并启动容器"
-docker compose up -d --build
+if ($NoBuild) { docker compose up -d } else { docker compose up -d --build }
 
 Write-Step "等待后端健康检查"
 $backendPort = "5002"
@@ -56,6 +61,15 @@ docker compose ps
 if ($ready) {
     Write-Host ""
     Write-Host "✅ 更新完成。如页面无变化，请在浏览器执行硬刷新 (Ctrl+F5)。" -ForegroundColor Green
+    if ($RunTests) {
+        Write-Step "运行集成测试"
+        $frontendPort = "8080"
+        $frontendLine = Select-String -Path $envPath -Pattern "^SMARTASK_FRONTEND_PORT=(.*)$" | Select-Object -First 1
+        if ($frontendLine) { $frontendPort = $frontendLine.Matches[0].Groups[1].Value.Trim() }
+        docker compose exec -T backend python -m pip install --quiet --disable-pip-version-check requests
+        docker compose exec -T backend python /app/scripts/integration_test.py --base-url "http://localhost:5002" --frontend-url "http://frontend" --no-wait
+        Write-Host "用户机访问地址: http://localhost:$frontendPort" -ForegroundColor Yellow
+    }
 }
 else {
     Write-Host ""

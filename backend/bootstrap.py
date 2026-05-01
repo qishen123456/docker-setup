@@ -39,6 +39,7 @@ except Exception:
 MIGRATIONS = [
     "20260330_bookshelf_schema.sql",
     "20260330_bookshelf_agent1_prompt_upgrade.sql",
+    "20260430_report_config.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
