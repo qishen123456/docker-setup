@@ -48,7 +48,7 @@
                       v-if="shouldShowLiveFeed(msg)"
                       :logs="session.state.logs"
                       :mode="msg.loading ? 'live' : 'completed'"
-                      :max-items="msg.loading ? 6 : 4"
+                      :max-items="6"
                       :elapsed-label="getMessageElapsedLabel(msg)"
                     />
                     <PlanCard :route="msg.data?.route" />
@@ -122,13 +122,14 @@
                           class="sa-confirm-textarea"
                           :disabled="isRunning"
                           placeholder="例如：这里的东部分公司指华东区域，先按分公司口径继续分析。"
+                          @keydown.enter.exact.prevent="handleConfirmationDraftEnter($event, msg)"
                         ></textarea>
                         <div class="sa-confirm-freeform-actions">
                           <span class="sa-confirm-freeform-hint">补充说明会直接作为老板确认内容继续推进问数流程。</span>
                           <button
                             class="sa-confirm-send"
                             :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
-                            @click="doConfirm(String(confirmationDrafts[msg.id] || '').trim(), msg)"
+                            @click="submitConfirmationDraft(msg)"
                           >
                             发送补充说明
                           </button>
@@ -150,8 +151,9 @@
                       class="sa-result-chain"
                     >
                     <ResultDigestCard
-                      v-if="!hasBusinessDrillDataset(getDatasets(msg)) && (getReport(msg) || getPrimaryDataset(msg))"
+                      v-if="getReport(msg) || getPrimaryDataset(msg)"
                       :title="getResultTitle(msg)"
+                      :question="msg.data?.question || session.state.question"
                       :report="getReport(msg)"
                       :dataset="getPrimaryDataset(msg)"
                       :datasets="getDatasets(msg)"
@@ -200,30 +202,6 @@
                         </div>
                       </div>
                     </div>
-
-                    <!-- 最终报告摘要-->
-                    <ReportSummary
-                      v-if="getReport(msg) && !hasBusinessDrillDataset(getDatasets(msg))"
-                      :report="getReport(msg)"
-                      :question="msg.data?.question"
-                      @download="downloadReportForMessage(msg)"
-                      @view="openReportViewerForMessage(msg)"
-                    />
-
-                    <ArtifactStrip
-                      v-if="getReport(msg) && !hasBusinessDrillDataset(getDatasets(msg))"
-                      :title="getResultTitle(msg)"
-                      :dataset-name="getPrimaryDataset(msg)?.dataset_name || ''"
-                      @download="downloadReportForMessage(msg)"
-                      @view-details="openDetailPanel"
-                    />
-
-                    <!-- Agent 执行完毕 -->
-                    <AgentDoneBar
-                      v-if="isMessageExecutionComplete(msg)"
-                      :title="getResultTitle(msg)"
-                      @view-details="openDetailPanel"
-                    />
 
                     <!-- 错误卡-->
                     </div>
@@ -282,7 +260,7 @@
 
             <div class="sa-panel-content" ref="panelRef">
               <LogTimeline
-                v-if="!hasSideReport"
+                :key="timelineKey"
                 :logs="session.state.logs"
                 :open-state="logOpen"
                 @toggle="toggleLog"
@@ -314,9 +292,9 @@
                     <div class="sa-log-markdown" v-html="renderMd(log.markdown)"></div>
                   </div>
 
-                  <div v-if="log.time" class="sa-log-time">
-                    <span class="sa-log-time-label">更新时间</span>
-                    <span>{{ log.time }}</span>
+                  <div v-if="getLogDurationText(log)" class="sa-log-time">
+                    <span class="sa-log-time-label">节点耗时</span>
+                    <span>{{ getLogDurationText(log) }}</span>
                   </div>
                 </template>
               </LogTimeline>
@@ -398,6 +376,41 @@
                         </div>
                         <div class="sa-office-chart" :ref="el => initPreviewChart(el, office.chartSpec, `side-office-${office.id}`)"></div>
                       </div>
+                    </article>
+                  </div>
+                </section>
+
+                <section v-if="sideReportCharts.length" class="sa-side-section sa-side-chart-gallery">
+                  <div class="sa-side-section-head">
+                    <div>
+                      <div class="sa-side-section-title">图表分析</div>
+                      <div class="sa-side-dataset-name">按报告配置拆出的独立图表</div>
+                    </div>
+                  </div>
+                  <div class="sa-side-chart-grid">
+                    <article
+                      v-for="chart in sideReportCharts"
+                      :key="chart.key"
+                      class="sa-side-extra-chart-card"
+                    >
+                      <div class="sa-side-extra-chart-head">
+                        <div class="sa-side-extra-chart-title">{{ chart.chartSpec.title || chart.caption }}</div>
+                        <button class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chart.chartSpec, `${chart.dataset.dataset_name} ${chart.chartSpec.title || chart.caption}`)">
+                          查看
+                        </button>
+                      </div>
+                      <div
+                        v-if="chart.chartSpec.chartType === 'metric'"
+                        class="sa-insight-metric sa-insight-metric-compact"
+                      >
+                        <div class="sa-insight-metric-value">{{ chart.chartSpec.value }}</div>
+                        <div class="sa-insight-metric-label">{{ chart.chartSpec.label }}</div>
+                      </div>
+                      <div
+                        v-else
+                        class="sa-side-extra-chart-canvas"
+                        :ref="el => initPreviewChart(el, chart.chartSpec, chart.key)"
+                      ></div>
                     </article>
                   </div>
                 </section>
@@ -556,7 +569,7 @@
             </button>
           </div>
         </div>
-        <div class="sa-report-dialog-content">
+        <div :class="['sa-report-dialog-content', `is-template-${reportSceneTemplate}`]">
           <div class="sa-report-dialog-overview">
             <section class="sa-report-stage-section sa-report-stage-summary">
               <div class="sa-report-stage-title">分析摘要</div>
@@ -758,10 +771,7 @@ import UserBubble from '../components/smartask/UserBubble.vue'
 import PlanCard from '../components/smartask/PlanCard.vue'
 import ThinkingCard from '../components/smartask/ThinkingCard.vue'
 import LiveExecutionFeed from '../components/smartask/LiveExecutionFeed.vue'
-import AgentDoneBar from '../components/smartask/AgentDoneBar.vue'
-import ArtifactStrip from '../components/smartask/ArtifactStrip.vue'
 import ResultDigestCard from '../components/smartask/ResultDigestCard.vue'
-import ReportSummary from '../components/smartask/ReportSummary.vue'
 import ComposerArea from '../components/smartask/ComposerArea.vue'
 import LogTimeline from '../components/smartask/LogTimeline.vue'
 import SqlBlock from '../components/smartask/SqlBlock.vue'
@@ -793,6 +803,7 @@ const panelRef = ref(null)
 const chartDialogRef = ref(null)
 const thinkingOpen = reactive({})
 const logOpen = reactive({})
+const timelineVersion = ref(0)
 const reportViewerVisible = ref(false)
 const reportViewerTitle = ref('')
 const reportViewerReport = ref('')
@@ -806,11 +817,14 @@ const officeDrillOpen = reactive({})
 let activePrintFrame = null
 let msgCounter = 0
 let elapsed = ref(0)
+const clockNow = ref(Date.now())
 let timerInst = null
+let clockTimer = null
 let chatScrollTimer = null
 let panelScrollTimer = null
 
 const isRunning = computed(() => session.state.status === 'running')
+const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
 
 const statusBarText = computed(() => {
   const m = {
@@ -866,12 +880,24 @@ const currentDatasetLabel = computed(() => {
 
 const datasetResults = computed(() => latestDatasets.value)
 const hasSideReport = computed(() => resultPreviews.value.length > 0 || !!latestReport.value)
-const sideReportHeading = computed(() => (
-  latestDatasets.value.length > 1
-    ? '跨数据集经营分析报告'
-    : (latestDataset.value?.dataset_name || '经营分析报告')
-))
-const sideReportTitle = computed(() => latestDataset.value?.dataset_name || '经营分析报告')
+const sideReportHeading = computed(() => '业绩分析报告')
+const sideReportTitle = computed(() => latestDataset.value?.dataset_name || '业绩分析报告')
+
+const reportSceneTemplate = computed(() => {
+  const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
+  const specTemplate = sourceDatasets.find(item => item?.report_spec?.layoutTemplate)?.report_spec?.layoutTemplate
+  if (specTemplate) return specTemplate
+  const questionText = String(session.state.question || query.value || '')
+  if (/对比|比较|哪个|谁更|差异| vs |VS/.test(questionText)) return 'comparison'
+  if (/排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
+  return 'detail'
+})
+
+const reportSceneTemplateLabel = computed(() => ({
+  comparison: '对比模板',
+  ranking: '排名模板',
+  detail: '详情模板',
+}[reportSceneTemplate.value] || '详情模板'))
 
 const normalizeConfidenceScore = (value, fallback = 0) => {
   const numeric = Number(value)
@@ -986,12 +1012,35 @@ const detailPanelDesc = computed(() => {
   return '发起问题后，这里会持续展示本轮任务的完整执行轨迹。'
 })
 
+const amountColumnPattern = /金额|开单|任务|销售|收入|成本|利润|缺口|剩余|回款|费用|价格|单价|amount|sales|revenue|cost|profit|remain/i
+const rateColumnPattern = /率|percent|rate/i
+
+const formatAmount = (value) => {
+  const numeric = typeof value === 'number'
+    ? value
+    : Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
+  if (!Number.isFinite(numeric)) return '-'
+  const absValue = Math.abs(numeric)
+  if (absValue < 10000) return Number.isInteger(numeric) ? String(numeric) : String(numeric)
+  if (absValue < 1000000) return `${(numeric / 10000).toFixed(1)}万`
+  if (absValue < 100000000) return `${Math.round(numeric / 10000)}万`
+  return `${(numeric / 100000000).toFixed(2)}亿`
+}
+
+const isAmountColumn = (column = '') => amountColumnPattern.test(String(column || ''))
+const isRateColumn = (column = '') => rateColumnPattern.test(String(column || ''))
+
 const formatDisplayValue = (value) => {
   if (typeof value === 'number') {
     if (Number.isInteger(value)) return value.toLocaleString()
     return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
   }
   return String(value ?? '-')
+}
+
+const formatValueByColumn = (value, column = '') => {
+  if (isAmountColumn(column)) return formatAmount(value)
+  return formatDisplayValue(value)
 }
 
 const getLabelColumn = (dataset) => {
@@ -1025,7 +1074,7 @@ const getMetricCards = (dataset) => {
     const values = rows.map(row => row[column]).filter(value => typeof value === 'number')
     if (!values.length) return
     const displayValue = rows.length === 1 ? firstRow[column] : Math.max(...values)
-    cards.push({ label: rows.length === 1 ? column : `最高${column}`, value: formatDisplayValue(displayValue) })
+    cards.push({ label: rows.length === 1 ? column : `最高${column}`, value: formatValueByColumn(displayValue, column) })
   })
 
   if (rows.length === 1 && cards.length === 0) {
@@ -1081,8 +1130,7 @@ const calcBusinessRate = (rows, taskCol, actualCol, rateCol) => {
 
 const formatBusinessAmount = (value) => {
   if (value === null || value === undefined) return '-'
-  if (Math.abs(value) >= 10000) return `${(value / 10000).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}万`
-  return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+  return formatAmount(value)
 }
 
 const formatMetricByDefinition = (value, metric = {}) => {
@@ -1238,10 +1286,11 @@ const buildBusinessDrillReport = (dataset) => {
     const sortedPeople = [...directChildren]
       .filter(item => item?.name)
       .sort((a, b) => (getNodeMetricValue(a, rateMetric) || 0) - (getNodeMetricValue(b, rateMetric) || 0))
+    const sortedPeopleDesc = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))
     const rate = getNodeMetricValue(office, rateMetric)
     const tone = getRateTone(rate)
     const riskPeople = sortedPeople.filter(item => getRateTone(getNodeMetricValue(item, rateMetric)) === 'danger')
-    const bestPerson = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))[0]
+    const bestPerson = sortedPeopleDesc[0]
     const worstPerson = sortedPeople[0]
     const formatPersonMetric = (person, metric) => (
       metric ? formatMetricByDefinition(getNodeMetricValue(person, metric), metric) : '-'
@@ -1254,7 +1303,7 @@ const buildBusinessDrillReport = (dataset) => {
       const rateText = formatPersonMetric(person, rateMetric)
       return `${person.name}开单${actualText} / 任务${taskText}，达成率${rateText}${remainMetric ? `，剩余缺口${remainText}` : ''}`
     }
-    const chartRows = sortedPeople.map(person => ({
+    const chartRows = sortedPeopleDesc.map(person => ({
       名称: person.name,
       [rateMetric.label || rateMetric.column || '达成率']: getNodeMetricValue(person, rateMetric) || 0,
       [actualMetric?.label || actualMetric?.column || '完成']: getNodeMetricValue(person, actualMetric) || 0,
@@ -1398,7 +1447,7 @@ const inferChartSpec = (dataset) => {
       return {
         chartType: 'metric',
         title: dataset?.dataset_name || '关键指标',
-        value: formatDisplayValue(firstRow[numericColumns[0]]),
+        value: formatValueByColumn(firstRow[numericColumns[0]], numericColumns[0]),
         label: numericColumns[0],
       }
     }
@@ -1486,6 +1535,12 @@ const buildSingleRowMetricCharts = (dataset) => {
   }))
 }
 
+const getReportSpecCharts = (dataset) => (
+  Array.isArray(dataset?.report_spec?.charts)
+    ? dataset.report_spec.charts.filter(Boolean)
+    : []
+)
+
 const buildReportTableBlocks = (datasets = []) => {
   return (datasets || [])
     .filter(dataset => Array.isArray(dataset?.rows) && dataset.rows.length > 0 && Array.isArray(dataset?.columns) && dataset.columns.length > 0)
@@ -1519,7 +1574,9 @@ const buildReportTableBlocks = (datasets = []) => {
 
 const resultPreviews = computed(() => (
   datasetResults.value.slice(0, 4).map((dataset, index) => {
+    const specCharts = getReportSpecCharts(dataset)
     const derivedCharts = [
+      ...specCharts.slice(1),
       ...buildLayeredBusinessCharts(dataset).slice(1),
       ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
     ]
@@ -1530,10 +1587,31 @@ const resultPreviews = computed(() => (
       caption: index === 0 ? '主结果视图' : '结果视图',
       dataset,
       metricCards: getMetricCards(dataset),
-      chartSpec: inferChartSpec(dataset),
+      chartSpec: specCharts[0] || inferChartSpec(dataset),
       extraCharts: derivedCharts,
     }
   })
+))
+
+const sideReportCharts = computed(() => (
+  latestDatasets.value
+    .slice(0, 3)
+    .flatMap((dataset, datasetIndex) => {
+      const specCharts = getReportSpecCharts(dataset)
+      const derivedCharts = specCharts.length
+        ? specCharts
+        : [
+            inferChartSpec(dataset),
+            ...buildLayeredBusinessCharts(dataset),
+            ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
+          ].filter(Boolean)
+      return derivedCharts.slice(0, 3).map((chartSpec, chartIndex) => ({
+        key: `side-report-chart-${dataset.dataset_id || datasetIndex}-${chartIndex}`,
+        caption: chartSpec.title || `图表 ${chartIndex + 1}`,
+        dataset,
+        chartSpec,
+      }))
+    })
 ))
 
 const reportDialogCharts = computed(() => {
@@ -1597,6 +1675,7 @@ const reportSummaryBullets = computed(() => {
   const primary = sourceDatasets[0]
   const names = sourceDatasets.map(item => item.dataset_name).filter(Boolean)
   if (session.state.question) bullets.push(`原始问题：${session.state.question}`)
+  bullets.push(`报告模板：${reportSceneTemplateLabel.value}`)
   if (names.length) bullets.push(`命中数据集：${names.join('、')}`)
   if (sourceDatasets.length) {
     const totalRows = sourceDatasets.reduce((sum, item) => sum + Number(item?.row_count || item?.rows?.length || 0), 0)
@@ -1656,6 +1735,27 @@ const openDetailPanel = () => {
   showPanel.value = true
   schedulePanelScroll(80, 'smooth')
 }
+
+const clearExecutionPanelState = () => {
+  Object.keys(logOpen).forEach(k => delete logOpen[k])
+  timelineVersion.value += 1
+  nextTick(() => {
+    if (panelRef.value) panelRef.value.scrollTop = 0
+  })
+}
+
+const clearChatUiState = () => {
+  Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
+  Object.keys(confirmationDrafts).forEach(k => delete confirmationDrafts[k])
+  Object.keys(confirmationSubmitting).forEach(k => delete confirmationSubmitting[k])
+  Object.keys(officeDrillOpen).forEach(k => delete officeDrillOpen[k])
+  reportViewerVisible.value = false
+  chartViewerVisible.value = false
+  elapsed.value = 0
+  stopTimer()
+  clearExecutionPanelState()
+}
+
 const isUiEventLike = (value) => Boolean(
   value
   && typeof value === 'object'
@@ -1677,7 +1777,7 @@ const openReportViewer = (report = latestReport.value, title = sideReportHeading
     return
   }
   reportViewerReport.value = report
-  reportViewerTitle.value = title || '经营分析报告'
+  reportViewerTitle.value = normalizeReportTitle(title)
   reportViewerDatasets.value = Array.isArray(datasetsForReport) ? datasetsForReport : []
   reportDialogFullscreen.value = false
   reportViewerVisible.value = true
@@ -1686,7 +1786,6 @@ const openFullScreenReport = () => {
   openReportViewer(latestReport.value, sideReportHeading.value, latestDatasets.value)
   reportDialogFullscreen.value = true
 }
-const openReportViewerForMessage = (msg) => openReportViewer(getReport(msg), getPrimaryDataset(msg)?.dataset_name || getResultTitle(msg), getDatasets(msg))
 const openChartViewer = (spec, title = '图表预览') => {
   if (!spec) return
   chartViewerSpec.value = spec
@@ -1810,8 +1909,20 @@ const isCurrentSessionMessage = (msg) => {
   )
 }
 
+const latestAiMessage = computed(() => (
+  [...messages].reverse().find(item => item?.role === 'ai') || null
+))
+
+const isLatestAiMessage = (msg) => latestAiMessage.value?.id === msg?.id
+
 const shouldShowLiveFeed = (msg) => {
-  return Boolean(msg?.loading && session.state.logs.length > 0)
+  if (msg?.loading) return true
+  if (!session.state.logs.length) return false
+  if (msg?.data?.requires_confirmation) return false
+  return Boolean(
+    isCurrentSessionMessage(msg) ||
+    (isLatestAiMessage(msg) && ['completed', 'error'].includes(session.state.status))
+  )
 }
 
 const shouldShowThinkingCard = (msg) => {
@@ -1864,6 +1975,36 @@ const formatElapsedLabel = (seconds) => {
   return `${minutes}m ${remain}s`
 }
 
+const formatNodeDuration = (duration) => {
+  const value = Number(duration)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  const seconds = value / 1000
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60)
+    const remain = seconds - minutes * 60
+    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
+    return `${minutes}m ${remainLabel}s`
+  }
+  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
+  return `${label}s`
+}
+
+const getLogDurationLabel = (log) => {
+  if (log?.status === 'running') {
+    const startedAtMs = Number(log?.startedAtMs)
+    if (Number.isFinite(startedAtMs)) {
+      return formatNodeDuration(clockNow.value - startedAtMs)
+    }
+  }
+  return log?.durationLabel || log?.elapsedLabel || ''
+}
+
+const getLogDurationText = (log) => {
+  const label = getLogDurationLabel(log)
+  if (!label) return ''
+  return log?.status === 'running' ? `已运行 ${label}` : `耗时 ${label}`
+}
+
 const getMessageElapsedLabel = (msg) => {
   if (msg?.loading && isCurrentSessionMessage(msg)) {
     return formatElapsedLabel(elapsed.value)
@@ -1898,6 +2039,7 @@ const handleSend = async () => {
   thinkingOpen[aid] = true
 
   showPanel.value = true
+  clearExecutionPanelState()
   scheduleChatScroll(24, 'smooth')
   startTimer()
 
@@ -1908,8 +2050,6 @@ const handleSend = async () => {
     query.value = ''
     thinkingOpen[aid] = false
     scheduleChatScroll(48, 'smooth')
-    schedulePanelScroll(160, 'smooth')
-    if (res?.dataset_results?.length) nextTick(() => schedulePanelScroll(260, 'smooth'))
   } catch (err) {
     aiMsg.loading = false
     aiMsg.data = { error: err.response?.data?.error || err.message || '系统繁忙' }
@@ -1929,9 +2069,16 @@ const handleStop = () => {
 const resetForNewChat = () => {
   saveCurrentToHistory()
   messages.splice(0, messages.length)
+  query.value = ''
+  clearRestoreRequest()
   setActiveHistory('')
+  clearChatUiState()
   session.resetSession()
   showPanel.value = true
+  nextTick(() => {
+    scheduleChatScroll(20, 'auto')
+    schedulePanelScroll(20, 'auto')
+  })
 }
 
 const handleNewChat = async () => {
@@ -1966,12 +2113,14 @@ const datasetNameMap = computed(() => new Map(
   (datasets.value || []).map(item => [Number(item.id), item.dataset_name])
 ))
 
+const normalizeReportTitle = () => '业绩分析报告'
+
 const buildDownloadFilename = (title) => {
-  const base = String(title || sideReportHeading.value || '经营分析报告')
+  const base = String(normalizeReportTitle(title))
     .replace(/[\\/:*?"<>|]+/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
-  return `${base || '经营分析报告'}.pdf`
+  return `${base || '业绩分析报告'}.pdf`
 }
 
 const buildReportHtml = (title, report) => `<!doctype html>
@@ -1979,13 +2128,14 @@ const buildReportHtml = (title, report) => `<!doctype html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${title}</title>
+  <title>${normalizeReportTitle(title)}</title>
   <style>
     @page { size: A4; margin: 16mm 14mm; }
-    body { margin: 0; font-family: var(--font-sans, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif); background: #f7f8fa; color: #1d2129; }
+    :root { --primary: #1890ff; --page-bg: #f0f2f5; --card-bg: #ffffff; --text: #1d2129; }
+    body { margin: 0; font-family: var(--font-sans, "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif); background: var(--page-bg); color: var(--text); }
     .page { max-width: 960px; margin: 0 auto; padding: 40px 24px 72px; }
-    .card { background: #fff; border: 1px solid #e5e6eb; border-radius: 20px; padding: 28px 32px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05); }
-    .eyebrow { font-size: 12px; color: #165dff; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .card { background: var(--card-bg); border-radius: 8px; padding: 28px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .eyebrow { font-size: 12px; color: var(--primary); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
     h1 { margin: 12px 0 8px; font-size: 28px; line-height: 1.25; }
     h2 { margin: 28px 0 12px; font-size: 20px; }
     h3 { margin: 20px 0 10px; font-size: 16px; }
@@ -2008,7 +2158,7 @@ const buildReportHtml = (title, report) => `<!doctype html>
   <main class="page">
     <section class="card">
       <div class="eyebrow">Data Agent Report</div>
-      <h1>${title}</h1>
+      <h1>${normalizeReportTitle(title)}</h1>
       <article>${renderMd(report)}</article>
       <div class="print-tip">请在打印对话框中选择“另存为 PDF”</div>
     </section>
@@ -2022,7 +2172,7 @@ const downloadLatestReport = (report = latestReport.value, title = sideReportHea
     return
   }
 
-  const exportTitle = title || '经营分析报告'
+  const exportTitle = normalizeReportTitle(title)
   if (activePrintFrame?.parentNode) {
     activePrintFrame.parentNode.removeChild(activePrintFrame)
     activePrintFrame = null
@@ -2069,8 +2219,6 @@ const downloadLatestReport = (report = latestReport.value, title = sideReportHea
   frame.onload = triggerPrint
   window.setTimeout(triggerPrint, 40)
 }
-const downloadReportForMessage = (msg) => downloadLatestReport(getReport(msg), getPrimaryDataset(msg)?.dataset_name || getResultTitle(msg))
-
 const handleDownloadReport = () => {
   ElMessage.info('报告下载功能开发中...')
 }
@@ -2128,6 +2276,7 @@ const restoreHistory = (item) => {
   Object.assign(thinkingOpen, item.thinkingOpen || {})
   Object.keys(logOpen).forEach(k => delete logOpen[k])
   Object.assign(logOpen, item.logOpen || {})
+  timelineVersion.value += 1
 
   nextTick(() => {
     scrollChat('auto')
@@ -2149,8 +2298,7 @@ const quickAsk = (text) => {
 }
 
 const handleExternalFreshChat = () => {
-  if (isRunning.value) return
-  handleNewChat()
+  resetForNewChat()
 }
 
 const getConfirmOptionKey = (opt) => (typeof opt === 'string' ? opt : (opt?.id || opt?.label || JSON.stringify(opt)))
@@ -2172,8 +2320,8 @@ const getConfirmOptionImpact = (opt) => {
   if (typeof opt === 'string') return '确认后将继续执行当前问数任务。'
   const optionType = String(opt?.option_type || '')
   if (optionType === 'cross_dataset') return '确认后将以多数据集汇总方式继续生成结果和报告。'
-  if (optionType === 'dataset_scope') return '确认后将锁定该数据集口径，并继续生成 SQL 与分析报告。'
-  if (optionType === 'dataset_disambiguation') return '确认后将锁定具体数据集口径，并继续生成后续分析结果。'
+  if (optionType === 'dataset_scope') return '确认后将采用该数据集口径，并继续生成 SQL 与分析报告。'
+  if (optionType === 'dataset_disambiguation') return '确认后将采用具体数据集口径，并继续生成后续分析结果。'
   if (optionType === 'member_set_confirmation') {
     return String(opt?.scope_mode || '') === 'compare'
       ? '确认后将按成员逐个对比，再输出结论和报告。'
@@ -2196,9 +2344,9 @@ const getConfirmationScopeSummary = (msg) => {
       : '当前需要确认集合口径，确认后会继续执行分析。'
   }
   if (confirmationType === 'dataset_disambiguation') {
-    return '当前命中了多个可能的数据集口径，确认后会锁定后续执行范围。'
+    return '当前命中了多个可能的数据集口径，确认后会采用对应执行范围。'
   }
-  if (candidateCount > 1) return `当前存在 ${candidateCount} 个候选口径，确认后会锁定后续执行范围。`
+  if (candidateCount > 1) return `当前存在 ${candidateCount} 个候选口径，确认后会采用对应执行范围。`
   return '当前需要先确认业务口径，确认后才会继续执行查询与报告生成。'
 }
 
@@ -2264,6 +2412,17 @@ const startTimer = () => {
   clearInterval(timerInst)
   timerInst = setInterval(() => elapsed.value++, 1000)
 }
+
+const submitConfirmationDraft = (msg) => {
+  const text = String(confirmationDrafts[msg?.id] || '').trim()
+  if (!text || isRunning.value) return
+  doConfirm(text, msg)
+}
+
+const handleConfirmationDraftEnter = (event, msg) => {
+  if (event?.isComposing) return
+  submitConfirmationDraft(msg)
+}
 const stopTimer = () => clearInterval(timerInst)
 
 const loadQuestions = async () => {
@@ -2273,10 +2432,25 @@ const loadQuestions = async () => {
   } catch { commonQuestions.value = [] }
 }
 
+const getStatusColor = (rate) => {
+  const value = toNumber(rate)
+  if (value === null) return '#1890ff'
+  if (value >= 100) return '#00b42a'
+  if (value >= 80) return '#faad14'
+  return '#f5222d'
+}
+
+const sortRowsByCompletionRate = (rows = [], columns = []) => {
+  const rateColumn = columns.find(column => isRateColumn(column)) || Object.keys(rows[0] || {}).find(column => isRateColumn(column))
+  if (!rateColumn) return rows
+  return [...rows].sort((a, b) => (toNumber(b?.[rateColumn]) || 0) - (toNumber(a?.[rateColumn]) || 0))
+}
+
 const renderChartSpec = (chart, data) => {
   const labelColumn = data.columns?.[0]
   const numericColumns = data.columns?.slice(1) || []
-  const colorPalette = ['#165dff', '#00b42a', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+  const sortedRows = sortRowsByCompletionRate(data.rows || [], data.columns || [])
+  const colorPalette = ['#1890ff', '#00b42a', '#faad14', '#f5222d', '#06b6d4', '#597ef7']
   const shortSeriesName = (name) => String(name || '')
     .replace(/^年度/, '')
     .replace(/^总/, '')
@@ -2293,7 +2467,7 @@ const renderChartSpec = (chart, data) => {
       grid: { left: 34, right: 18, top: 34, bottom: 28, containLabel: true },
       xAxis: {
         type: 'category',
-        data: data.rows.map(row => row[labelColumn]),
+        data: sortedRows.map(row => row[labelColumn]),
         axisLabel: { color: '#86909c', fontSize: 11, hideOverlap: true },
         axisLine: { lineStyle: { color: '#e5e6eb' } },
       },
@@ -2309,14 +2483,14 @@ const renderChartSpec = (chart, data) => {
         barMaxWidth: 18,
         symbolSize: columnIndex === 0 ? 0 : 6,
         itemStyle: { borderRadius: columnIndex === 0 ? [4, 4, 0, 0] : 0 },
-        data: data.rows.map(row => row[column]),
+        data: sortedRows.map(row => row[column]),
       })),
     })
     return
   }
 
   if (data.chartType === 'combo') {
-    const categoryRows = data.rows.slice(0, 12)
+    const categoryRows = sortedRows.slice(0, 12)
     const rateColumn = numericColumns.find(column => /率|percent|rate/i.test(column)) || numericColumns[numericColumns.length - 1]
     const barColumns = numericColumns
       .filter(column => column !== rateColumn && !/剩余|缺口|remain/i.test(column))
@@ -2346,7 +2520,7 @@ const renderChartSpec = (chart, data) => {
       yAxis: [
         {
           type: 'value',
-          axisLabel: { color: '#86909c', fontSize: 11, formatter: value => Math.abs(value) >= 10000 ? `${Math.round(value / 10000)}万` : value },
+          axisLabel: { color: '#86909c', fontSize: 11, formatter: value => formatAmount(value) },
           splitLine: { lineStyle: { color: '#f2f3f5', type: 'dashed' } },
         },
         {
@@ -2361,7 +2535,10 @@ const renderChartSpec = (chart, data) => {
           type: 'bar',
           barMaxWidth: 18,
           itemStyle: { borderRadius: [4, 4, 0, 0] },
-          data: categoryRows.map(row => row[column]),
+          data: categoryRows.map(row => ({
+            value: row[column],
+            itemStyle: { color: getStatusColor(row[rateColumn]) },
+          })),
         })),
         {
           name: rateColumn,
@@ -2377,7 +2554,10 @@ const renderChartSpec = (chart, data) => {
             distance: 6,
             formatter: ({ value }) => `${formatDisplayValue(value)}%`,
           },
-          data: categoryRows.map(row => row[rateColumn]),
+          data: categoryRows.map(row => ({
+            value: row[rateColumn],
+            itemStyle: { color: getStatusColor(row[rateColumn]) },
+          })),
         },
       ],
     })
@@ -2393,13 +2573,13 @@ const renderChartSpec = (chart, data) => {
       grid: { left: 34, right: 18, top: 18, bottom: 48, containLabel: true },
       xAxis: {
         type: 'category',
-        data: data.rows.slice(0, 8).map(row => row[labelColumn]),
-        axisLabel: { color: '#86909c', fontSize: 11, interval: 0, rotate: data.rows.length > 5 ? 18 : 0 },
+        data: sortedRows.slice(0, 8).map(row => row[labelColumn]),
+        axisLabel: { color: '#86909c', fontSize: 11, interval: 0, rotate: sortedRows.length > 5 ? 18 : 0 },
         axisLine: { lineStyle: { color: '#e5e6eb' } },
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: '#86909c', fontSize: 11 },
+        axisLabel: { color: '#86909c', fontSize: 11, formatter: value => isAmountColumn(valueColumn) ? formatAmount(value) : value },
         splitLine: { lineStyle: { color: '#f2f3f5', type: 'dashed' } },
       },
       series: [{
@@ -2414,7 +2594,10 @@ const renderChartSpec = (chart, data) => {
           fontWeight: 600,
           formatter: ({ value }) => formatDisplayValue(value),
         },
-        data: data.rows.slice(0, 8).map(row => row[valueColumn]),
+        data: sortedRows.slice(0, 8).map(row => ({
+          value: row[valueColumn],
+          itemStyle: { color: isRateColumn(valueColumn) ? getStatusColor(row[valueColumn]) : colorPalette[0] },
+        })),
       }],
     })
     return
@@ -2444,7 +2627,7 @@ const renderChartSpec = (chart, data) => {
           color: 'rgba(134, 144, 156, 0.7)',
         },
       },
-      data: data.rows.slice(0, 6).map(row => ({ name: row[labelColumn], value: row[valueColumn] })),
+      data: sortedRows.slice(0, 6).map(row => ({ name: row[labelColumn], value: row[valueColumn] })),
     }],
   })
 }
@@ -2484,11 +2667,16 @@ watch(() => session.state.logs.length, (len) => {
   }
 }, { flush: 'post' })
 
+watch(() => session.state.logs.map(log => log.pulseText || '').join('|'), (signature) => {
+  if (!signature) return
+  scheduleChatScroll(26, 'smooth')
+  schedulePanelScroll(80, 'smooth')
+}, { flush: 'post' })
+
 watch(() => session.state.status, (s) => {
   if (s === 'completed') {
     nextTick(() => {
       scheduleChatScroll(40, 'smooth')
-      schedulePanelScroll(180, 'smooth')
     })
   }
   if (s === 'waiting_confirmation') {
@@ -2540,6 +2728,9 @@ watch(() => pendingRestoreId.value, (historyId) => {
 }, { flush: 'post', immediate: true })
 
 onMounted(async () => {
+  clockTimer = window.setInterval(() => {
+    clockNow.value = Date.now()
+  }, 250)
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadHistory()
 
@@ -2594,6 +2785,8 @@ onDeactivated(() => {
 
 onUnmounted(() => {
   window.removeEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
+  if (clockTimer) clearInterval(clockTimer)
+  stopTimer()
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   if (panelScrollTimer) clearTimeout(panelScrollTimer)
   if (activePrintFrame?.parentNode) {
@@ -3983,6 +4176,12 @@ onUnmounted(() => {
   margin-top: 12px;
 }
 
+.sa-side-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
 .sa-side-extra-chart-card {
   padding: 12px 12px 10px;
   border-radius: 14px;
@@ -4134,15 +4333,27 @@ onUnmounted(() => {
   gap: 14px;
 }
 
+.sa-report-dialog-content.is-template-comparison .sa-report-dialog-overview {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sa-report-dialog-content.is-template-ranking .sa-report-chart-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sa-report-dialog-content.is-template-detail .sa-report-stage-metrics {
+  order: -1;
+}
+
 .sa-report-stage-section {
   max-width: 1120px;
   width: 100%;
   margin: 0 auto;
   padding: 16px 18px 16px;
   border: 1px solid rgba(29, 33, 41, 0.08);
-  border-radius: 16px;
+  border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .sa-report-stage-summary {
@@ -4187,14 +4398,14 @@ onUnmounted(() => {
 
 .sa-report-section-card {
   padding: 12px 14px 12px;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid rgba(29, 33, 41, 0.08);
   background: #fbfcff;
 }
 
 .sa-report-section-card-dialog {
   padding: 16px 18px 16px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: #ffffff;
 }
 
@@ -4214,9 +4425,10 @@ onUnmounted(() => {
 
 .sa-report-chart-card {
   padding: 14px 14px 12px;
-  border-radius: 16px;
+  border-radius: 8px;
   border: 1px solid rgba(22, 93, 255, 0.1);
-  background: #fbfcff;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .sa-report-chart-head {

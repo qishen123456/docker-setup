@@ -77,10 +77,66 @@ cd smartask
 ```powershell
 .\update.ps1
 .\update.ps1 -RunTests
+.\update.ps1 -RunTests -RunStreamTests
 .\update.ps1 -NoBuild
+.\update.ps1 -NoPull -RunTests
 ```
 
-默认等价于：`git pull --ff-only` → `docker compose up -d --build` → 健康检查。加 `-RunTests` 会在 backend 容器内运行 `scripts/integration_test.py`，即使用户机没有安装 Python 也可以测试。
+默认等价于：更新前备份 → `git pull --ff-only` → `docker compose config` → `docker compose up -d --build` → 健康检查。加 `-RunTests` 会在 backend 容器内运行 `scripts/integration_test.py`，即使用户机没有安装 Python 也可以测试。
+
+说明：
+
+- `-RunStreamTests` 会额外测试 AI 流式问数链路，依赖真实模型 Key 和网络。
+- `-NoPull` 适合离线更新包场景，不从 Gitee 拉代码。
+- `-NoBuild` 只重启已有镜像，不重新构建。
+- 更新脚本默认会先调用 `backup.ps1` 备份，保护用户机已有数据。
+
+---
+
+## 🧰 运维脚本
+
+### 备份
+
+```powershell
+.\backup.ps1
+```
+
+备份内容通常包括：
+
+- `config/`
+- `.env.example`
+- `bundles/`
+- `postgres.sql`
+
+备份输出到 `backups/时间戳/`，该目录已加入 `.gitignore`。
+
+### 诊断
+
+```powershell
+.\doctor.ps1
+```
+
+生成诊断包：
+
+```text
+diagnostics\smartask_diagnose_时间戳.zip
+```
+
+诊断包包含 Docker 状态、服务日志、端口占用、健康检查和脱敏 `.env` 摘要。遇到用户机问题时，优先让用户执行这个脚本并把 zip 发回。
+
+### 重启/重建/清空
+
+```powershell
+.\reset.ps1 -Mode Restart
+.\reset.ps1 -Mode Rebuild
+.\reset.ps1 -Mode Data -ConfirmDataReset
+```
+
+含义：
+
+- `Restart`：软重启容器，不重建镜像，不删除数据。
+- `Rebuild`：重新构建并启动容器，不删除数据卷。
+- `Data`：清空数据库和向量数据卷，从零初始化；必须显式加 `-ConfirmDataReset`，避免误删。
 
 ---
 
@@ -95,7 +151,8 @@ cd smartask
 | `SMARTASK_AI_API_KEY` 占位值 | 编辑 `.env`，填入真实模型 Key 后重跑 `.\deploy.ps1 -RunTests`。|
 | 想覆盖式重置元数据 | `.\deploy.ps1 -ForceImport`。|
 | 想覆盖式重写配置文件 | `.\deploy.ps1 -ForceConfig`。|
-| 想完全清空（含数据库） | `docker compose down -v`，再次 `.\deploy.ps1` 即从零初始化。|
+| 想完全清空（含数据库） | `.\reset.ps1 -Mode Data -ConfirmDataReset`。|
+| 不知道怎么排查 | `.\doctor.ps1`，把生成的 zip 发给项目管理员。|
 | 飞书同步未启用 | `.env` 中把 `SMARTASK_FEISHU_IS_ACTIVE=true`，并填好 AppID/AppSecret 等。|
 
 查看初始化进度：
@@ -113,6 +170,9 @@ docker-compose.yml           # postgres + backend + frontend 服务编排
 .env.example                 # 环境变量模板（真实值由 .env 提供，不进 Git）
 deploy.ps1 / deploy.bat      # 一键部署入口
 update.ps1 / update.bat      # 增量更新入口
+backup.ps1                   # 用户机备份入口
+doctor.ps1                   # 用户机诊断包入口
+reset.ps1                    # 重启/重建/清空数据入口
 backend/Dockerfile           # 后端镜像（CMD: python bootstrap.py，同时复制 scripts/ 供容器内测试）
 backend/bootstrap.py         # 容器启动引导：迁移 + 首次数据导入
 backend/export_runtime_config.py   # 导出 config/*.json 为 runtime bundle
@@ -130,15 +190,21 @@ docker/postgres/init/*.sql   # postgres 容器**首次创建卷**时执行（兜
 
 ## ❓还原不出来？
 
-请把以下三段日志发给项目管理员：
+优先执行：
+
+```powershell
+.\doctor.ps1
+```
+
+把 `diagnostics\smartask_diagnose_时间戳.zip` 发给项目管理员。
+
+如果诊断脚本也无法运行，再手工执行：
 
 ```powershell
 docker compose ps
 docker compose logs --tail=200 backend > backend.log
 docker compose logs --tail=200 postgres > postgres.log
 ```
-
-附上 `backend.log` / `postgres.log`，可以快速定位问题。
 
 ---
 

@@ -33,6 +33,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+diagnostics/
+backups/
 
 # Env files
 .env

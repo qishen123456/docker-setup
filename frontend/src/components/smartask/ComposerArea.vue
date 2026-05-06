@@ -9,7 +9,7 @@
                 <div class="sa-composer-label">选择数据集</div>
                 <el-tooltip content="不预选时会按问题自动匹配最合适的数据集" placement="top" :show-after="300">
                   <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
-                    {{ selectedDatasetMeta ? '已锁定' : '自动路由' }}
+                    {{ selectedDatasetMeta ? '已选择' : '自动路由' }}
                   </span>
                 </el-tooltip>
               </div>

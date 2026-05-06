@@ -44,6 +44,8 @@ def create_feishu_sync_config():
     """创建飞书同步配置"""
     try:
         data = request.get_json()
+        if data.get('target_table'):
+            data['target_table'] = sync_service.normalize_table_name(data['target_table'])
         
         # 验证必填字段
         required_fields = ['name', 'target_table', 'app_id', 'app_secret', 'base_id', 'table_id']
@@ -74,6 +76,8 @@ def update_feishu_sync_config(config_id):
     """更新飞书同步配置"""
     try:
         data = request.get_json()
+        if data.get('target_table'):
+            data['target_table'] = sync_service.normalize_table_name(data['target_table'])
         
         success = update_feishu_config(config_id, data)
         if success:
@@ -261,6 +265,34 @@ def parse_feishu_url_api():
             "error": f"解析失败: {str(e)}"
         }), 500
 
+@feishu_bp.route('/api/feishu-sync/schema-preview', methods=['POST'])
+def preview_feishu_schema():
+    """预览飞书字段和 PG 目标表字段差异"""
+    try:
+        data = request.get_json() or {}
+        required_fields = ['app_id', 'app_secret', 'base_id', 'table_id', 'target_table']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({
+                    "success": False,
+                    "error": f"缺少必填字段: {field}"
+                }), 400
+
+        data['id'] = int(data.get('id') or 0)
+        data['target_table'] = sync_service.normalize_table_name(data['target_table'])
+        sample_limit = int(data.get('sample_limit') or 50)
+        preview = sync_service.preview_schema(data, sample_limit=sample_limit)
+        return jsonify({
+            "success": True,
+            "preview": preview,
+            "message": "字段结构检测完成"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"字段结构检测失败: {str(e)}"
+        }), 500
+
 @feishu_bp.route('/api/feishu-sync/logs/<int:config_id>', methods=['GET'])
 def get_sync_logs(config_id):
     """获取指定配置的同步日志"""
@@ -363,8 +395,9 @@ def test_feishu_connection():
             'id': 0,
             'name': 'connection_test',
             'base_id': base_id,
-            'table_id': table_id
-        }, access_token)
+            'table_id': table_id,
+            'view_id': data.get('view_id', '')
+        }, access_token, limit=20)
         
         if test_records is not None:
             return jsonify({

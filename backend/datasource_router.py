@@ -11,6 +11,8 @@ import re
 import shutil
 from typing import Dict, List, Optional, Tuple
 
+import pandas as pd
+
 from config_manager import decode_secret, get_default_ai_model
 
 
@@ -103,6 +105,7 @@ class DataSourceRouter:
                 "disk I/O error",
                 "database disk image is malformed",
                 "readonly database",
+                "has no attribute 'bindings'",
             ]
             if not any(token in message for token in recoverable_errors):
                 raise
@@ -148,6 +151,63 @@ class DataSourceRouter:
             vn.connect_to_mssql(odbc_conn_str=odbc_conn_str)
             return
         raise ValueError(f"unsupported database type: {db_type}")
+
+    def _resolve_sqlite_path(self, sqlite_path: str) -> str:
+        if sqlite_path and sqlite_path != ":memory:" and not os.path.isabs(sqlite_path):
+            return os.path.join(os.path.dirname(__file__), sqlite_path)
+        return sqlite_path
+
+    def _connect_raw_database(self, db_config):
+        db_type = (db_config.get("type") or "").lower()
+        if db_type == "postgresql":
+            import psycopg2
+
+            return psycopg2.connect(
+                host=db_config.get("host", "localhost"),
+                port=int(db_config.get("port", 5432) or 5432),
+                dbname=db_config.get("database_name", ""),
+                user=db_config.get("username", ""),
+                password=self._decode_password(db_config.get("password_b64", "")),
+            )
+        if db_type == "mysql":
+            import pymysql
+
+            return pymysql.connect(
+                host=db_config.get("host", "localhost"),
+                port=int(db_config.get("port", 3306) or 3306),
+                database=db_config.get("database_name", ""),
+                user=db_config.get("username", ""),
+                password=self._decode_password(db_config.get("password_b64", "")),
+                charset="utf8mb4",
+            )
+        if db_type == "sqlite":
+            import sqlite3
+
+            return sqlite3.connect(self._resolve_sqlite_path(db_config.get("sqlite_path", ":memory:")))
+        if db_type == "sqlserver":
+            import pyodbc
+
+            driver = db_config.get("driver", "ODBC Driver 17 for SQL Server")
+            conn_str = (
+                f"DRIVER={{{driver}}};"
+                f"SERVER={db_config.get('host', '')};"
+                f"DATABASE={db_config.get('database_name', '')};"
+                f"UID={db_config.get('username', '')};"
+                f"PWD={self._decode_password(db_config.get('password_b64', ''))}"
+            )
+            return pyodbc.connect(conn_str)
+        raise ValueError(f"unsupported database type: {db_type}")
+
+    def execute_sql_for_source(self, source_id: int, sql: str) -> pd.DataFrame:
+        if source_id not in self.data_sources:
+            raise ValueError("数据源不存在")
+
+        db_config = self.data_sources[source_id]["config"]
+        conn = self._connect_raw_database(db_config)
+        try:
+            return pd.read_sql_query(sql, conn)
+        finally:
+            conn.close()
 
     def get_vanna_for_source(self, source_id: int) -> Tuple[object, str]:
         if source_id not in self.data_sources:

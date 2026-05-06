@@ -50,6 +50,7 @@ export const pauseFeishuSync = (id) => api.post(`/feishu-sync/${id}/pause`)
 export const resumeFeishuSync = (id) => api.post(`/feishu-sync/${id}/resume`)
 export const testFeishuConnection = (data) => api.post('/feishu-sync/test-connection', data)
 export const parseFeishuUrl = (url) => api.post('/feishu-sync/parse-url', { url })
+export const previewFeishuSchema = (data) => api.post('/feishu-sync/schema-preview', data)
 export const getFeishuSyncLogs = (configId, limit = 100) => api.get(`/feishu-sync/logs/${configId}?limit=${limit}`)
 export const getAllFeishuSyncLogs = (limit = 50) => api.get(`/feishu-sync/logs?limit=${limit}`)
 export const getFeishuSyncLogStats = () => api.get('/feishu-sync/logs/stats')
@@ -79,20 +80,15 @@ export const sendSmartChat = (question, signal, selectedDatasetIds, modelId, ses
     session_id: sessionId || undefined,
     conversation_history: conversationHistory || undefined,
   }, { signal })
-export const sendSmartChatStream = async (question, signal, selectedDatasetIds, onEvent, modelId, sessionId, conversationHistory) => {
-  const response = await fetch('/api/smart-chat/stream', {
+
+const sendSseRequest = async (url, body, signal, onEvent) => {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({
-      question,
-      selected_dataset_ids: selectedDatasetIds || undefined,
-      model_id: modelId || undefined,
-      session_id: sessionId || undefined,
-      conversation_history: conversationHistory || undefined,
-    }),
+    body: JSON.stringify(body),
     signal,
   })
 
@@ -161,7 +157,19 @@ export const sendSmartChatStream = async (question, signal, selectedDatasetIds, 
   buffer += decoder.decode()
   emitBufferedFrames()
 }
+
+export const sendSmartChatStream = (question, signal, selectedDatasetIds, onEvent, modelId, sessionId, conversationHistory) =>
+  sendSseRequest('/api/smart-chat/stream', {
+    question,
+    selected_dataset_ids: selectedDatasetIds || undefined,
+    model_id: modelId || undefined,
+    session_id: sessionId || undefined,
+    conversation_history: conversationHistory || undefined,
+  }, signal, onEvent)
+
 export const confirmByBoss = (payload) => api.post('/smart-chat/confirm-by-boss', payload)
+export const confirmByBossStream = (payload, signal, onEvent) =>
+  sendSseRequest('/api/smart-chat/confirm-by-boss/stream', payload, signal, onEvent)
 export const getVannaStatus = () => api.get('/bookshelves/health')
 
 export default api

@@ -10,6 +10,10 @@
   --color-primary-light: #f0f5ff;
   --color-primary-light-hover: #e1ecff;
   --color-primary-bg: #f7f9ff;
+  --color-accent: #0f766e;
+  --color-accent-hover: #0b625d;
+  --color-accent-light: #e8f6f4;
+  --color-action-ink: #12304f;
 
   /* ── 中性色阶 ── */
   --gray-50:  #f9fafb;
@@ -189,23 +193,135 @@ html, body, #app, .el-popper, .el-overlay {
 
 /* ===== Element Plus 全局覆写 ===== */
 
-/* 按钮统一 */
+/* 按钮统一：明确主/次/危险层级，避免满屏原生蓝胶囊 */
 .el-button {
-  border-radius: var(--radius-btn) !important;
-  font-weight: 500;
+  min-height: 34px;
+  border-radius: 999px !important;
+  border-color: rgba(18, 48, 79, 0.12) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%) !important;
+  color: var(--color-action-ink) !important;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   transition: all var(--duration-normal) var(--ease-out) !important;
 }
-.el-button:hover { transform: translateY(-1px); }
-.el-button:active { transform: translateY(0) scale(0.98); }
-.el-button--primary {
-  background: var(--color-primary) !important;
-  border-color: var(--color-primary) !important;
-  box-shadow: 0 2px 8px rgba(51,112,255,0.24);
+
+.el-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 118, 110, 0.32) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #eef8f7 100%) !important;
+  color: var(--color-accent-hover) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
+
+.el-button:active { transform: translateY(0) scale(0.98); }
+
+.el-button.is-disabled,
+.el-button.is-disabled:hover {
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none !important;
+}
+
+.el-button--primary {
+  border-color: transparent !important;
+  background:
+    radial-gradient(circle at 22% 0%, rgba(255, 255, 255, 0.28), transparent 32%),
+    linear-gradient(135deg, #123f68 0%, #0f766e 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.22), 0 2px 6px rgba(18, 63, 104, 0.18);
+}
+
 .el-button--primary:hover {
-  background: var(--color-primary-hover) !important;
-  border-color: var(--color-primary-hover) !important;
-  box-shadow: 0 4px 14px rgba(51,112,255,0.32);
+  border-color: transparent !important;
+  background:
+    radial-gradient(circle at 22% 0%, rgba(255, 255, 255, 0.34), transparent 34%),
+    linear-gradient(135deg, #0f355b 0%, #0b625d 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.28), 0 4px 10px rgba(18, 63, 104, 0.18);
+}
+
+.el-button--primary.is-plain {
+  border-color: rgba(15, 118, 110, 0.24) !important;
+  background: linear-gradient(180deg, #f4fbfa 0%, #e7f6f4 100%) !important;
+  color: var(--color-accent-hover) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.el-button--success {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #147d42 0%, #19a25b 100%) !important;
+  color: #ffffff !important;
+}
+
+.el-button--danger {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #b42318 0%, #e5484d 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(229, 72, 77, 0.2);
+}
+
+.el-button--danger:hover {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #9f1f16 0%, #d92d3b 100%) !important;
+  color: #ffffff !important;
+}
+
+.el-button--danger.is-plain {
+  border-color: rgba(218, 45, 59, 0.2) !important;
+  background: linear-gradient(180deg, #fff7f7 0%, #ffecec 100%) !important;
+  color: #c52b35 !important;
+  box-shadow: 0 1px 2px rgba(127, 29, 29, 0.04);
+}
+
+.el-button--danger.is-plain:hover {
+  border-color: rgba(218, 45, 59, 0.34) !important;
+  background: #fff0f0 !important;
+  color: #a61f2b !important;
+}
+
+.el-button.is-link,
+.el-button.is-text {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.el-button.is-link:hover,
+.el-button.is-text:hover {
+  transform: translateY(-1px);
+}
+
+.el-button.is-link.el-button--primary,
+.el-button.is-text.el-button--primary {
+  border-color: rgba(15, 118, 110, 0.16) !important;
+  background: #e8f6f4 !important;
+  color: #0b625d !important;
+}
+
+.el-button.is-link.el-button--primary:hover,
+.el-button.is-text.el-button--primary:hover {
+  border-color: rgba(15, 118, 110, 0.28) !important;
+  background: #d9f0ed !important;
+  color: #084f4b !important;
+}
+
+.el-button.is-link.el-button--danger,
+.el-button.is-text.el-button--danger {
+  border-color: rgba(218, 45, 59, 0.12) !important;
+  background: #fff1f2 !important;
+  color: #c52b35 !important;
+}
+
+.el-button.is-link.el-button--danger:hover,
+.el-button.is-text.el-button--danger:hover {
+  border-color: rgba(218, 45, 59, 0.24) !important;
+  background: #ffe4e6 !important;
+  color: #a61f2b !important;
 }
 
 /* 输入框统一 */
@@ -267,22 +383,38 @@ html, body, #app, .el-popper, .el-overlay {
 .el-table {
   border-radius: var(--radius-card) !important;
   overflow: hidden;
+  border: 1px solid rgba(18, 48, 79, 0.08);
 }
 .el-table th.el-table__cell {
-  background: var(--gray-50) !important;
-  font-weight: 600 !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #f2f6f8 100%) !important;
+  font-weight: 750 !important;
   font-size: 13px !important;
-  color: var(--text-body) !important;
+  color: #20364d !important;
   border-bottom: 1px solid var(--border) !important;
 }
 .el-table .el-table__row:hover > td {
-  background: var(--color-primary-light) !important;
+  background: #f6fbfa !important;
 }
 .el-table .el-table__row {
   transition: background var(--duration-fast) ease;
 }
 .el-table td.el-table__cell {
   border-bottom: 1px solid var(--border-light) !important;
+}
+
+.el-table .cell {
+  line-height: 1.55;
+}
+
+.el-table .cell:has(.el-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.el-table .cell:has(.el-button) .el-button + .el-button {
+  margin-left: 0;
 }
 
 /* Tag统一 */

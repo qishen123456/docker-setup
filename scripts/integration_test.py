@@ -74,6 +74,43 @@ def _safe_post(base: str, path: str, payload: Dict[str, Any] | None = None, **kw
         return False, exc
 
 
+def _read_sse_events(resp: Any, max_events: int = 12, max_seconds: int = 45) -> List[Tuple[str, Any]]:
+    """Read a small SSE sample without requiring the whole long-running task to finish."""
+    events: List[Tuple[str, Any]] = []
+    current_event = "message"
+    data_lines: List[str] = []
+    start = time.time()
+
+    def _flush() -> None:
+        nonlocal current_event, data_lines
+        if not data_lines:
+            current_event = "message"
+            return
+        raw = "\n".join(data_lines)
+        try:
+            body: Any = json.loads(raw)
+        except Exception:
+            body = raw
+        events.append((current_event, body))
+        current_event = "message"
+        data_lines = []
+
+    for raw_line in resp.iter_lines(decode_unicode=True):
+        if time.time() - start > max_seconds or len(events) >= max_events:
+            break
+        line = raw_line or ""
+        if not line:
+            _flush()
+            continue
+        if line.startswith("event:"):
+            current_event = line.split(":", 1)[1].strip() or "message"
+        elif line.startswith("data:"):
+            data_lines.append(line.split(":", 1)[1].strip())
+
+    _flush()
+    return events
+
+
 # ─────────────────────────────────────────────
 # Individual tests
 # ─────────────────────────────────────────────
@@ -233,6 +270,68 @@ def test_smart_chat_minimal(base: str, dataset: Dict[str, Any] | None, result: R
         result.record("/api/smart-chat", "FAIL", f"HTTP {r.status_code} {r.text[:120]}")
 
 
+def test_confirm_stream_contract(base: str, result: Result) -> None:
+    """Smoke-test the SSE wrapper without needing a real pending confirmation session."""
+    payload = {
+        "session_id": "__integration_test_missing_session__",
+        "selected_option": "integration contract test",
+        "selected_dataset_ids": [],
+    }
+    try:
+        with requests.post(
+            base + "/api/smart-chat/confirm-by-boss/stream",
+            json=payload,
+            stream=True,
+            timeout=(10, 35),
+        ) as r:
+            if r.status_code != 200:
+                return result.record("/api/smart-chat/confirm-by-boss/stream", "FAIL", f"HTTP {r.status_code} {r.text[:120]}")
+            content_type = r.headers.get("content-type", "")
+            events = _read_sse_events(r, max_events=6, max_seconds=25)
+    except Exception as exc:
+        return result.record("/api/smart-chat/confirm-by-boss/stream", "FAIL", str(exc))
+
+    names = [name for name, _ in events]
+    if "text/event-stream" not in content_type:
+        return result.record("/api/smart-chat/confirm-by-boss/stream", "FAIL", f"content-type={content_type}")
+    if "ready" in names and ("result" in names or "done" in names):
+        return result.record("/api/smart-chat/confirm-by-boss/stream", "PASS", f"events={','.join(names)}")
+    result.record("/api/smart-chat/confirm-by-boss/stream", "FAIL", f"events={','.join(names) or 'none'}")
+
+
+def test_smart_chat_stream_full(base: str, dataset: Dict[str, Any] | None, result: Result) -> None:
+    """Optional AI-backed stream test. It may skip when model credentials are unavailable."""
+    payload: Dict[str, Any] = {
+        "question": "ping integration test",
+        "session_id": "__integration_test_stream__",
+    }
+    if dataset and dataset.get("id"):
+        payload["selected_dataset_ids"] = [dataset.get("id")]
+
+    try:
+        with requests.post(
+            base + "/api/smart-chat/stream",
+            json=payload,
+            stream=True,
+            timeout=(10, 90),
+        ) as r:
+            if r.status_code in (400, 422, 503):
+                return result.record("/api/smart-chat/stream", "SKIP", f"HTTP {r.status_code} (AI/Vanna not ready)")
+            if r.status_code != 200:
+                return result.record("/api/smart-chat/stream", "FAIL", f"HTTP {r.status_code} {r.text[:120]}")
+            events = _read_sse_events(r, max_events=16, max_seconds=75)
+    except Exception as exc:
+        return result.record("/api/smart-chat/stream", "SKIP", f"stream unavailable: {exc}")
+
+    names = [name for name, _ in events]
+    result_events = [body for name, body in events if name == "result" and isinstance(body, dict)]
+    if result_events and result_events[-1].get("error"):
+        return result.record("/api/smart-chat/stream", "SKIP", str(result_events[-1].get("error"))[:140])
+    if "ready" in names and any(name in names for name in ("trace", "summary", "result", "done")):
+        return result.record("/api/smart-chat/stream", "PASS", f"events={','.join(names)}")
+    result.record("/api/smart-chat/stream", "FAIL", f"events={','.join(names) or 'none'}")
+
+
 def test_frontend(frontend_url: str, result: Result) -> None:
     try:
         r = requests.get(frontend_url + "/", timeout=10)
@@ -266,6 +365,7 @@ def main() -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE)
     parser.add_argument("--frontend-url", default=DEFAULT_FRONTEND)
     parser.add_argument("--no-wait", action="store_true", help="Skip waiting for backend health")
+    parser.add_argument("--with-stream", action="store_true", help="Also run the AI-backed /api/smart-chat/stream test")
     args = parser.parse_args()
 
     base = args.base_url.rstrip("/")
@@ -291,6 +391,9 @@ def main() -> int:
     test_smart_chat_data_sources(base, result)
     test_datasource_crud(base, result)
     test_smart_chat_minimal(base, first_ds, result)
+    test_confirm_stream_contract(base, result)
+    if args.with_stream:
+        test_smart_chat_stream_full(base, first_ds, result)
     test_frontend(frontend, result)
 
     result.report()

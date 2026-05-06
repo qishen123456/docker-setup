@@ -631,6 +631,8 @@ def save_ai_model(data: dict) -> dict:
         "model": data.get('model', ''),
         "base_url": data.get('base_url', ''),
         "api_key_b64": encode_secret(data.get('api_key', '')),
+        "channel_display_name": data.get('channel_display_name', ''),
+        "channel_icon": data.get('channel_icon', ''),
         "is_active": data.get('is_active', True),
         "is_default": data.get('is_default', False),
         "created_at": now,
@@ -664,6 +666,8 @@ def update_ai_model(model_id: int, data: dict) -> Optional[Dict]:
                 "provider": data.get('provider', m['provider']),
                 "model": data.get('model', m['model']),
                 "base_url": data.get('base_url', m['base_url']),
+                "channel_display_name": data.get('channel_display_name', m.get('channel_display_name', '')),
+                "channel_icon": data.get('channel_icon', m.get('channel_icon', '')),
                 "is_active": data.get('is_active', m['is_active']),
                 "is_default": data.get('is_default', m['is_default']),
                 "updated_at": now

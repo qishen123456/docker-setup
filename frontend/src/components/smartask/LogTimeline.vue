@@ -23,14 +23,32 @@
           <div v-if="openState[i]" class="sa-node-body">
             <div class="sa-node-body-head">
               <span class="sa-node-body-label">{{ sectionLabel(log) }}</span>
-              <span class="sa-node-body-meta">{{ log.time ? `更新时间 ${log.time}` : '执行明细' }}</span>
+              <span class="sa-node-body-meta">{{ nodeDurationMeta(log) }}</span>
             </div>
 
             <div v-if="log.summary" class="sa-node-summary">{{ log.summary }}</div>
 
-            <div v-if="log.thought && isThoughtVisible(log, i)" class="sa-node-thought">
-              <span class="sa-node-thought-label">思考过程</span>
-              <p>{{ log.thought }}</p>
+            <div v-if="compactThought(log) && !latestLiveThought(log) && isThoughtVisible(log, i)" class="sa-node-thought">
+              <span class="sa-node-thought-label">执行摘要</span>
+              <p>{{ compactThought(log) }}</p>
+            </div>
+
+            <div v-if="latestLiveThought(log)" class="sa-node-live-thought">
+              <div class="sa-node-live-head">
+                <span class="sa-live-pulse-dot"></span>
+                <span>{{ liveThoughtLabel(log) }}</span>
+              </div>
+              <div class="sa-node-live-line">
+                <div
+                  v-for="(line, lineIndex) in compactLiveThoughtLines(log)"
+                  :key="`${lineIndex}-${line}`"
+                  class="sa-node-live-check"
+                  :class="{ latest: lineIndex === compactLiveThoughtLines(log).length - 1 }"
+                >
+                  <span class="sa-node-live-check-dot"></span>
+                  <span>{{ line }}</span>
+                </div>
+              </div>
             </div>
 
             <div class="sa-log-steps">
@@ -56,7 +74,7 @@
               <slot name="content" :log="log" :index="i"></slot>
             </div>
 
-            <div v-if="log.time" class="sa-log-time">{{ log.time }}</div>
+            <div v-if="nodeDurationFooter(log)" class="sa-log-time">{{ nodeDurationFooter(log) }}</div>
           </div>
         </transition>
       </div>
@@ -65,7 +83,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, reactive, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   logs: {
@@ -82,6 +100,10 @@ defineEmits(['toggle'])
 
 const revealState = reactive({})
 const revealTimers = new Map()
+const clockNow = ref(Date.now())
+const clockTimer = setInterval(() => {
+  clockNow.value = Date.now()
+}, 250)
 
 const statusLabel = (status) => ({
   success: '已完成',
@@ -138,6 +160,142 @@ const sectionLabel = (log) => {
   if (log?.kind === 'fact-update') return '事实更新'
   if (log?.kind === 'confirmation') return '确认节点'
   return '执行记录'
+}
+
+const formatDuration = (duration) => {
+  const value = Number(duration)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  const seconds = value / 1000
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60)
+    const remain = seconds - minutes * 60
+    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
+    return `${minutes}m ${remainLabel}s`
+  }
+  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
+  return `${label}s`
+}
+
+const nodeDurationLabel = (log) => {
+  const startedAtMs = Number(log?.startedAtMs)
+  if (log?.status === 'running' && Number.isFinite(startedAtMs)) {
+    return formatDuration(clockNow.value - startedAtMs)
+  }
+  return log?.durationLabel || log?.elapsedLabel || ''
+}
+
+const nodeDurationMeta = (log) => {
+  const label = nodeDurationLabel(log)
+  if (!label) return '执行明细'
+  if (log?.status === 'running') return `已运行 ${label}`
+  if (log?.status === 'pending') return '等待执行'
+  return `耗时 ${label}`
+}
+
+const nodeDurationFooter = (log) => {
+  const label = nodeDurationLabel(log)
+  if (!label) return ''
+  return log?.status === 'running' ? `当前节点已运行 ${label}` : `当前节点耗时 ${label}`
+}
+
+const latestLiveThought = (log) => {
+  if (Array.isArray(log?.liveThoughtLines) && log.liveThoughtLines.length > 0) {
+    return log.liveThoughtLines[log.liveThoughtLines.length - 1]
+  }
+  if (Array.isArray(log?.thoughtLines) && log.thoughtLines.length > 0 && log?.status === 'running') {
+    return log.thoughtLines[log.thoughtLines.length - 1]
+  }
+  return ''
+}
+
+const isReportNode = (log = {}) => /报告|分析结论|经营分析|agent4/i.test(`${log?.key || ''} ${log?.title || ''}`)
+
+const isJsonLike = (value) => {
+  const text = String(value || '').trim()
+  return text.startsWith('{') || text.startsWith('[') || /^```json/i.test(text)
+}
+
+const parseJsonPreview = (value) => {
+  const text = String(value || '')
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/```$/i, '')
+    .trim()
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    return null
+  }
+}
+
+const structuredProgressPreview = (value, log = {}) => {
+  const raw = String(value || '').trim()
+  const scope = `${log?.key || ''} ${log?.title || ''} ${log?.summary || ''}`
+  if (/<\/?think>|dataset_id|option_id|score_hint|confirm_question|need_confirm/i.test(raw)) {
+    if (/理解|路由|口径|agent1/i.test(scope)) return '正在识别问题意图，并比较候选数据范围。'
+    if (/确认|confirm/i.test(scope)) return '正在整理需要确认的统计口径。'
+    return '正在接收后端实时执行进度。'
+  }
+  if (/WITH\s+|SELECT\s+|FROM\s+/i.test(raw) || /生成.*SQL|SQL/i.test(scope)) {
+    return /复核|校验|review|agent3/i.test(scope)
+      ? '模型正在复核 SQL 口径，完整语句已放到下方详情。'
+      : '模型正在生成 SQL，完整语句已放到下方详情。'
+  }
+  if (!isJsonLike(raw)) return ''
+
+  const data = parseJsonPreview(raw)
+  if (data?.need_confirm || data?.confirm_question || Array.isArray(data?.options)) {
+    return '模型正在判断是否需要口径确认，确认项会整理成可读卡片。'
+  }
+  if (data?.sql) return '模型正在生成 SQL，完整语句已放到下方详情。'
+  if (data?.analysis || data?.report || data?.conclusion) return '模型正在生成分析摘要，完整报告会在下方展示。'
+  return '模型正在返回结构化结果，系统会整理成可读内容。'
+}
+
+const cleanupMarkdownPreview = (value) => String(value || '')
+  .replace(/```[\s\S]*?```/g, ' ')
+  .replace(/`([^`]+)`/g, '$1')
+  .replace(/^#{1,6}\s*/gm, '')
+  .replace(/\*\*([^*]+)\*\*/g, '$1')
+  .replace(/^\s*[•*-]\s*/gm, '')
+  .replace(/\s*->\s*/g, '：')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const pickReportConclusion = (text) => {
+  const cleaned = cleanupMarkdownPreview(text)
+  const match = cleaned.match(/核心结论[:：]?\s*([^。！？\n]{8,120}[。！？]?)/)
+  if (match?.[1]) return `报告摘要：${match[1].trim()}`
+  const firstSentence = cleaned.split(/[。！？]/).find(item => item.trim().length >= 8)
+  return firstSentence ? `报告摘要：${firstSentence.trim()}。` : cleaned
+}
+
+const compactPreview = (value, log = {}, limit = 120) => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const structured = structuredProgressPreview(raw, log)
+  if (structured) return structured
+  const text = isReportNode(log) ? pickReportConclusion(raw) : cleanupMarkdownPreview(raw)
+  if (text.length <= limit) return text
+  return `${text.slice(0, limit).replace(/[，、；：,.:\s]+$/, '')}...`
+}
+
+const compactThought = (log) => {
+  if (log?.markdown && log?.status !== 'running') return ''
+  return compactPreview(log?.thought, log, 112)
+}
+
+const compactLiveThoughtLines = (log) => {
+  const lines = Array.isArray(log?.liveThoughtLines) && log.liveThoughtLines.length > 0
+    ? log.liveThoughtLines
+    : [latestLiveThought(log)]
+  return Array.from(new Set(lines.map(line => compactPreview(line, log, 128)).filter(Boolean))).slice(-4)
+}
+
+const liveThoughtLabel = (log) => {
+  if (log?.liveThoughtSource === 'llm-reasoning') return '实时推理进度'
+  if (log?.liveThoughtSource === 'llm-stream') return '实时生成进度'
+  return '执行摘要'
 }
 
 const buildRevealSignature = (log) => {
@@ -315,6 +473,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearInterval(clockTimer)
   Array.from(revealTimers.keys()).forEach(clearNodeTimers)
 })
 </script>
@@ -592,27 +751,91 @@ onBeforeUnmount(() => {
 
 .sa-node-thought {
   margin-bottom: 7px;
-  padding: 9px 11px;
-  border-radius: 10px;
-  background: #f7f8fa;
-  border: 1px solid rgba(29, 33, 41, 0.06);
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #fafbfc;
+  border: 1px solid rgba(229, 230, 235, 0.9);
 }
 
 .sa-node-thought-label {
   display: inline-flex;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #86909c;
+  color: #a0a7b2;
 }
 
 .sa-node-thought p {
   margin: 0;
   font-size: 10px;
-  line-height: 1.6;
+  line-height: 1.55;
+  color: #667085;
+}
+
+.sa-node-live-thought {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(229, 233, 242, 0.74);
+  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+}
+
+.sa-node-live-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #b0b8c4;
+}
+
+.sa-live-pulse-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #8aa8ff;
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.05);
+  animation: saLivePulse 1.3s ease-in-out infinite;
+}
+
+.sa-node-live-line {
+  max-height: 76px;
+  overflow: hidden;
+  white-space: normal;
+  font-size: 10px;
+  line-height: 1.55;
+  color: #7a8494;
+  animation: revealContent 0.2s ease-out;
+}
+
+.sa-node-live-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 18px;
+  color: #86909c;
+}
+
+.sa-node-live-check.latest {
   color: #4e5969;
+}
+
+.sa-node-live-check-dot {
+  width: 4px;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #b8c2d0;
+  flex-shrink: 0;
+}
+
+.sa-node-live-check.latest .sa-node-live-check-dot {
+  background: #165dff;
+  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.06);
 }
 
 .sa-log-step {
@@ -653,6 +876,17 @@ onBeforeUnmount(() => {
 @keyframes blink {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
+}
+
+@keyframes saLivePulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.62;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
 }
 
 .sa-node-rich {

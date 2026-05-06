@@ -81,6 +81,13 @@ class FourAgentAskService:
             return text
         return text[:limit] + f"\n...[truncated {len(text) - limit} chars]"
 
+    @staticmethod
+    def _stream_preview(value: Any, limit: int = 1400) -> str:
+        text = str(value or "").strip()
+        if len(text) <= limit:
+            return text
+        return "..." + text[-limit:]
+
     def _new_trace(
         self,
         question: str,
@@ -161,6 +168,100 @@ class FourAgentAskService:
                 "event": event,
             },
         )
+
+    def _append_llm_delta(
+        self,
+        trace: Optional[Dict[str, Any]],
+        stage: str,
+        agent_name: str,
+        delta_text: str,
+        stream_text: str,
+        started: float,
+        reasoning_delta: str = "",
+        reasoning_text: str = "",
+        delta_kind: str = "content",
+    ) -> None:
+        if not trace or (not delta_text and not reasoning_delta):
+            return
+        event = {
+            "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "stage": stage or "llm.call",
+            "status": "delta",
+            "agent": agent_name,
+            "duration_seconds": round(time.time() - started, 2),
+            "delta_kind": delta_kind or "content",
+        }
+        if delta_text:
+            event["delta_text"] = self._truncate_text(delta_text, 800)
+            event["stream_text"] = self._stream_preview(stream_text or delta_text)
+        if reasoning_delta:
+            event["reasoning_delta"] = self._truncate_text(reasoning_delta, 800)
+            event["reasoning_text"] = self._stream_preview(reasoning_text or reasoning_delta)
+        trace.setdefault("events", []).append(event)
+        self._emit_live_trace(
+            trace,
+            {
+                "type": "trace",
+                "trace_id": trace.get("trace_id"),
+                "entry": trace.get("entry"),
+                "question": trace.get("question"),
+                "model": trace.get("model"),
+                "base_url": trace.get("base_url"),
+                "event": event,
+            },
+        )
+
+    def _stream_delta_value_to_text(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            parts: List[str] = []
+            for item in value:
+                if isinstance(item, dict):
+                    parts.append(str(item.get("text") or item.get("content") or ""))
+                else:
+                    parts.append(str(item))
+            return "".join(parts)
+        if isinstance(value, dict):
+            return str(value.get("text") or value.get("content") or "")
+        return str(value)
+
+    def _extract_stream_delta(self, delta_obj: Any) -> Tuple[str, str]:
+        content_delta = self._stream_delta_value_to_text(getattr(delta_obj, "content", ""))
+        reasoning_delta = ""
+        reasoning_keys = ("reasoning_content", "reasoning", "reasoning_text")
+
+        for key in reasoning_keys:
+            reasoning_delta = self._stream_delta_value_to_text(getattr(delta_obj, key, ""))
+            if reasoning_delta:
+                break
+
+        if not reasoning_delta:
+            dict_sources: List[Dict[str, Any]] = []
+            extra = getattr(delta_obj, "model_extra", None)
+            if isinstance(extra, dict):
+                dict_sources.append(extra)
+            additional = getattr(delta_obj, "additional_kwargs", None)
+            if isinstance(additional, dict):
+                dict_sources.append(additional)
+            try:
+                dumped = delta_obj.model_dump()
+                if isinstance(dumped, dict):
+                    dict_sources.append(dumped)
+            except Exception:
+                pass
+
+            for source in dict_sources:
+                for key in reasoning_keys:
+                    reasoning_delta = self._stream_delta_value_to_text(source.get(key))
+                    if reasoning_delta:
+                        break
+                if reasoning_delta:
+                    break
+
+        return content_delta, reasoning_delta
 
     def _flush_trace(self, trace: Optional[Dict[str, Any]], result: Optional[Dict[str, Any]] = None) -> None:
         if not trace:
@@ -391,14 +492,44 @@ class FourAgentAskService:
         if layered:
             return layered
 
+        if row_count <= 0:
+            lines = [
+                "## 业绩分析报告",
+                "",
+                "### 核心结论",
+                f"本次围绕“{question or dataset_name}”未查询到匹配数据，暂不能判断业绩好坏。",
+                "",
+                "### 问题诊断",
+                "• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。",
+            ]
+            if review_summary:
+                lines.append(f"• **痛点：** SQL复核 -> {review_summary} -> SQL 语法通过不代表业务过滤条件一定命中数据。")
+            if error_message:
+                lines.append(f"• **痛点：** 执行链路 -> 生成失败 -> 已退回无结果诊断，原因：{error_message}")
+            lines.extend(
+                [
+                    "",
+                    "### 改进建议",
+                    "• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。",
+                    "• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+                ]
+            )
+            return "\n".join(lines)
+
         lines = [
-            f"## {dataset_name} 分析摘要",
-            f"- 原始问题：{question or '未提供问题内容'}",
-            f"- 数据结果：共返回 {row_count} 行数据，字段数 {len(columns)}。",
+            "## 业绩分析报告",
+            "",
+            "### 核心结论",
+            f"当前围绕“{question or dataset_name}”返回 {row_count} 行结果，可结合明细字段进一步判断经营动作。",
+            "",
+            "### 亮点分析",
+            f"• **亮点：** 数据可用性 -> 返回 {row_count} 行、{len(columns)} 个字段 -> 可支撑后续关键指标核对。",
+            "",
+            "### 问题诊断",
         ]
 
         if review_summary:
-            lines.append(f"- SQL复核结论：{review_summary}")
+            lines.append(f"• **痛点：** SQL复核 -> {review_summary} -> 请优先确认口径边界。")
 
         if rows and columns:
             sample_bits = []
@@ -406,17 +537,17 @@ class FourAgentAskService:
             for column in columns[:3]:
                 sample_bits.append(f"{column}={first_row.get(column)}")
             if sample_bits:
-                lines.append(f"- 样例结果：{'；'.join(sample_bits)}")
+                lines.append(f"• **痛点：** 样例结果 -> {'；'.join(sample_bits)} -> 需要继续结合完整明细判断风险。")
 
         if error_message:
-            lines.append(f"- 说明：高级分析报告生成失败，已退回基础摘要模式。原因：{error_message}")
+            lines.append(f"• **痛点：** 高级分析 -> 生成失败 -> 已退回基础摘要模式，原因：{error_message}")
 
         lines.extend(
             [
                 "",
-                "### 建议动作",
-                "- 先结合右侧明细结果确认统计口径与字段含义。",
-                "- 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+                "### 改进建议",
+                "• 先结合右侧明细结果确认统计口径与字段含义。",
+                "• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
             ]
         )
         return "\n".join(lines)
@@ -444,8 +575,17 @@ class FourAgentAskService:
     def _format_metric(value: Optional[float], suffix: str = "") -> str:
         if value is None:
             return "-"
-        if abs(value) >= 10000 and not suffix:
-            return f"{value / 10000:.2f}万"
+        if not suffix:
+            abs_value = abs(value)
+            if abs_value < 10000:
+                if value == int(value):
+                    return str(int(value))
+                return f"{value:.2f}".rstrip("0").rstrip(".")
+            if abs_value < 1000000:
+                return f"{value / 10000:.1f}万"
+            if abs_value < 100000000:
+                return f"{round(value / 10000)}万"
+            return f"{value / 100000000:.2f}亿"
         if value == int(value):
             return f"{int(value):,}{suffix}"
         return f"{value:.2f}{suffix}"
@@ -598,18 +738,21 @@ class FourAgentAskService:
 
         subject_label = "、".join(query_subjects[:6]) or question or dataset_name
         lines = [
-            "## 维度拆分汇总报告",
+            "## 业绩分析报告",
             "",
-            "### 1. 极简总结",
+            "### 核心结论",
             (
                 f"本轮围绕 {subject_label} 展开，共识别 {len(level_sections)} 个分析层级。"
                 f"{top_section['name']}综合达成率 {self._format_metric(top_rate, '%')}，"
                 f"{bottom_section['name']}综合达成率 {self._format_metric(bottom_rate, '%')}。"
             ),
             "",
-            "### 2. 维度拆分过程",
-            f"- 查询主体：{subject_label}",
-            "- 拆分维度：" + " → ".join(section["name"] for section in level_sections),
+            "### 亮点分析",
+            f"• **亮点：** {top_section['name']} -> 综合达成率 {self._format_metric(top_rate, '%')} -> 可作为当前层级的优先复盘样本。",
+            "",
+            "### 问题诊断",
+            f"• **痛点：** {bottom_section['name']} -> 综合达成率 {self._format_metric(bottom_rate, '%')} -> 需要关注目标拆解、项目推进和资源投入。",
+            f"• **结构：** 拆分维度 -> {' → '.join(section['name'] for section in level_sections)} -> 用于定位问题落点。",
             "",
         ]
 
@@ -629,10 +772,9 @@ class FourAgentAskService:
             lines.extend(
                 [
                     f"#### {' / '.join(tracks) + '｜' if tracks else ''}{section['name']}",
-                    f"- 下级单元：{', '.join([row_name(row) for row in section_rows[:12]]) or '暂无'}（共 {len(section_rows)} 个）",
-                    f"- 上级分组：{group_text}",
-                    f"- 风险节点：{format_rank(risk_rows)}",
-                    f"- 表现较好节点：{format_rank(top_rows)}",
+                    f"• **亮点：** 表现较好节点 -> {format_rank(top_rows)} -> 可沉淀可复制动作。",
+                    f"• **痛点：** 风险节点 -> {format_rank(risk_rows)} -> 需要短周期跟进缺口。",
+                    f"• **结构：** 下级单元 -> {', '.join([row_name(row) for row in section_rows[:12]]) or '暂无'}（共 {len(section_rows)} 个） -> 上级分组：{group_text}。",
                     "",
                 ]
             )
@@ -642,10 +784,10 @@ class FourAgentAskService:
         risk_examples = rank_items([row for row in valid_rows if (row_rate(row) or 0) < risk_threshold], False, 3)
         lines.extend(
             [
-                "### 3. 策略建议",
-                f"- {top_section['name']}：优先聚焦低于 {self._format_metric(risk_threshold, '%')} 的节点，复盘目标拆解、项目推进和资源投入是否匹配。",
-                f"- {bottom_section['name']}：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。",
-                f"- 当前共识别 {risk_count} 个风险节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
+                "### 改进建议",
+                f"• {top_section['name']}：优先聚焦低于 {self._format_metric(risk_threshold, '%')} 的节点，复盘目标拆解、项目推进和资源投入是否匹配。",
+                f"• {bottom_section['name']}：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。",
+                f"• 当前共识别 {risk_count} 个风险节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
             ]
         )
         if review_summary:
@@ -783,7 +925,7 @@ class FourAgentAskService:
         elif score < 70:
             summary = "当前更像相似命中，系统不会把它当作确定命中直接下结论。"
         elif candidate_count > 1:
-            summary = f"当前存在 {candidate_count} 个候选口径，后续执行仍需关注范围锁定。"
+            summary = f"当前存在 {candidate_count} 个候选口径，后续执行会继续标注采用的数据范围。"
         elif route.get("preferred_dataset_override"):
             summary = "当前按人工指定数据集执行，路由方向相对明确。"
         else:
@@ -951,7 +1093,7 @@ class FourAgentAskService:
                 user_prompt=self._truncate_text(user_prompt, 16000),
             )
             try:
-                response = self._llm_client.chat.completions.create(
+                stream = self._llm_client.chat.completions.create(
                     model=self._llm_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -959,9 +1101,79 @@ class FourAgentAskService:
                     ],
                     temperature=0.1,
                     max_tokens=max_tokens,
+                    stream=True,
                     timeout=180,
                 )
-                content = (response.choices[0].message.content or "").strip()
+                chunks: List[str] = []
+                reasoning_chunks: List[str] = []
+                pending_delta = ""
+                pending_reasoning = ""
+                last_emit_at = time.time()
+                last_reasoning_emit_at = time.time()
+                for chunk in stream:
+                    try:
+                        delta_obj = chunk.choices[0].delta
+                        delta, reasoning_delta = self._extract_stream_delta(delta_obj)
+                    except Exception:
+                        delta = ""
+                        reasoning_delta = ""
+                    if not delta and not reasoning_delta:
+                        continue
+                    now = time.time()
+                    if delta:
+                        chunks.append(delta)
+                        pending_delta += delta
+                    if reasoning_delta:
+                        reasoning_chunks.append(reasoning_delta)
+                        pending_reasoning += reasoning_delta
+                    if pending_delta and (len(pending_delta) >= 24 or now - last_emit_at >= 0.35):
+                        self._append_llm_delta(
+                            trace,
+                            stage or "llm.call",
+                            agent_name,
+                            pending_delta,
+                            "".join(chunks),
+                            started,
+                        )
+                        pending_delta = ""
+                        last_emit_at = now
+                    if pending_reasoning and (len(pending_reasoning) >= 24 or now - last_reasoning_emit_at >= 0.35):
+                        self._append_llm_delta(
+                            trace,
+                            stage or "llm.call",
+                            agent_name,
+                            "",
+                            "",
+                            started,
+                            reasoning_delta=pending_reasoning,
+                            reasoning_text="".join(reasoning_chunks),
+                            delta_kind="reasoning",
+                        )
+                        pending_reasoning = ""
+                        last_reasoning_emit_at = now
+
+                content = "".join(chunks).strip()
+                if pending_delta:
+                    self._append_llm_delta(
+                        trace,
+                        stage or "llm.call",
+                        agent_name,
+                        pending_delta,
+                        content,
+                        started,
+                    )
+                if pending_reasoning:
+                    self._append_llm_delta(
+                        trace,
+                        stage or "llm.call",
+                        agent_name,
+                        "",
+                        "",
+                        started,
+                        reasoning_delta=pending_reasoning,
+                        reasoning_text="".join(reasoning_chunks),
+                        delta_kind="reasoning",
+                    )
                 self._append_trace(
                     trace,
                     stage or "llm.call",
@@ -1395,7 +1607,7 @@ class FourAgentAskService:
         best_sample_score = int(best_sample.get("match_score", 0))
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
         route_margin = best_score - runner_up_score
-        if best_score < 70:
+        if best_score < 70 and len(ranked) > 1:
             best_dataset_name = best_dataset.get("dataset_name") or f"数据集 {best_dataset['id']}"
             options = self._normalize_confirmation_options(
                 [
@@ -1556,13 +1768,96 @@ class FourAgentAskService:
         dataset_code = str(dataset.get("dataset_code") or "")
         dataset_name = str(dataset.get("dataset_name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
+        is_syyb_dataset = dataset_code in {"angel_business_2026", "angel_business_2026_phase1"} or dataset_name in {
+            "商用事业部",
+            "商用事业部（阶段一升级版）",
+        }
+        is_phase1_dataset = dataset_code == "angel_business_2026_phase1" or dataset_name == "商用事业部（阶段一升级版）"
 
-        if dataset_code != "angel_business_2026" and dataset_name != "商用事业部":
+        if not is_syyb_dataset:
             return ""
+
+        ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"]
+        has_ranking_intent = any(token in normalized_question for token in ranking_tokens)
+        if is_phase1_dataset and has_ranking_intent:
+            if "代表处" in normalized_question:
+                order_direction = "DESC" if any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"]) else "ASC"
+                rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名"]) else 1
+                return f"""
+WITH 汇总结果 AS (
+{SYYB_BASE_SQL}
+),
+代表处分公司内排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY 上级名称
+            ORDER BY 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
+        ) AS 分公司内排名
+    FROM 汇总结果
+    WHERE 层级 = '代表处'
+)
+SELECT *
+FROM 代表处分公司内排序
+WHERE 分公司内排名 <= {rank_limit}
+ORDER BY 上级名称, 分公司内排名, 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
+LIMIT 50
+""".strip()
+            if "业务代表" in normalized_question or "业务员" in normalized_question:
+                is_desc = any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"])
+                order_direction = "DESC" if is_desc else "ASC"
+                rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名"]) else 1
+                metric_column = "年度开单金额" if ("开单" in normalized_question or "金额" in normalized_question) else "达成率"
+                return f"""
+WITH 汇总结果 AS (
+{SYYB_BASE_SQL}
+),
+业务代表上级内排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY 上级名称
+            ORDER BY {metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
+        ) AS 上级内排名
+    FROM 汇总结果
+    WHERE 层级 = '业务代表'
+)
+SELECT *
+FROM 业务代表上级内排序
+WHERE 上级内排名 <= {rank_limit}
+ORDER BY 上级名称, 上级内排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
+LIMIT 50
+""".strip()
+            if "分公司" in normalized_question:
+                order_direction = "DESC" if any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"]) else "ASC"
+                return f"""
+WITH 汇总结果 AS (
+{SYYB_BASE_SQL}
+)
+SELECT *
+FROM 汇总结果
+WHERE 层级 = '分公司'
+ORDER BY 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
+LIMIT 20
+""".strip()
+
+        if is_phase1_dataset and any(token in normalized_question for token in ["低于10", "低于 10", "小于10", "小于 10", "风险"]):
+            return f"""
+WITH 汇总结果 AS (
+{SYYB_BASE_SQL}
+)
+SELECT *
+FROM 汇总结果
+WHERE 达成率 < 10
+ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
+LIMIT 50
+""".strip()
 
         entity_names = []
         for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
             cleaned = match.strip("，,、 和与及的业绩情况表现")
+            if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
+                continue
             if cleaned and cleaned not in entity_names:
                 entity_names.append(cleaned)
         if entity_names:
@@ -1618,7 +1913,7 @@ WITH 字段提取 AS (
     COALESCE(NULLIF(regexp_replace(任务原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
     COALESCE(NULLIF(regexp_replace(开单原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
   FROM 字段提取
-  WHERE 当前年='2026'
+  WHERE COALESCE(NULLIF(当前年,''),'2026')='2026'
 ),
 分公司汇总 AS (
   SELECT
@@ -1655,7 +1950,7 @@ WITH 字段提取 AS (
     COALESCE(NULLIF(regexp_replace(任务原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
     COALESCE(NULLIF(regexp_replace(开单原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
   FROM 字段提取
-  WHERE 当前年='2026'
+  WHERE COALESCE(NULLIF(当前年,''),'2026')='2026'
 )
 SELECT
   '商用事业部' AS 事业部,
@@ -1679,15 +1974,29 @@ LIMIT 100
         seed_sample_id: Any = None,
         trace: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_code = str(dataset.get("dataset_code") or "")
+        dataset_name = str(dataset.get("dataset_name") or "")
+        defer_rule_fallback = dataset_code == "angel_business_2026_phase1" or dataset_name == "商用事业部（阶段一升级版）"
         rule_based_sql = self._build_rule_based_sql(question, route, context)
-        if rule_based_sql:
+        normalized_question = str(question or "").replace("\n", " ").strip()
+        force_grouped_ranking = (
+            defer_rule_fallback
+            and rule_based_sql
+            and any(token in normalized_question for token in ["代表处", "业务代表", "业务员"])
+            and any(token in normalized_question for token in ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"])
+        )
+        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking):
             self._append_trace(
                 trace,
-                "agent2.sql_generate.rule_based",
+                "agent2.sql_generate.grouped_rule" if force_grouped_ranking else "agent2.sql_generate.rule_based",
                 "info",
                 sql=self._truncate_text(rule_based_sql, 12000),
             )
-            return {"sql": rule_based_sql, "notes": "rule based sql fallback"}
+            return {
+                "sql": rule_based_sql,
+                "notes": "grouped hierarchy ranking rule" if force_grouped_ranking else "rule based sql fallback",
+            }
         seed_block = ""
         if seed_sql:
             seed_block = (
@@ -1722,6 +2031,10 @@ Agent1 路由结果：
 5. 如果报告配置提供 analysisDimensions，优先按这些管理链路输出行，保留父子关系列，方便前端从 rows + parentColumn 动态建树。
 6. 如果上下文不足以安全生成 SQL，返回空 sql，并在 notes 中明确缺少什么信息。
 7. 最终 SQL 必须可直接执行，不能包含省略号、伪代码或解释性文字。
+8. 如果用户问“哪些代表处/业务代表最低、最差、完成不好、Top/排名”，且没有指定某个上级组织，必须按上级分组比较：
+   - 代表处必须按 分公司/上级名称 分组，用 ROW_NUMBER() OVER (PARTITION BY 上级名称 ORDER BY 达成率 ASC/DESC...) 输出每个分公司下的最低/最高代表处，不能把所有代表处全局混排。
+   - 业务代表必须按代表处或业务部上级分组比较，不能把所有业务代表全局混排。
+   - 查询结果必须保留 上级名称、节点名称、层级、达成率、剩余任务金额，以及分组内排名字段。
 
 请输出 JSON：
 {{
@@ -1796,6 +2109,14 @@ Agent1 路由结果：
                     sql=self._truncate_text(seed_sql, 12000),
                 )
                 return {"sql": seed_sql, "notes": "golden sample seed fallback", "sample_id": seed_sample_id}
+            if rule_based_sql and defer_rule_fallback:
+                self._append_trace(
+                    trace,
+                    "agent2.sql_generate.rule_fallback",
+                    "info",
+                    sql=self._truncate_text(rule_based_sql, 12000),
+                )
+                return {"sql": rule_based_sql, "notes": "dynamic generation failed; used rule fallback"}
         result["sql"] = sql_text
         return result
 
@@ -1919,8 +2240,9 @@ LLD：
         dataset_name: str = "",
     ) -> Dict[str, Any]:
         started = time.time()
-        vn, error = datasource_router.get_vanna_for_source(source_id)
-        if error:
+        try:
+            dataframe = datasource_router.execute_sql_for_source(source_id, final_sql)
+        except Exception as exc:
             self._append_trace(
                 trace,
                 "datasource.execute_sql",
@@ -1928,11 +2250,9 @@ LLD：
                 dataset_name=dataset_name,
                 source_id=source_id,
                 sql=self._truncate_text(final_sql, 12000),
-                error=error,
+                error=str(exc),
             )
-            raise RuntimeError(error)
-
-        dataframe = vn.run_sql(final_sql)
+            raise RuntimeError(f"执行SQL失败: {exc}")
         if dataframe is None or dataframe.empty:
             self._append_trace(
                 trace,
@@ -1987,7 +2307,10 @@ LLD：
         trace: Optional[Dict[str, Any]] = None,
     ) -> str:
         dataset = self._safe_dict(context.get("dataset"))
-        if dataset.get("dataset_code") == "angel_business_2026" or dataset.get("dataset_name") == "商用事业部":
+        if dataset.get("dataset_code") in {"angel_business_2026", "angel_business_2026_phase1"} or dataset.get("dataset_name") in {
+            "商用事业部",
+            "商用事业部（阶段一升级版）",
+        }:
             self._append_trace(
                 trace,
                 "agent4.analysis.rule_based",
@@ -1999,6 +2322,15 @@ LLD：
             4,
             "你是 Agent4 业务分析官，负责输出老板视角的经营分析结论。",
         )
+        global_report_standard = """
+你现在是一个智能数据分析报告生成引擎。生成报告时必须遵循以下全局标准：
+1. 动态布局：先识别意图。对比查询使用左右对称对比结构；单体查询使用“核心 KPI -> 趋势/对比图 -> 细分维度”的纵向结构；列表或排名查询突出名次、差距和 Top/Bottom。
+2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用“万”；100万-1亿取整“万”；1亿以上保留2位小数“亿”。不得随意生成金额格式。
+3. 视觉引导：完成率按红绿灯解释，>=100% 为绿灯，80%-100% 为黄灯，<80% 为红灯；涉及多维度排序时默认按完成率降序。
+4. 分析文本：严禁重复主语和长篇段落。必须采用“核心结论 -> 亮点分析 • -> 问题诊断 • -> 改进建议”的结构。
+5. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
+""".strip()
+        system_prompt = f"{system_prompt}\n\n{global_report_standard}"
         prompt_groups = self._safe_dict(context.get("agent_prompts"))
         dataset_prompt = "\n\n".join(
             str(item.get("prompt_content") or "")
@@ -2366,15 +2698,32 @@ Agent3 复核结果：
 
         try:
             step_started = time.time()
-            route = self.route_with_agent1(effective_question, trace=trace, conversation_context=memory_history)
-            self._append_trace(trace, "agent1.route_result", "info", route=route)
             if preferred_dataset_ids:
-                route["dataset_ids"] = [int(item) for item in preferred_dataset_ids]
-                route["requires_confirmation"] = False
-                route["decision"] = "generate_sql"
-                route["intent"] = "detail"
-                route["preferred_dataset_override"] = True
-                self._append_trace(trace, "route.override", "info", dataset_ids=route["dataset_ids"])
+                selected_dataset_ids = [int(item) for item in preferred_dataset_ids]
+                route = {
+                    "dataset_ids": selected_dataset_ids,
+                    "intent": "detail",
+                    "refined_query": effective_question,
+                    "requires_confirmation": False,
+                    "decision": "generate_sql",
+                    "match_score": 100,
+                    "route_margin": 100,
+                    "confirmation_role": "boss",
+                    "confirmation_question": "",
+                    "confirmation_options": [],
+                    "candidate_dataset_ids": selected_dataset_ids,
+                    "preferred_dataset_override": True,
+                    "matched_sample_id": None,
+                    "matched_sample_sql": "",
+                    "split_queries": [
+                        {"dataset_id": item, "sub_query": effective_question}
+                        for item in selected_dataset_ids
+                    ],
+                }
+                self._append_trace(trace, "agent1.preferred_dataset_bypass", "info", route=route)
+            else:
+                route = self.route_with_agent1(effective_question, trace=trace, conversation_context=memory_history)
+                self._append_trace(trace, "agent1.route_result", "info", route=route)
             steps.append(
                 {
                     "title": "Agent1 语义路由",
@@ -2446,10 +2795,11 @@ Agent3 复核结果：
         selected_option: str,
         selected_dataset_ids: Optional[List[int]] = None,
         option_id: str = "",
+        live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
         started = time.time()
         steps: List[Dict[str, Any]] = []
-        trace = self._new_trace(selected_option or session_id, "confirm_by_boss")
+        trace = self._new_trace(selected_option or session_id, "confirm_by_boss", live_callback=live_callback)
         self._append_trace(
             trace,
             "confirmation.received",

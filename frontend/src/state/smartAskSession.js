@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue'
-import { confirmByBoss, sendSmartChatStream } from '../api/index.js'
+import { confirmByBossStream, sendSmartChatStream } from '../api/index.js'
 
 const STORAGE_KEY = 'smart-ask-session-v1'
 
@@ -40,7 +40,7 @@ const phaseTemplates = [
     key: 'schema',
     title: '选择数据表',
     summary: '正在匹配最合适的数据集和字段范围。',
-    detailLines: ['匹配候选数据集。', '锁定字段与表范围。'],
+    detailLines: ['匹配候选数据集。', '确认可用字段与表范围。'],
     status: 'pending',
     kind: 'tool',
     toolType: 'dataset',
@@ -104,13 +104,38 @@ const phaseTemplates = [
 const normalizeStatus = (status) => {
   const value = String(status || '').toLowerCase()
   if (['success', 'completed', 'done'].includes(value)) return 'success'
-  if (['running', 'processing', 'in_progress'].includes(value)) return 'running'
+  if (['running', 'processing', 'in_progress', 'delta', 'streaming'].includes(value)) return 'running'
   if (['warning', 'waiting', 'wait', 'waiting_confirmation'].includes(value)) return 'warning'
   if (['error', 'failed', 'failure'].includes(value)) return 'error'
   return 'pending'
 }
 
 const uniqueLines = (lines) => Array.from(new Set((lines || []).map(item => String(item || '').trim()).filter(Boolean)))
+const MAX_LIVE_THOUGHT_LINES = 6
+const HEARTBEAT_LINE_INTERVAL_MS = 3200
+
+const liveLineKey = (line) => String(line || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\d+(\.\d+)?/g, '#')
+  .replace(/[，。、“”‘’；;：:,.!?！？\s]+/g, '')
+  .slice(0, 80)
+
+const uniqueLiveLines = (lines = []) => {
+  const result = []
+  const keys = []
+  ;(lines || []).forEach((line) => {
+    const text = String(line || '').trim()
+    const key = liveLineKey(text)
+    if (!text || !key) return
+    const repeated = keys.some(existing => existing === key || existing.includes(key) || key.includes(existing))
+    if (!repeated) {
+      keys.push(key)
+      result.push(text)
+    }
+  })
+  return result
+}
 
 const inferToolType = (entry) => {
   if (entry?.toolType) return entry.toolType
@@ -171,6 +196,13 @@ const createTimelineEvent = (entry = {}) => {
   const firstTable = tables[0]
   const firstChart = charts[0]
   const summary = entry.summary || entry.detail || ''
+  const baseThoughtLines = Array.isArray(entry.thoughtLines) && entry.thoughtLines.length > 0
+    ? entry.thoughtLines
+    : buildThoughtLines(entry)
+  const liveThoughtLines = uniqueLiveLines(entry.liveThoughtLines).slice(-MAX_LIVE_THOUGHT_LINES)
+  const startedAtMs = Number(entry.startedAtMs || Date.now())
+  const duration = Number(entry.duration)
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : undefined
 
   const normalized = {
     time: entry.time || nowText(),
@@ -186,10 +218,17 @@ const createTimelineEvent = (entry = {}) => {
     codeBlocks,
     tables,
     charts,
-    duration: entry.duration,
+    startedAtMs,
+    duration: safeDuration,
     timeLabel: entry.time || '',
-    durationLabel: formatDuration(entry.duration),
-    thoughtLines: buildThoughtLines(entry),
+    durationLabel: formatDuration(safeDuration),
+    elapsedLabel: entry.elapsedLabel || formatDuration(safeDuration),
+    thoughtLines: uniqueLiveLines([...baseThoughtLines, ...liveThoughtLines]).slice(-MAX_LIVE_THOUGHT_LINES),
+    liveThoughtLines,
+    pulseText: entry.pulseText || liveThoughtLines[liveThoughtLines.length - 1] || '',
+    streamText: entry.streamText || '',
+    liveThoughtSource: entry.liveThoughtSource || '',
+    lastStreamAt: entry.lastStreamAt || 0,
     detailLines: buildDetailLines({ ...entry, summary }),
     sqlTitle: entry.sqlTitle || firstSqlBlock?.title || '',
     sql: entry.sql || firstSqlBlock?.code || '',
@@ -218,6 +257,8 @@ const state = reactive({
 
 let phaseTimer = null
 let activeAbortController = null
+let lastHeartbeatLineAt = 0
+let runToken = 0
 
 const snapshot = () => ({
   question: state.question,
@@ -250,7 +291,23 @@ const hydrate = () => {
   }
 }
 
-const nowText = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
+const nowText = () => {
+  const date = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    '-',
+    pad(date.getMonth() + 1),
+    '-',
+    pad(date.getDate()),
+    ' ',
+    pad(date.getHours()),
+    ':',
+    pad(date.getMinutes()),
+    ':',
+    pad(date.getSeconds()),
+  ].join('')
+}
 
 const stopPhaseTimer = () => {
   if (phaseTimer) {
@@ -280,9 +337,26 @@ const setLogStatus = (key, status, detail, meta = {}) => {
 
 const appendLog = (entry) => {
   const index = state.logs.findIndex((item) => item.key === entry.key)
+  const existing = index >= 0 ? state.logs[index] : null
   const fullEntry = createTimelineEvent({
     time: nowText(),
     status: 'pending',
+    startedAtMs: existing?.startedAtMs || Date.now(),
+    liveThoughtLines: existing?.liveThoughtLines || [],
+    streamText: existing?.streamText || '',
+    liveThoughtSource: existing?.liveThoughtSource || '',
+    lastStreamAt: existing?.lastStreamAt || 0,
+    codeBlocks: existing?.codeBlocks || [],
+    tables: existing?.tables || [],
+    charts: existing?.charts || [],
+    markdown: existing?.markdown || '',
+    sql: existing?.sql || '',
+    sqlTitle: existing?.sqlTitle || '',
+    tableColumns: existing?.tableColumns || [],
+    tableRows: existing?.tableRows || [],
+    tableTitle: existing?.tableTitle || '',
+    chartData: existing?.chartData || null,
+    chartTitle: existing?.chartTitle || '',
     ...entry,
   })
 
@@ -348,6 +422,7 @@ const beginPhaseStreaming = () => {
 
 const beginRealtimeStreaming = (question) => {
   stopPhaseTimer()
+  lastHeartbeatLineAt = 0
   replaceLogs([
     {
       key: 'stream-connect',
@@ -362,6 +437,109 @@ const beginRealtimeStreaming = (question) => {
       ],
     },
   ])
+}
+
+const findActiveLogIndex = () => {
+  for (let i = state.logs.length - 1; i >= 0; i -= 1) {
+    if (state.logs[i]?.status === 'running') return i
+  }
+  return -1
+}
+
+const getHeartbeatThoughtLine = (log, elapsedMs) => {
+  const elapsedLabel = formatDuration(elapsedMs) || '几秒'
+  const scope = `${log?.key || ''} ${log?.title || ''}`
+  const buckets = [
+    {
+      test: /trace-agent2|生成 SQL/i,
+      lines: [
+        '正在阅读数据集说明、字段字典和 Golden SQL 样例，先把问题翻译成可靠查询口径。',
+        '正在组织只读 PostgreSQL 查询，重点校准分公司、代表处、时间范围和指标口径。',
+        '正在检查聚合层级，避免把下级明细重复累加到上级结果里。',
+        '正在补齐筛选条件和排序逻辑，确保返回结果能直接用于分析报告。',
+        '大模型仍在生成 SQL，不是停住了；我会继续同步当前节点进展。',
+      ],
+    },
+    {
+      test: /trace-agent3|校验 SQL|复核 SQL/i,
+      lines: [
+        '正在复核 SQL 是否只读，并检查字段、过滤条件和统计口径是否一致。',
+        '正在排查可能的层级口径风险，例如组织简称、代表处归属和金额聚合方向。',
+        '正在把 SQL 与数据集约束做最后对齐，避免执行阶段才暴露明显错误。',
+      ],
+    },
+    {
+      test: /trace-execute|执行 SQL|查询执行/i,
+      lines: [
+        'SQL 已提交到数据源，正在等待数据库返回结果。',
+        '正在等待查询完成，同时保持实时通道连接。',
+        '数据库还在执行当前查询，结果回来后会立即进入分析节点。',
+      ],
+    },
+    {
+      test: /trace-agent4|报告|分析|结论/i,
+      lines: [
+        '正在把查询结果整理成经营分析语言，提炼关键结论、异常点和建议动作。',
+        '正在检查指标单位、排序结果和风险提示，避免报告只是一段流水账。',
+        '正在生成结论性摘要与后续建议，完成后会同步到报告区。',
+      ],
+    },
+    {
+      test: /trace-route|理解问题/i,
+      lines: [
+        '正在识别问题里的指标、组织层级和时间范围。',
+        '正在匹配候选数据集，并判断是否需要进一步确认统计口径。',
+      ],
+    },
+    {
+      test: /trace-context|数据集上下文|dataset/i,
+      lines: [
+        '正在加载数据集上下文、字段说明和可复用样例。',
+        '正在整理本轮可用的数据字典与 SQL 样本，为后续查询做准备。',
+      ],
+    },
+  ]
+
+  const matched = buckets.find(item => item.test.test(scope))
+  const lines = matched?.lines || [
+    '当前节点仍在执行，正在等待后端返回下一条真实执行事件。',
+    '实时通道保持连接中，拿到新进展后会继续追加到执行记录。',
+    '正在推进当前问数链路，请稍等一下。',
+  ]
+  const index = Math.floor(Math.max(0, elapsedMs) / HEARTBEAT_LINE_INTERVAL_MS) % lines.length
+  return lines[index]
+}
+
+const applyHeartbeatEvent = () => {
+  if (state.status !== 'running') return
+  const now = Date.now()
+  if (now - lastHeartbeatLineAt < HEARTBEAT_LINE_INTERVAL_MS) return
+
+  const index = findActiveLogIndex()
+  if (index < 0) return
+
+  const log = state.logs[index]
+  if (['llm-stream', 'llm-reasoning'].includes(log.liveThoughtSource) && now - Number(log.lastStreamAt || 0) < HEARTBEAT_LINE_INTERVAL_MS * 2) {
+    return
+  }
+  const startedAt = Date.parse(state.startedAt)
+  const elapsedMs = Number.isFinite(startedAt) ? now - startedAt : 0
+  const nodeStartedAt = Number(log.startedAtMs || now)
+  const nodeElapsedMs = Math.max(0, now - nodeStartedAt)
+  const line = getHeartbeatThoughtLine(log, elapsedMs)
+  const liveThoughtLines = uniqueLiveLines([...(log.liveThoughtLines || []), line]).slice(-MAX_LIVE_THOUGHT_LINES)
+
+  state.logs[index] = createTimelineEvent({
+    ...log,
+    status: 'running',
+    duration: nodeElapsedMs,
+    elapsedLabel: formatDuration(nodeElapsedMs),
+    liveThoughtLines,
+    pulseText: line,
+    time: nowText(),
+  })
+  state.updatedAt = new Date().toISOString()
+  lastHeartbeatLineAt = now
 }
 
 const normalizeTraceStageKey = (stage) => {
@@ -415,7 +593,7 @@ const normalizeTraceStatus = (status, stage) => {
   if (value === 'error') return 'error'
   if (value === 'fallback') return 'warning'
   if (stage === 'request.received') return 'success'
-  if (['request', 'processing'].includes(value)) return 'running'
+  if (['request', 'processing', 'delta', 'streaming'].includes(value)) return 'running'
   if (['response', 'parsed', 'info'].includes(value)) return 'success'
   return normalizeStatus(value)
 }
@@ -451,12 +629,14 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
   }
 
   if (text.startsWith('agent2.') || text === 'pipeline.agent2_result') {
+    if (status === 'delta') lines.push('模型正在实时返回真实内容，已切换为逐段打印。')
     if (status === 'request') lines.push('正在结合书架上下文和业务口径生成 SQL。')
     if (payload.notes) lines.push(`生成说明：${payload.notes}`)
     if (payload.sample_id) lines.push(`已回退到样例 SQL：${payload.sample_id}`)
   }
 
   if (text.startsWith('agent3.') || text === 'pipeline.agent3_result') {
+    if (status === 'delta') lines.push('模型正在实时返回真实复核内容，已切换为逐段打印。')
     if (status === 'request') lines.push('正在复核 SQL 语义、统计口径与安全性。')
     if (payload.review_summary) lines.push(`复核结论：${payload.review_summary}`)
     if (Array.isArray(payload.risks) && payload.risks.length > 0) {
@@ -479,6 +659,7 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
   }
 
   if (text.startsWith('agent4.') || text === 'pipeline.agent4_result') {
+    if (status === 'delta') lines.push('模型正在实时返回真实分析内容，已切换为逐段打印。')
     if (status === 'request') lines.push('正在生成经营分析摘要与最终报告。')
     if (payload.analysis_preview) lines.push('已生成分析摘要预览。')
   }
@@ -505,6 +686,7 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
 
 const buildTraceThought = (stage, status, payload = {}) => {
   const text = String(stage || '')
+  if (status === 'delta') return ''
   if (payload.response_text) return String(payload.response_text).trim()
   if (payload.analysis_preview) return String(payload.analysis_preview).trim()
   if (payload.review_summary) return String(payload.review_summary).trim()
@@ -512,6 +694,130 @@ const buildTraceThought = (stage, status, payload = {}) => {
   if (status === 'request' && text.startsWith('agent3.')) return '正在从统计口径、字段匹配和只读安全三个方向复核当前 SQL。'
   if (status === 'request' && text.startsWith('agent4.')) return '正在基于结果数据生成经营分析摘要和建议动作。'
   return ''
+}
+
+const compactReadableChinese = (value) => {
+  const text = String(value || '')
+    .replace(/<\/?think>/gi, '')
+    .replace(/```(?:json|sql)?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return ''
+  const chineseCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+  const noisyTokenCount = (text.match(/[{}[\]"'`]|dataset_id|option_id|score_hint|confirm_question|need_confirm|jsonb|SELECT|FROM|WHERE|GROUP\s+BY|CASE\s+WHEN|COUNT|SUM|WITH\s+/gi) || []).length
+  if (chineseCount < 8 || noisyTokenCount > 0) return ''
+  return text.length > 54 ? `${text.slice(0, 54)}...` : text
+}
+
+const fallbackStreamProgress = (stage, source = '') => {
+  const scope = `${stage || ''} ${source || ''}`
+  if (/confirmation|confirm/i.test(scope)) return '正在整理需要确认的统计口径。'
+  if (/agent1|route|理解|口径/i.test(scope)) return '正在识别问题意图，并比较候选数据范围。'
+  if (/context|dataset|数据集/i.test(scope)) return '正在读取字段字典、样例 SQL 和数据集上下文。'
+  if (/agent2|生成.*SQL|SQL/i.test(scope)) return '正在生成 SQL 草稿，等待完整语句确认。'
+  if (/agent3|复核|校验|review/i.test(scope)) return '正在复核 SQL 字段、口径和只读安全。'
+  if (/execute|执行/i.test(scope)) return 'SQL 已提交，正在等待数据源返回结果。'
+  if (/agent4|报告|分析|结论/i.test(scope)) return '正在整理指标、图表和经营分析结论。'
+  return '正在接收后端实时执行进度。'
+}
+
+const humanizeStreamPreview = (stage, value, source = '') => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const scope = `${stage || ''} ${source || ''}`
+  const compact = raw.replace(/\s+/g, ' ')
+
+  if (/need_confirm|confirm_question|options|option_id/i.test(compact)) {
+    return '正在判断是否需要补充确认口径。'
+  }
+  if (/dataset_id|score_hint|candidate|arbiter|route/i.test(compact)) {
+    return '正在比较候选数据集与命中置信度。'
+  }
+  if (/<\/?think>|```|^[{[]|"\w+"\s*:|[a-z_]{3,}\s*[:=]|ct\s*\|/i.test(compact)) {
+    return fallbackStreamProgress(stage, source)
+  }
+
+  if (/agent2|生成.*SQL|SQL/i.test(scope)) {
+    if (/WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT/i.test(compact)) return '已确认筛选、分组和排序条件，正在收束 SQL。'
+    if (/FROM|JOIN|WITH/i.test(compact)) return '已确认查询表与字段来源，正在补齐过滤条件。'
+    if (/SELECT|"\s*sql\s*"/i.test(compact)) return '已开始生成 SQL 主体，正在确认字段和指标。'
+    return '正在结合问题口径生成 SQL 草稿。'
+  }
+  if (/agent3|复核|校验|review/i.test(scope)) {
+    if (/通过|安全|只读|valid|pass/i.test(compact)) return '已确认 SQL 只读安全，正在复核统计口径。'
+    return '正在复核 SQL 字段、过滤条件和统计口径。'
+  }
+  if (/agent4|报告|分析结论|经营分析/i.test(scope) && (/^```|^[[{]/.test(raw) || /"analysis"|"report"|"conclusion"/i.test(compact))) {
+    return '模型正在生成分析摘要，完整报告会在下方展示。'
+  }
+  if (/^```json/i.test(raw) || /^[{[]/.test(raw)) {
+    if (/"need_confirm"|"confirm_question"|"options"/i.test(compact)) {
+      return '模型正在判断是否需要口径确认，确认项会整理成可读卡片。'
+    }
+    if (/"sql"\s*:/i.test(compact)) {
+      return '已接收到 SQL 结构化片段，正在等待完整语句。'
+    }
+    return '模型正在返回结构化结果，系统会整理成可读内容。'
+  }
+  if (/```|WITH\s+|SELECT\s+|FROM\s+/i.test(raw)) {
+    return '模型正在生成 SQL，完整语句会在生成完成后展示。'
+  }
+  return compactReadableChinese(raw) || fallbackStreamProgress(stage, source)
+}
+
+const buildTraceArtifacts = (stage, status, payload = {}, existing = null) => {
+  const text = String(stage || '')
+  const artifacts = {}
+  const sqlText = String(payload.sql || payload.final_sql || '').trim()
+
+  if (text === 'pipeline.agent2_result' && sqlText) {
+    artifacts.codeBlocks = [{ language: 'sql', title: '模型生成 SQL', code: sqlText }]
+    artifacts.sql = sqlText
+    artifacts.sqlTitle = '模型生成 SQL'
+  }
+
+  if (text === 'pipeline.agent3_result' && sqlText) {
+    artifacts.codeBlocks = [{ language: 'sql', title: '复核后的最终 SQL', code: sqlText }]
+    artifacts.sql = sqlText
+    artifacts.sqlTitle = '复核后的最终 SQL'
+  }
+
+  if (text.startsWith('datasource.execute_sql') && status === 'response') {
+    const columns = Array.isArray(payload.columns) ? payload.columns : []
+    const rows = Array.isArray(payload.sample_rows) ? payload.sample_rows : []
+    if (columns.length || rows.length) {
+      artifacts.tables = [{
+        title: `${payload.dataset_name || 'SQL'} 查询结果预览`,
+        columns,
+        rows,
+      }]
+      artifacts.tableTitle = `${payload.dataset_name || 'SQL'} 查询结果预览`
+      artifacts.tableColumns = columns
+      artifacts.tableRows = rows
+    }
+  }
+
+  if (text === 'pipeline.agent4_result' && payload.analysis_preview) {
+    artifacts.markdown = String(payload.analysis_preview || '').trim()
+  }
+
+  if (!Object.keys(artifacts).length) {
+    return {
+      codeBlocks: existing?.codeBlocks || [],
+      tables: existing?.tables || [],
+      charts: existing?.charts || [],
+      markdown: existing?.markdown || '',
+      sql: existing?.sql || '',
+      sqlTitle: existing?.sqlTitle || '',
+      tableColumns: existing?.tableColumns || [],
+      tableRows: existing?.tableRows || [],
+      tableTitle: existing?.tableTitle || '',
+      chartData: existing?.chartData || null,
+      chartTitle: existing?.chartTitle || '',
+    }
+  }
+
+  return artifacts
 }
 
 const applyTraceEvent = (payload = {}) => {
@@ -537,6 +843,34 @@ const applyTraceEvent = (payload = {}) => {
   const thought = buildTraceThought(stage, event.status, event)
   const summary = detailLines[0] || `${meta.title}处理中`
   const existing = state.logs.find(item => item.key === key)
+  const nodeStartedAt = existing?.startedAtMs || Date.now()
+  const tracedDuration = event.duration_seconds ? Number(event.duration_seconds) * 1000 : undefined
+  const fallbackDuration = normalizedStatus === 'success' && !tracedDuration
+    ? Date.now() - nodeStartedAt
+    : existing?.duration
+
+  const eventStatus = String(event.status || '').toLowerCase()
+  const deltaKind = String(event.delta_kind || '').toLowerCase()
+  const isDelta = eventStatus === 'delta'
+  const isReasoningDelta = isDelta && (
+    deltaKind === 'reasoning'
+    || Boolean(event.reasoning_text)
+    || Boolean(event.reasoning_delta)
+  )
+  const rawStreamText = isDelta
+    ? String(
+      isReasoningDelta
+        ? event.reasoning_text || event.reasoning_delta || ''
+        : event.stream_text || event.delta_text || ''
+    ).trim()
+    : existing?.streamText || ''
+  const streamText = isDelta
+    ? humanizeStreamPreview(stage, rawStreamText, isReasoningDelta ? 'reasoning' : 'content')
+    : rawStreamText
+  const liveThoughtLines = isDelta && streamText
+    ? uniqueLiveLines([...(existing?.liveThoughtLines || []), streamText]).slice(-MAX_LIVE_THOUGHT_LINES)
+    : existing?.liveThoughtLines || []
+  const artifacts = buildTraceArtifacts(stage, event.status, event, existing)
 
   appendLog({
     key,
@@ -548,8 +882,21 @@ const applyTraceEvent = (payload = {}) => {
     thought,
     detailLines,
     time: event.time || nowText(),
-    duration: event.duration_seconds ? Number(event.duration_seconds) * 1000 : existing?.duration,
+    startedAtMs: nodeStartedAt,
+    duration: tracedDuration || fallbackDuration,
+    liveThoughtLines,
+    pulseText: streamText || existing?.pulseText || '',
+    streamText,
+    liveThoughtSource: isDelta
+      ? (isReasoningDelta ? 'llm-reasoning' : 'llm-stream')
+      : existing?.liveThoughtSource || '',
+    lastStreamAt: isDelta ? Date.now() : existing?.lastStreamAt || 0,
+    ...artifacts,
   })
+
+  if (normalizedStatus === 'running') {
+    lastHeartbeatLineAt = 0
+  }
 }
 
 const formatDuration = (duration) => {
@@ -574,6 +921,96 @@ const normalizeSelectedDatasetIds = (selectedDatasetInput) => {
   }
   const value = Number(selectedDatasetInput)
   return Number.isFinite(value) && value > 0 ? [value] : []
+}
+
+const getConfirmationType = (data = {}) => String(
+  data?.confirmation_type
+  || data?.route?.confirmation_type
+  || (Array.isArray(data?.confirmation_options) ? data.confirmation_options[0]?.confirmation_type : '')
+  || (Array.isArray(data?.confirmation_options) ? data.confirmation_options[0]?.option_type : '')
+  || ''
+)
+
+const getOptionDatasetIds = (option = {}) => normalizeSelectedDatasetIds(option?.dataset_ids)
+
+const getUniqueConfirmationDatasetIds = (data = {}) => {
+  const ids = [
+    ...normalizeSelectedDatasetIds(data?.route?.dataset_ids),
+    ...normalizeSelectedDatasetIds(data?.route?.candidate_dataset_ids),
+    ...normalizeSelectedDatasetIds(data?.candidate_dataset_ids),
+  ]
+  const options = Array.isArray(data?.confirmation_options) ? data.confirmation_options : []
+  options.forEach((option) => {
+    ids.push(...getOptionDatasetIds(option))
+  })
+  return Array.from(new Set(ids.map(Number).filter(item => Number.isFinite(item) && item > 0)))
+}
+
+const isDatasetOnlyConfirmation = (data = {}, selectedIds = []) => {
+  if (!data?.requires_confirmation || !data?.session_id) return false
+  const confirmationType = getConfirmationType(data)
+  if (/member_set|成员|口径集合/i.test(confirmationType)) return false
+  const uniqueDatasetIds = selectedIds.length ? selectedIds : getUniqueConfirmationDatasetIds(data)
+  if (uniqueDatasetIds.length !== 1) return false
+  if (/dataset|scope|similarity/i.test(confirmationType)) return true
+
+  const options = Array.isArray(data?.confirmation_options) ? data.confirmation_options : []
+  if (options.length === 0) return false
+  return options.every((option) => {
+    const optionType = String(option?.option_type || option?.confirmation_type || '')
+    return /dataset|scope|similarity/i.test(optionType)
+  })
+}
+
+const pickDatasetConfirmationOption = (data = {}, selectedIds = []) => {
+  const selectedSet = new Set(selectedIds.map(Number))
+  const options = Array.isArray(data?.confirmation_options) ? data.confirmation_options : []
+  const matched = options.find((option) => {
+    const ids = getOptionDatasetIds(option)
+    return ids.length > 0 && ids.some(id => selectedSet.has(Number(id)))
+  }) || options[0] || null
+
+  if (!matched || typeof matched === 'string') {
+    return {
+      id: '',
+      label: typeof matched === 'string' ? matched : '按唯一可用数据集继续',
+    }
+  }
+
+  return {
+    id: matched?.id || '',
+    label: String(matched?.label || matched?.name || '按唯一可用数据集继续').trim(),
+  }
+}
+
+const consumeStreamEvent = (eventName, payload, finalPayloadRef) => {
+  if (eventName === 'trace') {
+    applyTraceEvent(payload)
+    return
+  }
+  if (eventName === 'heartbeat') {
+    applyHeartbeatEvent(payload)
+    return
+  }
+  if (eventName === 'result') {
+    finalPayloadRef.value = payload
+  }
+}
+
+const runConfirmationStream = async (payload, signal, isStale = () => false) => {
+  const finalPayloadRef = { value: null }
+  await confirmByBossStream(
+    payload,
+    signal,
+    (eventName, streamPayload) => {
+      if (isStale()) return
+      consumeStreamEvent(eventName, streamPayload, finalPayloadRef)
+    },
+  )
+  if (!finalPayloadRef.value) {
+    throw new Error('后端确认执行流已结束，但没有返回最终结果。')
+  }
+  return finalPayloadRef.value
 }
 
 const splitDatasetSteps = (steps = []) => {
@@ -768,7 +1205,7 @@ const buildDatasetExecutionEvents = (question, route, dataset, stepGroup = [], i
     thought: route?.matched_reason || '',
     detailLines: [
       `开始执行任务：${refinedQuestion}`,
-      `已锁定数据集：${datasetName}`,
+      `当前使用数据集：${datasetName}`,
       `此查询问题无需拆解：${refinedQuestion}`,
     ],
   })
@@ -1023,8 +1460,72 @@ const buildTimelineFromResult = (data) => {
   return events.filter(Boolean)
 }
 
+const inferRealtimeSourceKey = (entry = {}) => {
+  const text = `${entry.key || ''} ${entry.title || ''} ${entry.summary || ''}`
+  if (/生成.*SQL|SQL.*生成|模型生成SQL/i.test(text)) return 'trace-agent2'
+  if (/校验.*SQL|复核.*SQL|SQL.*复核|SQL纠错/i.test(text)) return 'trace-agent3'
+  if (/执行.*SQL|SQL.*执行|查询执行/i.test(text)) return 'trace-execute'
+  if (/报告|经营分析|结论|摘要/i.test(text)) return 'trace-agent4'
+  if (/路由|口径|命中|理解/i.test(text)) return 'trace-route'
+  if (/数据集|上下文|数据表/i.test(text)) return 'trace-context'
+  return ''
+}
+
+const mergeRealtimeProgressIntoTimeline = (timeline = []) => {
+  const liveSources = new Map()
+  const liveSourceKinds = new Map()
+  state.logs.forEach((log) => {
+    if (!Array.isArray(log?.liveThoughtLines) || log.liveThoughtLines.length === 0) return
+    liveSources.set(log.key, log.liveThoughtLines)
+    liveSourceKinds.set(log.key, log.liveThoughtSource || '')
+  })
+  if (liveSources.size === 0) return timeline
+
+  return timeline.map((entry) => {
+    const sourceKey = inferRealtimeSourceKey(entry)
+    const liveThoughtLines = uniqueLiveLines([
+      ...(entry.liveThoughtLines || []),
+      ...(liveSources.get(sourceKey) || []),
+    ]).slice(-MAX_LIVE_THOUGHT_LINES)
+    return liveThoughtLines.length > 0
+      ? {
+        ...entry,
+        liveThoughtLines,
+        liveThoughtSource: entry.liveThoughtSource || liveSourceKinds.get(sourceKey) || '',
+        pulseText: liveThoughtLines[liveThoughtLines.length - 1],
+      }
+      : entry
+  })
+}
+
+const settleRealtimeTimeline = () => {
+  if (!state.logs.some(log => String(log?.key || '').startsWith('trace-'))) {
+    return false
+  }
+
+  const settledAt = new Date().toISOString()
+  state.logs = state.logs.map((log) => {
+    const status = ['error', 'warning'].includes(log?.status) ? log.status : 'success'
+    const startedAtMs = Number(log?.startedAtMs)
+    const duration = Number.isFinite(startedAtMs)
+      ? Math.max(Number(log?.duration || 0), Date.now() - startedAtMs)
+      : log?.duration
+    return createTimelineEvent({
+      ...log,
+      status,
+      duration,
+      elapsedLabel: formatDuration(duration),
+      durationLabel: formatDuration(duration),
+      time: log?.time || nowText(),
+      updatedAt: settledAt,
+    })
+  })
+  return true
+}
+
 const finalizeFromResult = (data) => {
   stopPhaseTimer()
+  lastHeartbeatLineAt = 0
 
   state.result = data
   state.currentSessionId = data?.session_id || state.currentSessionId
@@ -1048,8 +1549,10 @@ const finalizeFromResult = (data) => {
     return
   }
 
-  const timeline = buildTimelineFromResult(data)
-  replaceLogs(timeline)
+  if (!settleRealtimeTimeline()) {
+    const timeline = mergeRealtimeProgressIntoTimeline(buildTimelineFromResult(data))
+    replaceLogs(timeline)
+  }
   state.status = data?.requires_confirmation ? 'waiting_confirmation' : 'completed'
   state.error = ''
   persist()
@@ -1058,6 +1561,7 @@ const finalizeFromResult = (data) => {
 const startAsk = async (question, selectedDatasetInput, modelId) => {
   const normalizedQuestion = String(question || '').trim()
   if (!normalizedQuestion) return null
+  const currentRunToken = ++runToken
   const selectedIds = normalizeSelectedDatasetIds(selectedDatasetInput)
 
   if (activeAbortController) {
@@ -1086,8 +1590,13 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
       activeAbortController.signal,
       selected,
       (eventName, payload) => {
+        if (currentRunToken !== runToken) return
         if (eventName === 'trace') {
           applyTraceEvent(payload)
+          return
+        }
+        if (eventName === 'heartbeat') {
+          applyHeartbeatEvent(payload)
           return
         }
         if (eventName === 'result') {
@@ -1097,8 +1606,47 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
       modelId || undefined,
       state.conversationSessionId,
     )
+    if (currentRunToken !== runToken) return null
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')
+    }
+    const autoDatasetIds = selectedIds.length ? selectedIds : getUniqueConfirmationDatasetIds(finalPayload)
+    if (isDatasetOnlyConfirmation(finalPayload, autoDatasetIds)) {
+      const option = pickDatasetConfirmationOption(finalPayload, autoDatasetIds)
+      appendLog({
+        key: 'dataset-confirmation-auto-bypass',
+        title: selectedIds.length ? '沿用当前数据集继续' : '采用唯一数据集继续',
+        kind: 'confirmation',
+        toolType: 'dataset',
+        status: 'running',
+        summary: selectedIds.length
+          ? '当前已选择数据集，本轮不再二次询问数据集口径。'
+          : '仅识别到一个可用数据集，本轮自动采用该数据集继续。',
+        detailLines: [
+          `${selectedIds.length ? '已选' : '唯一'}数据集 ID：${autoDatasetIds.join('、')}`,
+          option.label ? `自动采用口径：${option.label}` : '自动采用当前数据集继续执行。',
+        ],
+      })
+      try {
+        finalPayload = await runConfirmationStream({
+          session_id: finalPayload.session_id,
+          selected_option: option.label || '按唯一可用数据集继续',
+          option_id: option.id || undefined,
+          selected_dataset_ids: autoDatasetIds,
+        }, activeAbortController?.signal, () => currentRunToken !== runToken)
+      } catch (error) {
+        setLogStatus(
+          'dataset-confirmation-auto-bypass',
+          'warning',
+          '自动采用当前数据集失败，已保留确认卡片供手动选择。',
+          {
+            detailLines: [
+              '尝试自动采用当前数据集时失败。',
+              String(error?.response?.data?.error || error?.message || '未知错误'),
+            ],
+          },
+        )
+      }
     }
     if (!finalPayload?.requires_confirmation) {
       const elapsedMs = Date.now() - new Date(state.startedAt).getTime()
@@ -1120,6 +1668,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
     activeAbortController = null
     return data
   } catch (error) {
+    if (currentRunToken !== runToken) return null
     stopPhaseTimer()
     const aborted = error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED'
 
@@ -1183,6 +1732,7 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
     return startAsk(fallbackQuestion, selectedDatasetIds.length > 0 ? selectedDatasetIds : fallbackCandidateIds)
   }
 
+  const currentRunToken = ++runToken
   state.status = 'running'
   setLogStatus('boss-confirm', 'success', optionLabel, {
     summary: '已提交确认选项，任务继续进入执行流程。',
@@ -1194,28 +1744,27 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
     ],
     time: nowText(),
   })
-  appendLog({
-    key: 'agent2-resume',
-    title: '继续生成 SQL',
-    kind: 'tool',
-    toolType: 'sql',
-    summary: '根据确认后的统计口径继续生成 SQL。',
-    detailLines: ['已收到确认结果。', '根据最新口径继续生成 SQL。'],
-    status: 'running',
-  })
   persist()
 
   try {
-    const data = await confirmByBoss({
+    if (activeAbortController) {
+      activeAbortController.abort()
+    }
+    activeAbortController = new AbortController()
+    const data = await runConfirmationStream({
       session_id: state.result.session_id,
       selected_option: optionLabel,
       option_id: optionId || undefined,
       selected_dataset_ids: selectedDatasetIds.length > 0 ? selectedDatasetIds : undefined,
-    })
+    }, activeAbortController.signal, () => currentRunToken !== runToken)
 
+    if (currentRunToken !== runToken) return null
     finalizeFromResult(data)
+    activeAbortController = null
     return data
   } catch (error) {
+    if (currentRunToken !== runToken) return null
+    activeAbortController = null
     const errorMessage = String(error?.response?.data?.error || error?.message || '').trim()
     if (/Confirmation session not found or expired/i.test(errorMessage)) {
       appendLog({
@@ -1240,11 +1789,13 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
 }
 
 const resetSession = () => {
+  runToken += 1
   if (activeAbortController) {
     activeAbortController.abort()
     activeAbortController = null
   }
   stopPhaseTimer()
+  lastHeartbeatLineAt = 0
   state.question = ''
   state.selectedDatasetId = null
   state.status = 'idle'
@@ -1268,7 +1819,9 @@ const stopAsk = () => {
 }
 
 const clearRecoveredSessionResult = () => {
+  runToken += 1
   stopPhaseTimer()
+  lastHeartbeatLineAt = 0
   state.question = ''
   state.status = 'idle'
   state.result = null

@@ -3,6 +3,13 @@
     <div class="cs-layout">
       <!-- ===== LEFT: Channel List ===== -->
       <aside class="cs-sidebar">
+        <div class="cs-sidebar-head">
+          <div>
+            <div class="cs-sidebar-kicker">MODEL ROUTES</div>
+            <div class="cs-sidebar-title">模型通道</div>
+          </div>
+          <span class="cs-sidebar-count">{{ channels.length }}</span>
+        </div>
         <div class="cs-sidebar-scroll">
           <div
             v-for="ch in channels" :key="ch.key"
@@ -10,8 +17,11 @@
             :class="{ 'is-active': selectedChannelKey === ch.key }"
             @click="selectChannel(ch.key)"
           >
-            <span class="cs-ch-icon">{{ providerEmoji(ch.provider) }}</span>
-            <span class="cs-ch-name">{{ ch._displayName || channelDisplayName(ch) }}</span>
+            <span class="cs-ch-icon" v-html="channelIconSvg(ch)"></span>
+            <span class="cs-ch-copy">
+              <span class="cs-ch-name">{{ ch._displayName || channelDisplayName(ch) }}</span>
+              <span class="cs-ch-meta">{{ ch.models.length }} 个模型 · {{ ch.models.filter(m => m.is_active).length }} 启用</span>
+            </span>
             <el-switch
               v-model="ch._hasActive"
               size="small"
@@ -22,119 +32,179 @@
           </div>
         </div>
         <div class="cs-sidebar-footer">
-          <el-button class="cs-add-btn" @click="openAddChannel">
+          <el-button type="primary" class="cs-add-btn" @click="openAddChannel">
             <el-icon><Plus /></el-icon>
-            <span>添加</span>
+            <span>新建通道</span>
           </el-button>
         </div>
       </aside>
 
       <!-- ===== RIGHT: Channel Detail ===== -->
       <main class="cs-main" v-if="activeChannel">
-        <!-- Provider Header -->
-        <div class="cs-provider-header">
-          <div class="cs-provider-icon">{{ providerEmoji(activeChannel.provider) }}</div>
-          <div class="cs-provider-title-row" v-if="!editingProviderName">
-            <div class="cs-provider-title">{{ activeChannel._displayName || channelDisplayName(activeChannel) }}</div>
-            <el-button text size="small" class="cs-provider-edit-btn" @click="startEditProviderName">
-              <el-icon><Edit /></el-icon>
-            </el-button>
+        <section class="cs-hero">
+          <div class="cs-hero-main">
+            <el-popover placement="bottom-start" trigger="click" width="260" popper-class="cs-icon-popover">
+              <template #reference>
+                <button class="cs-provider-icon" type="button" title="选择通道图标">
+                  <span v-html="channelIconSvg(activeChannel)"></span>
+                </button>
+              </template>
+              <div class="cs-icon-picker">
+                <div class="cs-icon-picker-title">选择通道图标</div>
+                <button
+                  v-for="icon in channelIconOptions"
+                  :key="icon.key"
+                  type="button"
+                  class="cs-icon-option"
+                  :class="{ 'is-active': channelIconKey(activeChannel) === icon.key }"
+                  @click="saveChannelIcon(icon.key)"
+                >
+                  <span v-html="renderTechIcon(icon.key)"></span>
+                </button>
+              </div>
+            </el-popover>
+            <div class="cs-provider-copy">
+              <div class="cs-provider-kicker">当前供应商通道</div>
+              <div class="cs-provider-title-row" v-if="!editingProviderName">
+                <div class="cs-provider-title">{{ activeChannel._displayName || channelDisplayName(activeChannel) }}</div>
+                <el-button text size="small" class="cs-provider-edit-btn" @click="startEditProviderName">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </div>
+              <div class="cs-provider-title-row" v-else>
+                <el-input
+                  v-model="editProviderNameValue"
+                  size="default"
+                  class="cs-provider-name-input"
+                  @keyup.enter="saveProviderName"
+                  ref="providerNameInputRef"
+                />
+                <el-button type="primary" size="small" @click="saveProviderName">保存名称</el-button>
+                <el-button size="small" @click="cancelProviderNameEdit">取消</el-button>
+              </div>
+              <span class="cs-provider-url-sub">{{ activeChannel.base_url || '尚未配置 API 地址' }}</span>
+            </div>
           </div>
-          <div class="cs-provider-title-row" v-else>
-            <el-input
-              v-model="editProviderNameValue"
-              size="default"
-              class="cs-provider-name-input"
-              @keyup.enter="saveProviderName"
-              @blur="saveProviderName"
-              ref="providerNameInputRef"
-            />
+          <div class="cs-hero-stats">
+            <div class="cs-stat-card">
+              <span>模型数</span>
+              <strong>{{ activeChannel.models.length }}</strong>
+            </div>
+            <div class="cs-stat-card">
+              <span>已启用</span>
+              <strong>{{ activeChannel.models.filter(m => m.is_active).length }}</strong>
+            </div>
+            <div class="cs-stat-card">
+              <span>默认模型</span>
+              <strong>{{ activeChannel.models.find(m => m.is_default)?.name || '未设置' }}</strong>
+            </div>
           </div>
-          <span class="cs-provider-url-sub">{{ activeChannel.base_url }}</span>
-        </div>
+        </section>
 
-        <!-- API Key Section -->
-        <div class="cs-section">
-          <div class="cs-section-label">API 密钥</div>
-          <div class="cs-key-row">
-            <el-input
-              v-model="editableApiKey"
-              :type="showApiKey ? 'text' : 'password'"
-              placeholder="sk-..."
-              class="cs-key-input"
-              @change="onApiKeyChange"
-            />
-            <el-button text @click="showApiKey = !showApiKey">
-              <el-icon><View v-if="!showApiKey" /><Hide v-else /></el-icon>
-            </el-button>
-            <el-button
-              round size="small"
-              :loading="channelTesting === activeChannel.key"
-              @click="testChannel(activeChannel)"
-            >检 测</el-button>
+        <section class="cs-config-grid">
+          <!-- API Key Section -->
+          <div class="cs-config-card cs-config-card-key">
+            <div class="cs-section-head">
+              <div>
+                <div class="cs-section-label">API 密钥</div>
+                <div class="cs-section-desc">统一应用到当前通道下的模型。</div>
+              </div>
+              <el-button text class="cs-icon-btn" @click="showApiKey = !showApiKey">
+                <el-icon><View v-if="!showApiKey" /><Hide v-else /></el-icon>
+              </el-button>
+            </div>
+            <div class="cs-key-row">
+              <el-input
+                v-model="editableApiKey"
+                :type="showApiKey ? 'text' : 'password'"
+                placeholder="sk-..."
+                class="cs-key-input"
+                @change="onApiKeyChange"
+              />
+              <el-button
+                :loading="channelTesting === activeChannel.key"
+                @click="testChannel(activeChannel)"
+              >检测连接</el-button>
+            </div>
           </div>
-        </div>
 
-        <!-- API URL Section -->
-        <div class="cs-section">
-          <div class="cs-section-label">API 地址</div>
-          <div class="cs-url-row">
-            <el-input v-model="editableBaseUrl" class="cs-url-input" @change="onBaseUrlChange" />
+          <!-- API URL Section -->
+          <div class="cs-config-card">
+            <div class="cs-section-head">
+              <div>
+                <div class="cs-section-label">API 地址</div>
+                <div class="cs-section-desc">兼容 OpenAI 格式的接口地址。</div>
+              </div>
+            </div>
+            <div class="cs-url-row">
+              <el-input v-model="editableBaseUrl" class="cs-url-input" @change="onBaseUrlChange" />
+            </div>
           </div>
-        </div>
+        </section>
 
         <!-- Models Section -->
-        <div class="cs-models-header">
-          <span class="cs-models-label">模型</span>
-          <span class="cs-models-count">{{ activeChannel.models.length }}</span>
-          <div class="cs-models-spacer"></div>
-          <el-button text size="small" @click="testAllModels(activeChannel)">全部检测</el-button>
-        </div>
-
-        <div class="cs-model-list">
-          <div
-            v-for="model in activeChannel.models"
-            :key="model.id"
-            class="cs-model-row"
-            :class="{ 'is-default': model.is_default, 'is-inactive': !model.is_active }"
-          >
-            <span class="cs-model-emoji">{{ providerEmoji(activeChannel.provider) }}</span>
-            <span class="cs-model-name">{{ model.name || model.model }}</span>
-            <el-tag v-if="model.is_default" type="warning" size="small" round effect="plain">默认</el-tag>
-            <el-tag v-if="!model.is_active" type="info" size="small" round effect="plain">禁用</el-tag>
-            <span
-              v-if="testResults[model.id]"
-              class="cs-model-dot"
-              :class="testResults[model.id] === 'success' ? 'is-ok' : 'is-err'"
-            ></span>
-            <div class="cs-model-spacer"></div>
-            <span class="cs-model-id">{{ model.model }}</span>
-            <el-button
-              v-if="!model.is_default && model.is_active"
-              text size="small" @click="setDefault(model)"
-            >设默认</el-button>
-            <el-button
-              text size="small"
-              :loading="testingId === model.id"
-              @click="testModel(model)"
-            >测试</el-button>
-            <el-button text size="small" @click="openEditModel(model)">
-              <el-icon><Setting /></el-icon>
-            </el-button>
-            <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
-              <template #reference>
-                <el-button text size="small" class="cs-model-del">—</el-button>
-              </template>
-            </el-popconfirm>
+        <section class="cs-model-panel">
+          <div class="cs-models-header">
+            <div>
+              <div class="cs-models-label">模型资产</div>
+              <div class="cs-models-desc">维护可调用模型、默认模型与连通性。</div>
+            </div>
+            <span class="cs-models-count">{{ activeChannel.models.length }}</span>
+            <div class="cs-models-spacer"></div>
+            <el-button @click="testAllModels(activeChannel)">全部检测</el-button>
           </div>
-        </div>
 
-        <!-- Add Model Row -->
-        <div class="cs-add-model-bar">
-          <el-button text type="primary" @click="openAddModelInChannel(activeChannel)">
-            <el-icon><Plus /></el-icon> 添加模型
-          </el-button>
-        </div>
+          <div class="cs-model-list">
+            <div
+              v-for="model in activeChannel.models"
+              :key="model.id"
+              class="cs-model-row"
+              :class="{ 'is-default': model.is_default, 'is-inactive': !model.is_active }"
+            >
+              <span class="cs-model-emoji" v-html="channelIconSvg(activeChannel)"></span>
+              <div class="cs-model-copy">
+                <div class="cs-model-title-line">
+                  <span class="cs-model-name">{{ model.name || model.model }}</span>
+                  <el-tag v-if="model.is_default" type="warning" size="small" round effect="plain">默认</el-tag>
+                  <el-tag v-if="!model.is_active" type="info" size="small" round effect="plain">禁用</el-tag>
+                  <span
+                    v-if="testResults[model.id]"
+                    class="cs-model-dot"
+                    :class="testResults[model.id] === 'success' ? 'is-ok' : 'is-err'"
+                  ></span>
+                </div>
+                <span class="cs-model-id">{{ model.model }}</span>
+              </div>
+              <div class="cs-model-spacer"></div>
+              <div class="cs-model-actions">
+                <el-button
+                  v-if="!model.is_default && model.is_active"
+                  text size="small" @click="setDefault(model)"
+                >设默认</el-button>
+                <el-button
+                  text size="small"
+                  :loading="testingId === model.id"
+                  @click="testModel(model)"
+                >测试</el-button>
+                <el-button text size="small" @click="openEditModel(model)">
+                  <el-icon><Setting /></el-icon>
+                </el-button>
+                <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
+                  <template #reference>
+                    <el-button text size="small" type="danger" class="cs-model-del">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add Model Row -->
+          <div class="cs-add-model-bar">
+            <el-button type="primary" plain @click="openAddModelInChannel(activeChannel)">
+              <el-icon><Plus /></el-icon> 添加模型
+            </el-button>
+          </div>
+        </section>
       </main>
 
       <!-- Empty State -->
@@ -223,8 +293,22 @@ const editableBaseUrl = ref('')
 const editingProviderName = ref(false)
 const editProviderNameValue = ref('')
 const providerNameInputRef = ref()
-// Custom display names per channel stored locally
-const channelCustomNames = ref(JSON.parse(localStorage.getItem('sa_channel_names') || '{}'))
+const legacyChannelNames = ref(JSON.parse(localStorage.getItem('sa_channel_names') || '{}'))
+const legacyChannelIcons = ref(JSON.parse(localStorage.getItem('sa_channel_icons') || '{}'))
+const channelIconOptions = [
+  { key: 'orbit' },
+  { key: 'chip' },
+  { key: 'neural' },
+  { key: 'rocket' },
+  { key: 'radar' },
+  { key: 'cube' },
+  { key: 'shield' },
+  { key: 'spark' },
+  { key: 'terminal' },
+  { key: 'cloud' },
+  { key: 'grid' },
+  { key: 'bolt' },
+]
 
 // Channel dialog
 const channelDialogVisible = ref(false)
@@ -268,6 +352,8 @@ const channels = computed(() => {
         key, provider: p, base_url: url,
         apiKeyRaw: m.api_key || '',
         apiKeyMasked: m.api_key ? '***已保存***' : '',
+        channelDisplayName: m.channel_display_name || '',
+        channelIcon: m.channel_icon || '',
         models: [],
         _hasActive: false,
       }
@@ -276,7 +362,8 @@ const channels = computed(() => {
   }
   for (const ch of Object.values(map)) {
     ch._hasActive = ch.models.some(m => m.is_active)
-    ch._displayName = channelCustomNames.value[ch.key] || ''
+    ch._displayName = ch.channelDisplayName || ch.models.find(m => m.channel_display_name)?.channel_display_name || legacyChannelNames.value[ch.key] || ''
+    ch._icon = ch.channelIcon || ch.models.find(m => m.channel_icon)?.channel_icon || legacyChannelIcons.value[ch.key] || ''
   }
   return Object.values(map)
 })
@@ -299,13 +386,64 @@ const providerLabel = (p) => ({
   custom: '自定义 API'
 }[p] || p)
 
-const providerEmoji = (p) => ({
-  dashscope: '🌐',
-  deepseek: '🐋',
-  openai: '🤖',
-  ollama: '💻',
-  custom: '⚙️'
-}[p] || '🔌')
+const providerIconKey = (p) => ({
+  dashscope: 'orbit',
+  deepseek: 'neural',
+  openai: 'spark',
+  ollama: 'terminal',
+  custom: 'chip'
+}[p] || 'cloud')
+
+const legacyEmojiIconMap = {
+  '⚙️': 'chip',
+  '🌐': 'orbit',
+  '🧠': 'neural',
+  '✨': 'spark',
+  '🚀': 'rocket',
+  '🔮': 'radar',
+  '🧩': 'cube',
+  '🛰️': 'radar',
+  '🔥': 'bolt',
+  '💎': 'cube',
+  '🐋': 'neural',
+  '🤖': 'spark',
+  '💻': 'terminal',
+  '🔌': 'cloud',
+  '🛡️': 'shield',
+  '📡': 'radar',
+}
+
+const normalizeIconKey = (value, provider = 'custom') => {
+  if (!value) return providerIconKey(provider)
+  if (legacyEmojiIconMap[value]) return legacyEmojiIconMap[value]
+  return channelIconOptions.some(item => item.key === value) ? value : providerIconKey(provider)
+}
+
+const channelIconKey = (ch) => {
+  if (!ch) return 'cloud'
+  return normalizeIconKey(ch._icon, ch.provider)
+}
+
+const renderTechIcon = (key) => {
+  const iconKey = normalizeIconKey(key)
+  const paths = {
+    orbit: '<circle cx="12" cy="12" r="3.2"/><ellipse cx="12" cy="12" rx="8.5" ry="3.8" transform="rotate(-24 12 12)"/><ellipse cx="12" cy="12" rx="8.5" ry="3.8" transform="rotate(24 12 12)"/>',
+    chip: '<rect x="6.5" y="6.5" width="11" height="11" rx="2.4"/><path d="M9 3.5v3M15 3.5v3M9 17.5v3M15 17.5v3M3.5 9h3M3.5 15h3M17.5 9h3M17.5 15h3"/><circle cx="12" cy="12" r="2.2"/>',
+    neural: '<circle cx="7" cy="8" r="2"/><circle cx="16.5" cy="6.8" r="2"/><circle cx="17" cy="16" r="2"/><circle cx="8" cy="17" r="2"/><path d="M8.8 8.7l5.1-1.2M8.2 9.7l7.1 5M9.6 16.1l5.4-.1M7.3 10l.5 5"/>',
+    rocket: '<path d="M13.5 4.4c2.7.6 4.7 2.6 5.3 5.3l-5.9 5.9-4.8-4.8 5.4-6.4Z"/><path d="M8.1 10.8 5.4 12l-1.2 3.4 3.8-1.1M12.9 15.6 11.8 19l-3.4 1.2 1.2-2.7"/><circle cx="15.3" cy="8.4" r="1.2"/>',
+    radar: '<path d="M12 19.5a7.5 7.5 0 1 0-7.5-7.5"/><path d="M12 15.5a3.5 3.5 0 1 0-3.5-3.5"/><path d="M12 12l6.2-6.2"/><circle cx="12" cy="12" r="1.4"/>',
+    cube: '<path d="m12 3.8 7 4v8.4l-7 4-7-4V7.8l7-4Z"/><path d="m5.4 8 6.6 3.8L18.6 8M12 11.8v7.7"/>',
+    shield: '<path d="M12 3.8 18.5 6v5.3c0 4.1-2.5 7.1-6.5 8.9-4-1.8-6.5-4.8-6.5-8.9V6L12 3.8Z"/><path d="m8.8 12 2.1 2.1 4.3-4.7"/>',
+    spark: '<path d="M12 3.8 13.8 9l5.2 1.8-5.2 1.8L12 17.8l-1.8-5.2L5 10.8 10.2 9 12 3.8Z"/><path d="M18 16.5v3M16.5 18h3M5.8 4.5v2.6M4.5 5.8h2.6"/>',
+    terminal: '<rect x="4.5" y="5.5" width="15" height="13" rx="2.4"/><path d="m8 10 2.4 2L8 14M12 14h4"/>',
+    cloud: '<path d="M8.2 17.5h8.4a3.4 3.4 0 0 0 .4-6.8A5.2 5.2 0 0 0 7 9.4a4.1 4.1 0 0 0 1.2 8.1Z"/><path d="M10 13.6h4.5"/>',
+    grid: '<rect x="5" y="5" width="5.2" height="5.2" rx="1.4"/><rect x="13.8" y="5" width="5.2" height="5.2" rx="1.4"/><rect x="5" y="13.8" width="5.2" height="5.2" rx="1.4"/><rect x="13.8" y="13.8" width="5.2" height="5.2" rx="1.4"/>',
+    bolt: '<path d="M13.3 3.8 6.5 13h5.2l-1 7.2 6.8-9.4h-5.2l1-7Z"/>',
+  }
+  return `<svg viewBox="0 0 24 24" class="cs-tech-icon" aria-hidden="true">${paths[iconKey] || paths.cloud}</svg>`
+}
+
+const channelIconSvg = (ch) => renderTechIcon(channelIconKey(ch))
 
 const selectChannel = (key) => {
   selectedChannelKey.value = key
@@ -359,17 +497,33 @@ const startEditProviderName = () => {
   nextTick(() => providerNameInputRef.value?.focus())
 }
 
-const saveProviderName = () => {
+const saveProviderName = async () => {
   const ch = activeChannel.value
   if (!ch) return
   const name = editProviderNameValue.value.trim()
-  if (name && name !== channelDisplayName(ch)) {
-    channelCustomNames.value[ch.key] = name
-  } else {
-    delete channelCustomNames.value[ch.key]
+  for (const model of ch.models) {
+    await updateAIModel(model.id, { channel_display_name: name })
   }
-  localStorage.setItem('sa_channel_names', JSON.stringify(channelCustomNames.value))
   editingProviderName.value = false
+  ElMessage.success('通道名称已保存')
+  await loadData()
+}
+
+const cancelProviderNameEdit = () => {
+  editingProviderName.value = false
+  editProviderNameValue.value = ''
+}
+
+const saveChannelIcon = async (icon) => {
+  const ch = activeChannel.value
+  if (!ch) return
+  const normalizedIcon = normalizeIconKey(icon, ch.provider)
+  const nextIcon = normalizedIcon && normalizedIcon !== providerIconKey(ch.provider) ? normalizedIcon : ''
+  for (const model of ch.models) {
+    await updateAIModel(model.id, { channel_icon: nextIcon })
+  }
+  ElMessage.success('通道图标已保存')
+  await loadData()
 }
 
 const loadData = async () => {
@@ -380,7 +534,31 @@ const loadData = async () => {
     if (channels.value.length > 0 && !selectedChannelKey.value) {
       selectChannel(channels.value[0].key)
     }
+    await migrateLegacyChannelMetaToBackend()
   } finally { loading.value = false }
+}
+
+const migrateLegacyChannelMetaToBackend = async () => {
+  const pendingNames = legacyChannelNames.value || {}
+  const pendingIcons = legacyChannelIcons.value || {}
+  const entries = channels.value.filter(ch => pendingNames[ch.key] || pendingIcons[ch.key])
+  if (!entries.length) return
+
+  for (const ch of entries) {
+    const payload = {}
+    if (pendingNames[ch.key] && !ch.channelDisplayName) payload.channel_display_name = pendingNames[ch.key]
+    if (pendingIcons[ch.key] && !ch.channelIcon) payload.channel_icon = pendingIcons[ch.key]
+    if (!Object.keys(payload).length) continue
+    for (const model of ch.models) {
+      await updateAIModel(model.id, payload)
+    }
+  }
+  localStorage.removeItem('sa_channel_names')
+  localStorage.removeItem('sa_channel_icons')
+  legacyChannelNames.value = {}
+  legacyChannelIcons.value = {}
+  const refreshed = await getAIModels()
+  models.value = refreshed.models || []
 }
 
 // Channel CRUD
@@ -502,142 +680,703 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.cs-page { height: 100%; display: flex; flex-direction: column; }
+.cs-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
 .cs-layout {
-  flex: 1; display: flex; min-height: 0;
-  background: var(--bg-card, #fff);
-  border-radius: var(--radius-card, 12px);
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--border, #e5e6eb);
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 82% 8%, rgba(15, 118, 110, 0.13), transparent 28%),
+    radial-gradient(circle at 30% 0%, rgba(18, 63, 104, 0.09), transparent 24%),
+    linear-gradient(135deg, #f8fbfa 0%, #f5f7fb 45%, #ffffff 100%);
+  box-shadow: 0 12px 32px rgba(18, 48, 79, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.cs-layout::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(18, 48, 79, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 48, 79, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 74%);
 }
 
 /* ===== LEFT SIDEBAR ===== */
 .cs-sidebar {
-  width: 240px; min-width: 240px;
-  background: var(--bg-muted, #f2f3f5);
-  border-right: 1px solid var(--border, #e5e6eb);
-  display: flex; flex-direction: column;
+  position: relative;
+  z-index: 1;
+  width: 260px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(18, 48, 79, 0.08);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(18px);
 }
+
+.cs-sidebar-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 16px 16px 10px;
+}
+
+.cs-sidebar-kicker {
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+}
+
+.cs-sidebar-title {
+  margin-top: 4px;
+  color: #122033;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.cs-sidebar-count {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b625d;
+  font-size: 12px;
+  font-weight: 850;
+  background: #e8f6f4;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+}
+
 .cs-sidebar-scroll {
-  flex: 1; overflow-y: auto; padding: 8px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px 10px;
 }
+
 .cs-ch-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: var(--radius-md, 8px);
-  cursor: pointer; transition: all var(--duration-fast, 150ms) ease;
-  margin-bottom: 2px; user-select: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(18, 48, 79, 0.07);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: all var(--duration-normal, 220ms) var(--ease-out);
 }
-.cs-ch-item:hover { background: rgba(51,112,255,0.04); }
+
+.cs-ch-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 118, 110, 0.2);
+  background: #ffffff;
+  box-shadow: 0 12px 26px rgba(18, 48, 79, 0.08);
+}
+
 .cs-ch-item.is-active {
-  background: var(--color-primary-light, #f0f5ff);
-  box-shadow: inset 3px 0 0 var(--color-primary, #3370ff);
+  border-color: rgba(15, 118, 110, 0.26);
+  background:
+    linear-gradient(135deg, rgba(232, 246, 244, 0.95), rgba(255, 255, 255, 0.96));
+  box-shadow: 0 12px 30px rgba(15, 118, 110, 0.12), inset 4px 0 0 #0f766e;
 }
-.cs-ch-icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
+
+.cs-ch-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #123f68 0%, #0f766e 100%);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18);
+}
+
+.cs-ch-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .cs-ch-name {
-  flex: 1; font-size: 13px; font-weight: 500; color: var(--text-title, #1d2129);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #152033;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cs-ch-switch { flex-shrink: 0; }
+
+.cs-ch-meta {
+  color: #7a8595;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-ch-switch {
+  flex-shrink: 0;
+}
 
 .cs-sidebar-footer {
-  padding: 12px; border-top: 1px solid var(--border, #e5e6eb);
+  padding: 12px;
+  border-top: 1px solid rgba(18, 48, 79, 0.08);
 }
+
 .cs-add-btn {
-  width: 100%; border-radius: var(--radius-md, 8px); height: 36px;
-  font-size: 13px; font-weight: 500;
+  width: 100%;
+  height: 36px;
 }
 
 /* ===== RIGHT MAIN ===== */
 .cs-main {
-  flex: 1; overflow-y: auto; padding: 28px 36px;
-  background: var(--bg-card, #fff);
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px;
 }
+
 .cs-empty {
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.cs-empty-text { color: var(--text-muted, #86909c); font-size: 14px; }
 
-/* Provider Header */
-.cs-provider-header {
-  text-align: center; margin-bottom: 28px;
+.cs-empty-text {
+  padding: 24px 32px;
+  border: 1px dashed rgba(18, 48, 79, 0.14);
+  border-radius: 20px;
+  color: var(--text-muted, #86909c);
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.76);
 }
+
+/* Provider Hero */
+.cs-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 4% 10%, rgba(15, 118, 110, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 250, 0.88));
+  box-shadow: 0 10px 26px rgba(18, 48, 79, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.cs-hero-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .cs-provider-icon {
-  font-size: 36px; margin-bottom: 8px;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.34), transparent 26%),
+    linear-gradient(135deg, #122033 0%, #123f68 48%, #0f766e 100%);
+  box-shadow: 0 12px 24px rgba(18, 48, 79, 0.18);
+  transition: all var(--duration-normal, 220ms) var(--ease-out);
 }
+
+.cs-provider-icon:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 16px 28px rgba(18, 48, 79, 0.22);
+}
+
+.cs-provider-copy {
+  min-width: 0;
+}
+
+.cs-provider-kicker {
+  margin-bottom: 4px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
 .cs-provider-title-row {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
 .cs-provider-title {
-  font-size: 18px; font-weight: 700; color: var(--text-title, #1d2129);
+  min-width: 0;
+  color: #101828;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
 .cs-provider-edit-btn {
-  opacity: 0.4; transition: opacity 0.15s;
+  opacity: 0.58;
+  transition: opacity 0.15s;
 }
-.cs-provider-header:hover .cs-provider-edit-btn { opacity: 1; }
-.cs-provider-name-input { max-width: 260px; }
+
+.cs-hero:hover .cs-provider-edit-btn {
+  opacity: 1;
+}
+
+.cs-provider-name-input {
+  width: min(520px, 70vw);
+}
+
+.cs-provider-title-row .el-button + .el-button {
+  margin-left: 0;
+}
+
 .cs-provider-url-sub {
-  display: block; font-size: 12px; color: var(--text-muted, #86909c); margin-top: 4px;
+  display: block;
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  word-break: break-all;
 }
 
-/* Sections */
-.cs-section { margin-bottom: 20px; }
+.cs-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  gap: 8px;
+  align-self: stretch;
+}
+
+.cs-stat-card {
+  min-width: 100px;
+  padding: 11px 12px;
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.cs-stat-card span {
+  display: block;
+  color: #7a8595;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.cs-stat-card strong {
+  display: block;
+  margin-top: 6px;
+  max-width: 150px;
+  color: #122033;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Config Cards */
+.cs-config-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(320px, 0.82fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.cs-config-card,
+.cs-model-panel {
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 22px rgba(18, 48, 79, 0.045), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.cs-config-card {
+  padding: 14px;
+}
+
+.cs-config-card-key {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(15, 118, 110, 0.12), transparent 30%),
+    rgba(255, 255, 255, 0.84);
+}
+
+.cs-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .cs-section-label {
-  font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969);
-  margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #1f3349;
+  font-size: 13px;
+  font-weight: 850;
 }
 
-.cs-key-row { display: flex; align-items: center; gap: 8px; }
-.cs-key-input { flex: 1; }
-.cs-url-row { display: flex; align-items: center; gap: 8px; }
-.cs-url-input { flex: 1; }
+.cs-section-desc,
+.cs-models-desc {
+  margin-top: 4px;
+  color: #7a8595;
+  font-size: 11px;
+}
+
+.cs-key-row,
+.cs-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-key-input,
+.cs-url-input {
+  flex: 1;
+}
+
+.cs-main :deep(.el-input__wrapper) {
+  min-height: 34px;
+}
+
+.cs-main :deep(.el-button) {
+  min-height: 32px;
+}
+
+.cs-icon-btn {
+  width: 32px;
+}
 
 /* Models */
-.cs-models-header {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 12px; padding-top: 12px;
-  border-top: 1px solid var(--border, #e5e6eb);
+.cs-model-panel {
+  padding: 14px;
 }
-.cs-models-label { font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969); text-transform: uppercase; letter-spacing: 0.04em; }
-.cs-models-count {
-  font-size: 10px; font-weight: 700; color: #fff; background: var(--color-primary, #3370ff);
-  min-width: 18px; height: 18px; border-radius: var(--radius-pill, 999px);
-  display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
-}
-.cs-models-spacer { flex: 1; }
 
-.cs-model-list { display: flex; flex-direction: column; gap: 2px; }
+.cs-models-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cs-models-label {
+  color: #1f3349;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.cs-models-count {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill, 999px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b625d;
+  font-size: 12px;
+  font-weight: 900;
+  background: #e8f6f4;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+}
+
+.cs-models-spacer {
+  flex: 1;
+}
+
+.cs-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .cs-model-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px; border-radius: var(--radius-md, 8px);
-  transition: all var(--duration-fast, 150ms) ease;
-  background: var(--gray-50, #f9fafb);
-  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(18, 48, 79, 0.07);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  transition: all var(--duration-normal, 220ms) var(--ease-out);
 }
-.cs-model-row:hover { background: var(--color-primary-light, #f0f5ff); border-color: var(--border, #e5e6eb); }
-.cs-model-row.is-inactive { opacity: 0.4; }
-.cs-model-row.is-default { background: var(--warning-bg, #fff7e8); border-color: rgba(255,125,0,0.12); }
 
-.cs-model-emoji { font-size: 16px; flex-shrink: 0; }
+.cs-model-row:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 118, 110, 0.18);
+  box-shadow: 0 14px 26px rgba(18, 48, 79, 0.08);
+}
+
+.cs-model-row.is-inactive {
+  opacity: 0.58;
+}
+
+.cs-model-row.is-default {
+  border-color: rgba(255, 125, 0, 0.2);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 125, 0, 0.1), transparent 28%),
+    linear-gradient(180deg, #fffdf8 0%, #fff8ec 100%);
+}
+
+.cs-model-emoji {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #eef6f5;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.cs-ch-icon :deep(.cs-tech-icon),
+.cs-provider-icon :deep(.cs-tech-icon),
+.cs-model-emoji :deep(.cs-tech-icon),
+.cs-icon-option :deep(.cs-tech-icon) {
+  width: 1em;
+  height: 1em;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cs-ch-icon,
+.cs-provider-icon {
+  color: #b9f7ef;
+}
+
+.cs-ch-icon :deep(.cs-tech-icon) {
+  width: 19px;
+  height: 19px;
+  filter: drop-shadow(0 0 8px rgba(125, 224, 212, 0.28));
+}
+
+.cs-provider-icon :deep(.cs-tech-icon) {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 10px rgba(125, 224, 212, 0.34));
+}
+
+.cs-model-emoji {
+  color: #0f766e;
+}
+
+.cs-model-emoji :deep(.cs-tech-icon) {
+  width: 18px;
+  height: 18px;
+}
+
+.cs-model-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cs-model-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .cs-model-name {
-  font-size: 13px; font-weight: 600; color: var(--text-title, #1d2129);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #101828;
+  font-size: 13px;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
 .cs-model-id {
-  font-size: 10px; color: var(--text-muted, #86909c); font-family: 'JetBrains Mono', 'SF Mono', monospace;
-  white-space: nowrap; flex-shrink: 0;
+  color: #8a94a6;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.cs-model-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.cs-model-dot.is-ok { background: #00b42a; }
-.cs-model-dot.is-err { background: #f53f3f; }
-.cs-model-spacer { flex: 1; }
-.cs-model-del { color: #86909c !important; font-weight: 700; }
+
+.cs-model-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(0, 180, 42, 0.12);
+}
+
+.cs-model-dot.is-ok {
+  background: #00b42a;
+}
+
+.cs-model-dot.is-err {
+  background: #f53f3f;
+  box-shadow: 0 0 0 3px rgba(245, 63, 63, 0.12);
+}
+
+.cs-model-spacer {
+  flex: 1;
+}
+
+.cs-model-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cs-model-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.cs-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+
+.cs-icon-picker-title {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  color: #1f3349;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.cs-icon-option {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(18, 48, 79, 0.1);
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.8), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f6f9fb 100%);
+  color: #38526d;
+  cursor: pointer;
+  transition: all var(--duration-fast, 150ms) var(--ease-out);
+}
+
+.cs-icon-option:hover,
+.cs-icon-option.is-active {
+  border-color: rgba(15, 118, 110, 0.3);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.9), transparent 30%),
+    linear-gradient(135deg, #e8f6f4 0%, #ffffff 100%);
+  color: #0b625d;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
+}
+
+.cs-icon-option :deep(.cs-tech-icon) {
+  width: 18px;
+  height: 18px;
+}
 
 .cs-add-model-bar {
-  padding: 12px 0; text-align: center;
-  border-top: 1px solid var(--border-light, #f0f1f3);
-  margin-top: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px dashed rgba(15, 118, 110, 0.22);
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(232, 246, 244, 0.38);
+}
+
+@media (max-width: 1180px) {
+  .cs-layout {
+    flex-direction: column;
+  }
+
+  .cs-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: 260px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(18, 48, 79, 0.08);
+  }
+
+  .cs-sidebar-scroll {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .cs-ch-item {
+    margin-bottom: 0;
+  }
+
+  .cs-hero,
+  .cs-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cs-hero-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .cs-main {
+    padding: 18px;
+  }
+
+  .cs-hero-main,
+  .cs-model-row {
+    align-items: flex-start;
+  }
+
+  .cs-hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .cs-model-row {
+    flex-wrap: wrap;
+  }
+
+  .cs-model-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>

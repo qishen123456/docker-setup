@@ -25,11 +25,24 @@ def _format_value(value: Any, metric: Dict[str, Any]) -> str:
         return "-"
     if metric.get("format") == "percent":
         return f"{numeric:.2f}%"
-    if metric.get("format") == "amount" and abs(numeric) >= 10000:
-        return f"{numeric / 10000:.2f}万"
+    if metric.get("format") == "amount":
+        return _format_amount(numeric)
     if numeric == int(numeric):
         return f"{int(numeric):,}"
     return f"{numeric:.2f}"
+
+
+def _format_amount(value: float) -> str:
+    abs_value = abs(value)
+    if abs_value < 10000:
+        if value == int(value):
+            return str(int(value))
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    if abs_value < 1000000:
+        return f"{value / 10000:.1f}万"
+    if abs_value < 100000000:
+        return f"{round(value / 10000)}万"
+    return f"{value / 100000000:.2f}亿"
 
 
 def _metric_by_key(config: Dict[str, Any], key: str, fallback_tokens: List[str]) -> Optional[Dict[str, Any]]:
@@ -141,15 +154,25 @@ def _level_label(nodes: List[Dict[str, Any]], fallback: str) -> str:
 
 def _detect_mode(question: str, focus_node: Optional[Dict[str, Any]], selected_count: int) -> str:
     text = question or ""
-    if re.search(r"为什么|原因|归因|下滑|异常|差距", text):
-        return "diagnostic"
+    if re.search(r"排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低", text):
+        return "ranking"
     if selected_count > 1 or re.search(r"对比|比较|哪个|谁更|差异| vs |VS", text):
         return "comparative"
+    if re.search(r"为什么|原因|归因|下滑|异常|差距", text):
+        return "diagnostic"
     if focus_node:
-        return "drill_down"
-    if re.search(r"最差|最好|最高|最低|风险|缺口", text):
-        return "bottom_up"
-    return "top_down"
+        return "detail"
+    if re.search(r"风险|缺口", text):
+        return "diagnostic"
+    return "detail"
+
+
+def _layout_template(mode: str) -> str:
+    if mode == "comparative":
+        return "comparison"
+    if mode == "ranking":
+        return "ranking"
+    return "detail"
 
 
 def build_report_spec(
@@ -227,14 +250,19 @@ def build_report_spec(
 
     accordions = []
     threshold = _to_float(config.get("riskThreshold")) or 80
-    for node in comparison_nodes:
+    for node in sorted(
+        comparison_nodes,
+        key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0,
+        reverse=True,
+    ):
         descendants = _descendants(node)
         leaf_children = [item for item in descendants if not item.get("children")] or descendants or node.get("children") or []
         sorted_children = sorted(leaf_children, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0)
+        sorted_children_desc = sorted(sorted_children, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)
         worst = sorted_children[0] if sorted_children else None
-        best = sorted(sorted_children, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)[0] if sorted_children else None
+        best = sorted_children_desc[0] if sorted_children_desc else None
         rate = _row_value(node["raw"], rate_metric) if rate_metric else None
-        child_chart_rows = [chart_row(child) for child in sorted_children]
+        child_chart_rows = [chart_row(child) for child in sorted_children_desc]
         risk_children = [
             child for child in sorted_children
             if rate_metric and (_row_value(child["raw"], rate_metric) or 0) < threshold
@@ -302,8 +330,10 @@ def build_report_spec(
     provenance_id = "p_sql_result_001"
     return {
         "version": "2.0",
+        "reportTitle": "业绩分析报告",
         "question": question,
         "analysisMode": mode,
+        "layoutTemplate": _layout_template(mode),
         "dataset": {
             "id": dataset.get("id") or dataset.get("dataset_id"),
             "code": dataset.get("dataset_code"),

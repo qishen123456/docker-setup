@@ -207,6 +207,6 @@ def get_default_config() -> dict:
             {"key": "rate", "op": "<", "value": 80, "tone": "danger", "label": "红灯"},
         ],
         "sections": ["core", "group", "risk", "strategy"],
-        "reportTitle": "经营分析报告",
-        "agentReportGuidance": "报告结构由 SQL 标准列和动态树决定。Agent4 不维护组织树，只基于指标、风险节点、优秀节点和 analysisDimensions 输出洞察、风险解释和建议。",
+        "reportTitle": "业绩分析报告",
+        "agentReportGuidance": "报告结构由 SQL 标准列、场景识别和动态树决定。Agent4 不维护组织树，只基于指标、风险节点、优秀节点和 analysisDimensions 输出核心结论、亮点分析、问题诊断和改进建议；金额使用统一格式化口径，完成率按绿/黄/红灯解释，多维图表按完成率降序。",
     }

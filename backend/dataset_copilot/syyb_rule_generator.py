@@ -98,7 +98,8 @@ WITH 字段提取 AS (
         COALESCE(NULLIF(regexp_replace(任务原始, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 任务金额,
         COALESCE(NULLIF(regexp_replace(开单原始, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 开单金额,
         CASE WHEN 分公司 LIKE '%分公司' THEN '区域条线' WHEN 分公司 LIKE '%业务部' THEN '行业条线' ELSE '事业部层级' END AS 条线类型
-    FROM 字段提取 WHERE 当前年 = '2026'
+    FROM 字段提取
+    WHERE COALESCE(NULLIF(当前年, ''), '2026') = '2026'
 ),
 维度汇总 AS (
     SELECT '区域条线' AS 条线, 分公司 AS 上级名称, 代表处 AS 节点名称, '代表处' AS 层级, 任务金额, 开单金额

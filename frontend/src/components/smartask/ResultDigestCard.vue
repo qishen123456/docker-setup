@@ -1,48 +1,22 @@
 <template>
-  <section v-if="dataset || report" class="sa-digest-card">
-    <div class="sa-digest-head">
-      <div class="sa-digest-copy">
-        <span class="sa-digest-kicker">执行摘要</span>
-        <h3 class="sa-digest-title">{{ title }}</h3>
-        <p class="sa-digest-desc">{{ description }}</p>
+  <section v-if="dataset || report" class="sa-boss-answer">
+    <div class="sa-boss-answer-mainline">
+      <div class="sa-boss-answer-copy">
+        <div class="sa-boss-answer-row">
+          <span class="sa-boss-answer-label">问题：</span>
+          <span class="sa-boss-answer-question">{{ questionLabel }}</span>
+        </div>
+        <div class="sa-boss-answer-row">
+          <span class="sa-boss-answer-label">结论：</span>
+          <span class="sa-boss-answer-conclusion">{{ directAnswer }}</span>
+        </div>
       </div>
 
-      <div class="sa-digest-state">已生成</div>
+      <button class="sa-boss-answer-link" @click="$emit('viewDetails')">查看详情</button>
     </div>
 
-    <div class="sa-digest-meta">
-      <div class="sa-meta-chip">{{ dataset?.dataset_name || '经营分析结果' }}</div>
-      <div class="sa-meta-chip subtle">{{ attachmentCount }} 项结果</div>
-      <div class="sa-meta-chip subtle">{{ datasetCount }} 个数据集</div>
-    </div>
-
-    <div class="sa-digest-stats">
-      <div class="sa-stat-tile">
-        <div class="sa-stat-value">{{ rowCount }}</div>
-        <div class="sa-stat-label">结果行数</div>
-      </div>
-      <div class="sa-stat-tile">
-        <div class="sa-stat-value">{{ columnCount }}</div>
-        <div class="sa-stat-label">字段数量</div>
-      </div>
-      <div class="sa-stat-tile">
-        <div class="sa-stat-value">{{ reviewStatusText }}</div>
-        <div class="sa-stat-label">SQL复核</div>
-      </div>
-    </div>
-
-    <div v-if="summaryLines.length" class="sa-digest-summary">
-      <div v-for="(line, index) in summaryLines" :key="index" class="sa-summary-line">
-        <span class="sa-summary-dot"></span>
-        <span>{{ line }}</span>
-      </div>
-    </div>
-
-    <div class="sa-digest-next">
-      <div class="sa-digest-next-label">下一步</div>
-      <button class="sa-digest-next-btn" @click="$emit('viewDetails')">
-        查看执行详情与完整结果
-      </button>
+    <div v-if="supportLines.length" class="sa-boss-answer-points">
+      <span v-for="(line, index) in supportLines.slice(0, 2)" :key="index">{{ line }}</span>
     </div>
   </section>
 </template>
@@ -53,7 +27,11 @@ import { computed } from 'vue'
 const props = defineProps({
   title: {
     type: String,
-    default: '本月公司经营表现分析',
+    default: '本轮问数结论',
+  },
+  question: {
+    type: String,
+    default: '',
   },
   report: {
     type: String,
@@ -75,12 +53,6 @@ const props = defineProps({
 
 defineEmits(['viewDetails'])
 
-const normalizeScore = (value, fallback = 0) => {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return fallback
-  return Math.max(0, Math.min(100, Math.round(numeric)))
-}
-
 const datasetList = computed(() => {
   if (Array.isArray(props.datasets) && props.datasets.length) return props.datasets
   return props.dataset ? [props.dataset] : []
@@ -91,305 +63,210 @@ const rowCount = computed(() => {
   return props.dataset?.rows?.length || 0
 })
 
-const columnCount = computed(() => props.dataset?.columns?.length || 0)
-const datasetCount = computed(() => datasetList.value.length || (props.dataset ? 1 : 0))
-
-const attachmentCount = computed(() => {
-  let count = 1
-  if (props.dataset) count += 1
-  if (datasetCount.value > 1) count += datasetCount.value - 1
-  return count + 1
-})
-
 const reviewStats = computed(() => {
-  const reviews = datasetList.value
-    .map(item => item?.agent3_review)
-    .filter(Boolean)
-
-  const approvedCount = reviews.filter(item => item?.approved !== false).length
-  const riskCount = reviews.reduce((sum, item) => sum + (Array.isArray(item?.risks) ? item.risks.length : 0), 0)
+  const reviews = datasetList.value.map(item => item?.agent3_review).filter(Boolean)
   return {
     reviews,
-    approvedCount,
-    riskCount,
+    riskCount: reviews.reduce((sum, item) => sum + (Array.isArray(item?.risks) ? item.risks.length : 0), 0),
   }
 })
 
 const reviewStatusText = computed(() => {
-  if (!reviewStats.value.reviews.length) return '待复核'
+  if (!reviewStats.value.reviews.length) return '已完成'
   if (reviewStats.value.riskCount > 0) return `${reviewStats.value.riskCount} 项风险`
-  return '已通过'
+  return 'SQL通过'
 })
 
-const description = computed(() => {
-  if (props.dataset?.dataset_name) {
-    return `已基于 ${props.dataset.dataset_name} 完成结果整理，并同步生成当前经营分析摘要。`
+const questionLabel = computed(() => cleanText(props.question || props.title || '本轮问数'))
+
+const rows = computed(() => (Array.isArray(props.dataset?.rows) ? props.dataset.rows : []))
+
+const cleanText = (value) => String(value ?? '').trim()
+const toNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = Number(String(value).replace(/[%万,，\s]/g, ''))
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const findColumn = (row, matchers = []) => {
+  const keys = Object.keys(row || {})
+  return keys.find(key => matchers.some(matcher => matcher.test(key))) || ''
+}
+
+const rateText = (row) => {
+  const key = findColumn(row, [/达成率/, /completion.*rate/i, /\brate\b/i])
+  const value = toNumber(key ? row[key] : null)
+  if (value === null) return ''
+  return `${value.toFixed(2).replace(/\.?0+$/, '')}%`
+}
+
+const normalizedRows = computed(() => rows.value.map((row) => {
+  const nameKey = findColumn(row, [/节点名称/, /^name$/i, /名称/, /分公司|代表处|业务代表/])
+  const parentKey = findColumn(row, [/上级名称/, /parent/i, /分公司/])
+  const levelKey = findColumn(row, [/层级/, /^level$/i])
+  const rateKey = findColumn(row, [/达成率/, /completion.*rate/i, /\brate\b/i])
+  return {
+    name: cleanText(nameKey ? row[nameKey] : ''),
+    parent: cleanText(parentKey ? row[parentKey] : ''),
+    level: cleanText(levelKey ? row[levelKey] : ''),
+    rate: toNumber(rateKey ? row[rateKey] : null),
+    rateText: rateText(row),
   }
-  return '当前任务结果已经整理完成，可继续查看报告、结果数据与执行明细。'
+}).filter(item => item.name))
+
+const questionText = computed(() => cleanText(props.question || props.title))
+const asksLowest = computed(() => /最低|最差|不好|垫底|落后|风险/.test(questionText.value))
+const asksRepresentative = computed(() => /代表处/.test(questionText.value))
+const asksBusinessPerson = computed(() => /业务代表|业务员/.test(questionText.value))
+const asksLowerNode = computed(() => asksRepresentative.value || asksBusinessPerson.value)
+const lowerNodeLabel = computed(() => (asksBusinessPerson.value ? '业务代表' : '代表处'))
+
+const targetRows = computed(() => {
+  if (!asksLowerNode.value) return normalizedRows.value
+  const label = lowerNodeLabel.value
+  const filtered = normalizedRows.value.filter(item => item.level === label || item.name.includes(label))
+  return filtered.length ? filtered : normalizedRows.value
 })
 
-const summaryLines = computed(() => {
-  return String(props.report || '')
+const sortedByRateAsc = computed(() => (
+  [...targetRows.value]
+    .filter(item => item.rate !== null)
+    .sort((a, b) => a.rate - b.rate)
+))
+
+const groupedWorstLines = computed(() => {
+  if (!asksLowerNode.value || !asksLowest.value) return []
+  const groups = new Map()
+  targetRows.value.forEach((item) => {
+    if (!item.parent || item.rate === null) return
+    const current = groups.get(item.parent)
+    if (!current || item.rate < current.rate) groups.set(item.parent, item)
+  })
+  return Array.from(groups.entries())
+    .map(([parent, item]) => `${parent} 下最低是 ${item.name}${item.rateText ? `，达成率 ${item.rateText}` : ''}`)
+    .slice(0, 2)
+})
+
+const usefulReportLines = computed(() => (
+  String(props.report || '')
     .replace(/^#+\s*/gm, '')
     .replace(/\*\*/g, '')
     .split('\n')
-    .map(item => item.trim())
+    .map(item => item.replace(/^[-*•\s]+/, '').trim())
     .filter(Boolean)
-    .slice(0, 3)
+    .filter(line => !/^(业绩分析报告|核心结论|亮点分析|问题诊断|改进建议|报告内容|节点摘要)$/i.test(line))
+    .filter(line => !/^SQL|^数据集|^报告模板|^当前/.test(line))
+    .slice(0, 4)
+))
+
+const directAnswer = computed(() => {
+  if (asksLowerNode.value && asksLowest.value && groupedWorstLines.value.length) {
+    return `已按上级组织拆开看，不能把所有${lowerNodeLabel.value}直接混在一起比。`
+  }
+  const worst = sortedByRateAsc.value[0]
+  if (worst && asksLowest.value) return `最低的是 ${worst.name}${worst.rateText ? `，达成率 ${worst.rateText}` : ''}。`
+  return usefulReportLines.value[0] || props.title || '本轮问数已完成。'
+})
+
+const supportLines = computed(() => {
+  if (groupedWorstLines.value.length) return groupedWorstLines.value
+  const worst = sortedByRateAsc.value[0]
+  const second = sortedByRateAsc.value[1]
+  if (worst && asksLowest.value) {
+    return [
+      second ? `次低是 ${second.name}${second.rateText ? `，达成率 ${second.rateText}` : ''}` : '',
+      '右侧可查看完整明细、SQL 和报告。',
+    ].filter(Boolean)
+  }
+  return usefulReportLines.value.slice(1, 3)
 })
 </script>
 
 <style scoped>
-.sa-digest-card {
+.sa-boss-answer {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  padding: 11px 13px;
+  border-radius: 13px;
   border: 1px solid rgba(22, 93, 255, 0.12);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(245, 249, 255, 0.96) 0%, rgba(255, 255, 255, 1) 42%),
-    #ffffff;
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
 }
 
-.sa-digest-head {
+.sa-boss-answer-mainline {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
 }
 
-.sa-digest-copy {
+.sa-boss-answer-copy {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.sa-boss-answer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
 }
 
-.sa-digest-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #165dff;
-}
-
-.sa-digest-title {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.45;
-  color: #1d2129;
-}
-
-.sa-digest-desc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.65;
-  color: #4e5969;
-}
-
-.sa-digest-state {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: #e8ffea;
-  color: #00b42a;
-  font-size: 11px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-.sa-digest-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.sa-meta-chip {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: #edf4ff;
-  color: #165dff;
-  font-size: 11px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-}
-
-.sa-meta-chip.subtle {
-  background: #f2f3f5;
-  color: #4e5969;
-}
-
-.sa-digest-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sa-stat-tile {
-  padding: 11px;
-  border-radius: 11px;
-  background: #ffffff;
-  border: 1px solid rgba(29, 33, 41, 0.08);
-}
-
-.sa-stat-value {
-  font-size: 18px;
+.sa-boss-answer-label {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.55;
   font-weight: 700;
   color: #1d2129;
 }
 
-.sa-stat-label {
-  margin-top: 4px;
-  font-size: 11px;
-  color: #86909c;
-}
-
-.sa-confidence-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.sa-confidence-card {
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  background: #ffffff;
-}
-
-.sa-confidence-card.is-success {
-  background: linear-gradient(180deg, #f7fff9 0%, #ffffff 100%);
-  border-color: rgba(0, 180, 42, 0.16);
-}
-
-.sa-confidence-card.is-info {
-  background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
-  border-color: rgba(22, 93, 255, 0.16);
-}
-
-.sa-confidence-card.is-warning {
-  background: linear-gradient(180deg, #fffaf2 0%, #ffffff 100%);
-  border-color: rgba(255, 125, 0, 0.16);
-}
-
-.sa-confidence-label {
-  font-size: 11px;
-  color: #86909c;
-}
-
-.sa-confidence-value {
-  margin-top: 6px;
-  font-size: 18px;
-  font-weight: 700;
+.sa-boss-answer-question {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.55;
   color: #1d2129;
 }
 
-.sa-confidence-desc {
-  margin-top: 6px;
-  font-size: 11px;
+.sa-boss-answer-conclusion {
+  min-width: 0;
+  font-size: 14px;
   line-height: 1.6;
-  color: #4e5969;
-}
-
-.sa-confidence-notes {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 1px 2px 0;
-}
-
-.sa-confidence-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 11px;
-  line-height: 1.65;
-  color: #4e5969;
-}
-
-.sa-confidence-note-dot {
-  width: 6px;
-  height: 6px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: #165dff;
-  flex-shrink: 0;
-}
-
-.sa-digest-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 2px 2px 0;
-}
-
-.sa-summary-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  font-size: 12px;
-  line-height: 1.65;
   color: #1d2129;
+  font-weight: 700;
 }
 
-.sa-summary-dot {
-  width: 7px;
-  height: 7px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: #165dff;
+.sa-boss-answer-link {
   flex-shrink: 0;
-}
-
-.sa-digest-next {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 1px;
-}
-
-.sa-digest-next-label {
-  font-size: 11px;
-  color: #86909c;
-}
-
-.sa-digest-next-btn {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 9px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
   border: 1px solid rgba(22, 93, 255, 0.18);
-  background: #ffffff;
+  background: #f8fbff;
   color: #165dff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.18s ease;
 }
 
-.sa-digest-next-btn:hover {
-  background: #f8fbff;
-  border-color: rgba(22, 93, 255, 0.28);
+.sa-boss-answer-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #86909c;
 }
 
-@media (max-width: 900px) {
-  .sa-digest-stats,
-  .sa-confidence-grid {
-    grid-template-columns: 1fr;
-  }
+.sa-boss-answer-points span:not(:last-child)::after {
+  content: '·';
+  margin-left: 12px;
+  color: #c9cdd4;
+}
 
-  .sa-digest-head,
-  .sa-digest-next {
+@media (max-width: 760px) {
+  .sa-boss-answer-mainline {
     flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>

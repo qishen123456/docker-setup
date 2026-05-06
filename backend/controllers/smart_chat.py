@@ -237,6 +237,86 @@ def confirm_by_boss():
         ), 500
 
 
+@smart_chat_bp.route("/api/smart-chat/confirm-by-boss/stream", methods=["POST"])
+def confirm_by_boss_stream():
+    started = time.time()
+    payload = request.get_json() or {}
+    session_id = (payload.get("session_id") or "").strip()
+    selected_option = (payload.get("selected_option") or "").strip()
+    option_id = (payload.get("option_id") or "").strip()
+    selected_dataset_ids = payload.get("selected_dataset_ids")
+
+    if not session_id:
+        return jsonify({"error": "session_id is required."}), 400
+    if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
+        return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+
+    def event_stream():
+        event_queue: "queue.Queue[dict]" = queue.Queue()
+        completed = threading.Event()
+
+        def emit(trace_payload: dict) -> None:
+            event_queue.put(trace_payload)
+
+        def run_confirm() -> None:
+            try:
+                result = four_agent_ask_service.confirm_by_boss(
+                    session_id=session_id,
+                    selected_option=selected_option,
+                    selected_dataset_ids=selected_dataset_ids,
+                    option_id=option_id,
+                    live_callback=emit,
+                )
+                result["total_duration"] = round(time.time() - started, 2)
+                ds_id = result.get("dataset_id")
+                if ds_id:
+                    rc = drc.get_config(int(ds_id))
+                    if rc:
+                        result["report_config"] = rc
+                event_queue.put({"type": "result", "result": result})
+            except Exception as exc:
+                event_queue.put(
+                    {
+                        "type": "result",
+                        "result": {
+                            "error": f"confirm-by-boss failed: {exc}",
+                            "total_duration": round(time.time() - started, 2),
+                        },
+                    }
+                )
+            finally:
+                completed.set()
+
+        worker = threading.Thread(target=run_confirm, daemon=True)
+        worker.start()
+        yield _sse_frame("ready", {"ok": True, "session_id": session_id})
+
+        while not completed.is_set() or not event_queue.empty():
+            try:
+                item = event_queue.get(timeout=1.0)
+            except queue.Empty:
+                yield _sse_frame("heartbeat", {"time": time.time()})
+                continue
+
+            item_type = str(item.get("type") or "")
+            if item_type == "trace":
+                yield _sse_frame("trace", item)
+                continue
+            if item_type == "summary":
+                yield _sse_frame("summary", item)
+                continue
+            if item_type == "result":
+                yield _sse_frame("result", item.get("result") or {})
+                break
+
+        yield _sse_frame("done", {"ok": True})
+
+    response = Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
+
+
 @smart_chat_bp.route("/api/data-sources", methods=["GET"])
 def list_data_sources():
     try:

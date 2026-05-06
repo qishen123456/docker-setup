@@ -12,12 +12,14 @@
       </div>
     </div>
 
-    <el-row :gutter="18">
-      <el-col :span="7">
-        <el-card class="glass-card">
-          <template #header>
+    <div class="agent-workbench">
+      <section class="agent-rail">
+        <div class="agent-rail-head">
+          <div>
+            <div class="agent-rail-kicker">CONTROL ROLES</div>
             <div class="panel-title">四个中枢 AGENT</div>
-          </template>
+          </div>
+        </div>
           <div
             v-for="item in agents"
             :key="item.agent_no"
@@ -25,48 +27,56 @@
             :class="{ active: selectedAgentNo === item.agent_no }"
             @click="selectAgent(item)"
           >
-            <div class="agent-card-title">{{ item.name }}</div>
-            <div class="agent-card-desc">{{ item.role_summary }}</div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :span="17">
-        <el-card class="glass-card">
-          <template #header>
-            <div class="header-row">
-              <div class="panel-title">{{ form.name || 'AGENT详情' }}</div>
-              <el-button type="primary" @click="saveAgent">保存配置</el-button>
+            <div class="agent-card-no">0{{ item.agent_no }}</div>
+            <div class="agent-card-copy">
+              <div class="agent-card-title">{{ item.name }}</div>
+              <div class="agent-card-desc">{{ item.role_summary }}</div>
             </div>
-          </template>
+          </div>
+      </section>
+
+      <section class="agent-editor">
+        <div class="agent-editor-head">
+          <div>
+            <div class="agent-editor-kicker">PROMPT WORKSPACE</div>
+            <div class="panel-title">{{ form.name || 'AGENT详情' }}</div>
+          </div>
+          <el-button type="primary" @click="saveAgent">保存配置</el-button>
+        </div>
 
           <el-empty v-if="!selectedAgentNo" description="请选择一个 Agent" />
           <template v-else>
-            <el-form label-width="110px">
-              <el-form-item label="Agent名称">
+            <div class="agent-form-grid">
+              <label class="agent-field agent-field-name">
+                <span>Agent 名称</span>
                 <el-input v-model="form.name" />
-              </el-form-item>
-              <el-form-item label="职责说明">
+              </label>
+              <label class="agent-field">
+                <span>职责说明</span>
                 <el-input v-model="form.role_summary" type="textarea" :rows="3" />
-              </el-form-item>
-              <el-form-item label="系统提示词">
-                <el-input v-model="form.system_prompt" type="textarea" :rows="10" />
-              </el-form-item>
-            </el-form>
+              </label>
+              <label class="agent-field agent-field-prompt">
+                <span>系统提示词</span>
+                <el-input v-model="form.system_prompt" type="textarea" :rows="9" class="prompt-input" />
+              </label>
+            </div>
 
             <div class="knowledge-head">
-              <div class="subheading">知识片段</div>
+              <div>
+                <div class="subheading">知识片段</div>
+                <div class="knowledge-desc">用于给当前 Agent 补充稳定规则和业务约束。</div>
+              </div>
               <el-button size="small" @click="addKnowledge">新增知识片段</el-button>
             </div>
 
             <div v-for="(item, index) in form.knowledge_base" :key="index" class="knowledge-item">
+              <span class="knowledge-index">{{ index + 1 }}</span>
               <el-input v-model="form.knowledge_base[index]" type="textarea" :rows="2" />
               <el-button link type="danger" @click="form.knowledge_base.splice(index, 1)">删除</el-button>
             </div>
           </template>
-        </el-card>
-      </el-col>
-    </el-row>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -128,7 +138,10 @@ onMounted(loadAgents)
   min-height: calc(100vh - 150px);
 }
 
-.agent-head { margin-bottom: 16px; }
+.agent-head {
+  margin-bottom: 14px;
+  border-radius: 18px;
+}
 
 .agent-head-metrics {
   display: flex;
@@ -139,81 +152,208 @@ onMounted(loadAgents)
 
 .agent-head-metrics span {
   padding: 8px 12px;
-  border: 1px solid var(--border, #e5e6eb);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-card, #fff);
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 999px;
+  background: #f5fbfa;
+  color: #0b625d;
+  font-weight: 750;
 }
 
-.glass-card {
-  border: 1px solid var(--border, #e5e6eb);
-  background: var(--bg-card, #ffffff);
-  border-radius: var(--radius-card, 12px);
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
+.agent-workbench {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 
 .panel-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-title, #1d2129);
+  font-size: 17px;
+  font-weight: 900;
+  color: #101828;
 }
 
-.header-row {
+.agent-rail,
+.agent-editor {
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(15, 118, 110, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 26px rgba(18, 48, 79, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+.agent-rail {
+  padding: 16px;
+}
+
+.agent-rail-head,
+.agent-editor-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-rail-head {
+  margin-bottom: 14px;
+}
+
+.agent-rail-kicker,
+.agent-editor-kicker {
+  margin-bottom: 4px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
 }
 
 .agent-card {
-  padding: 16px;
-  margin-bottom: 12px;
-  border-radius: var(--radius-card, 12px);
+  display: flex;
+  gap: 12px;
+  padding: 13px;
+  margin-bottom: 10px;
+  border-radius: 16px;
   cursor: pointer;
-  border: 1px solid var(--border, #e5e6eb);
-  background: var(--bg-card, #fff);
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
 }
 
 .agent-card:hover {
-  border-color: var(--border-hover, #c9cdd4);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.04));
+  border-color: rgba(15, 118, 110, 0.2);
+  box-shadow: 0 10px 22px rgba(18, 48, 79, 0.07);
   transform: translateY(-1px);
 }
 
 .agent-card.active {
-  border-color: var(--color-primary, #3370ff);
-  background: var(--color-primary-light, #f0f5ff);
-  box-shadow: var(--shadow-md, 0 2px 4px rgba(0,0,0,0.03));
+  border-color: rgba(15, 118, 110, 0.28);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(15, 118, 110, 0.12), transparent 28%),
+    linear-gradient(135deg, #e8f6f4 0%, #ffffff 100%);
+  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.12), inset 4px 0 0 #0f766e;
+}
+
+.agent-card-no {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b625d;
+  font-size: 12px;
+  font-weight: 900;
+  background: #e8f6f4;
+  border: 1px solid rgba(15, 118, 110, 0.14);
+}
+
+.agent-card-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .agent-card-title {
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--text-title, #1d2129);
+  font-weight: 850;
+  margin-bottom: 5px;
+  color: #101828;
 }
 
 .agent-card-desc {
-  font-size: 13px;
-  color: var(--text-muted, #86909c);
+  font-size: 12px;
+  color: #667085;
   line-height: 1.6;
+}
+
+.agent-editor {
+  padding: 18px 20px;
+}
+
+.agent-editor-head {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(18, 48, 79, 0.08);
+}
+
+.agent-form-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.agent-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #1f3349;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.agent-field-prompt {
+  grid-column: 1 / -1;
+}
+
+.prompt-input :deep(textarea) {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Microsoft YaHei UI', monospace;
+  line-height: 1.65;
 }
 
 .knowledge-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 20px 0 12px;
+  margin: 18px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(18, 48, 79, 0.08);
 }
 
 .subheading {
   font-size: 15px;
-  font-weight: 700;
-  color: var(--text-title, #1d2129);
+  font-weight: 900;
+  color: #101828;
+}
+
+.knowledge-desc {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
 }
 
 .knowledge-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid rgba(18, 48, 79, 0.06);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.knowledge-index {
+  width: 26px;
+  height: 26px;
+  margin-top: 4px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b625d;
+  font-size: 11px;
+  font-weight: 900;
+  background: #e8f6f4;
+}
+
+@media (max-width: 1180px) {
+  .agent-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

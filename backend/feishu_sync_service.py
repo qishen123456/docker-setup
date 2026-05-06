@@ -5,7 +5,10 @@
 import requests
 import json
 import psycopg2
+from psycopg2 import sql
+from psycopg2.extras import Json
 import time
+import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import threading
@@ -19,12 +22,92 @@ from feishu_sync_manager import (
 from feishu_sync_logger import write_log
 from config_manager import decode_secret, get_datasources
 
+FEISHU_FIELD_TYPE_LABELS = {
+    1: "文本",
+    2: "数字",
+    3: "单选",
+    4: "多选",
+    5: "日期",
+    7: "复选框",
+    11: "人员",
+    13: "电话",
+    15: "超链接",
+    17: "附件",
+    18: "单向关联",
+    19: "公式",
+    20: "双向关联",
+    21: "地理位置",
+    22: "群组",
+    23: "创建时间",
+    24: "最后更新时间",
+    1001: "创建人",
+    1002: "修改人",
+    1003: "自动编号",
+}
+
 class FeishuSyncService:
     """飞书同步服务"""
     
     def __init__(self):
         self.sync_threads = {}
         self.running = False
+
+    def normalize_table_name(self, value: str) -> str:
+        """把目标表名规整成安全的 PostgreSQL 标识符。"""
+        raw = str(value or "").strip()
+        if not raw:
+            return "feishu_sync_table"
+        normalized = re.sub(r"[^0-9A-Za-z_]", "_", raw)
+        normalized = re.sub(r"_+", "_", normalized).strip("_").lower()
+        if not normalized:
+            normalized = "feishu_sync_table"
+        if normalized[0].isdigit():
+            normalized = f"t_{normalized}"
+        return normalized[:60]
+
+    def _index_name(self, table_name: str, suffix: str) -> str:
+        base = self.normalize_table_name(f"idx_{table_name}_{suffix}")
+        return base[:60]
+
+    def _extract_record_fields(self, records: List[Dict]) -> List[str]:
+        fields = set()
+        for record in records or []:
+            record_fields = record.get("fields") or {}
+            if isinstance(record_fields, dict):
+                fields.update(str(key) for key in record_fields.keys() if str(key).strip())
+        return sorted(fields)
+
+    def _field_type_label(self, value) -> str:
+        try:
+            code = int(value)
+        except Exception:
+            return str(value or "未知")
+        return FEISHU_FIELD_TYPE_LABELS.get(code, f"类型{code}")
+
+    def _normalize_field_item(self, item: Dict, index: int) -> Dict:
+        field_type = item.get("type")
+        return {
+            "sequence": index,
+            "field_id": item.get("field_id") or item.get("id") or "",
+            "name": item.get("field_name") or item.get("name") or "",
+            "type_code": field_type,
+            "type": self._field_type_label(field_type),
+            "is_primary": bool(item.get("is_primary")),
+        }
+
+    def _format_feishu_api_error(self, data: Dict) -> str:
+        code = data.get("code", "")
+        msg = data.get("msg") or data.get("message") or "未知错误"
+        extra = ""
+        if msg == "RolePermNotAllow":
+            extra = "。当前飞书应用没有这个多维表格/视图的访问权限，请把应用或机器人添加为该 Base 的协作者，并确认应用已开通 bitable 读取权限"
+        elif msg in {"WrongAppToken", "App token not found"}:
+            extra = "。请检查 Base ID 是否正确，或应用是否有访问该多维表格的权限"
+        elif msg in {"TableIdNotFound", "table not found"}:
+            extra = "。请检查 Table ID 是否正确，或该表是否已被删除/无权限访问"
+        elif msg in {"ViewIdNotFound", "view not found"}:
+            extra = "。请检查 View ID 是否正确，必要时先清空 View ID 用全表视图检测"
+        return f"飞书接口返回错误 code={code}, msg={msg}{extra}"
         
     def get_access_token(self, app_id: str, app_secret: str, config_id: int) -> Optional[str]:
         """获取飞书访问令牌"""
@@ -60,7 +143,7 @@ class FeishuSyncService:
             write_log(config_id, 'ERROR', error_msg)
             return None
     
-    def get_feishu_data(self, config: Dict, access_token: str) -> Optional[List[Dict]]:
+    def get_feishu_data(self, config: Dict, access_token: str, limit: Optional[int] = None, raise_error: bool = False) -> Optional[List[Dict]]:
         """获取飞书多维表格数据"""
         try:
             write_log(config['id'], 'INFO', f'开始获取飞书数据, Base ID: {config["base_id"][:10]}..., Table ID: {config["table_id"][:10]}...')
@@ -71,7 +154,9 @@ class FeishuSyncService:
                 'Content-Type': 'application/json'
             }
             
-            params = {}
+            params = {"page_size": 500}
+            if limit:
+                params["page_size"] = max(1, min(int(limit), 500))
             if config.get('view_id'):
                 params['view_id'] = config['view_id']
             
@@ -93,6 +178,9 @@ class FeishuSyncService:
                     items = data.get("data", {}).get("items", [])
                     current_page_size = len(items)
                     all_records.extend(items)
+                    if limit and len(all_records) >= int(limit):
+                        all_records = all_records[:int(limit)]
+                        break
                     
                     write_log(config['id'], 'INFO', f'获取第{page_count}页数据，{current_page_size}条记录')
                     
@@ -101,16 +189,80 @@ class FeishuSyncService:
                         break
                     page_token = next_page_token
                 else:
-                    error_msg = f"获取飞书数据失败: {data.get('msg')}"
+                    error_msg = self._format_feishu_api_error(data)
                     write_log(config['id'], 'ERROR', error_msg)
+                    if raise_error:
+                        raise RuntimeError(error_msg)
                     return None
             
             write_log(config['id'], 'SUCCESS', f'飞书数据获取完成，共{len(all_records)}条记录，{page_count}页')
             return all_records
             
         except Exception as e:
-            error_msg = f"获取飞书数据异常: {e}"
+            raw_error = str(e)
+            error_msg = raw_error if raw_error.startswith("飞书接口返回错误") else f"获取飞书数据异常: {raw_error}"
+            if raise_error and raw_error.startswith("飞书接口返回错误"):
+                raise RuntimeError(raw_error)
             write_log(config['id'], 'ERROR', error_msg)
+            if raise_error:
+                raise RuntimeError(error_msg)
+            return None
+
+    def get_feishu_fields(self, config: Dict, access_token: str, raise_error: bool = False) -> Optional[List[Dict]]:
+        """获取飞书表字段元数据。字段检测优先用它，避免空字段在记录样本里丢失。"""
+        try:
+            write_log(config['id'], 'INFO', f'开始获取飞书字段元数据, Table ID: {config["table_id"][:10]}...')
+            url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{config['base_id']}/tables/{config['table_id']}/fields"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            params = {"page_size": 100}
+            page_token = None
+            seen_page_tokens = set()
+            all_fields = []
+
+            for _ in range(20):
+                current_params = params.copy()
+                if page_token:
+                    current_params["page_token"] = page_token
+                response = requests.get(url, headers=headers, params=current_params, timeout=15)
+                response.raise_for_status()
+                data = response.json()
+                if data.get("code") != 0:
+                    error_msg = self._format_feishu_api_error(data)
+                    write_log(config['id'], 'ERROR', error_msg)
+                    if raise_error:
+                        raise RuntimeError(error_msg)
+                    return None
+                data_payload = data.get("data") or {}
+                items = data_payload.get("items") or []
+                all_fields.extend(items)
+                next_page_token = data_payload.get("page_token")
+                if not next_page_token or next_page_token in seen_page_tokens:
+                    break
+                seen_page_tokens.add(next_page_token)
+                page_token = next_page_token
+                if not page_token:
+                    break
+            else:
+                write_log(config['id'], 'WARNING', '飞书字段元数据分页超过20页，已停止继续翻页')
+
+            normalized = [
+                self._normalize_field_item(item, index + 1)
+                for index, item in enumerate(all_fields)
+                if (item.get("field_name") or item.get("name"))
+            ]
+            write_log(config['id'], 'SUCCESS', f'飞书字段元数据获取完成，共{len(normalized)}个字段')
+            return normalized
+        except Exception as e:
+            raw_error = str(e)
+            error_msg = raw_error if raw_error.startswith("飞书接口返回错误") else f"获取飞书字段元数据异常: {raw_error}"
+            if raise_error and raw_error.startswith("飞书接口返回错误"):
+                raise RuntimeError(raw_error)
+            write_log(config['id'], 'ERROR', error_msg)
+            if raise_error:
+                raise RuntimeError(error_msg)
             return None
     
     def get_postgres_connection(self, config: Dict) -> Optional[psycopg2.extensions.connection]:
@@ -146,28 +298,214 @@ class FeishuSyncService:
             print(f"连接PostgreSQL失败: {e}")
             return None
     
+    def ensure_schema_registry_table(self, conn: psycopg2.extensions.connection) -> None:
+        """创建飞书字段快照记录表。"""
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feishu_sync_schema_registry (
+                id BIGSERIAL PRIMARY KEY,
+                config_id INTEGER,
+                target_table TEXT NOT NULL,
+                base_id TEXT,
+                table_id TEXT,
+                view_id TEXT,
+                field_names JSONB NOT NULL DEFAULT '[]'::jsonb,
+                field_count INTEGER NOT NULL DEFAULT 0,
+                diff JSONB NOT NULL DEFAULT '{}'::jsonb,
+                sample_record_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_feishu_schema_registry_target
+            ON feishu_sync_schema_registry(target_table, updated_at DESC);
+        """)
+        conn.commit()
+
+    def table_exists(self, conn: psycopg2.extensions.connection, table_name: str) -> bool:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = %s
+            )
+            """,
+            (table_name,),
+        )
+        row = cursor.fetchone()
+        return bool(row and row[0])
+
+    def get_existing_field_names(self, conn: psycopg2.extensions.connection, table_name: str) -> List[str]:
+        """从已落库 JSONB 数据中识别历史字段。"""
+        if not self.table_exists(conn, table_name):
+            return []
+        cursor = conn.cursor()
+        query = sql.SQL("""
+            SELECT DISTINCT key
+            FROM {table}, LATERAL jsonb_object_keys(fields) AS key
+            WHERE fields IS NOT NULL
+            ORDER BY key
+        """).format(table=sql.Identifier(table_name))
+        cursor.execute(query)
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_latest_schema_snapshot(self, conn: psycopg2.extensions.connection, config: Dict, table_name: str) -> Dict:
+        """读取最近一次字段快照。没有快照时返回空。"""
+        self.ensure_schema_registry_table(conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT field_names, diff, updated_at
+            FROM feishu_sync_schema_registry
+            WHERE target_table = %s
+              AND (%s = '' OR table_id = %s)
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (table_name, str(config.get("table_id") or ""), str(config.get("table_id") or "")),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"field_names": [], "field_rows": [], "updated_at": None}
+        field_names, diff, updated_at = row
+        diff = diff or {}
+        return {
+            "field_names": field_names or [],
+            "field_rows": diff.get("field_rows") or [],
+            "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at,
+        }
+
+    def compare_schema(self, conn: psycopg2.extensions.connection, table_name: str, records: List[Dict], config: Optional[Dict] = None, field_items: Optional[List[Dict]] = None) -> Dict:
+        """比较飞书当前字段和 PG 既有字段。"""
+        config = config or {}
+        target_table = self.normalize_table_name(table_name)
+        current_field_rows = field_items or []
+        if not current_field_rows:
+            current_names = self._extract_record_fields(records)
+            current_field_rows = [
+                {"sequence": index + 1, "field_id": "", "name": name, "type_code": "", "type": "样本推断", "is_primary": False}
+                for index, name in enumerate(current_names)
+            ]
+        feishu_fields = [item["name"] for item in current_field_rows if item.get("name")]
+        snapshot = self.get_latest_schema_snapshot(conn, config, target_table)
+        if snapshot.get("field_names"):
+            database_fields = snapshot["field_names"]
+            baseline_source = "schema_registry"
+        else:
+            database_fields = self.get_existing_field_names(conn, target_table)
+            baseline_source = "pg_jsonb"
+        feishu_set = set(feishu_fields)
+        database_set = set(database_fields)
+        table_exists = self.table_exists(conn, target_table)
+        added_fields = sorted(feishu_set - database_set)
+        removed_fields = sorted(database_set - feishu_set)
+        common_fields = sorted(feishu_set & database_set)
+        field_rows = []
+        for item in current_field_rows:
+            name = item.get("name")
+            if not name:
+                continue
+            if name in added_fields:
+                status = "added"
+                status_text = "新增"
+            elif name in common_fields:
+                status = "same"
+                status_text = "一致"
+            else:
+                status = "current"
+                status_text = "当前字段"
+            field_rows.append({
+                **item,
+                "status": status,
+                "status_text": status_text,
+                "in_feishu": True,
+                "in_pg": name in database_set,
+            })
+        known_sequence = len(field_rows)
+        for offset, name in enumerate(removed_fields, start=1):
+            field_rows.append({
+                "sequence": known_sequence + offset,
+                "field_id": "",
+                "name": name,
+                "type_code": "",
+                "type": "历史字段",
+                "is_primary": False,
+                "status": "removed",
+                "status_text": "减少",
+                "in_feishu": False,
+                "in_pg": True,
+            })
+        return {
+            "target_table": target_table,
+            "table_exists": table_exists,
+            "feishu_fields": feishu_fields,
+            "database_fields": database_fields,
+            "added_fields": added_fields,
+            "removed_fields": removed_fields,
+            "common_fields": common_fields,
+            "field_rows": field_rows,
+            "field_count": len(feishu_fields),
+            "database_field_count": len(database_fields),
+            "record_sample_count": len(records or []),
+            "baseline_source": baseline_source,
+            "baseline_updated_at": snapshot.get("updated_at"),
+        }
+
+    def save_schema_snapshot(self, conn: psycopg2.extensions.connection, config: Dict, records: List[Dict], diff: Dict) -> None:
+        """保存字段快照，便于后续发现字段新增/减少。"""
+        self.ensure_schema_registry_table(conn)
+        target_table = self.normalize_table_name(config.get("target_table"))
+        fields = diff.get("feishu_fields") or self._extract_record_fields(records)
+        sample_record_id = ""
+        if records:
+            sample_record_id = str(records[0].get("record_id") or "")
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO feishu_sync_schema_registry
+                (config_id, target_table, base_id, table_id, view_id, field_names, field_count, diff, sample_record_id, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb, %s, CURRENT_TIMESTAMP)
+            """,
+            (
+                config.get("id"),
+                target_table,
+                config.get("base_id", ""),
+                config.get("table_id", ""),
+                config.get("view_id", ""),
+                json.dumps(fields, ensure_ascii=False),
+                len(fields),
+                json.dumps(diff, ensure_ascii=False),
+                sample_record_id,
+            ),
+        )
+        conn.commit()
+
     def create_target_table(self, conn: psycopg2.extensions.connection, table_name: str) -> bool:
         """创建目标表"""
         try:
             cursor = conn.cursor()
+            target_table = self.normalize_table_name(table_name)
             
-            # 创建表结构（根据飞书数据结构）
-            create_table_sql = f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-                id SERIAL PRIMARY KEY,
-                record_id VARCHAR(255) UNIQUE,
+            create_table_sql = sql.SQL("""
+            CREATE TABLE IF NOT EXISTS {table} (
+                id BIGSERIAL PRIMARY KEY,
+                record_id TEXT UNIQUE,
                 fields JSONB,
                 created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
-            CREATE INDEX IF NOT EXISTS idx_{table_name}_record_id ON {table_name}(record_id);
-            CREATE INDEX IF NOT EXISTS idx_{table_name}_sync_time ON {table_name}(sync_time);
-            """
+            CREATE INDEX IF NOT EXISTS {record_idx} ON {table}(record_id);
+            CREATE INDEX IF NOT EXISTS {sync_idx} ON {table}(sync_time);
+            """).format(
+                table=sql.Identifier(target_table),
+                record_idx=sql.Identifier(self._index_name(target_table, "record_id")),
+                sync_idx=sql.Identifier(self._index_name(target_table, "sync_time")),
+            )
             
             cursor.execute(create_table_sql)
             conn.commit()
-            print(f"成功创建/更新表: {table_name}")
+            print(f"成功创建/更新表: {target_table}")
             return True
             
         except Exception as e:
@@ -178,11 +516,38 @@ class FeishuSyncService:
         """获取最后同步时间"""
         try:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT MAX(sync_time) FROM {table_name}")
+            target_table = self.normalize_table_name(table_name)
+            cursor.execute(
+                sql.SQL("SELECT MAX(sync_time) FROM {table}").format(table=sql.Identifier(target_table))
+            )
             result = cursor.fetchone()
             return result[0] if result and result[0] else None
         except Exception:
             return None
+
+    def preview_schema(self, config: Dict, sample_limit: int = 50) -> Dict:
+        """获取飞书样本并对比 PG 目标表字段差异。"""
+        access_token = self.get_access_token(config["app_id"], config["app_secret"], int(config.get("id") or 0))
+        if not access_token:
+            raise RuntimeError("获取飞书访问令牌失败")
+
+        field_items = self.get_feishu_fields(config, access_token, raise_error=False) or []
+        records = self.get_feishu_data(config, access_token, limit=sample_limit, raise_error=True)
+        if records is None:
+            raise RuntimeError("获取飞书样本数据失败")
+
+        conn = self.get_postgres_connection(config)
+        if not conn:
+            raise RuntimeError("连接 PostgreSQL 失败")
+        try:
+            preview = self.compare_schema(conn, config.get("target_table", ""), records, config=config, field_items=field_items)
+            preview["field_source"] = "feishu_metadata" if field_items else "record_sample"
+            preview["field_source_text"] = "飞书字段元数据" if field_items else "记录样本推断"
+            if not field_items:
+                preview["warning"] = "未能读取飞书字段元数据，当前字段明细由记录样本推断；空字段可能无法被发现。"
+            return preview
+        finally:
+            conn.close()
     
     def sync_data_to_postgres(self, config: Dict, records: List[Dict]) -> bool:
         """同步数据到PostgreSQL"""
@@ -191,27 +556,29 @@ class FeishuSyncService:
             return False
         
         try:
-            table_name = config['target_table']
+            table_name = self.normalize_table_name(config['target_table'])
+            config['target_table'] = table_name
             
             # 创建目标表
             if not self.create_target_table(conn, table_name):
                 return False
+
+            schema_diff = self.compare_schema(conn, table_name, records, config=config, field_items=config.get("_field_items") or [])
+            self.save_schema_snapshot(conn, config, records, schema_diff)
+            if schema_diff.get("added_fields"):
+                write_log(config["id"], "INFO", f"发现飞书新增字段: {', '.join(schema_diff['added_fields'][:20])}")
+            if schema_diff.get("removed_fields"):
+                write_log(config["id"], "WARNING", f"发现飞书缺失历史字段: {', '.join(schema_diff['removed_fields'][:20])}")
             
             cursor = conn.cursor()
             
-            # 增量同步：只同步新记录
+            # 增量同步：按 record_id upsert，既保留幂等，也能覆盖飞书侧已修改记录。
             if config.get('sync_mode') == 'incremental':
                 last_sync_time = self.get_last_sync_time(conn, table_name)
                 if last_sync_time:
-                    # 过滤出更新的记录（这里简化处理，实际应该比较记录的更新时间）
-                    existing_records = set()
-                    cursor.execute(f"SELECT record_id FROM {table_name}")
-                    existing_records.update(row[0] for row in cursor.fetchall())
-                    
-                    # 只同步新记录
-                    new_records = [r for r in records if r.get('record_id') not in existing_records]
-                    records_to_sync = new_records
-                    print(f"增量同步：共{len(records)}条记录，新增{len(new_records)}条")
+                    # 飞书字段和历史记录可能会变化，统一走 UPSERT，避免只插新记录导致数据陈旧。
+                    records_to_sync = records
+                    print(f"增量同步：共{len(records)}条记录，按record_id执行UPSERT")
                 else:
                     records_to_sync = records
                     print(f"首次全量同步：{len(records)}条记录")
@@ -225,18 +592,17 @@ class FeishuSyncService:
                 sync_time = datetime.now()
                 for record in records_to_sync:
                     record_id = record.get('record_id', '')
-                    fields_json = json.dumps(record.get('fields', {}), ensure_ascii=False)
-                    
                     # 使用UPSERT操作
-                    cursor.execute(f"""
-                        INSERT INTO {table_name} (record_id, fields, sync_time, created_time, updated_time)
+                    upsert_sql = sql.SQL("""
+                        INSERT INTO {table} (record_id, fields, sync_time, created_time, updated_time)
                         VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (record_id) 
                         DO UPDATE SET 
                             fields = EXCLUDED.fields,
                             sync_time = EXCLUDED.sync_time,
                             updated_time = EXCLUDED.updated_time
-                    """, (record_id, fields_json, sync_time, sync_time, sync_time))
+                    """).format(table=sql.Identifier(table_name))
+                    cursor.execute(upsert_sql, (record_id, Json(record.get('fields', {})), sync_time, sync_time, sync_time))
                 
                 conn.commit()
                 print(f"成功同步{len(records_to_sync)}条记录到{table_name}")
@@ -261,6 +627,8 @@ class FeishuSyncService:
             if not access_token:
                 update_sync_status(config['id'], 'failed')
                 return False
+
+            field_items = self.get_feishu_fields(config, access_token) or []
             
             # 获取飞书数据
             records = self.get_feishu_data(config, access_token)
@@ -270,7 +638,9 @@ class FeishuSyncService:
             
             # 同步到PostgreSQL
             write_log(config['id'], 'INFO', f'开始同步数据到PostgreSQL，共{len(records)}条记录')
-            success = self.sync_data_to_postgres(config, records)
+            sync_config = dict(config)
+            sync_config["_field_items"] = field_items
+            success = self.sync_data_to_postgres(sync_config, records)
             if success:
                 sync_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 write_log(config['id'], 'INFO', f'数据库同步成功，更新状态为success')
