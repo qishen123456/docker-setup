@@ -6,8 +6,42 @@ const historySessions = ref([])
 const pendingRestoreId = ref('')
 const activeHistoryId = ref('')
 let loaded = false
+let historyScope = 'anonymous'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+
+const normalizeScopePart = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9_\-@.]+/gi, '_')
+  .replace(/^_+|_+$/g, '')
+
+const getScopedHistoryKey = () => `${SMART_ASK_HISTORY_KEY}:${historyScope}`
+
+export const buildSmartAskHistoryScope = (user = {}) => {
+  const role = normalizeScopePart(user.role || 'user')
+  const identity = normalizeScopePart(
+    user.username
+    || user.login_account
+    || user.account
+    || user.union_id
+    || user.permission_identifier
+    || user.name
+    || 'anonymous'
+  )
+  return `${role}:${identity || 'anonymous'}`
+}
+
+export const setSmartAskHistoryScope = (scope) => {
+  const nextScope = normalizeScopePart(scope) || 'anonymous'
+  if (historyScope === nextScope && loaded) return
+  historyScope = nextScope
+  loaded = false
+  historySessions.value = []
+  activeHistoryId.value = ''
+  pendingRestoreId.value = ''
+  loadSmartAskHistory()
+}
 
 export const loadSmartAskHistory = () => {
   if (typeof window === 'undefined') {
@@ -16,7 +50,7 @@ export const loadSmartAskHistory = () => {
   }
 
   try {
-    const raw = localStorage.getItem(SMART_ASK_HISTORY_KEY)
+    const raw = localStorage.getItem(getScopedHistoryKey())
     historySessions.value = raw ? JSON.parse(raw) : []
   } catch {
     historySessions.value = []
@@ -32,7 +66,7 @@ const ensureLoaded = () => {
 
 const persistSmartAskHistory = () => {
   if (typeof window === 'undefined') return
-  localStorage.setItem(SMART_ASK_HISTORY_KEY, JSON.stringify(historySessions.value))
+  localStorage.setItem(getScopedHistoryKey(), JSON.stringify(historySessions.value))
 }
 
 export const upsertSmartAskHistory = (payload) => {
@@ -82,6 +116,8 @@ export const useSmartAskHistory = () => ({
   historySessions,
   pendingRestoreId,
   activeHistoryId,
+  buildHistoryScope: buildSmartAskHistoryScope,
+  setHistoryScope: setSmartAskHistoryScope,
   loadHistory: loadSmartAskHistory,
   upsertHistory: upsertSmartAskHistory,
   removeHistory: removeSmartAskHistory,

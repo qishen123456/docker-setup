@@ -292,25 +292,19 @@
                     <div class="sa-log-markdown" v-html="renderMd(log.markdown)"></div>
                   </div>
 
-                  <div v-if="getLogDurationText(log)" class="sa-log-time">
-                    <span class="sa-log-time-label">节点耗时</span>
-                    <span>{{ getLogDurationText(log) }}</span>
-                  </div>
                 </template>
               </LogTimeline>
 
-              <section v-if="hasSideReport" class="sa-side-report">
+              <section v-if="hasSideReport" ref="sideReportRef" class="sa-side-report">
                 <div class="sa-side-report-head">
-                  <div class="sa-side-report-titlebar">
+                  <div ref="sideReportHeadRef" class="sa-side-report-titlebar">
                     <div>
-                      <span class="sa-side-report-kicker">经营分析报告</span>
-                      <h3 class="sa-side-report-title">{{ sideReportHeading }}</h3>
+                      <h3 class="sa-side-report-title">业绩分析报告</h3>
                     </div>
                     <button class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
                       <span class="sa-btn-label">全屏报告</span>
                     </button>
                   </div>
-                  <p class="sa-side-report-desc">按{{ businessDrillReport?.compareLevelLabel || '下一层级' }}拆分关键 KPI，展开后查看{{ businessDrillReport?.detailLevelLabel || '明细层级' }}完成情况和对应文字说明。</p>
                   <div v-if="sideConfidenceBadges.length" class="sa-side-confidence" aria-label="路由与结果可信度">
                     <span
                       v-for="badge in sideConfidenceBadges"
@@ -321,7 +315,6 @@
                       {{ badge.label }}：{{ badge.value }}
                     </span>
                   </div>
-                  <p v-if="sideConfidenceNote" class="sa-route-review-note">{{ sideConfidenceNote }}</p>
                 </div>
 
                 <section v-if="businessDrillReport" class="sa-side-section sa-business-report">
@@ -557,15 +550,11 @@
       <div class="sa-report-dialog-body">
         <div class="sa-report-dialog-head">
           <div>
-            <div class="sa-side-report-kicker">FULL REPORT</div>
-            <h3 class="sa-report-dialog-title">{{ reportViewerTitle || sideReportHeading }}</h3>
+            <h3 class="sa-report-dialog-title">业绩分析报告</h3>
           </div>
           <div class="sa-report-dialog-actions">
             <button class="sa-secondary-btn" @click="reportDialogFullscreen = !reportDialogFullscreen">
               <span class="sa-btn-label">{{ reportDialogFullscreen ? '退出全屏' : '全屏查看' }}</span>
-            </button>
-            <button class="sa-secondary-btn" @click="downloadLatestReport">
-              <span class="sa-btn-label">导出 PDF</span>
             </button>
           </div>
         </div>
@@ -800,6 +789,8 @@ const confirmationSubmitting = reactive({})
 const showPanel = ref(true)
 const chatBodyRef = ref(null)
 const panelRef = ref(null)
+const sideReportRef = ref(null)
+const sideReportHeadRef = ref(null)
 const chartDialogRef = ref(null)
 const thinkingOpen = reactive({})
 const logOpen = reactive({})
@@ -817,9 +808,7 @@ const officeDrillOpen = reactive({})
 let activePrintFrame = null
 let msgCounter = 0
 let elapsed = ref(0)
-const clockNow = ref(Date.now())
 let timerInst = null
-let clockTimer = null
 let chatScrollTimer = null
 let panelScrollTimer = null
 
@@ -1733,8 +1722,24 @@ const toggleThinking = (id) => { thinkingOpen[id] = !thinkingOpen[id] }
 const toggleLog = (i) => { logOpen[i] = !logOpen[i] }
 const openDetailPanel = () => {
   showPanel.value = true
-  schedulePanelScroll(80, 'smooth')
+  scrollPanelToReportTop()
 }
+
+const scrollPanelToReportTop = () => nextTick(() => {
+  const panel = panelRef.value
+  const report = sideReportRef.value
+  const reportHead = sideReportHeadRef.value
+  if (!panel) return
+  if (!report) {
+    panel.scrollTo({ top: 0, behavior: 'auto' })
+    return
+  }
+  const target = reportHead || report
+  const panelRect = panel.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const top = panel.scrollTop + targetRect.top - panelRect.top - 12
+  panel.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+})
 
 const clearExecutionPanelState = () => {
   Object.keys(logOpen).forEach(k => delete logOpen[k])
@@ -1975,36 +1980,6 @@ const formatElapsedLabel = (seconds) => {
   return `${minutes}m ${remain}s`
 }
 
-const formatNodeDuration = (duration) => {
-  const value = Number(duration)
-  if (!Number.isFinite(value) || value <= 0) return ''
-  const seconds = value / 1000
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60)
-    const remain = seconds - minutes * 60
-    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
-    return `${minutes}m ${remainLabel}s`
-  }
-  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
-  return `${label}s`
-}
-
-const getLogDurationLabel = (log) => {
-  if (log?.status === 'running') {
-    const startedAtMs = Number(log?.startedAtMs)
-    if (Number.isFinite(startedAtMs)) {
-      return formatNodeDuration(clockNow.value - startedAtMs)
-    }
-  }
-  return log?.durationLabel || log?.elapsedLabel || ''
-}
-
-const getLogDurationText = (log) => {
-  const label = getLogDurationLabel(log)
-  if (!label) return ''
-  return log?.status === 'running' ? `已运行 ${label}` : `耗时 ${label}`
-}
-
 const getMessageElapsedLabel = (msg) => {
   if (msg?.loading && isCurrentSessionMessage(msg)) {
     return formatElapsedLabel(elapsed.value)
@@ -2077,7 +2052,7 @@ const resetForNewChat = () => {
   showPanel.value = true
   nextTick(() => {
     scheduleChatScroll(20, 'auto')
-    schedulePanelScroll(20, 'auto')
+    schedulePanelScroll(20, 'auto', true)
   })
 }
 
@@ -2387,8 +2362,22 @@ const scrollChat = (behavior = 'smooth') => nextTick(() => {
     chatBodyRef.value.scrollTo({ top: chatBodyRef.value.scrollHeight, behavior })
   }
 })
-const scrollPanel = (behavior = 'smooth') => nextTick(() => {
-  if (panelRef.value) {
+
+const forceScrollChatToBottom = (behavior = 'auto') => {
+  ;[0, 60, 180, 360].forEach((delay) => {
+    window.setTimeout(() => scrollChat(behavior), delay)
+  })
+}
+const isPanelNearBottom = () => {
+  const el = panelRef.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+
+const shouldFollowPanelBottom = () => ['running', 'waiting_confirmation'].includes(session.state.status)
+
+const scrollPanel = (behavior = 'auto', force = false) => nextTick(() => {
+  if (panelRef.value && (force || shouldFollowPanelBottom() || isPanelNearBottom())) {
     panelRef.value.scrollTo({ top: panelRef.value.scrollHeight, behavior })
   }
 })
@@ -2400,10 +2389,10 @@ const scheduleChatScroll = (delay = 40, behavior = 'smooth') => {
   }, delay)
 }
 
-const schedulePanelScroll = (delay = 150, behavior = 'smooth') => {
+const schedulePanelScroll = (delay = 150, behavior = 'auto', force = false) => {
   if (panelScrollTimer) clearTimeout(panelScrollTimer)
   panelScrollTimer = window.setTimeout(() => {
-    scrollPanel(behavior)
+    scrollPanel(behavior, force)
   }, delay)
 }
 
@@ -2663,27 +2652,35 @@ watch(() => session.state.logs.length, (len) => {
   if (len > 0) {
     logOpen[len - 1] = true
     scheduleChatScroll(26, 'smooth')
-    schedulePanelScroll(140, 'smooth')
+    schedulePanelScroll(60, 'auto', shouldFollowPanelBottom())
   }
 }, { flush: 'post' })
 
 watch(() => session.state.logs.map(log => log.pulseText || '').join('|'), (signature) => {
   if (!signature) return
   scheduleChatScroll(26, 'smooth')
-  schedulePanelScroll(80, 'smooth')
+  schedulePanelScroll(60, 'auto', shouldFollowPanelBottom())
 }, { flush: 'post' })
 
 watch(() => session.state.status, (s) => {
   if (s === 'completed') {
     nextTick(() => {
-      scheduleChatScroll(40, 'smooth')
+      forceScrollChatToBottom('auto')
+      if (hasSideReport.value) scrollPanelToReportTop()
     })
   }
   if (s === 'waiting_confirmation') {
     scheduleChatScroll(26, 'smooth')
-    schedulePanelScroll(140, 'smooth')
+    schedulePanelScroll(60, 'auto', true)
   }
 })
+
+watch(() => hasSideReport.value, (ready) => {
+  if (ready && session.state.status === 'completed') {
+    scrollPanelToReportTop()
+    forceScrollChatToBottom('auto')
+  }
+}, { flush: 'post' })
 
 watch(() => [chartViewerVisible.value, chartViewerSpec.value, chartViewerMode.value], ([visible]) => {
   if (visible) {
@@ -2728,9 +2725,6 @@ watch(() => pendingRestoreId.value, (historyId) => {
 }, { flush: 'post', immediate: true })
 
 onMounted(async () => {
-  clockTimer = window.setInterval(() => {
-    clockNow.value = Date.now()
-  }, 250)
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadHistory()
 
@@ -2785,7 +2779,6 @@ onDeactivated(() => {
 
 onUnmounted(() => {
   window.removeEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
-  if (clockTimer) clearInterval(clockTimer)
   stopTimer()
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   if (panelScrollTimer) clearTimeout(panelScrollTimer)
@@ -3423,9 +3416,14 @@ onUnmounted(() => {
 
 /* ===== 右侧面板 ===== */
 .sa-detail-panel {
-  width: 458px;
+  width: clamp(360px, 34vw, 440px);
+  max-width: 42vw;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-left: 1px solid rgba(29, 33, 41, 0.08);
   background: rgba(255, 255, 255, 0.92);
   flex-shrink: 0;
@@ -3516,8 +3514,10 @@ onUnmounted(() => {
 }
 .sa-panel-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-bottom: 10px;
+  overscroll-behavior: contain;
 }
 
 /* 数据预览 */
@@ -4733,7 +4733,8 @@ onUnmounted(() => {
   }
 
   .sa-detail-panel {
-    width: 420px;
+    width: 400px;
+    max-width: 42vw;
   }
 }
 
@@ -4749,9 +4750,11 @@ onUnmounted(() => {
 
   .sa-detail-panel {
     width: 100%;
+    max-width: none;
     border-left: none;
     border-top: 1px solid rgba(29, 33, 41, 0.08);
-    min-height: 360px;
+    min-height: 320px;
+    max-height: 42vh;
   }
 }
 </style>

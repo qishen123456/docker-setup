@@ -16,17 +16,16 @@
           <span class="sa-node-icon" :class="iconClass(log)" aria-hidden="true"></span>
           <span class="sa-node-title">{{ log.title }}</span>
           <span v-if="log.status === 'running'" class="sa-spin">◌</span>
-          <span class="sa-node-status" :class="log.status">{{ statusLabel(log.status) }}</span>
+          <span class="sa-node-status" :class="log.status">{{ nodeStatusText(log) }}</span>
         </div>
 
         <transition name="sa-collapse">
           <div v-if="openState[i]" class="sa-node-body">
             <div class="sa-node-body-head">
               <span class="sa-node-body-label">{{ sectionLabel(log) }}</span>
-              <span class="sa-node-body-meta">{{ nodeDurationMeta(log) }}</span>
             </div>
 
-            <div v-if="log.summary" class="sa-node-summary">{{ log.summary }}</div>
+            <div v-if="log.summary && !isDurationLine(log.summary)" class="sa-node-summary">{{ log.summary }}</div>
 
             <div v-if="compactThought(log) && !latestLiveThought(log) && isThoughtVisible(log, i)" class="sa-node-thought">
               <span class="sa-node-thought-label">执行摘要</span>
@@ -38,7 +37,7 @@
                 <span class="sa-live-pulse-dot"></span>
                 <span>{{ liveThoughtLabel(log) }}</span>
               </div>
-              <div class="sa-node-live-line">
+              <div ref="liveLineRef" class="sa-node-live-line">
                 <div
                   v-for="(line, lineIndex) in compactLiveThoughtLines(log)"
                   :key="`${lineIndex}-${line}`"
@@ -74,7 +73,6 @@
               <slot name="content" :log="log" :index="i"></slot>
             </div>
 
-            <div v-if="nodeDurationFooter(log)" class="sa-log-time">{{ nodeDurationFooter(log) }}</div>
           </div>
         </transition>
       </div>
@@ -83,7 +81,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   logs: {
@@ -101,9 +99,11 @@ defineEmits(['toggle'])
 const revealState = reactive({})
 const revealTimers = new Map()
 const clockNow = ref(Date.now())
+const liveLineRef = ref(null)
 const clockTimer = setInterval(() => {
   clockNow.value = Date.now()
 }, 250)
+let liveLineScrollTimer = null
 
 const statusLabel = (status) => ({
   success: '已完成',
@@ -117,7 +117,10 @@ const getNodeKey = (log, index) => log?.key || `${log?.title || 'node'}-${index}
 
 const detailLines = (log) => {
   if (Array.isArray(log?.detailLines) && log.detailLines.length > 0) {
-    return log.detailLines
+    return uniqueDisplayLines(log.detailLines
+      .map(item => String(item || '').trim())
+      .filter(Boolean)
+      .filter(line => !isDurationLine(line) && !isRedundantRealtimePrintLine(line)))
   }
 
   const lines = [`开始执行任务：${log?.title || '执行节点'}`]
@@ -136,7 +139,35 @@ const detailLines = (log) => {
   if (log?.status === 'warning') lines.push('当前节点等待进一步确认。')
   if (log?.status === 'error') lines.push('当前节点执行失败，请查看错误信息。')
 
-  return Array.from(new Set(lines))
+  return uniqueDisplayLines(lines.filter(line => !isDurationLine(line) && !isRedundantRealtimePrintLine(line)))
+}
+
+const isDurationLine = (line) => {
+  const text = String(line || '')
+    .trim()
+    .replace(/^[•·\-\s]+/, '')
+    .replace(/[。；;,.，、\s]+$/g, '')
+  return /节点耗时|当前节点耗时|当前节点已运行|^已运行\s*[\dm.\s]+s?$|^耗时\s*[\dm.\s]+s?$/i.test(text)
+}
+
+const isRedundantRealtimePrintLine = (line) => {
+  const text = normalizeDisplayLine(line)
+  return text.includes('模型正在实时返回真实内容') && text.includes('逐段打印')
+}
+
+const normalizeDisplayLine = (line) => String(line || '')
+  .trim()
+  .replace(/\s+/g, ' ')
+  .replace(/[。；;,.，、\s]+$/g, '')
+
+const uniqueDisplayLines = (lines = []) => {
+  const seen = new Set()
+  return lines.filter((line) => {
+    const key = normalizeDisplayLine(line)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 const iconClass = (log) => {
@@ -184,18 +215,11 @@ const nodeDurationLabel = (log) => {
   return log?.durationLabel || log?.elapsedLabel || ''
 }
 
-const nodeDurationMeta = (log) => {
-  const label = nodeDurationLabel(log)
-  if (!label) return '执行明细'
-  if (log?.status === 'running') return `已运行 ${label}`
-  if (log?.status === 'pending') return '等待执行'
-  return `耗时 ${label}`
-}
-
-const nodeDurationFooter = (log) => {
-  const label = nodeDurationLabel(log)
-  if (!label) return ''
-  return log?.status === 'running' ? `当前节点已运行 ${label}` : `当前节点耗时 ${label}`
+const nodeStatusText = (log) => {
+  const base = statusLabel(log?.status)
+  const duration = nodeDurationLabel(log)
+  if (!duration || log?.status === 'pending') return base
+  return `${base} ${duration}`
 }
 
 const latestLiveThought = (log) => {
@@ -289,7 +313,12 @@ const compactLiveThoughtLines = (log) => {
   const lines = Array.isArray(log?.liveThoughtLines) && log.liveThoughtLines.length > 0
     ? log.liveThoughtLines
     : [latestLiveThought(log)]
-  return Array.from(new Set(lines.map(line => compactPreview(line, log, 128)).filter(Boolean))).slice(-4)
+  return Array.from(new Set(
+    lines
+      .map(line => compactPreview(line, log, 128))
+      .filter(Boolean)
+      .filter(line => line !== '模型正在实时返回真实内容，已切换为逐段打印。')
+  )).slice(-4)
 }
 
 const liveThoughtLabel = (log) => {
@@ -302,12 +331,10 @@ const buildRevealSignature = (log) => {
   const lines = detailLines(log)
   return [
     log?.status || '',
-    log?.time || '',
-    log?.summary || '',
-    log?.thought || '',
-    lines.join('|'),
-    log?.sql || '',
-    log?.markdown || '',
+    lines.length,
+    log?.sql ? 'has-sql' : '',
+    log?.markdown ? 'has-markdown' : '',
+    log?.chartData ? 'has-chart' : '',
     Array.isArray(log?.tableRows) ? log.tableRows.length : 0,
     Array.isArray(log?.charts) ? log.charts.length : 0
   ].join('::')
@@ -472,8 +499,34 @@ watch(
   { deep: true, immediate: true }
 )
 
+const clearLiveLineScrollTimer = () => {
+  if (liveLineScrollTimer) {
+    clearInterval(liveLineScrollTimer)
+    liveLineScrollTimer = null
+  }
+}
+
+const scrollLiveLineToBottom = () => nextTick(() => {
+  const el = Array.isArray(liveLineRef.value)
+    ? liveLineRef.value[liveLineRef.value.length - 1]
+    : liveLineRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+})
+
+watch(
+  () => props.logs.map(log => `${log?.status || ''}:${Array.isArray(log?.liveThoughtLines) ? log.liveThoughtLines.join('|') : ''}:${log?.pulseText || ''}:${log?.streamText || ''}`).join('||'),
+  () => {
+    clearLiveLineScrollTimer()
+    scrollLiveLineToBottom()
+    liveLineScrollTimer = setInterval(scrollLiveLineToBottom, 120)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   clearInterval(clockTimer)
+  clearLiveLineScrollTimer()
   Array.from(revealTimers.keys()).forEach(clearNodeTimers)
 })
 </script>
@@ -672,11 +725,14 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  justify-content: flex-end;
+  min-width: 58px;
   padding: 0 1px;
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
   letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .sa-node-status::before {
@@ -715,7 +771,7 @@ onBeforeUnmount(() => {
 .sa-node-body-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   margin-bottom: 7px;
 }
@@ -726,13 +782,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #86909c;
-}
-
-.sa-node-body-meta {
-  font-size: 10px;
-  font-weight: 600;
-  color: #86909c;
-  white-space: nowrap;
 }
 
 .sa-log-steps {
@@ -777,9 +826,12 @@ onBeforeUnmount(() => {
 .sa-node-live-thought {
   margin: 0 0 8px;
   padding: 6px 8px;
+  height: 92px;
+  box-sizing: border-box;
   border-radius: 8px;
   border: 1px solid rgba(229, 233, 242, 0.74);
   background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+  overflow: hidden;
 }
 
 .sa-node-live-head {
@@ -803,13 +855,22 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-live-line {
-  max-height: 76px;
-  overflow: hidden;
+  height: 60px;
+  overflow-y: auto;
+  padding-right: 3px;
   white-space: normal;
   font-size: 10px;
   line-height: 1.55;
   color: #7a8494;
-  animation: revealContent 0.2s ease-out;
+}
+
+.sa-node-live-line::-webkit-scrollbar {
+  width: 3px;
+}
+
+.sa-node-live-line::-webkit-scrollbar-thumb {
+  background: #d8dee8;
+  border-radius: 999px;
 }
 
 .sa-node-live-check {
@@ -890,7 +951,7 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-rich {
-  animation: revealContent 0.22s ease-out;
+  animation: none;
 }
 
 @keyframes revealContent {

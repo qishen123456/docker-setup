@@ -27,7 +27,7 @@
           </div>
           <div class="sa-lite-step-desc">{{ step.description }}</div>
 
-          <div v-if="step.showThought && activeThoughtLines.length" class="sa-lite-thought">
+          <div v-if="step.showThought && activeThoughtLines.length" ref="thoughtRef" class="sa-lite-thought">
             <div class="sa-lite-thought-label">{{ activeThoughtLabel }}</div>
             <div class="sa-lite-print-lines">
               <div
@@ -53,7 +53,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import TypewriterLine from './TypewriterLine.vue'
 
 const props = defineProps({
@@ -76,9 +76,11 @@ const props = defineProps({
 })
 
 const clockNow = ref(Date.now())
+const thoughtRef = ref(null)
 const clockTimer = setInterval(() => {
   clockNow.value = Date.now()
 }, 250)
+let thoughtScrollTimer = null
 
 const formatDuration = (duration) => {
   const value = Number(duration)
@@ -274,8 +276,35 @@ const displaySteps = computed(() => {
   ]
 })
 
+const clearThoughtScrollTimer = () => {
+  if (thoughtScrollTimer) {
+    clearInterval(thoughtScrollTimer)
+    thoughtScrollTimer = null
+  }
+}
+
+const scrollThoughtToBottom = () => nextTick(() => {
+  const el = Array.isArray(thoughtRef.value)
+    ? thoughtRef.value[thoughtRef.value.length - 1]
+    : thoughtRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+})
+
+watch(
+  () => [props.mode, activeThoughtLines.value.join('|')],
+  () => {
+    clearThoughtScrollTimer()
+    if (props.mode !== 'live' || !activeThoughtLines.value.length) return
+    scrollThoughtToBottom()
+    thoughtScrollTimer = setInterval(scrollThoughtToBottom, 120)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   clearInterval(clockTimer)
+  clearThoughtScrollTimer()
 })
 </script>
 

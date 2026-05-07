@@ -62,9 +62,6 @@
                 <div class="sidebar-history-subtitle">最近 {{ historyPreviewList.length }} 条分析记录</div>
               </div>
               <div class="sidebar-history-actions">
-                <button class="sidebar-history-new" type="button" @click="createFreshChat">
-                  新建分析
-                </button>
                 <button
                   v-if="historySessions.length"
                   class="sidebar-history-more"
@@ -217,13 +214,16 @@
       :close-on-click-modal="false"
     >
       <div class="password-panel">
-        <h3>更新登录密码</h3>
-        <p>新密码至少 8 位。修改成功后需要重新登录。</p>
+        <span class="password-panel-icon">锁</span>
+        <div>
+          <h3>更新登录密码</h3>
+          <p>建议使用至少 8 位，并包含数字和字母的密码。</p>
+        </div>
       </div>
       <div class="password-form">
         <label>
           <span>原密码</span>
-          <input v-model="passwordForm.old_password" type="password" autocomplete="current-password" @keydown.enter="submitPasswordChange" />
+          <input v-model="passwordForm.old_password" type="password" autocomplete="current-password" placeholder="请输入当前密码" @keydown.enter="submitPasswordChange" />
         </label>
         <label>
           <span>新密码</span>
@@ -261,6 +261,8 @@ const session = useSmartAskSession()
 const {
   historySessions,
   activeHistoryId,
+  buildHistoryScope,
+  setHistoryScope,
   loadHistory,
   removeHistory,
   clearHistory,
@@ -355,15 +357,26 @@ const refreshAuthUser = async () => {
   try {
     const data = await getCurrentUser()
     authUser.value = data?.authenticated ? (data.user || {}) : null
+    syncHistoryScope()
   } catch {
     authUser.value = null
+    syncHistoryScope()
   } finally {
     authReady.value = true
   }
 }
 
+const syncHistoryScope = () => {
+  if (!authUser.value) {
+    setHistoryScope('anonymous')
+    return
+  }
+  setHistoryScope(buildHistoryScope(authUser.value))
+}
+
 const handleAuthenticated = (user) => {
   authUser.value = user || null
+  syncHistoryScope()
   authReady.value = true
   enforceRouteAccess()
 }
@@ -397,6 +410,7 @@ const submitPasswordChange = async () => {
     ElMessage.success('密码已修改，请重新登录')
     clearAuthToken()
     authUser.value = null
+    syncHistoryScope()
   } finally {
     passwordSaving.value = false
   }
@@ -407,10 +421,12 @@ const handleLogout = async () => {
     await logout()
     clearAuthToken()
     authUser.value = null
+    syncHistoryScope()
     ElMessage.success('已退出登录')
   } catch {
     clearAuthToken()
     authUser.value = null
+    syncHistoryScope()
   }
   if (route.path !== '/smart-ask') {
     router.replace('/smart-ask')
@@ -507,7 +523,6 @@ const handleHistoryFocus = () => {
 }
 
 onMounted(() => {
-  loadHistory()
   refreshClock()
   pingBackend()
   refreshAuthUser()
@@ -533,6 +548,7 @@ watch(() => route.path, (path) => {
 })
 
 watch(authUser, () => {
+  syncHistoryScope()
   enforceRouteAccess()
 })
 </script>
@@ -1867,33 +1883,6 @@ body,
   box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
 }
 
-.dialog-ghost-button,
-.dialog-primary-button {
-  height: 34px;
-  padding: 0 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.dialog-ghost-button {
-  border: 1px solid #e5e6eb;
-  background: #fff;
-  color: #4e5969;
-}
-
-.dialog-primary-button {
-  border: 1px solid #165dff;
-  background: #165dff;
-  color: #fff;
-}
-
-.dialog-primary-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
 .auth-password-button {
   height: 22px;
   padding: 0 8px;
@@ -1911,15 +1900,15 @@ body,
 }
 
 .password-dialog {
-  border-radius: 12px !important;
+  border-radius: 18px !important;
   overflow: hidden;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14) !important;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18) !important;
 }
 
 .password-dialog .el-dialog__header {
-  padding: 22px 24px 16px;
+  padding: 22px 28px 14px;
   margin: 0;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 0;
 }
 
 .password-dialog .el-dialog__title {
@@ -1929,24 +1918,50 @@ body,
 }
 
 .password-dialog .el-dialog__body {
-  padding: 18px 24px 20px;
+  padding: 8px 28px 24px;
 }
 
 .password-dialog .el-dialog__footer {
-  padding: 14px 24px 18px;
-  border-top: 1px solid #f0f1f3;
-  background: #fbfcfe;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 28px 24px;
+  border-top: 1px solid #f2f3f5;
+  background: #fff;
 }
 
 .password-panel {
   margin-bottom: 18px;
-  padding: 0 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e6efff;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(22, 93, 255, 0.12), transparent 32%),
+    linear-gradient(135deg, #f8fbff 0%, #f3f7ff 100%);
+}
+
+.password-panel-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #165dff;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(22, 93, 255, 0.24);
 }
 
 .password-panel h3 {
   margin: 0;
   color: #1d2129;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
 }
 
@@ -1954,29 +1969,31 @@ body,
   margin: 6px 0 0;
   color: #667085;
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .password-form {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
 }
 
 .password-form label {
-  display: grid;
-  grid-template-columns: 86px 1fr;
-  gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   color: #4e5969;
   font-size: 13px;
   font-weight: 800;
 }
 
 .password-form input {
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border: 1px solid #dfe3eb;
+  border-radius: 10px;
   outline: none;
   color: #1d2129;
   font-size: 14px;
@@ -1991,12 +2008,14 @@ body,
 
 .dialog-ghost-button,
 .dialog-primary-button {
-  height: 34px;
-  padding: 0 16px;
-  border-radius: 8px;
+  min-width: 82px;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 11px;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  transition: all 0.18s ease;
 }
 
 .dialog-ghost-button {
@@ -2009,6 +2028,17 @@ body,
   border: 1px solid #165dff;
   background: #165dff;
   color: #fff;
+  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.24);
+}
+
+.dialog-ghost-button:hover {
+  border-color: #c9d3e5;
+  background: #f7f9fc;
+}
+
+.dialog-primary-button:hover {
+  background: #0e52e8;
+  border-color: #0e52e8;
 }
 
 .dialog-primary-button:disabled {
