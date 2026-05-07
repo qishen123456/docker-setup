@@ -4,18 +4,37 @@
       <div>
         <div class="admin-kicker">ACCESS GOVERNANCE</div>
         <h2>员工权限配置</h2>
-        <p>维护员工登录账号、默认密码、飞书身份映射与系统角色。新增员工默认密码为 12345678。</p>
+        <p>维护账号、角色与飞书免登映射。新员工默认密码为 12345678。</p>
       </div>
       <button class="save-button" type="button" :disabled="loading || saving" @click="saveAll">
         {{ saving ? '保存中...' : '保存配置' }}
       </button>
     </div>
 
+    <section class="permission-metrics">
+      <div>
+        <span>员工账号</span>
+        <strong>{{ employees.length }}</strong>
+      </div>
+      <div>
+        <span>管理员</span>
+        <strong>{{ adminCount }}</strong>
+      </div>
+      <div>
+        <span>普通用户</span>
+        <strong>{{ userCount }}</strong>
+      </div>
+      <div>
+        <span>待重置密码</span>
+        <strong>{{ resetCount }}</strong>
+      </div>
+    </section>
+
     <section class="permission-card">
       <div class="permission-toolbar">
         <div>
           <h3>账号与角色</h3>
-          <p>登录账号用于账号密码登录；飞书 UnionID 用于飞书免登身份匹配。</p>
+          <p>登录账号用于密码登录；飞书 UnionID 用于免登匹配。</p>
         </div>
         <button class="add-button" type="button" @click="addEmployee">新增员工</button>
       </div>
@@ -63,13 +82,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getEmployeePermissions, saveEmployeePermissions } from '../api/index.js'
 
 const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)
+const adminCount = computed(() => employees.value.filter((item) => item.role === 'admin').length)
+const userCount = computed(() => employees.value.filter((item) => item.role === 'user').length)
+const resetCount = computed(() => employees.value.filter((item) => item.reset_password).length)
 
 const uid = () => `emp_${Date.now()}_${Math.random().toString(16).slice(2)}`
 
@@ -123,7 +145,7 @@ onMounted(load)
 .permission-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .permission-head {
@@ -131,6 +153,13 @@ onMounted(load)
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
+  min-height: auto;
+  padding: 22px 24px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(22, 93, 255, 0.08), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
 }
 
 .save-button,
@@ -144,10 +173,11 @@ onMounted(load)
 }
 
 .save-button {
-  height: 36px;
-  padding: 0 16px;
-  background: #165dff;
+  height: 38px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, #165dff, #0f766e);
   color: #fff;
+  box-shadow: 0 12px 24px rgba(22, 93, 255, 0.18);
 }
 
 .save-button:disabled {
@@ -155,9 +185,39 @@ onMounted(load)
   opacity: 0.7;
 }
 
+.permission-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.permission-metrics > div {
+  min-height: 82px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(18, 48, 79, 0.07);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
+}
+
+.permission-metrics span {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.permission-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: #1d2129;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
 .permission-card {
   border: 1px solid rgba(18, 48, 79, 0.08);
-  border-radius: 18px;
+  border-radius: 22px;
   background: #fff;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
 }
@@ -178,8 +238,9 @@ onMounted(load)
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  padding: 18px;
+  padding: 18px 20px;
   border-bottom: 1px solid #f0f1f3;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
 }
 
 .permission-toolbar h3 {
@@ -189,14 +250,15 @@ onMounted(load)
 }
 
 .add-button {
-  height: 34px;
-  padding: 0 14px;
+  height: 36px;
+  padding: 0 16px;
   background: #e8f6f4;
   color: #0b625d;
 }
 
 .permission-table {
-  padding: 12px 18px 18px;
+  padding: 8px 20px 18px;
+  overflow-x: auto;
 }
 
 .permission-row {
@@ -204,6 +266,7 @@ onMounted(load)
   grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.25fr) 120px 88px 220px 68px;
   gap: 12px;
   align-items: center;
+  min-width: 1120px;
   padding: 10px 0;
   border-bottom: 1px solid #f5f6f8;
 }
@@ -212,11 +275,13 @@ onMounted(load)
   color: #86909c;
   font-size: 12px;
   font-weight: 900;
+  padding-top: 12px;
+  padding-bottom: 8px;
 }
 
 .permission-row input,
 .permission-row select {
-  height: 38px;
+  height: 36px;
   padding: 0 12px;
   border: 1px solid #e5e6eb;
   border-radius: 12px;
@@ -239,7 +304,7 @@ onMounted(load)
 }
 
 .password-status {
-  height: 30px;
+  height: 28px;
   min-width: 72px;
   padding: 0 10px;
   border-radius: 999px;
@@ -265,7 +330,7 @@ onMounted(load)
 
 .reset-button,
 .delete-button {
-  height: 32px;
+  height: 30px;
   padding: 0 12px;
 }
 
@@ -287,12 +352,17 @@ onMounted(load)
 }
 
 @media (max-width: 1100px) {
+  .permission-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .permission-summary {
     grid-template-columns: 1fr;
   }
 
   .permission-row {
     grid-template-columns: 1fr;
+    min-width: 0;
     padding: 14px 0;
   }
 

@@ -306,8 +306,23 @@ notepad .env
 - `git clone https://gitee.com/tailin1/volcano-intelligent-questions.git smartask`：从 Gitee 下载项目，并把文件夹命名为 `smartask`。
 - `cd smartask`：进入项目目录，后续命令都要在这个目录执行。
 - `Copy-Item .env.example .env`：复制一份运行配置文件，真实配置都写到 `.env`。
-- `notepad .env`：打开 `.env`，填写 AI Key、系统密钥、飞书配置等真实值。
+- `notepad .env`：打开 `.env`，填写 AI Key、系统密钥、飞书配置等真实值；必须把 `SMARTASK_ADMIN_PASSWORD` 改成强密码。
 - `.\deploy.ps1 -RunTests`：一键构建并启动 Docker 服务，启动后自动跑接口测试。
+
+部署成功后访问：
+
+```text
+http://localhost:8080
+```
+
+首次登录使用 `.env` 中配置的超级管理员账号：
+
+```text
+账号：SMARTASK_ADMIN_USERNAME 的值，默认 admin
+密码：SMARTASK_ADMIN_PASSWORD 的值
+```
+
+登录后进入“员工权限配置”，可以新增管理员或普通用户。新增员工默认密码为 `12345678`；忘记密码时，超级管理员可点击“重置密码”，再点“保存配置”，把该员工密码重置回 `12345678`。
 
 ### 12.2 日常更新
 

@@ -212,10 +212,14 @@
     <el-dialog
       v-model="passwordDialogVisible"
       title="修改密码"
-      width="380px"
+      width="420px"
       custom-class="password-dialog"
       :close-on-click-modal="false"
     >
+      <div class="password-panel">
+        <h3>更新登录密码</h3>
+        <p>新密码至少 8 位。修改成功后需要重新登录。</p>
+      </div>
       <div class="password-form">
         <label>
           <span>原密码</span>
@@ -1906,27 +1910,78 @@ body,
   background: rgba(22, 93, 255, 0.16);
 }
 
+.password-dialog {
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14) !important;
+}
+
+.password-dialog .el-dialog__header {
+  padding: 22px 24px 16px;
+  margin: 0;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.password-dialog .el-dialog__title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #1d2129;
+}
+
+.password-dialog .el-dialog__body {
+  padding: 18px 24px 20px;
+}
+
+.password-dialog .el-dialog__footer {
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f0f1f3;
+  background: #fbfcfe;
+}
+
+.password-panel {
+  margin-bottom: 18px;
+  padding: 0 0 2px;
+}
+
+.password-panel h3 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.password-panel p {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .password-form {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .password-form label {
   display: grid;
-  gap: 7px;
+  grid-template-columns: 86px 1fr;
+  gap: 12px;
+  align-items: center;
   color: #4e5969;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .password-form input {
-  height: 38px;
+  height: 36px;
   padding: 0 12px;
   border: 1px solid #e5e6eb;
-  border-radius: 10px;
+  border-radius: 8px;
   outline: none;
   color: #1d2129;
   font-size: 14px;
+  background: #fff;
+  transition: all 0.18s ease;
 }
 
 .password-form input:focus {
@@ -1938,7 +1993,7 @@ body,
 .dialog-primary-button {
   height: 34px;
   padding: 0 16px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
