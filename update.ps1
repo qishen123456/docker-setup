@@ -94,6 +94,8 @@ docker compose ps
 if ($ready) {
     Write-Host ""
     Write-Host "[OK] Update finished. If the page looks stale, hard refresh with Ctrl+F5." -ForegroundColor Green
+    Write-Host "     Frontend image was rebuilt unless -NoBuild was used." -ForegroundColor Green
+    Write-Host "     SmartAsk history is isolated by login account in the browser." -ForegroundColor Green
     if ($RunTests) {
         Write-Step "Run integration tests"
         $streamArgs = @()

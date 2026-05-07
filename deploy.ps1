@@ -132,6 +132,7 @@ if ($ready) {
     Write-Host "  Frontend: http://localhost:$frontendPort" -ForegroundColor Yellow
     Write-Host "  Backend:  http://localhost:$backendPort/api/health"
     Write-Host "  Postgres: localhost:$pgPort (container 5432)"
+    Write-Host "  Note: SmartAsk history is isolated by login account in the browser."
 } else {
     Write-Err "Backend health check failed."
     Write-Host "  Run: docker compose logs --tail=200 backend" -ForegroundColor Red
