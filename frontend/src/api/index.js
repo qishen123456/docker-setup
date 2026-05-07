@@ -9,6 +9,23 @@ const api = axios.create({
   }
 })
 
+export const AUTH_TOKEN_KEY = 'auth_token'
+
+export const getAuthToken = () => localStorage.getItem(AUTH_TOKEN_KEY) || ''
+export const setAuthToken = (token) => {
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token)
+}
+export const clearAuthToken = () => localStorage.removeItem(AUTH_TOKEN_KEY)
+
+api.interceptors.request.use((config) => {
+  const token = getAuthToken()
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers['X-Auth-Token'] = token
+  }
+  return config
+})
+
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
@@ -20,6 +37,16 @@ api.interceptors.response.use(
 
 export const healthCheck = () => api.get('/health')
 export const getDashboard = () => api.get('/dashboard')
+
+export const getCurrentUser = () => api.get('/auth/me')
+export const logout = () => api.post('/auth/logout').finally(() => clearAuthToken())
+export const passwordLogin = (data) => api.post('/auth/login', data)
+export const adminLogin = (data) => api.post('/auth/admin/login', data)
+export const changePassword = (data) => api.post('/auth/change-password', data)
+export const getEmployeePermissions = () => api.get('/auth/employee-permissions')
+export const saveEmployeePermissions = (employees) => api.put('/auth/employee-permissions', { employees })
+export const getFeishuLoginUrl = () => api.get('/auth/feishu/login-url')
+export const feishuInAppAuth = (authCode) => api.post('/feishu/auth', { auth_code: authCode })
 
 export const getDataSources = () => api.get('/datasources')
 export const createDataSource = (data) => api.post('/datasources', data)
@@ -82,11 +109,13 @@ export const sendSmartChat = (question, signal, selectedDatasetIds, modelId, ses
   }, { signal })
 
 const sendSseRequest = async (url, body, signal, onEvent) => {
+  const token = getAuthToken()
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...(token ? { 'X-Auth-Token': token } : {}),
     },
     body: JSON.stringify(body),
     signal,

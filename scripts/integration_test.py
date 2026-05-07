@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Any, Callable, Dict, List, Tuple
@@ -69,6 +70,14 @@ def _safe_get(base: str, path: str, **kwargs) -> Tuple[bool, Any]:
 def _safe_post(base: str, path: str, payload: Dict[str, Any] | None = None, **kwargs) -> Tuple[bool, Any]:
     try:
         r = requests.post(base + path, json=payload or {}, timeout=30, **kwargs)
+        return r.ok, r
+    except Exception as exc:
+        return False, exc
+
+
+def _safe_put(base: str, path: str, payload: Dict[str, Any] | None = None, **kwargs) -> Tuple[bool, Any]:
+    try:
+        r = requests.put(base + path, json=payload or {}, timeout=30, **kwargs)
         return r.ok, r
     except Exception as exc:
         return False, exc
@@ -131,6 +140,48 @@ def test_dashboard(base: str, result: Result) -> None:
     if not ok:
         return result.record("/api/dashboard", "FAIL", str(r))
     result.record("/api/dashboard", "PASS", f"HTTP {r.status_code}")
+
+
+def test_auth_me(base: str, result: Result) -> None:
+    ok, r = _safe_get(base, "/api/auth/me")
+    if not ok:
+        return result.record("/api/auth/me", "FAIL", str(r))
+    body = r.json() if hasattr(r, "json") else {}
+    if body.get("success") is True and body.get("authenticated") is False:
+        result.record("/api/auth/me anonymous", "PASS", "authenticated=false")
+    else:
+        result.record("/api/auth/me anonymous", "FAIL", json.dumps(body, ensure_ascii=False)[:120])
+
+
+def test_admin_auth_contract(base: str, result: Result) -> None:
+    username = os.getenv("SMARTASK_ADMIN_USERNAME", "admin")
+    password = os.getenv("SMARTASK_ADMIN_PASSWORD", "")
+    if not password or password in {"please-change-admin-password", "admin123456"}:
+        return result.record("/api/auth/login admin", "SKIP", "admin password not configured for test")
+    ok, r = _safe_post(base, "/api/auth/login", {"username": username, "password": password})
+    if not ok:
+        return result.record("/api/auth/login admin", "FAIL", str(r))
+    body = r.json() if hasattr(r, "json") else {}
+    token = body.get("token")
+    role = (body.get("user") or {}).get("role")
+    if body.get("success") is True and token and role == "super_admin":
+        result.record("/api/auth/login admin", "PASS", "role=super_admin")
+    else:
+        result.record("/api/auth/login admin", "FAIL", json.dumps(body, ensure_ascii=False)[:120])
+
+
+def test_feishu_login_url_contract(base: str, result: Result) -> None:
+    ok, r = _safe_get(base, "/api/auth/feishu/login-url")
+    if not ok:
+        status = getattr(r, "status_code", None)
+        if status == 500:
+            return result.record("/api/auth/feishu/login-url", "SKIP", "Feishu login config missing")
+        return result.record("/api/auth/feishu/login-url", "FAIL", str(r))
+    body = r.json() if hasattr(r, "json") else {}
+    if body.get("success") and body.get("url"):
+        result.record("/api/auth/feishu/login-url", "PASS", "url generated")
+    else:
+        result.record("/api/auth/feishu/login-url", "FAIL", json.dumps(body, ensure_ascii=False)[:120])
 
 
 def test_datasources_list(base: str, result: Result) -> None:
@@ -381,6 +432,9 @@ def main() -> int:
 
     test_health(base, result)
     test_dashboard(base, result)
+    test_auth_me(base, result)
+    test_admin_auth_contract(base, result)
+    test_feishu_login_url_contract(base, result)
     test_datasources_list(base, result)
     test_ai_models_list(base, result)
     test_bookshelves_health(base, result)

@@ -89,6 +89,7 @@ Write-Ok ".env exists"
 
 Test-EnvRequired -FilePath $envPath -Key "SMARTASK_SECRET_KEY" -InvalidValues @("please-change-me-to-a-random-32-char-string")
 Test-EnvRequired -FilePath $envPath -Key "SMARTASK_AI_API_KEY" -InvalidValues @("please-fill-your-ai-api-key")
+Test-EnvRequired -FilePath $envPath -Key "SMARTASK_ADMIN_PASSWORD" -InvalidValues @("please-change-admin-password", "admin123456")
 
 New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backend\logs") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "config") | Out-Null

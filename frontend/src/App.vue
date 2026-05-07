@@ -1,5 +1,14 @@
 ﻿<template>
-  <el-container class="app-shell">
+  <router-view v-if="isAuthCallbackRoute" />
+  <div v-else-if="!authReady" class="auth-loading-screen">
+    <div class="auth-loading-card">
+      <div class="auth-loading-mark"></div>
+      <strong>正在校验登录状态</strong>
+      <span>请稍候...</span>
+    </div>
+  </div>
+  <AuthLogin v-else-if="!authUser" @authenticated="handleAuthenticated" />
+  <el-container v-else class="app-shell">
     <el-aside class="sidebar" :class="{ 'sidebar-collapsed': collapsed }" :width="collapsed ? '72px' : '248px'">
       <div class="brand">
         <div class="brand-pill" :class="{ 'is-collapsed': collapsed }">
@@ -29,33 +38,14 @@
           active-text-color="#22252b"
           @select="handleMenuSelect"
         >
-          <el-menu-item index="/smart-ask" data-tooltip="问数会话">
-            <el-icon><ChatLineRound /></el-icon>
-            <template #title>问数会话</template>
-          </el-menu-item>
-          <el-menu-item index="/agents" data-tooltip="AGENT管理">
-            <el-icon><Cpu /></el-icon>
-            <template #title>AGENT管理</template>
-          </el-menu-item>
-          <el-menu-item index="/datasets" data-tooltip="数据集管理">
-            <el-icon><Collection /></el-icon>
-            <template #title>数据集管理</template>
-          </el-menu-item>
-          <el-menu-item index="/databases" data-tooltip="数据源管理">
-            <el-icon><Coin /></el-icon>
-            <template #title>数据源管理</template>
-          </el-menu-item>
-          <el-menu-item index="/ai-models" data-tooltip="AI模型配置">
-            <el-icon><MagicStick /></el-icon>
-            <template #title>AI模型配置</template>
-          </el-menu-item>
-          <el-menu-item index="/report-config" data-tooltip="报告配置">
-            <el-icon><Document /></el-icon>
-            <template #title>报告配置</template>
-          </el-menu-item>
-          <el-menu-item index="/feishu-sync" data-tooltip="飞书同步">
-            <el-icon><Connection /></el-icon>
-            <template #title>飞书同步</template>
+          <el-menu-item
+            v-for="item in availableMenuItems"
+            :key="item.path"
+            :index="item.path"
+            :data-tooltip="item.label"
+          >
+            <el-icon><component :is="item.icon" /></el-icon>
+            <template #title>{{ item.label }}</template>
           </el-menu-item>
         </el-menu>
 
@@ -68,12 +58,12 @@
           >
             <div class="sidebar-history-head">
               <div>
-                <div class="sidebar-history-title">历史对话</div>
-                <div class="sidebar-history-subtitle">最近 {{ historyPreviewList.length }} 条问数记录</div>
+                <div class="sidebar-history-title">历史分析</div>
+                <div class="sidebar-history-subtitle">最近 {{ historyPreviewList.length }} 条分析记录</div>
               </div>
               <div class="sidebar-history-actions">
                 <button class="sidebar-history-new" type="button" @click="createFreshChat">
-                  新对话
+                  新建分析
                 </button>
                 <button
                   v-if="historySessions.length"
@@ -123,7 +113,7 @@
 
             <div v-else class="sidebar-history-empty">
               <div class="sidebar-history-empty-title">暂无历史记录</div>
-              <div class="sidebar-history-empty-desc">发起问数后，这里会沉淀可恢复的对话记录。</div>
+              <div class="sidebar-history-empty-desc">发起分析后，这里会沉淀可恢复的会话记录。</div>
             </div>
           </section>
         </transition>
@@ -131,14 +121,14 @@
 
       <el-drawer
         v-model="historyDrawerVisible"
-        title="全部历史对话"
+        title="全部历史分析"
         size="420px"
         custom-class="history-drawer"
       >
         <div class="history-drawer-head">
           <div>
-            <div class="history-drawer-title">{{ historySessions.length }} 条问数记录</div>
-            <div class="history-drawer-desc">选择任意记录可恢复到问数会话。</div>
+            <div class="history-drawer-title">{{ historySessions.length }} 条分析记录</div>
+            <div class="history-drawer-desc">选择任意记录可恢复到分析工作台。</div>
           </div>
           <button v-if="historySessions.length" class="history-drawer-clear" type="button" @click="clearHistoryList">
             清空全部
@@ -175,7 +165,7 @@
         </div>
         <div v-else class="sidebar-history-empty history-drawer-empty">
           <div class="sidebar-history-empty-title">暂无历史记录</div>
-          <div class="sidebar-history-empty-desc">发起问数后，这里会沉淀可恢复的对话记录。</div>
+          <div class="sidebar-history-empty-desc">发起分析后，这里会沉淀可恢复的会话记录。</div>
         </div>
       </el-drawer>
 
@@ -195,6 +185,13 @@
           </div>
         </div>
         <div class="topbar-right">
+          <div class="auth-user-chip">
+            <span class="auth-user-avatar">{{ authUserInitial }}</span>
+            <span class="auth-user-name">{{ authUserName }}</span>
+            <span class="auth-user-role">{{ authRoleLabel }}</span>
+            <button class="auth-password-button" type="button" @click="passwordDialogVisible = true">改密</button>
+            <button class="auth-logout-button" type="button" @click="handleLogout">退出</button>
+          </div>
           <span class="backend-status-chip" :class="{ 'is-online': backendOk, 'is-offline': !backendOk }">
             <span class="backend-status-dot"></span>
             {{ backendOk ? '后端在线' : '后端异常' }}
@@ -211,15 +208,46 @@
         </router-view>
       </el-main>
     </el-container>
+
+    <el-dialog
+      v-model="passwordDialogVisible"
+      title="修改密码"
+      width="380px"
+      custom-class="password-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="password-form">
+        <label>
+          <span>原密码</span>
+          <input v-model="passwordForm.old_password" type="password" autocomplete="current-password" @keydown.enter="submitPasswordChange" />
+        </label>
+        <label>
+          <span>新密码</span>
+          <input v-model="passwordForm.new_password" type="password" autocomplete="new-password" placeholder="至少 8 位" @keydown.enter="submitPasswordChange" />
+        </label>
+        <label>
+          <span>确认新密码</span>
+          <input v-model="passwordForm.confirm_password" type="password" autocomplete="new-password" @keydown.enter="submitPasswordChange" />
+        </label>
+      </div>
+      <template #footer>
+        <button class="dialog-ghost-button" type="button" @click="passwordDialogVisible = false">取消</button>
+        <button class="dialog-primary-button" type="button" :disabled="passwordSaving" @click="submitPasswordChange">
+          {{ passwordSaving ? '保存中...' : '确认修改' }}
+        </button>
+      </template>
+    </el-dialog>
+
   </el-container>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound } from '@element-plus/icons-vue'
-import { healthCheck } from './api/index.js'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick } from '@element-plus/icons-vue'
+import AuthLogin from './auth/AuthLogin.vue'
+import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
 
@@ -237,38 +265,74 @@ const {
 } = useSmartAskHistory()
 const collapsed = ref(false)
 const backendOk = ref(false)
+const authUser = ref(null)
+const authReady = ref(false)
+const passwordDialogVisible = ref(false)
+const passwordSaving = ref(false)
+const passwordForm = ref({
+  old_password: '',
+  new_password: '',
+  confirm_password: ''
+})
 const currentTime = ref('')
 const historyPanelRef = ref(null)
 const historyPanelHighlighted = ref(false)
 const historyDrawerVisible = ref(false)
 
-const titleMap = {
-  '/smart-ask': '经营问答台',
-  '/agents': 'AGENT管理',
-  '/datasets': '数据集管理',
-  '/databases': '数据源管理',
-  '/ai-models': 'AI模型配置',
-  '/report-config': '报告配置',
-  '/feishu-sync': '飞书同步'
+const roleRank = {
+  super_admin: 3,
+  admin: 2,
+  user: 1
 }
+
+const menuItems = [
+  { path: '/smart-ask', label: '智能分析工作台', icon: ChatLineRound, minRole: 'user' },
+  { path: '/agents', label: '智能体编排配置', icon: Cpu, minRole: 'admin' },
+  { path: '/datasets', label: '数据资产管理', icon: Collection, minRole: 'admin' },
+  { path: '/databases', label: '数据连接管理', icon: Coin, minRole: 'admin' },
+  { path: '/ai-models', label: '模型服务配置', icon: MagicStick, minRole: 'admin' },
+  { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin' },
+  { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin' },
+  { path: '/employee-permissions', label: '员工权限配置', icon: Lock, minRole: 'super_admin' }
+]
 
 const subtitleMap = {
   '/smart-ask': '',
-  '/agents': '维护四个核心Agent的系统提示词与知识规则',
-  '/datasets': '维护每个数据集的书架元数据与Golden SQL',
-  '/databases': '管理PostgreSQL与其他连接源',
-  '/ai-models': '配置默认模型与模型连接',
-  '/report-config': '为数据集配置独立的报告渲染规则',
-  '/feishu-sync': '飞书多维表格同步、日志与任务控制'
+  '/agents': '维护核心智能体提示词与执行规则',
+  '/datasets': '治理数据集元数据、书架与Golden SQL',
+  '/databases': '管理 PostgreSQL 与其他业务数据连接',
+  '/ai-models': '配置默认模型、通道与调用参数',
+  '/report-config': '维护数据集对应的报告模板与展示规范',
+  '/feishu-sync': '管理飞书多维表格同步、日志与任务控制',
+  '/employee-permissions': '维护员工身份映射、角色与可访问范围'
 }
 
 const activeMenu = computed(() => route.path)
+const isAuthCallbackRoute = computed(() => route.path === '/auth/callback')
 const isSmartAskRoute = computed(() => route.path === '/smart-ask')
-const currentTitle = computed(() => titleMap[route.path] || '经营问答台')
+const authRole = computed(() => authUser.value?.role || 'user')
+const authRoleLabel = computed(() => authUser.value?.role_label || ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
+const canAccessRole = (minRole) => (roleRank[authRole.value] || 0) >= (roleRank[minRole] || 0)
+const availableMenuItems = computed(() => menuItems.filter((item) => canAccessRole(item.minRole)))
+const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析工作台')
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
 const historyPreviewList = computed(() => historySessions.value.slice(0, 5))
 const showHistorySidebar = computed(() => route.path === '/smart-ask' && !collapsed.value)
+const cleanDisplayName = (value) => {
+  const text = String(value || '').trim()
+  if (!text || /^[?\s]+$/.test(text)) return ''
+  return text.replace(/^\?+\s*/, '')
+}
+const authUserName = computed(() => (
+  cleanDisplayName(authUser.value?.name)
+  || cleanDisplayName(authUser.value?.permission_name)
+  || cleanDisplayName(authUser.value?.username)
+  || cleanDisplayName(authUser.value?.zh_name)
+  || cleanDisplayName(authUser.value?.union_id)
+  || '已登录'
+))
+const authUserInitial = computed(() => String(authUserName.value || '登').slice(0, 1).toUpperCase())
 
 const refreshClock = () => {
   currentTime.value = new Date().toLocaleString('zh-CN', { hour12: false })
@@ -283,13 +347,92 @@ const pingBackend = async () => {
   }
 }
 
+const refreshAuthUser = async () => {
+  try {
+    const data = await getCurrentUser()
+    authUser.value = data?.authenticated ? (data.user || {}) : null
+  } catch {
+    authUser.value = null
+  } finally {
+    authReady.value = true
+  }
+}
+
+const handleAuthenticated = (user) => {
+  authUser.value = user || null
+  authReady.value = true
+  enforceRouteAccess()
+}
+
+const submitPasswordChange = async () => {
+  if (passwordSaving.value) return
+  if (authRole.value === 'super_admin') {
+    ElMessage.warning('超级管理员密码由 .env 管理，请修改 SMARTASK_ADMIN_PASSWORD')
+    return
+  }
+  if (!passwordForm.value.old_password || !passwordForm.value.new_password) {
+    ElMessage.warning('请填写原密码和新密码')
+    return
+  }
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  if (passwordForm.value.new_password.length < 8) {
+    ElMessage.warning('新密码至少需要 8 位')
+    return
+  }
+  passwordSaving.value = true
+  try {
+    await changePassword({
+      old_password: passwordForm.value.old_password,
+      new_password: passwordForm.value.new_password
+    })
+    passwordDialogVisible.value = false
+    passwordForm.value = { old_password: '', new_password: '', confirm_password: '' }
+    ElMessage.success('密码已修改，请重新登录')
+    clearAuthToken()
+    authUser.value = null
+  } finally {
+    passwordSaving.value = false
+  }
+}
+
+const handleLogout = async () => {
+  try {
+    await logout()
+    clearAuthToken()
+    authUser.value = null
+    ElMessage.success('已退出登录')
+  } catch {
+    clearAuthToken()
+    authUser.value = null
+  }
+  if (route.path !== '/smart-ask') {
+    router.replace('/smart-ask')
+  }
+}
+
 const refreshCurrentPage = () => {
   window.location.reload()
 }
 
 const handleMenuSelect = (index) => {
   if (!index || index === route.path) return
+  const target = menuItems.find((item) => item.path === index)
+  if (target && !canAccessRole(target.minRole)) {
+    ElMessage.warning('当前账号无权访问该功能')
+    return
+  }
   router.push(index)
+}
+
+const enforceRouteAccess = () => {
+  if (!authUser.value || isAuthCallbackRoute.value) return
+  const target = menuItems.find((item) => item.path === route.path)
+  if (target && !canAccessRole(target.minRole)) {
+    router.replace('/smart-ask')
+  }
 }
 
 const pulseHistoryPanel = () => {
@@ -363,6 +506,7 @@ onMounted(() => {
   loadHistory()
   refreshClock()
   pingBackend()
+  refreshAuthUser()
   clockTimer = setInterval(refreshClock, 1000)
   healthTimer = setInterval(pingBackend, 10000)
   window.addEventListener('smartask-history-focus', handleHistoryFocus)
@@ -378,9 +522,14 @@ onUnmounted(() => {
 })
 
 watch(() => route.path, (path) => {
+  enforceRouteAccess()
   if (path === '/smart-ask') {
     loadHistory()
   }
+})
+
+watch(authUser, () => {
+  enforceRouteAccess()
 })
 </script>
 
@@ -411,6 +560,46 @@ body,
 
 .app-shell {
   height: 100%;
+}
+
+.auth-loading-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(15, 118, 110, 0.12), transparent 28%),
+    linear-gradient(135deg, #f6f9fb, #eef5f3);
+}
+
+.auth-loading-card {
+  width: 260px;
+  padding: 26px;
+  border-radius: 22px;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  box-shadow: 0 24px 54px rgba(18, 48, 79, 0.12);
+  color: #1d2129;
+}
+
+.auth-loading-card span {
+  color: #86909c;
+  font-size: 12px;
+}
+
+.auth-loading-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #165dff, #0f766e);
+  animation: auth-loading-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes auth-loading-pulse {
+  from { transform: scale(0.92); opacity: 0.72; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .sidebar {
@@ -1532,6 +1721,244 @@ body,
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+}
+
+.admin-login-button,
+.feishu-login-button {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid rgba(51, 112, 255, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+}
+
+.admin-login-button {
+  border-color: rgba(15, 118, 110, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #effaf8 100%);
+  color: #0b625d;
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.admin-login-button:hover,
+.feishu-login-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.feishu-login-button:hover:not(:disabled) {
+  border-color: rgba(51, 112, 255, 0.32);
+  background: #e8f0ff;
+}
+
+.admin-login-button:hover {
+  border-color: rgba(15, 118, 110, 0.32);
+  background: #e8f6f4;
+}
+
+.feishu-login-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auth-user-chip {
+  height: 30px;
+  padding: 3px 5px 3px 3px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(180deg, #ffffff 0%, #f1faf9 100%);
+  color: #0b625d;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.auth-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f766e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.auth-user-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.auth-user-role {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0b625d;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.auth-logout-button {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0b625d;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.auth-logout-button:hover {
+  background: rgba(15, 118, 110, 0.16);
+}
+
+.admin-login-dialog {
+  border-radius: 18px !important;
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-login-field input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  outline: none;
+  color: #1d2129;
+  font-size: 14px;
+  transition: all 0.18s ease;
+}
+
+.admin-login-field input:focus {
+  border-color: #3370ff;
+  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
+}
+
+.dialog-ghost-button,
+.dialog-primary-button {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dialog-ghost-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.dialog-primary-button {
+  border: 1px solid #165dff;
+  background: #165dff;
+  color: #fff;
+}
+
+.dialog-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auth-password-button {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(22, 93, 255, 0.1);
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.auth-password-button:hover {
+  background: rgba(22, 93, 255, 0.16);
+}
+
+.password-form {
+  display: grid;
+  gap: 14px;
+}
+
+.password-form label {
+  display: grid;
+  gap: 7px;
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.password-form input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  outline: none;
+  color: #1d2129;
+  font-size: 14px;
+}
+
+.password-form input:focus {
+  border-color: #3370ff;
+  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
+}
+
+.dialog-ghost-button,
+.dialog-primary-button {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dialog-ghost-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.dialog-primary-button {
+  border: 1px solid #165dff;
+  background: #165dff;
+  color: #fff;
+}
+
+.dialog-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .backend-status-chip {

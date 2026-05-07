@@ -66,6 +66,8 @@ config/ai_settings.json
 config/datasources.json
 config/feishu_sync.json
 config/app_config.json
+config/auth_tokens.json
+config/employee_permissions.json
 
 # Frontend build output / caches
 dist/

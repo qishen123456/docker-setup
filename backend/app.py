@@ -37,6 +37,7 @@ _make_console_safe()
 from config_manager import get_app_config, init_default_configs
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
+from controllers.auth import auth_bp
 from controllers.bookshelf import bookshelf_bp
 from controllers.dashboard import dashboard_bp
 from controllers.datasources import datasources_bp
@@ -53,18 +54,26 @@ app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
 app.secret_key = str(APP_CONFIG.get("secret_key") or os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026"))
 
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    os.getenv("FRONTEND_URL", ""),
+    os.getenv("BACKEND_URL", ""),
+    os.getenv("SMARTASK_FRONTEND_URL", ""),
+    os.getenv("SMARTASK_BACKEND_URL", ""),
+]
+
 CORS(
     app,
-    origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:5175",
-    ],
+    origins=[origin for origin in CORS_ORIGINS if origin],
+    supports_credentials=True,
 )
 
+app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(datasources_bp)
 app.register_blueprint(ai_models_bp)

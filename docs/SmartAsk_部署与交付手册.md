@@ -1,6 +1,6 @@
 # SmartAsk 部署与交付手册
 
-更新时间：2026-05-06
+更新时间：2026-05-07
 
 本文档整合原 Docker 部署、换电脑迁移、用户机更新、发布前验证等文档，作为用户机交付和开发机发布的唯一入口。
 
@@ -56,7 +56,12 @@ SMARTASK_SECRET_KEY
 SMARTASK_AI_API_KEY
 SMARTASK_AI_MODEL
 SMARTASK_AI_BASE_URL
+SMARTASK_ADMIN_USERNAME
+SMARTASK_ADMIN_PASSWORD
+SMARTASK_ADMIN_DISPLAY_NAME
 ```
+
+`SMARTASK_ADMIN_PASSWORD` 是超级管理员登录密码，用户机必须改成强密码，不能使用模板值。首次登录后，超级管理员可在“员工权限配置”中维护员工账号。
 
 如果启用飞书同步，还要填写：
 
@@ -71,7 +76,33 @@ SMARTASK_FEISHU_IS_ACTIVE=true
 
 `.env` 不提交到 Git / Gitee。
 
-## 4. 日常更新
+## 4. 登录与员工权限
+
+系统现在启用登录拦截：未登录只能看到登录页，看不到工作台内容。
+
+角色说明：
+
+- 超级管理员：由 `.env` 中 `SMARTASK_ADMIN_USERNAME` / `SMARTASK_ADMIN_PASSWORD` 控制，可访问全部功能，包括“员工权限配置”。
+- 管理员：由“员工权限配置”维护，可访问除“员工权限配置”外的管理功能。
+- 普通用户：由“员工权限配置”维护，只能访问“智能分析工作台”。
+
+员工账号规则：
+
+- 新增员工时填写“员工名称、登录账号、飞书 UnionID、角色、状态”。
+- 新员工默认密码为 `12345678`。
+- 忘记密码时，超级管理员在“员工权限配置”里点击“重置密码”，再点击“保存配置”，该员工密码会重置为 `12345678`。
+- 员工登录后可在右上角点击“改密”修改自己的密码。
+- 出于安全考虑，系统不展示员工明文密码，只保存 `password_salt` 和 `password_hash`。
+
+运行态权限文件：
+
+```text
+config/employee_permissions.json
+```
+
+该文件由系统运行时生成并挂载到 Docker 后端容器，属于用户机本地数据，已加入 `.gitignore`，不会提交到 Git。
+
+## 5. 日常更新
 
 ```powershell
 cd smartask
@@ -90,7 +121,7 @@ cd smartask
 - `-SkipBackup`：跳过更新前备份，不推荐普通用户使用。
 - `-RunStreamTests`：额外测试 AI 流式问数链路，依赖真实模型 Key 和网络。
 
-## 5. 常用运维命令
+## 6. 常用运维命令
 
 软重启，不重建镜像，不删除数据：
 
@@ -128,7 +159,7 @@ cd smartask
 docker compose logs -f backend
 ```
 
-## 6. 诊断包
+## 7. 诊断包
 
 报错时执行：
 
@@ -145,7 +176,7 @@ diagnostics\smartask_diagnose_时间戳.zip
 
 诊断包包含 Docker 状态、服务日志、端口占用、健康检查和脱敏 `.env` 摘要。Key、Secret、Token、Password 会自动脱敏。
 
-## 7. 备份策略
+## 8. 备份策略
 
 `update.ps1` 默认会先执行备份。
 
@@ -171,7 +202,7 @@ backups\时间戳\
 
 `backups/` 已加入 `.gitignore`。
 
-## 8. 开发机发布流程
+## 9. 开发机发布流程
 
 开发机改完代码后先验证：
 
@@ -195,7 +226,7 @@ git tag v1.0.0
 git push gitee v1.0.0
 ```
 
-## 9. 用户机按 tag 更新或回退
+## 10. 用户机按 tag 更新或回退
 
 切到指定 tag：
 

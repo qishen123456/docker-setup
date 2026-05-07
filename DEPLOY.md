@@ -27,6 +27,7 @@ Copy-Item .env.example .env
 # - SMARTASK_AI_API_KEY
 # - SMARTASK_AI_MODEL
 # - SMARTASK_AI_BASE_URL
+# - SMARTASK_ADMIN_PASSWORD（超级管理员密码，必须改成强密码）
 # - 如启用飞书，同步填写 SMARTASK_FEISHU_* 相关配置
 
 # 3) 一键部署并附带集成测试
@@ -34,6 +35,7 @@ Copy-Item .env.example .env
 ```
 
 `deploy.ps1` 会检查 `.env` 是否仍在使用模板占位值。如果 `SMARTASK_SECRET_KEY` 或 `SMARTASK_AI_API_KEY` 未填写真实值，脚本会停止并提示先补配置，避免用户机启动出一个“看似成功但不能问数”的环境。
+同时会检查 `SMARTASK_ADMIN_PASSWORD`，避免用户机继续使用模板密码或开发密码。
 
 如果项目管理员已经单独发给你可用的 `.env`，也可以直接放到项目根目录后执行：
 
@@ -90,6 +92,24 @@ cd smartask
 - `-NoPull` 适合离线更新包场景，不从 Gitee 拉代码。
 - `-NoBuild` 只重启已有镜像，不重新构建。
 - 更新脚本默认会先调用 `backup.ps1` 备份，保护用户机已有数据。
+
+---
+
+## 🔐 登录与员工权限
+
+系统启用登录态拦截：未登录只能看到登录页，看不到工作台内容。
+
+- 超级管理员：由 `.env` 的 `SMARTASK_ADMIN_USERNAME` / `SMARTASK_ADMIN_PASSWORD` 控制，可访问所有功能。
+- 管理员：由“员工权限配置”维护，可访问除“员工权限配置”外的管理功能。
+- 普通用户：由“员工权限配置”维护，只能访问“智能分析工作台”。
+
+员工账号规则：
+
+- 新增员工默认密码为 `12345678`。
+- 员工忘记密码时，超级管理员在“员工权限配置”点击“重置密码”，再点击“保存配置”，即可重置为 `12345678`。
+- 员工登录后可在右上角点击“改密”修改自己的密码。
+- 飞书 `UnionID` 用于飞书免登身份匹配；登录账号用于账号密码登录。
+- 员工权限保存在 `config/employee_permissions.json`，属于用户机本地运行态配置，不提交 Git。
 
 ---
 
