@@ -6,7 +6,7 @@
         <h2>员工权限配置</h2>
         <p>维护账号、角色与飞书免登映射。新员工默认密码为 12345678。</p>
       </div>
-      <button class="save-button" type="button" :disabled="loading || saving" @click="saveAll">
+      <button v-if="isFeatureEnabled('employee_permission_edit')" class="save-button" type="button" :disabled="loading || saving" @click="saveAll">
         {{ saving ? '保存中...' : '保存配置' }}
       </button>
     </div>
@@ -36,7 +36,7 @@
           <h3>账号与角色</h3>
           <p>登录账号用于密码登录；飞书 UnionID 用于免登匹配。</p>
         </div>
-        <button class="add-button" type="button" @click="addEmployee">新增员工</button>
+        <button v-if="isFeatureEnabled('employee_permission_edit')" class="add-button" type="button" @click="addEmployee">新增员工</button>
       </div>
 
       <div class="permission-table">
@@ -70,10 +70,10 @@
             <span class="password-status" :class="{ 'is-reset': item.reset_password }">
               {{ item.reset_password ? '保存后重置' : '已设置' }}
             </span>
-            <button class="reset-button" type="button" @click="resetPassword(item)">重置密码</button>
+            <button v-if="isFeatureEnabled('employee_password_reset')" class="reset-button" type="button" @click="resetPassword(item)">重置密码</button>
           </div>
           <div class="row-actions">
-            <button class="delete-button" type="button" @click="removeEmployee(index)">删除</button>
+            <button v-if="isFeatureEnabled('employee_delete')" class="delete-button" type="button" @click="removeEmployee(index)">删除</button>
           </div>
         </div>
       </div>
@@ -85,10 +85,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getEmployeePermissions, saveEmployeePermissions } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const employees = ref([])
 const loading = ref(false)
 const saving = ref(false)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const adminCount = computed(() => employees.value.filter((item) => item.role === 'admin').length)
 const userCount = computed(() => employees.value.filter((item) => item.role === 'user').length)
 const resetCount = computed(() => employees.value.filter((item) => item.reset_password).length)
@@ -138,7 +140,10 @@ const saveAll = async () => {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  loadFeatureFlags()
+  load()
+})
 </script>
 
 <style scoped>

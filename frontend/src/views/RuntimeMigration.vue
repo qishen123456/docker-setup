@@ -11,7 +11,7 @@
       </div>
       <div class="hero-actions">
         <el-button :loading="loading" @click="loadSummary">刷新状态</el-button>
-        <el-button type="primary" :loading="exporting" @click="handleExport">导出运行态包</el-button>
+        <el-button v-if="runtimeExportEnabled" type="primary" :loading="exporting" @click="handleExport">导出运行态包</el-button>
       </div>
     </section>
 
@@ -55,22 +55,29 @@
             <strong>{{ selectedFileName || '选择 smartask_runtime_*.json' }}</strong>
             <p>支持从 Windows 测试环境导出的运行态包，也支持命令行脚本导出的包。</p>
           </div>
-          <label class="file-picker">
+          <label v-if="runtimeFileSelectEnabled" class="file-picker">
             选择文件
             <input type="file" accept="application/json,.json" @change="handleFileChange" />
           </label>
         </div>
 
         <div class="option-row">
-          <el-radio-group v-model="importMode">
+          <el-radio-group v-if="runtimeReplaceModeEnabled" v-model="importMode">
             <el-radio-button value="merge">合并导入</el-radio-button>
             <el-radio-button value="replace">替换书架表</el-radio-button>
           </el-radio-group>
-          <el-switch v-model="overwriteConfigs" active-text="覆盖已有 JSON 配置" />
+          <el-switch v-if="runtimeOverwriteConfigEnabled" v-model="overwriteConfigs" active-text="覆盖已有 JSON 配置" />
         </div>
 
         <el-alert
-          v-if="importMode === 'replace'"
+          v-if="!runtimePreviewEnabled && !runtimeConfirmEnabled"
+          type="info"
+          show-icon
+          :closable="false"
+          title="运行态导入入口已由系统控制台隐藏"
+        />
+        <el-alert
+          v-else-if="importMode === 'replace'"
           type="warning"
           show-icon
           :closable="false"
@@ -78,11 +85,11 @@
         />
 
         <div class="action-row">
-          <el-button :disabled="!bundle" :loading="previewing" @click="handlePreview">预检导入</el-button>
-          <el-button type="danger" plain :disabled="!bundle" :loading="importing" @click="handleImport">
+          <el-button v-if="runtimePreviewEnabled" :disabled="!bundle" :loading="previewing" @click="handlePreview">预检导入</el-button>
+          <el-button v-if="runtimeConfirmEnabled" type="danger" plain :disabled="!bundle" :loading="importing" @click="handleImport">
             确认导入
           </el-button>
-          <el-button :loading="backingUp" @click="handleBackup">手动备份当前环境</el-button>
+          <el-button v-if="runtimeBackupEnabled" :loading="backingUp" @click="handleBackup">手动备份当前环境</el-button>
         </div>
       </el-card>
 
@@ -147,6 +154,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createRuntimeMigrationBackup,
   exportRuntimeMigrationBundle,
+  getFeatureFlags,
   getRuntimeMigrationSummary,
   importRuntimeMigrationBundle,
   previewRuntimeMigrationImport,
@@ -164,6 +172,13 @@ const selectedFileName = ref('')
 const previewResult = ref(null)
 const importMode = ref('merge')
 const overwriteConfigs = ref(false)
+const runtimeFileSelectEnabled = ref(true)
+const runtimePreviewEnabled = ref(true)
+const runtimeConfirmEnabled = ref(true)
+const runtimeExportEnabled = ref(true)
+const runtimeBackupEnabled = ref(true)
+const runtimeReplaceModeEnabled = ref(true)
+const runtimeOverwriteConfigEnabled = ref(true)
 
 const summaryStats = computed(() => {
   const current = summary.value || {}
@@ -189,6 +204,28 @@ const loadSummary = async () => {
     backups.value = res.backups || []
   } finally {
     loading.value = false
+  }
+}
+
+const loadFeatureAccess = async () => {
+  try {
+    const res = await getFeatureFlags()
+    const items = res?.data?.features || {}
+    runtimeFileSelectEnabled.value = Boolean(items.runtime_file_select?.available ?? true)
+    runtimePreviewEnabled.value = Boolean(items.runtime_import_preview?.available ?? true)
+    runtimeConfirmEnabled.value = Boolean(items.runtime_import_confirm?.available ?? true)
+    runtimeExportEnabled.value = Boolean(items.runtime_export?.available ?? true)
+    runtimeBackupEnabled.value = Boolean(items.runtime_backup?.available ?? true)
+    runtimeReplaceModeEnabled.value = Boolean(items.runtime_replace_mode?.available ?? true)
+    runtimeOverwriteConfigEnabled.value = Boolean(items.runtime_overwrite_config?.available ?? true)
+  } catch {
+    runtimeFileSelectEnabled.value = true
+    runtimePreviewEnabled.value = true
+    runtimeConfirmEnabled.value = true
+    runtimeExportEnabled.value = true
+    runtimeBackupEnabled.value = true
+    runtimeReplaceModeEnabled.value = true
+    runtimeOverwriteConfigEnabled.value = true
   }
 }
 
@@ -228,12 +265,13 @@ const handleFileChange = (event) => {
 }
 
 const importOptions = () => ({
-  mode: importMode.value,
-  overwrite_configs: overwriteConfigs.value,
+  mode: runtimeReplaceModeEnabled.value ? importMode.value : 'merge',
+  overwrite_configs: runtimeOverwriteConfigEnabled.value ? overwriteConfigs.value : false,
 })
 
 const handlePreview = async () => {
   if (!bundle.value) return
+  if (!runtimePreviewEnabled.value) return
   previewing.value = true
   try {
     const res = await previewRuntimeMigrationImport(bundle.value, importOptions())
@@ -246,6 +284,7 @@ const handlePreview = async () => {
 
 const handleImport = async () => {
   if (!bundle.value) return
+  if (!runtimeConfirmEnabled.value) return
   await ElMessageBox.confirm(
     '导入前系统会自动生成当前环境备份。确认继续导入运行态资源吗？',
     '确认导入',
@@ -286,7 +325,10 @@ const formatSize = (size) => {
   return `${(value / 1024 / 1024).toFixed(1)} MB`
 }
 
-onMounted(loadSummary)
+onMounted(() => {
+  loadSummary()
+  loadFeatureAccess()
+})
 </script>
 
 <style scoped>

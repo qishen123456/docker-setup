@@ -126,13 +126,13 @@
             rows="1"
             :disabled="isRunning"
             @input="autoGrow"
-            @keydown.enter.exact.prevent="$emit('send')"
+            @keydown.enter.exact.prevent="allowSend && !isRunning && $emit('send')"
           ></textarea>
           <div class="sa-composer-hint">Enter 发送，Shift + Enter 换行</div>
         </div>
 
         <button
-          v-if="!isRunning"
+          v-if="!isRunning && allowSend"
           class="sa-send-btn"
           aria-label="发送问题"
           @click="$emit('send')"
@@ -141,7 +141,7 @@
         </button>
 
         <button
-          v-else
+          v-else-if="isRunning && allowStop"
           class="sa-stop-btn"
           aria-label="停止执行"
           @click="$emit('stop')"
@@ -172,6 +172,14 @@ const props = defineProps({
   isRunning: {
     type: Boolean,
     default: false
+  },
+  allowSend: {
+    type: Boolean,
+    default: true
+  },
+  allowStop: {
+    type: Boolean,
+    default: true
   }
 })
 

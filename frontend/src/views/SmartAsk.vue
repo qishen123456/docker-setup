@@ -1,13 +1,15 @@
 ﻿<template>
   <div class="sa-page">
     <div class="sa-shell">
-      <section class="sa-workspace" :class="{ 'is-detail-hidden': !showPanel }">
+      <section class="sa-workspace" :class="{ 'is-detail-hidden': !detailPanelVisible }">
         <!-- 📌 左侧/中间 对话区-->
-        <div class="sa-chat-panel" :class="{ 'is-detail-hidden': !showPanel }">
+        <div class="sa-chat-panel" :class="{ 'is-detail-hidden': !detailPanelVisible }">
           <!-- 头部组件-->
           <ChatHeader
-            :show-panel="showPanel"
+            :show-panel="detailPanelVisible"
             :dataset-name="currentDatasetLabel"
+            :allow-toggle-panel="isFeatureEnabled('debug_execution_trace')"
+            :allow-new-chat="isFeatureEnabled('smart_new_chat')"
             @toggle-panel="togglePanel"
             @new-chat="handleNewChat"
             @show-history="focusSidebarHistory"
@@ -94,7 +96,7 @@
                           </div>
                         </div>
                       </div>
-                      <div class="sa-confirm-opts">
+                      <div v-if="isFeatureEnabled('smart_confirm_scope')" class="sa-confirm-opts">
                         <button
                           v-for="opt in msg.data.confirmation_options"
                           :key="getConfirmOptionKey(opt)"
@@ -127,6 +129,7 @@
                         <div class="sa-confirm-freeform-actions">
                           <span class="sa-confirm-freeform-hint">补充说明会直接作为老板确认内容继续推进问数流程。</span>
                           <button
+                            v-if="isFeatureEnabled('smart_submit_note')"
                             class="sa-confirm-send"
                             :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
                             @click="submitConfirmationDraft(msg)"
@@ -185,7 +188,7 @@
                               <div class="sa-inline-visual-card-title">{{ preview.chartSpec?.title || preview.dataset.dataset_name }}</div>
                               <div class="sa-inline-visual-card-subtitle">{{ preview.dataset.dataset_name }}</div>
                             </div>
-                            <button class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">
+                            <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">
                               放大查看
                             </button>
                           </div>
@@ -236,6 +239,8 @@
             :datasets="datasets"
             :ai-models="aiModels"
             :is-running="isRunning"
+            :allow-send="isFeatureEnabled('smart_send_question')"
+            :allow-stop="isFeatureEnabled('smart_stop_run')"
             @send="handleSend"
             @stop="handleStop"
             @dataset-change="loadQuestions"
@@ -244,7 +249,7 @@
 
         <!-- ██ 右侧 执行详情面板 -->
         <transition name="sa-panel-slide">
-          <aside v-if="showPanel" class="sa-detail-panel">
+          <aside v-if="detailPanelVisible" class="sa-detail-panel">
             <div class="sa-panel-header">
               <div class="sa-panel-heading">
                 <span class="sa-panel-eyebrow">执行事件详情</span>
@@ -268,12 +273,12 @@
                 <template #content="{ log, index }">
                   <div v-if="log.sql" class="sa-log-section">
                     <div class="sa-log-section-title">{{ log.sqlTitle || '生成 SQL' }}</div>
-                    <SqlBlock :sql="log.sql" />
+                    <SqlBlock :sql="log.sql" :allow-copy="isFeatureEnabled('smart_sql_copy')" />
                   </div>
 
                   <div v-if="log.chartData" class="sa-log-section">
                     <div class="sa-log-section-title">{{ log.chartTitle || '图表预览' }}</div>
-                    <button class="sa-ghost-btn sa-log-inline-action" @click="openChartViewer(log.chartData, log.chartTitle || '图表预览')">放大查看</button>
+                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-log-inline-action" @click="openChartViewer(log.chartData, log.chartTitle || '图表预览')">放大查看</button>
                     <div class="sa-chart-embed" :ref="el => initLogChart(el, log.chartData, index)"></div>
                   </div>
 
@@ -301,7 +306,7 @@
                     <div>
                       <h3 class="sa-side-report-title">业绩分析报告</h3>
                     </div>
-                    <button class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
+                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
                       <span class="sa-btn-label">全屏报告</span>
                     </button>
                   </div>
@@ -337,7 +342,7 @@
                         <div class="sa-side-section-title">各{{ businessDrillReport.compareLevelLabel }}对比分析</div>
                         <p class="sa-chart-copy">{{ businessDrillReport.officeCompareText }}</p>
                       </div>
-                      <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(businessDrillReport.officeCompareSpec, `各${businessDrillReport.compareLevelLabel}对比分析`)" type="button">
+                      <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(businessDrillReport.officeCompareSpec, `各${businessDrillReport.compareLevelLabel}对比分析`)" type="button">
                         <span class="sa-btn-label">放大查看</span>
                       </button>
                     </div>
@@ -363,7 +368,7 @@
                       <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
                         <p class="sa-chart-copy">{{ office.chartText }}</p>
                         <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
-                          <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${businessDrillReport.detailLevelLabel}达成率`)" type="button">
+                          <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${businessDrillReport.detailLevelLabel}达成率`)" type="button">
                             <span class="sa-btn-label">放大查看</span>
                           </button>
                         </div>
@@ -391,7 +396,7 @@
                     >
                       <div class="sa-side-extra-chart-head">
                         <div class="sa-side-extra-chart-title">{{ chart.chartSpec.title || chart.caption }}</div>
-                        <button class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chart.chartSpec, `${chart.dataset.dataset_name} ${chart.chartSpec.title || chart.caption}`)">
+                        <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chart.chartSpec, `${chart.dataset.dataset_name} ${chart.chartSpec.title || chart.caption}`)">
                           查看
                         </button>
                       </div>
@@ -443,7 +448,7 @@
 
                   <div v-else-if="preview.chartSpec" class="sa-main-chart" :ref="el => initPreviewChart(el, preview.chartSpec, preview.key)"></div>
                   <div v-if="preview.chartSpec" class="sa-chart-actions">
-                    <button class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">放大查看</button>
+                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">放大查看</button>
                   </div>
 
                   <div v-if="preview.extraCharts?.length" class="sa-side-extra-charts">
@@ -454,7 +459,7 @@
                     >
                       <div class="sa-side-extra-chart-head">
                         <div class="sa-side-extra-chart-title">{{ chartSpec.title || `图表 ${chartIndex + 1}` }}</div>
-                        <button class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chartSpec, `${preview.dataset.dataset_name} ${chartSpec.title || `图表 ${chartIndex + 1}`}`)">
+                        <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chartSpec, `${preview.dataset.dataset_name} ${chartSpec.title || `图表 ${chartIndex + 1}`}`)">
                           查看
                         </button>
                       </div>
@@ -483,7 +488,7 @@
                 <div v-if="latestReport && !businessDrillReport" class="sa-side-section sa-report-view">
                   <div class="sa-side-section-title">完整报告</div>
                   <div class="sa-chart-actions">
-                    <button class="sa-ghost-btn" @click="openReportViewer">全屏查看</button>
+                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-ghost-btn" @click="openReportViewer">全屏查看</button>
                   </div>
                   <ul class="sa-report-bullet-list sa-report-bullet-list-compact">
                     <li v-for="(item, index) in reportSummaryBullets.slice(0, 4)" :key="index">{{ item }}</li>
@@ -526,10 +531,10 @@
                   </div>
                   <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderMd(latestReport)"></div>
                   <div class="sa-download-row">
-                    <button class="sa-secondary-btn" @click="openReportViewer">
+                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-secondary-btn" @click="openReportViewer">
                       <span class="sa-btn-label">查看大图</span>
                     </button>
-                    <button class="sa-primary-btn" @click="downloadLatestReport">
+                    <button v-if="isFeatureEnabled('smart_report_download')" class="sa-primary-btn" @click="downloadLatestReport">
                       <span class="sa-btn-label">下载报告</span>
                     </button>
                   </div>
@@ -589,7 +594,7 @@
                   <div class="sa-report-chart-title">各{{ dialogBusinessDrillReport.compareLevelLabel }}对比分析</div>
                   <div class="sa-report-chart-subtitle">{{ dialogBusinessDrillReport.officeCompareText }}</div>
                 </div>
-                <button class="sa-ghost-btn" @click="openChartViewer(dialogBusinessDrillReport.officeCompareSpec, `各${dialogBusinessDrillReport.compareLevelLabel}对比分析`)">放大查看</button>
+                <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(dialogBusinessDrillReport.officeCompareSpec, `各${dialogBusinessDrillReport.compareLevelLabel}对比分析`)">放大查看</button>
               </div>
               <div class="sa-report-chart-canvas" :ref="el => el && dialogBusinessDrillReport?.officeCompareSpec && initPreviewChart(el, dialogBusinessDrillReport.officeCompareSpec, 'dialog-office-overview')"></div>
             </div>
@@ -613,7 +618,7 @@
                 <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
                   <p class="sa-chart-copy">{{ office.chartText }}</p>
                   <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
-                    <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${dialogBusinessDrillReport.detailLevelLabel}达成率`)" type="button">
+                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${dialogBusinessDrillReport.detailLevelLabel}达成率`)" type="button">
                       <span class="sa-btn-label">放大查看</span>
                     </button>
                   </div>
@@ -635,7 +640,7 @@
                     <div class="sa-report-chart-title">{{ block.dataset.dataset_name }}</div>
                     <div class="sa-report-chart-subtitle">{{ block.chartSpec.title || '图表预览' }}</div>
                   </div>
-                  <button class="sa-ghost-btn" @click="openChartViewer(block.chartSpec, `${block.dataset.dataset_name} 图表预览`)">放大查看</button>
+                  <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(block.chartSpec, `${block.dataset.dataset_name} 图表预览`)">放大查看</button>
                 </div>
                 <div v-if="block.chartSpec.chartType === 'metric'" class="sa-insight-metric sa-insight-metric-report">
                   <div class="sa-insight-metric-value">{{ block.chartSpec.value }}</div>
@@ -758,6 +763,7 @@ import * as echarts from 'echarts'
 import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
+import { useFeatureFlags } from '../state/featureFlags'
 
 defineOptions({ name: 'SmartAsk' })
 import ChatHeader from '../components/smartask/ChatHeader.vue'
@@ -775,6 +781,7 @@ import { buildOrgTree, getDefaultConfig as getDefaultReportTreeConfig } from '..
 import '../styles/volcano-design.css'
 
 const session = useSmartAskSession()
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const {
   pendingRestoreId,
   loadHistory,
@@ -820,6 +827,7 @@ let panelScrollTimer = null
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
+const detailPanelVisible = computed(() => showPanel.value && isFeatureEnabled('debug_execution_trace'))
 
 const statusBarText = computed(() => {
   const m = {
@@ -2747,6 +2755,7 @@ watch(() => pendingRestoreId.value, (historyId) => {
 
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
+  loadFeatureFlags()
   loadHistory()
 
   // 从 sessionStorage 还原输入状态

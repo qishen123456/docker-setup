@@ -42,12 +42,15 @@ from controllers.bookshelf import bookshelf_bp
 from controllers.dashboard import dashboard_bp
 from controllers.datasources import datasources_bp
 from controllers.feishu_sync import feishu_bp
+from controllers.feature_flags import feature_flags_bp
 from controllers.smart_chat import smart_chat_bp
 from controllers.report_config import report_config_bp
 from controllers.runtime_migration import runtime_migration_bp
+from feature_flags import ensure_feature_flags
 
 
 init_default_configs()
+ensure_feature_flags()
 APP_CONFIG = get_app_config()
 BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", "5002"))
 
@@ -84,6 +87,7 @@ app.register_blueprint(bookshelf_bp)
 app.register_blueprint(agents_bp)
 app.register_blueprint(report_config_bp)
 app.register_blueprint(runtime_migration_bp)
+app.register_blueprint(feature_flags_bp)
 
 
 @app.route("/api/health", methods=["GET"])

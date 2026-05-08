@@ -6,7 +6,7 @@
         <h2>数据源管理</h2>
         <p>维护问数系统可访问的数据连接、默认库与连通性状态。</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openAdd">添加数据源</el-button>
+      <el-button v-if="isFeatureEnabled('datasource_create')" type="primary" :icon="Plus" @click="openAdd">添加数据源</el-button>
     </div>
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="admin-stat-grid">
@@ -28,7 +28,7 @@
       <template #header>
         <div class="card-header">
           <span>连接清单</span>
-          <el-button plain :icon="Connection" :disabled="!connections.length" @click="testActiveConnections">批量测试活跃连接</el-button>
+          <el-button v-if="isFeatureEnabled('datasource_test')" plain :icon="Connection" :disabled="!connections.length" @click="testActiveConnections">批量测试活跃连接</el-button>
         </div>
       </template>
 
@@ -59,9 +59,9 @@
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <div style="white-space: nowrap">
-              <el-button link :icon="Connection" :loading="testingId === row.id" @click="testConn(row)">测试</el-button>
-              <el-button link :icon="Edit" @click="openEdit(row)">编辑</el-button>
-              <el-popconfirm title="确认删除此数据源？" @confirm="deleteConn(row.id)">
+              <el-button v-if="isFeatureEnabled('datasource_test')" link :icon="Connection" :loading="testingId === row.id" @click="testConn(row)">测试</el-button>
+              <el-button v-if="isFeatureEnabled('datasource_edit')" link :icon="Edit" @click="openEdit(row)">编辑</el-button>
+              <el-popconfirm v-if="isFeatureEnabled('datasource_delete')" title="确认删除此数据源？" @confirm="deleteConn(row.id)">
                 <template #reference>
                   <el-button link type="danger" :icon="Delete">删除</el-button>
                 </template>
@@ -146,7 +146,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
+        <el-button v-if="!isEdit || isFeatureEnabled('datasource_edit')" type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -157,6 +157,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete, Connection } from '@element-plus/icons-vue'
 import { getDataSources, createDataSource, updateDataSource, deleteDataSource, testDataSource } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const connections = ref([])
 const loading = ref(false)
@@ -165,6 +166,7 @@ const testingId = ref(null)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const defaultForm = () => ({ name:'', type:'sqlite', sqlite_path:'./test.db', host:'', port:3306, database_name:'', username:'', password:'', driver:'psycopg2', is_active:true, is_default:false })
 const form = ref(defaultForm())
@@ -247,7 +249,10 @@ const testActiveConnections = async () => {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadFeatureFlags()
+  loadData()
+})
 </script>
 
 <style scoped>

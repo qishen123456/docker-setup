@@ -13,7 +13,7 @@
           <span class="sa-sql-state-dot"></span>
           已生成
         </span>
-        <button class="sa-copy-btn" @click="handleCopy" type="button" :aria-label="copied ? '已复制 SQL' : '复制 SQL'">
+        <button v-if="allowCopy" class="sa-copy-btn" @click="handleCopy" type="button" :aria-label="copied ? '已复制 SQL' : '复制 SQL'">
           <span class="sa-copy-icon" aria-hidden="true"></span>
           {{ copied ? '已复制' : '复制' }}
         </button>
@@ -40,6 +40,10 @@ const props = defineProps({
   sql: {
     type: String,
     default: ''
+  },
+  allowCopy: {
+    type: Boolean,
+    default: true
   }
 })
 

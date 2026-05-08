@@ -18,8 +18,8 @@
     </div>
 
     <div class="sa-header-right">
-      <button class="sa-solid-btn" type="button" @click="$emit('newChat')">新会话</button>
-      <button class="sa-text-btn" type="button" @click="$emit('togglePanel')">
+      <button v-if="allowNewChat" class="sa-solid-btn" type="button" @click="$emit('newChat')">新会话</button>
+      <button v-if="allowTogglePanel" class="sa-text-btn" type="button" @click="$emit('togglePanel')">
         {{ showPanel ? '隐藏详情' : '显示详情' }}
       </button>
     </div>
@@ -35,6 +35,14 @@ defineProps({
   datasetName: {
     type: String,
     default: '自动路由数据集'
+  },
+  allowTogglePanel: {
+    type: Boolean,
+    default: true
+  },
+  allowNewChat: {
+    type: Boolean,
+    default: true
   }
 })
 

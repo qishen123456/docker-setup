@@ -41,7 +41,7 @@
             <div class="agent-editor-kicker">PROMPT WORKSPACE</div>
             <div class="panel-title">{{ form.name || 'AGENT详情' }}</div>
           </div>
-          <el-button type="primary" @click="saveAgent">保存配置</el-button>
+          <el-button v-if="isFeatureEnabled('agent_config_edit')" type="primary" @click="saveAgent">保存配置</el-button>
         </div>
 
           <el-empty v-if="!selectedAgentNo" description="请选择一个 Agent" />
@@ -66,13 +66,13 @@
                 <div class="subheading">知识片段</div>
                 <div class="knowledge-desc">用于给当前 Agent 补充稳定规则和业务约束。</div>
               </div>
-              <el-button size="small" @click="addKnowledge">新增知识片段</el-button>
+              <el-button v-if="isFeatureEnabled('agent_config_edit')" size="small" @click="addKnowledge">新增知识片段</el-button>
             </div>
 
             <div v-for="(item, index) in form.knowledge_base" :key="index" class="knowledge-item">
               <span class="knowledge-index">{{ index + 1 }}</span>
               <el-input v-model="form.knowledge_base[index]" type="textarea" :rows="2" />
-              <el-button link type="danger" @click="form.knowledge_base.splice(index, 1)">删除</el-button>
+              <el-button v-if="isFeatureEnabled('agent_config_edit')" link type="danger" @click="form.knowledge_base.splice(index, 1)">删除</el-button>
             </div>
           </template>
       </section>
@@ -84,9 +84,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAgents, updateAgent } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const agents = ref([])
 const selectedAgentNo = ref(null)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const form = reactive({
   name: '',
   role_summary: '',
@@ -130,7 +132,10 @@ const saveAgent = async () => {
   await loadAgents()
 }
 
-onMounted(loadAgents)
+onMounted(() => {
+  loadFeatureFlags()
+  loadAgents()
+})
 </script>
 
 <style scoped>

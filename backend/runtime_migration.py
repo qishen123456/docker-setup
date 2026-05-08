@@ -32,6 +32,7 @@ RUNTIME_CONFIG_FILES = [
     "sql_prompts.json",
     "app_config.json",
     "employee_permissions.json",
+    "feature_flags.json",
 ]
 
 EXCLUDED_CONFIG_FILES = {

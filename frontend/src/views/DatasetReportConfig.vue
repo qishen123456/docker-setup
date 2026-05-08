@@ -31,8 +31,8 @@
             <el-tag v-else type="info" size="small" effect="plain" round>未配置</el-tag>
           </div>
           <div class="rc-main-actions">
-            <el-button size="small" @click="loadDefaultConfig">加载默认模板</el-button>
-            <el-button size="small" type="primary" :loading="saving" @click="saveConfig">保存</el-button>
+            <el-button v-if="isFeatureEnabled('report_template_edit')" size="small" @click="loadDefaultConfig">加载默认模板</el-button>
+            <el-button v-if="isFeatureEnabled('report_template_edit')" size="small" type="primary" :loading="saving" @click="saveConfig">保存</el-button>
           </div>
         </div>
 
@@ -104,7 +104,7 @@
               <div class="rc-card rc-card-wide">
                 <div class="rc-card-title">
                   分析维度 / 管理链路
-                  <el-button text type="primary" size="small" @click="addAnalysisDimension">+ 添加</el-button>
+                  <el-button v-if="isFeatureEnabled('report_template_edit')" text type="primary" size="small" @click="addAnalysisDimension">+ 添加</el-button>
                 </div>
                 <div class="rc-card-body">
                   <el-table :data="configForm.analysisDimensions" size="small" border stripe>
@@ -125,7 +125,7 @@
                     </el-table-column>
                     <el-table-column label="" width="50">
                       <template #default="{ $index }">
-                        <el-button text type="danger" size="small" @click="configForm.analysisDimensions.splice($index, 1)">×</el-button>
+                        <el-button v-if="isFeatureEnabled('report_template_edit')" text type="danger" size="small" @click="configForm.analysisDimensions.splice($index, 1)">×</el-button>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -160,7 +160,7 @@
               <div class="rc-card rc-card-wide">
                 <div class="rc-card-title">
                   指标定义
-                  <el-button text type="primary" size="small" @click="addMetric">+ 添加</el-button>
+                  <el-button v-if="isFeatureEnabled('report_template_edit')" text type="primary" size="small" @click="addMetric">+ 添加</el-button>
                 </div>
                 <div class="rc-card-body">
                   <el-table :data="configForm.metrics" size="small" border stripe>
@@ -185,7 +185,7 @@
                     </el-table-column>
                     <el-table-column label="" width="50">
                       <template #default="{ $index }">
-                        <el-button text type="danger" size="small" @click="configForm.metrics.splice($index, 1)">×</el-button>
+                        <el-button v-if="isFeatureEnabled('report_template_edit')" text type="danger" size="small" @click="configForm.metrics.splice($index, 1)">×</el-button>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -196,7 +196,7 @@
               <div class="rc-card rc-card-wide">
                 <div class="rc-card-title">
                   信号灯规则
-                  <el-button text type="primary" size="small" @click="addSignalRule">+ 添加</el-button>
+                  <el-button v-if="isFeatureEnabled('report_template_edit')" text type="primary" size="small" @click="addSignalRule">+ 添加</el-button>
                 </div>
                 <div class="rc-card-body">
                   <el-table :data="configForm.signalRules" size="small" border stripe>
@@ -230,7 +230,7 @@
                     </el-table-column>
                     <el-table-column label="" width="50">
                       <template #default="{ $index }">
-                        <el-button text type="danger" size="small" @click="configForm.signalRules.splice($index, 1)">×</el-button>
+                        <el-button v-if="isFeatureEnabled('report_template_edit')" text type="danger" size="small" @click="configForm.signalRules.splice($index, 1)">×</el-button>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -248,19 +248,19 @@
               class="rc-json-editor"
             />
             <div class="rc-json-actions">
-              <el-button size="small" @click="parseJson">应用 JSON → 可视化</el-button>
+              <el-button v-if="isFeatureEnabled('report_template_edit')" size="small" @click="parseJson">应用 JSON → 可视化</el-button>
             </div>
           </el-tab-pane>
         </el-tabs>
 
         <!-- Bottom bar -->
         <div class="rc-bottom-bar">
-          <el-popconfirm v-if="hasConfig" title="确认删除此数据集的报告配置？" @confirm="deleteConfig">
+          <el-popconfirm v-if="hasConfig && isFeatureEnabled('report_template_delete')" title="确认删除此数据集的报告配置？" @confirm="deleteConfig">
             <template #reference><el-button type="danger" plain size="small">删除配置</el-button></template>
           </el-popconfirm>
           <div class="rc-spacer"></div>
-          <el-button size="small" @click="loadDefaultConfig">重置为默认</el-button>
-          <el-button type="primary" size="small" :loading="saving" @click="saveConfig">保存配置</el-button>
+          <el-button v-if="isFeatureEnabled('report_template_edit')" size="small" @click="loadDefaultConfig">重置为默认</el-button>
+          <el-button v-if="isFeatureEnabled('report_template_edit')" type="primary" size="small" :loading="saving" @click="saveConfig">保存配置</el-button>
         </div>
       </main>
 
@@ -280,10 +280,12 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Grid, Refresh } from '@element-plus/icons-vue'
 import { getReportConfig, upsertReportConfig, deleteReportConfig, getDefaultReportConfig } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 import axios from 'axios'
 
 const loading = ref(false)
 const saving = ref(false)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const datasets = ref([])
 const selectedDatasetId = ref(null)
 const activeTab = ref('visual')
@@ -432,7 +434,10 @@ watch(configForm, () => {
   }
 }, { deep: true })
 
-onMounted(loadDatasets)
+onMounted(() => {
+  loadFeatureFlags()
+  loadDatasets()
+})
 </script>
 
 <style scoped>

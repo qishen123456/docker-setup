@@ -1,10 +1,43 @@
 # SmartAsk 部署与交付手册
 
-更新时间：2026-05-07
+更新时间：2026-05-08
 
-本文档整合原 Docker 部署、换电脑迁移、用户机更新、发布前验证等文档，作为用户机交付和开发机发布的唯一入口。
+当前项目真实 Git 信息：
 
-## 1. 用户机前置条件
+```text
+Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
+当前可拉取发布分支：docker-setup
+```
+
+注意：Linux/Git 对分支名大小写敏感。已核验当前本地与 Gitee 远端存在的分支是 `docker-setup`；如果后续你在 Gitee 另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
+
+本文档是 SmartAsk 给用户机交付、Windows 一键 Docker 部署、日常更新、权限控制和运行态配置保护的统一入口。Linux 服务器部署请另看：
+
+```text
+docs/Linux_Docker部署运维手册.md
+```
+
+如果你要从 Windows 测试环境发布到 Linux 正式环境，并保护生产数据源、数据集、提示词、模型配置和权限配置，请同时阅读：
+
+```text
+docs/迁移发布与运行态配置保护方案.md
+docs/运行态配置导出导入操作手册.md
+```
+
+## 1. 当前交付能力
+
+当前项目支持：
+
+- Docker 一键部署前端、后端、PostgreSQL、Chroma 向量库。
+- 未登录拦截，用户不登录看不到系统内容。
+- 超级管理员、管理员、普通用户三类身份。
+- 员工账号密码登录，员工默认密码 `12345678`，员工可前端改密。
+- 超级管理员可在“员工权限配置”新增员工、修改角色、重置密码、维护飞书 UnionID。
+- 超级管理员可从头像菜单进入“系统控制台”，按身份控制左侧导航和页面按钮显示。
+- 运行态配置导出/导入，保护数据源、数据集、提示词、模型配置、报告模板、员工权限和系统控制台开关。
+- 更新前备份、诊断包、Docker 重建和健康检查。
+
+## 2. 用户机前置条件
 
 用户机只需要安装：
 
@@ -20,25 +53,27 @@ docker info
 docker compose version
 ```
 
-如果 `docker info` 报 `dockerDesktopLinuxEngine` pipe 不存在，说明 Docker Desktop 没启动或 daemon 未就绪，先打开 Docker Desktop 等 1-3 分钟。
+如果 `docker info` 报 `dockerDesktopLinuxEngine` pipe 不存在，说明 Docker Desktop 没启动或 daemon 未就绪。先打开 Docker Desktop，等待 1-3 分钟后再执行部署命令。
 
-## 2. 第一次部署
+## 3. 第一次部署
+
+下面这段可以直接发给用户机执行。
 
 ```powershell
-git clone https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
 cd smartask
 Copy-Item .env.example .env
 notepad .env
 .\deploy.ps1 -RunTests
 ```
 
-命令说明：
+命令解释：
 
-- `git clone ... smartask`：从 Gitee 下载项目到本机 `smartask` 文件夹。
-- `cd smartask`：进入项目目录。
-- `Copy-Item .env.example .env`：复制运行配置模板。
-- `notepad .env`：填写真实 AI Key、系统密钥、数据库和飞书配置。
-- `.\deploy.ps1 -RunTests`：一键构建并启动 Docker 服务，完成后自动跑接口测试。
+- `git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask`：从 Gitee 下载 `docker-setup` 分支，并把目录命名为 `smartask`。
+- `cd smartask`：进入项目目录，后续命令都在这里执行。
+- `Copy-Item .env.example .env`：复制一份真实运行配置文件。
+- `notepad .env`：打开配置文件，填写 AI Key、系统密钥、超管密码、飞书配置等真实值。
+- `.\deploy.ps1 -RunTests`：一键构建并启动 Docker 服务，启动后自动跑接口测试。
 
 部署成功后访问：
 
@@ -47,7 +82,7 @@ notepad .env
 后端健康：http://localhost:5002/api/health
 ```
 
-## 3. `.env` 必填项
+## 4. `.env` 必填项
 
 至少确认这些配置不是占位符：
 
@@ -61,9 +96,13 @@ SMARTASK_ADMIN_PASSWORD
 SMARTASK_ADMIN_DISPLAY_NAME
 ```
 
-`SMARTASK_ADMIN_PASSWORD` 是超级管理员登录密码，用户机必须改成强密码，不能使用模板值。首次登录后，超级管理员可在“员工权限配置”中维护员工账号。
+生产环境必须修改：
 
-如果启用飞书同步，还要填写：
+```text
+SMARTASK_ADMIN_PASSWORD=请改成强密码
+```
+
+如果启用飞书同步或飞书登录，还要填写：
 
 ```text
 SMARTASK_FEISHU_APP_ID
@@ -71,57 +110,141 @@ SMARTASK_FEISHU_APP_SECRET
 SMARTASK_FEISHU_BASE_ID
 SMARTASK_FEISHU_TABLE_ID
 SMARTASK_FEISHU_VIEW_ID
-SMARTASK_FEISHU_IS_ACTIVE=true
+FEISHU_APP_ID
+FEISHU_APP_SECRET
+BACKEND_URL
+FRONTEND_URL
 ```
 
 `.env` 不提交到 Git / Gitee。
 
-## 4. 登录与员工权限
+## 5. 登录与权限
 
-系统现在启用登录拦截：未登录只能看到登录页，看不到工作台内容。
+系统启用登录拦截：未登录只能看到登录页，看不到工作台内容。
 
 角色说明：
 
-- 超级管理员：由 `.env` 中 `SMARTASK_ADMIN_USERNAME` / `SMARTASK_ADMIN_PASSWORD` 控制，可访问全部功能，包括“员工权限配置”。
-- 管理员：由“员工权限配置”维护，可访问除“员工权限配置”外的管理功能。
-- 普通用户：由“员工权限配置”维护，只能访问“智能分析工作台”。
+- 超级管理员：由 `.env` 的 `SMARTASK_ADMIN_USERNAME` / `SMARTASK_ADMIN_PASSWORD` 控制，可访问全部功能。
+- 管理员：由“员工权限配置”维护，可访问业务配置功能，但默认不能维护员工权限和系统控制台。
+- 普通用户：由“员工权限配置”维护，默认只访问“智能分析工作台”。
 
 员工账号规则：
 
 - 新增员工时填写“员工名称、登录账号、飞书 UnionID、角色、状态”。
-- 新员工默认密码为 `12345678`。
-- 忘记密码时，超级管理员在“员工权限配置”里点击“重置密码”，再点击“保存配置”，该员工密码会重置为 `12345678`。
-- 员工登录后可在右上角点击“改密”修改自己的密码。
-- 出于安全考虑，系统不展示员工明文密码，只保存 `password_salt` 和 `password_hash`。
+- 新员工默认密码是 `12345678`。
+- 忘记密码时，超级管理员在“员工权限配置”点击“重置密码”，再点击“保存配置”，员工密码会重置为 `12345678`。
+- 员工登录后可在右上角头像菜单点击“修改密码”。
+- 系统不展示员工明文密码，只保存 `password_salt` 和 `password_hash`。
 
-运行态权限文件：
+员工权限文件：
 
 ```text
 config/employee_permissions.json
 ```
 
-该文件由系统运行时生成并挂载到 Docker 后端容器，属于用户机本地数据，已加入 `.gitignore`，不会提交到 Git。
+## 6. 系统控制台
 
-## 5. 日常更新
+超级管理员点击右上角头像，选择“系统控制台”，可以进入权限矩阵页面。
+
+系统控制台现在按两层控制：
+
+- 左侧导航栏：控制“智能分析工作台、数据资产管理、模型服务配置、迁移发布管理”等入口是否显示。
+- 页面按钮：控制每个页面内部的重要交互按钮，例如发送问题、停止执行、SQL 复制、报告下载、数据集保存、数据源编辑、运行态导入、员工重置密码等。
+
+保存后立即生效。若点击“保存配置”没有成功提示，请按以下顺序检查：
+
+```powershell
+docker compose logs --tail=200 backend
+docker compose ps
+curl http://localhost:5002/api/health
+```
+
+常见原因：
+
+- 当前账号不是超级管理员，后端会返回 403。
+- 后端没有重启，仍在跑旧代码。
+- `config/feature_flags.json` 所在目录没有写入权限。
+- 浏览器还缓存旧前端，按 `Ctrl + F5` 强制刷新。
+
+系统控制台配置文件：
+
+```text
+config/feature_flags.json
+```
+
+该文件属于运行态配置，会随运行态导出/导入一起迁移。
+
+## 7. 日常更新
 
 ```powershell
 cd smartask
 .\update.ps1 -RunTests
 ```
 
-命令说明：
+命令解释：
 
 - `cd smartask`：进入已经部署过的项目目录。
-- `.\update.ps1 -RunTests`：更新前备份、拉取 Gitee 最新代码、重建 Docker 服务，并跑接口测试。
+- `.\update.ps1 -RunTests`：自动备份、拉取 Gitee 最新代码、重建 Docker 服务，并跑接口测试。
 
 可选参数：
 
 - `-NoPull`：不执行 `git pull`，适合离线更新包。
 - `-NoBuild`：不重新 build，只重启已有镜像。
-- `-SkipBackup`：跳过更新前备份，不推荐普通用户使用。
-- `-RunStreamTests`：额外测试 AI 流式问数链路，依赖真实模型 Key 和网络。
+- `-SkipBackup`：跳过更新前备份，不推荐生产/用户机使用。
+- `-RunStreamTests`：额外测试 AI 流式问数链路，需要真实模型 Key 和网络。
 
-## 6. 常用运维命令
+如果页面仍显示旧样式或旧按钮：
+
+```text
+Ctrl + F5
+```
+
+不要使用 `-NoBuild`，除非你明确只想重启旧镜像。
+
+如果用户机之前拉错了默认分支，只看到 README，按下面方式修正：
+
+```powershell
+cd smartask
+git fetch --all
+git checkout docker-setup
+git pull --ff-only
+.\deploy.ps1 -RunTests
+```
+
+## 8. 运行态配置保护
+
+代码更新不应该覆盖用户机运行态配置。当前重要运行态资源包括：
+
+- `config/datasources.json`
+- `config/ai_settings.json`
+- `config/feishu_sync.json`
+- `config/app_config.json`
+- `config/employee_permissions.json`
+- `config/feature_flags.json`
+- PostgreSQL 中的数据集、字段字典、Golden SQL、Agent 提示词、报告模板等书架表。
+
+推荐发布流程：
+
+1. 测试环境改代码并验证。
+2. 正式环境更新代码前先备份。
+3. 如需迁移配置，从测试环境导出运行态包。
+4. 在正式环境“迁移发布管理”先预检导入。
+5. 确认无误后再正式导入。
+6. 导入前系统会自动备份当前正式环境运行态资源。
+
+手动备份：
+
+```powershell
+.\backup.ps1
+```
+
+运行态导出/导入页面：
+
+```text
+迁移发布管理
+```
+
+## 9. 常用运维命令
 
 软重启，不重建镜像，不删除数据：
 
@@ -141,12 +264,6 @@ cd smartask
 .\reset.ps1 -Mode Data -ConfirmDataReset
 ```
 
-手工备份：
-
-```powershell
-.\backup.ps1
-```
-
 生成诊断包：
 
 ```powershell
@@ -159,7 +276,13 @@ cd smartask
 docker compose logs -f backend
 ```
 
-## 7. 诊断包
+查看容器状态：
+
+```powershell
+docker compose ps
+```
+
+## 10. 诊断包
 
 报错时执行：
 
@@ -168,7 +291,7 @@ cd smartask
 .\doctor.ps1
 ```
 
-生成后把这个 zip 发给开发者：
+生成后，把下面目录里的 zip 发给开发者：
 
 ```text
 diagnostics\smartask_diagnose_时间戳.zip
@@ -176,194 +299,97 @@ diagnostics\smartask_diagnose_时间戳.zip
 
 诊断包包含 Docker 状态、服务日志、端口占用、健康检查和脱敏 `.env` 摘要。Key、Secret、Token、Password 会自动脱敏。
 
-## 8. 备份策略
+## 11. Docker 数据保存位置
 
-`update.ps1` 默认会先执行备份。
-
-手工备份：
-
-```powershell
-.\backup.ps1
-```
-
-备份输出：
+PostgreSQL 数据：
 
 ```text
-backups\时间戳\
+Docker volume: smartask_pg_data
 ```
 
-通常包含：
+Chroma 向量库：
 
-- `config/`
-- `.env.example`
-- `bundles/`
-- `postgres.sql`
-- `README.txt`
+```text
+Docker volume: smartask_chroma
+```
 
-`backups/` 已加入 `.gitignore`。
+运行配置：
 
-## 9. 开发机发布流程
+```text
+项目目录/config
+```
 
-开发机改完代码后先验证：
+后端日志：
+
+```text
+项目目录/backend/logs
+```
+
+导入导出包：
+
+```text
+项目目录/backend/imports
+```
+
+备份：
+
+```text
+项目目录/backups
+```
+
+正式环境不要执行：
 
 ```powershell
+docker compose down -v
+```
+
+`-v` 会删除 Docker volume，可能导致 PostgreSQL 和 Chroma 数据丢失。
+
+## 12. 开发机发布前验证
+
+开发机改完代码后建议执行：
+
+```powershell
+cd frontend
 npm run build
+cd ..
 python .\scripts\integration_test.py --base-url http://localhost:5002 --frontend-url http://localhost:5173 --no-wait
 ```
 
-提交并推送：
+如果只验证后端语法，可执行：
 
 ```powershell
-git add .
-git commit -m "更新说明"
-git push gitee docker-setup
+python -m py_compile backend\app.py
 ```
 
-如果发布稳定版本：
+如果 Windows 上 `__pycache__` 被占用，可改用源码编译检查：
 
 ```powershell
-git tag v1.0.0
-git push gitee v1.0.0
+python -c "compile(open('backend/app.py', encoding='utf-8').read(), 'backend/app.py', 'exec'); print('OK')"
 ```
 
-## 10. 用户机按 tag 更新或回退
+## 13. 用户机最短命令
 
-切到指定 tag：
-
-```powershell
-git fetch --all --tags
-git checkout v1.0.0
-.\update.ps1 -NoPull -RunTests
-```
-
-升级到新 tag：
+第一次部署：
 
 ```powershell
-git fetch --all --tags
-git checkout v1.0.1
-.\update.ps1 -NoPull -RunTests
-```
-
-回退到旧 tag：
-
-```powershell
-git fetch --all --tags
-git checkout v1.0.0
-.\update.ps1 -NoPull -RunTests
-```
-
-## 10. Docker 自动初始化机制
-
-后端容器启动时会执行 `backend/bootstrap.py`：
-
-1. 等待 PostgreSQL 容器健康。
-2. 初始化 `config/` 默认 JSON 配置。
-3. 导入 `runtime_config_bundle.json` 中的运行时配置。
-4. 应用 `backend/migrations/*.sql` schema 迁移。
-5. 首次空库时导入 `bookshelf_bundle.json` 和 `angel_group_data_bundle.json`。
-6. 启动 Flask 主程序。
-
-再次启动不会默认覆盖用户数据。如需覆盖式重导入：
-
-```powershell
-.\deploy.ps1 -ForceImport
-```
-
-如需覆盖式重写配置：
-
-```powershell
-.\deploy.ps1 -ForceConfig
-```
-
-## 11. 当前验证基线
-
-2026-05-06 本地验证结果：
-
-- PowerShell 脚本解析通过。
-- 后端 Python AST 检查通过。
-- 前端 `npm run build` 通过。
-- 本地集成测试 `16 PASS / 0 FAIL / 0 SKIP`。
-- `docker compose config` 通过。
-
-备注：完整 `docker compose up` 需要 Docker Desktop daemon 处于 running 状态。
-
-## 12. 直接发给用户机的命令
-
-下面这段可以直接发给用户。
-
-### 12.1 第一次部署
-
-```powershell
-git clone https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
 cd smartask
 Copy-Item .env.example .env
 notepad .env
 .\deploy.ps1 -RunTests
 ```
 
-命令解释：
-
-- `git clone https://gitee.com/tailin1/volcano-intelligent-questions.git smartask`：从 Gitee 下载项目，并把文件夹命名为 `smartask`。
-- `cd smartask`：进入项目目录，后续命令都要在这个目录执行。
-- `Copy-Item .env.example .env`：复制一份运行配置文件，真实配置都写到 `.env`。
-- `notepad .env`：打开 `.env`，填写 AI Key、系统密钥、飞书配置等真实值；必须把 `SMARTASK_ADMIN_PASSWORD` 改成强密码。
-- `.\deploy.ps1 -RunTests`：一键构建并启动 Docker 服务，启动后自动跑接口测试。默认会构建前端镜像和后端镜像。
-
-部署成功后访问：
-
-```text
-http://localhost:8080
-```
-
-首次登录使用 `.env` 中配置的超级管理员账号：
-
-```text
-账号：SMARTASK_ADMIN_USERNAME 的值，默认 admin
-密码：SMARTASK_ADMIN_PASSWORD 的值
-```
-
-登录后进入“员工权限配置”，可以新增管理员或普通用户。新增员工默认密码为 `12345678`；忘记密码时，超级管理员可点击“重置密码”，再点“保存配置”，把该员工密码重置回 `12345678`。
-
-历史分析记录按登录账号隔离：同一台电脑上，不同账号登录后只能看到自己的历史分析。历史记录保存在浏览器本地存储中，切换浏览器或清理浏览器缓存后，本地历史不会自动同步。
-
-### 12.2 日常更新
+日常更新：
 
 ```powershell
 cd smartask
 .\update.ps1 -RunTests
 ```
 
-命令解释：
-
-- `cd smartask`：进入已经部署过的项目目录。
-- `.\update.ps1 -RunTests`：自动备份、拉取 Gitee 最新代码、重建 Docker 服务，并跑接口测试。默认会执行 `docker compose up -d --build`，因此会重建前端静态资源。
-
-更新完成后访问：
-
-```text
-http://localhost:8080
-```
-
-如果页面仍显示旧样式或旧按钮，按 `Ctrl + F5` 强制刷新浏览器缓存。不要加 `-NoBuild`，除非只想重启旧镜像。
-
-更新后的历史分析记录仍按登录账号隔离，不同员工不会互相看到历史会话。
-
-### 12.3 报错时生成诊断包
+报错生成诊断包：
 
 ```powershell
 cd smartask
 .\doctor.ps1
 ```
-
-命令解释：
-
-- `cd smartask`：进入项目目录。
-- `.\doctor.ps1`：收集 Docker 状态、服务日志、端口占用、健康检查和脱敏配置，生成诊断包。
-
-生成后，把下面目录里的 zip 发给开发者：
-
-```text
-diagnostics\smartask_diagnose_时间戳.zip
-```
-
-说明：诊断包里的 `.env` 会自动脱敏，不会直接暴露 Key、Secret、Password。

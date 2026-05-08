@@ -71,7 +71,7 @@
                   全部 {{ historySessions.length }}
                 </button>
                 <button
-                  v-if="historyPreviewList.length"
+                  v-if="historyPreviewList.length && isFeatureEnabled('app_history_clear')"
                   class="sidebar-history-clear"
                   type="button"
                   @click="clearHistoryList"
@@ -98,6 +98,7 @@
                   <div class="history-item-time">{{ item.updatedAt }}</div>
                 </div>
                 <button
+                  v-if="isFeatureEnabled('app_history_delete')"
                   class="history-item-delete"
                   type="button"
                   aria-label="删除历史对话"
@@ -127,7 +128,7 @@
             <div class="history-drawer-title">{{ historySessions.length }} 条分析记录</div>
             <div class="history-drawer-desc">选择任意记录可恢复到分析工作台。</div>
           </div>
-          <button v-if="historySessions.length" class="history-drawer-clear" type="button" @click="clearHistoryList">
+          <button v-if="historySessions.length && isFeatureEnabled('app_history_clear')" class="history-drawer-clear" type="button" @click="clearHistoryList">
             清空全部
           </button>
         </div>
@@ -151,6 +152,7 @@
               </div>
             </div>
             <button
+              v-if="isFeatureEnabled('app_history_delete')"
               class="history-item-delete"
               type="button"
               aria-label="删除历史对话"
@@ -182,12 +184,31 @@
           </div>
         </div>
         <div class="topbar-right">
-          <div class="auth-user-chip">
-            <span class="auth-user-avatar">{{ authUserInitial }}</span>
-            <span class="auth-user-name">{{ authUserName }}</span>
-            <span class="auth-user-role">{{ authRoleLabel }}</span>
-            <button class="auth-password-button" type="button" @click="passwordDialogVisible = true">改密</button>
-            <button class="auth-logout-button" type="button" @click="handleLogout">退出</button>
+          <div class="auth-user-menu">
+            <button class="auth-user-chip" type="button" @click.stop="toggleUserMenu">
+              <span class="auth-user-avatar">{{ authUserInitial }}</span>
+              <span class="auth-user-name">{{ authUserName }}</span>
+              <span class="auth-user-role">{{ authRoleLabel }}</span>
+              <span class="auth-user-arrow">⌄</span>
+            </button>
+            <div v-if="userMenuVisible" class="auth-user-dropdown" @click.stop>
+              <button
+                v-if="authRole === 'super_admin' && isFeatureEnabled('admin_console')"
+                type="button"
+                @click="openAdminConsole"
+              >
+                <strong>系统控制台</strong>
+                <span>功能开关与灰度发布</span>
+              </button>
+              <button v-if="isFeatureEnabled('app_password_change')" type="button" @click="openPasswordDialog">
+                <strong>修改密码</strong>
+                <span>更新当前账号登录密码</span>
+              </button>
+              <button class="danger" type="button" @click="handleLogout">
+                <strong>退出登录</strong>
+                <span>清除本机登录状态</span>
+              </button>
+            </div>
           </div>
           <span class="backend-status-chip" :class="{ 'is-online': backendOk, 'is-offline': !backendOk }">
             <span class="backend-status-dot"></span>
@@ -249,9 +270,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, UploadFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Setting, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
-import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
+import { changePassword, clearAuthToken, getCurrentUser, getFeatureFlags, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
 
@@ -284,6 +305,9 @@ const currentTime = ref('')
 const historyPanelRef = ref(null)
 const historyPanelHighlighted = ref(false)
 const historyDrawerVisible = ref(false)
+const featureFlags = ref({})
+const featureFlagsReady = ref(false)
+const userMenuVisible = ref(false)
 
 const roleRank = {
   super_admin: 3,
@@ -292,15 +316,16 @@ const roleRank = {
 }
 
 const menuItems = [
-  { path: '/smart-ask', label: '智能分析工作台', icon: ChatLineRound, minRole: 'user' },
-  { path: '/agents', label: '智能体编排配置', icon: Cpu, minRole: 'admin' },
-  { path: '/datasets', label: '数据资产管理', icon: Collection, minRole: 'admin' },
-  { path: '/databases', label: '数据连接管理', icon: Coin, minRole: 'admin' },
-  { path: '/ai-models', label: '模型服务配置', icon: MagicStick, minRole: 'admin' },
-  { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin' },
-  { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin' },
-  { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin' },
-  { path: '/employee-permissions', label: '员工权限配置', icon: Lock, minRole: 'super_admin' }
+  { path: '/smart-ask', label: '智能分析工作台', icon: ChatLineRound, minRole: 'user', featureKey: 'smart_ask_workspace' },
+  { path: '/agents', label: '智能体编排配置', icon: Cpu, minRole: 'admin', featureKey: 'agent_management' },
+  { path: '/datasets', label: '数据资产管理', icon: Collection, minRole: 'admin', featureKey: 'dataset_management' },
+  { path: '/databases', label: '数据连接管理', icon: Coin, minRole: 'admin', featureKey: 'database_management' },
+  { path: '/ai-models', label: '模型服务配置', icon: MagicStick, minRole: 'admin', featureKey: 'ai_model_config' },
+  { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin', featureKey: 'report_config' },
+  { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin', featureKey: 'feishu_sync' },
+  { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin', featureKey: 'runtime_migration' },
+  { path: '/employee-permissions', label: '员工权限配置', icon: Lock, minRole: 'super_admin', featureKey: 'employee_permissions' },
+  { path: '/admin-console', label: '系统控制台', icon: Setting, minRole: 'super_admin', featureKey: 'admin_console', hidden: true }
 ]
 
 const subtitleMap = {
@@ -321,7 +346,13 @@ const isSmartAskRoute = computed(() => route.path === '/smart-ask')
 const authRole = computed(() => authUser.value?.role || 'user')
 const authRoleLabel = computed(() => authUser.value?.role_label || ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
 const canAccessRole = (minRole) => (roleRank[authRole.value] || 0) >= (roleRank[minRole] || 0)
-const availableMenuItems = computed(() => menuItems.filter((item) => canAccessRole(item.minRole)))
+const isFeatureEnabled = (key) => {
+  if (!key) return true
+  const feature = featureFlags.value?.[key]
+  if (!featureFlagsReady.value || !feature) return true
+  return Boolean(feature.available ?? feature.enabled)
+}
+const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessRole(item.minRole) && isFeatureEnabled(item.featureKey)))
 const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析工作台')
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
@@ -355,13 +386,32 @@ const pingBackend = async () => {
   }
 }
 
+const loadFeatureFlags = async () => {
+  if (!authUser.value) {
+    featureFlags.value = {}
+    featureFlagsReady.value = false
+    return
+  }
+  try {
+    const res = await getFeatureFlags()
+    featureFlags.value = res?.data?.features || {}
+    featureFlagsReady.value = true
+  } catch {
+    featureFlags.value = {}
+    featureFlagsReady.value = false
+  }
+}
+
 const refreshAuthUser = async () => {
   try {
     const data = await getCurrentUser()
     authUser.value = data?.authenticated ? (data.user || {}) : null
     syncHistoryScope()
+    await loadFeatureFlags()
   } catch {
     authUser.value = null
+    featureFlags.value = {}
+    featureFlagsReady.value = false
     syncHistoryScope()
   } finally {
     authReady.value = true
@@ -376,9 +426,10 @@ const syncHistoryScope = () => {
   setHistoryScope(buildHistoryScope(authUser.value))
 }
 
-const handleAuthenticated = (user) => {
+const handleAuthenticated = async (user) => {
   authUser.value = user || null
   syncHistoryScope()
+  await loadFeatureFlags()
   authReady.value = true
   enforceRouteAccess()
 }
@@ -412,10 +463,30 @@ const submitPasswordChange = async () => {
     ElMessage.success('密码已修改，请重新登录')
     clearAuthToken()
     authUser.value = null
+    featureFlags.value = {}
+    featureFlagsReady.value = false
     syncHistoryScope()
   } finally {
     passwordSaving.value = false
   }
+}
+
+const toggleUserMenu = () => {
+  userMenuVisible.value = !userMenuVisible.value
+}
+
+const closeUserMenu = () => {
+  userMenuVisible.value = false
+}
+
+const openPasswordDialog = () => {
+  closeUserMenu()
+  passwordDialogVisible.value = true
+}
+
+const openAdminConsole = () => {
+  closeUserMenu()
+  router.push('/admin-console')
 }
 
 const handleLogout = async () => {
@@ -423,11 +494,15 @@ const handleLogout = async () => {
     await logout()
     clearAuthToken()
     authUser.value = null
+    featureFlags.value = {}
+    featureFlagsReady.value = false
     syncHistoryScope()
     ElMessage.success('已退出登录')
   } catch {
     clearAuthToken()
     authUser.value = null
+    featureFlags.value = {}
+    featureFlagsReady.value = false
     syncHistoryScope()
   }
   if (route.path !== '/smart-ask') {
@@ -446,14 +521,26 @@ const handleMenuSelect = (index) => {
     ElMessage.warning('当前账号无权访问该功能')
     return
   }
+  if (target && !isFeatureEnabled(target.featureKey)) {
+    ElMessage.warning('该功能暂未开放')
+    return
+  }
   router.push(index)
 }
+
+const fallbackRoute = () => availableMenuItems.value[0]?.path || '/smart-ask'
 
 const enforceRouteAccess = () => {
   if (!authUser.value || isAuthCallbackRoute.value) return
   const target = menuItems.find((item) => item.path === route.path)
   if (target && !canAccessRole(target.minRole)) {
-    router.replace('/smart-ask')
+    const nextPath = fallbackRoute()
+    if (route.path !== nextPath) router.replace(nextPath)
+    return
+  }
+  if (target && !isFeatureEnabled(target.featureKey)) {
+    const nextPath = fallbackRoute()
+    if (route.path !== nextPath) router.replace(nextPath)
   }
 }
 
@@ -524,6 +611,15 @@ const handleHistoryFocus = () => {
   }, 60)
 }
 
+const handleGlobalClick = () => {
+  closeUserMenu()
+}
+
+const handleFeatureFlagsUpdated = async () => {
+  await loadFeatureFlags()
+  enforceRouteAccess()
+}
+
 onMounted(() => {
   refreshClock()
   pingBackend()
@@ -531,6 +627,8 @@ onMounted(() => {
   clockTimer = setInterval(refreshClock, 1000)
   healthTimer = setInterval(pingBackend, 10000)
   window.addEventListener('smartask-history-focus', handleHistoryFocus)
+  window.addEventListener('click', handleGlobalClick)
+  window.addEventListener('smartask-feature-flags-updated', handleFeatureFlagsUpdated)
 })
 
 onUnmounted(() => {
@@ -540,6 +638,8 @@ onUnmounted(() => {
     clearTimeout(historyFocusTimer)
   }
   window.removeEventListener('smartask-history-focus', handleHistoryFocus)
+  window.removeEventListener('click', handleGlobalClick)
+  window.removeEventListener('smartask-feature-flags-updated', handleFeatureFlagsUpdated)
 })
 
 watch(() => route.path, (path) => {
@@ -1798,6 +1898,12 @@ body,
   background: linear-gradient(180deg, #ffffff 0%, #f1faf9 100%);
   color: #0b625d;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+}
+
+.auth-user-menu {
+  position: relative;
+  display: inline-flex;
 }
 
 .auth-user-avatar {
@@ -1832,6 +1938,78 @@ body,
   color: #0b625d;
   font-size: 10px;
   font-weight: 900;
+}
+
+.auth-user-arrow {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #64748b;
+  background: rgba(15, 118, 110, 0.08);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.auth-user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: 230px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.auth-user-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 24px;
+  width: 10px;
+  height: 10px;
+  border-left: 1px solid rgba(148, 163, 184, 0.22);
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  background: #fff;
+  transform: rotate(45deg);
+}
+
+.auth-user-dropdown button {
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: left;
+}
+
+.auth-user-dropdown button:hover {
+  background: #f1f5f9;
+}
+
+.auth-user-dropdown button strong {
+  font-size: 13px;
+}
+
+.auth-user-dropdown button span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.auth-user-dropdown button.danger strong {
+  color: #dc2626;
 }
 
 .auth-logout-button {

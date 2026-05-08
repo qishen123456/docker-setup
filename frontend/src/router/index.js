@@ -76,6 +76,12 @@ const routes = [
     meta: { title: '迁移发布管理', roles: ['super_admin'] }
   },
   {
+    path: '/admin-console',
+    name: 'AdminConsole',
+    component: () => import('../views/AdminConsole.vue'),
+    meta: { title: '系统控制台', roles: ['super_admin'] }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFound.vue'),

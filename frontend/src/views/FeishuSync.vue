@@ -12,7 +12,7 @@
           <el-icon><RefreshRight /></el-icon>
           <span>刷新状态</span>
         </button>
-        <button class="fs-btn fs-btn-primary" @click="openAdd">
+        <button v-if="isFeatureEnabled('feishu_sync_edit')" class="fs-btn fs-btn-primary" @click="openAdd">
           <el-icon><Plus /></el-icon>
           <span>新建同步任务</span>
         </button>
@@ -80,11 +80,12 @@
           </div>
 
           <div class="fs-task-actions">
-            <button class="fs-action-btn" :disabled="testingId === row.id" @click="testConnection(row)">
+            <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn" :disabled="testingId === row.id" @click="testConnection(row)">
               <el-icon><VideoPlay /></el-icon>
               <span>{{ testingId === row.id ? '测试中' : '测试' }}</span>
             </button>
             <button
+              v-if="isFeatureEnabled('feishu_sync_run')"
               class="fs-action-btn fs-action-primary"
               :disabled="!row.is_active || row.last_sync_status === 'running'"
               @click="startSync(row)"
@@ -92,11 +93,11 @@
               <el-icon><RefreshRight /></el-icon>
               <span>{{ row.last_sync_status === 'running' ? '同步中' : '同步' }}</span>
             </button>
-            <button v-if="row.is_active" class="fs-action-btn" :disabled="pausingId === row.id" @click="pauseSync(row)">
+            <button v-if="row.is_active && isFeatureEnabled('feishu_sync_run')" class="fs-action-btn" :disabled="pausingId === row.id" @click="pauseSync(row)">
               <el-icon><VideoPause /></el-icon>
               <span>{{ pausingId === row.id ? '暂停中' : '暂停' }}</span>
             </button>
-            <button v-else class="fs-action-btn" :disabled="resumingId === row.id" @click="resumeSync(row)">
+            <button v-else-if="isFeatureEnabled('feishu_sync_run')" class="fs-action-btn" :disabled="resumingId === row.id" @click="resumeSync(row)">
               <el-icon><VideoPlay /></el-icon>
               <span>{{ resumingId === row.id ? '恢复中' : '恢复' }}</span>
             </button>
@@ -104,11 +105,11 @@
               <el-icon><Document /></el-icon>
               <span>日志</span>
             </button>
-            <button class="fs-action-btn" @click="openEdit(row)">
+            <button v-if="isFeatureEnabled('feishu_sync_edit')" class="fs-action-btn" @click="openEdit(row)">
               <el-icon><Edit /></el-icon>
               <span>编辑</span>
             </button>
-            <el-popconfirm title="确认删除此同步配置？" @confirm="deleteConfig(row.id)">
+            <el-popconfirm v-if="isFeatureEnabled('feishu_sync_edit')" title="确认删除此同步配置？" @confirm="deleteConfig(row.id)">
               <template #reference>
                 <button class="fs-action-btn fs-action-danger">
                   <el-icon><Delete /></el-icon>
@@ -136,7 +137,7 @@
             clearable
             @change="parseFeishuLink"
           />
-          <button class="fs-action-btn fs-action-primary" :disabled="parsingUrl || !feishuUrlInput" @click.prevent="parseFeishuLink">
+          <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn fs-action-primary" :disabled="parsingUrl || !feishuUrlInput" @click.prevent="parseFeishuLink">
             {{ parsingUrl ? '解析中' : '解析链接' }}
           </button>
         </div>
@@ -218,7 +219,7 @@
             <strong>字段结构检测</strong>
             <span>同步前自动检查 PG 目标表是否存在，以及飞书字段相对历史落库字段的变化。</span>
           </div>
-          <button class="fs-action-btn fs-action-primary" :disabled="schemaLoading" @click.prevent="previewSchema">
+          <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn fs-action-primary" :disabled="schemaLoading" @click.prevent="previewSchema">
             {{ schemaLoading ? '检测中' : '检测字段与建表方案' }}
           </button>
         </div>
@@ -307,7 +308,7 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
+        <el-button v-if="isFeatureEnabled('feishu_sync_edit')" type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
 
@@ -317,7 +318,7 @@
           <span>日志查看 - {{ currentConfig?.name || '' }}</span>
           <div>
             <el-button size="small" @click="refreshLogs" :loading="loadingLogs">刷新</el-button>
-            <el-popconfirm title="确认清空日志？" @confirm="clearLogs">
+            <el-popconfirm v-if="isFeatureEnabled('feishu_log_clear')" title="确认清空日志？" @confirm="clearLogs">
               <template #reference>
                 <el-button size="small" type="danger">清空</el-button>
               </template>
@@ -357,6 +358,7 @@ import {
   testFeishuConnection,
   updateFeishuSyncConfig
 } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const syncConfigs = ref([])
 const loading = ref(false)
@@ -368,6 +370,7 @@ const feishuUrlInput = ref('')
 const parsingUrl = ref(false)
 const schemaLoading = ref(false)
 const schemaPreview = ref(null)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -733,6 +736,7 @@ const statusClass = (s) => {
 }
 
 onMounted(() => {
+  loadFeatureFlags()
   loadData()
 })
 

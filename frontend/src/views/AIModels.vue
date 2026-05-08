@@ -26,13 +26,14 @@
               v-model="ch._hasActive"
               size="small"
               class="cs-ch-switch"
+              :disabled="!isFeatureEnabled('ai_channel_edit')"
               @click.stop
               @change="toggleChannelActive(ch, $event)"
             />
           </div>
         </div>
         <div class="cs-sidebar-footer">
-          <el-button type="primary" class="cs-add-btn" @click="openAddChannel">
+          <el-button v-if="isFeatureEnabled('ai_channel_edit')" type="primary" class="cs-add-btn" @click="openAddChannel">
             <el-icon><Plus /></el-icon>
             <span>新建通道</span>
           </el-button>
@@ -45,7 +46,7 @@
           <div class="cs-hero-main">
             <el-popover placement="bottom-start" trigger="click" width="260" popper-class="cs-icon-popover">
               <template #reference>
-                <button class="cs-provider-icon" type="button" title="选择通道图标">
+                <button v-if="isFeatureEnabled('ai_channel_edit')" class="cs-provider-icon" type="button" title="选择通道图标">
                   <span v-html="channelIconSvg(activeChannel)"></span>
                 </button>
               </template>
@@ -67,7 +68,7 @@
               <div class="cs-provider-kicker">当前供应商通道</div>
               <div class="cs-provider-title-row" v-if="!editingProviderName">
                 <div class="cs-provider-title">{{ activeChannel._displayName || channelDisplayName(activeChannel) }}</div>
-                <el-button text size="small" class="cs-provider-edit-btn" @click="startEditProviderName">
+                <el-button v-if="isFeatureEnabled('ai_channel_edit')" text size="small" class="cs-provider-edit-btn" @click="startEditProviderName">
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </div>
@@ -79,7 +80,7 @@
                   @keyup.enter="saveProviderName"
                   ref="providerNameInputRef"
                 />
-                <el-button type="primary" size="small" @click="saveProviderName">保存名称</el-button>
+                <el-button v-if="isFeatureEnabled('ai_channel_edit')" type="primary" size="small" @click="saveProviderName">保存名称</el-button>
                 <el-button size="small" @click="cancelProviderNameEdit">取消</el-button>
               </div>
               <span class="cs-provider-url-sub">{{ activeChannel.base_url || '尚未配置 API 地址' }}</span>
@@ -119,9 +120,11 @@
                 :type="showApiKey ? 'text' : 'password'"
                 placeholder="sk-..."
                 class="cs-key-input"
+                :disabled="!isFeatureEnabled('ai_channel_edit')"
                 @change="onApiKeyChange"
               />
               <el-button
+                v-if="isFeatureEnabled('ai_model_test')"
                 :loading="channelTesting === activeChannel.key"
                 @click="testChannel(activeChannel)"
               >检测连接</el-button>
@@ -137,7 +140,7 @@
               </div>
             </div>
             <div class="cs-url-row">
-              <el-input v-model="editableBaseUrl" class="cs-url-input" @change="onBaseUrlChange" />
+              <el-input v-model="editableBaseUrl" class="cs-url-input" :disabled="!isFeatureEnabled('ai_channel_edit')" @change="onBaseUrlChange" />
             </div>
           </div>
         </section>
@@ -151,7 +154,7 @@
             </div>
             <span class="cs-models-count">{{ activeChannel.models.length }}</span>
             <div class="cs-models-spacer"></div>
-            <el-button @click="testAllModels(activeChannel)">全部检测</el-button>
+            <el-button v-if="isFeatureEnabled('ai_model_test')" @click="testAllModels(activeChannel)">全部检测</el-button>
           </div>
 
           <div class="cs-model-list">
@@ -178,18 +181,19 @@
               <div class="cs-model-spacer"></div>
               <div class="cs-model-actions">
                 <el-button
-                  v-if="!model.is_default && model.is_active"
+                  v-if="!model.is_default && model.is_active && isFeatureEnabled('ai_model_edit')"
                   text size="small" @click="setDefault(model)"
                 >设默认</el-button>
                 <el-button
+                  v-if="isFeatureEnabled('ai_model_test')"
                   text size="small"
                   :loading="testingId === model.id"
                   @click="testModel(model)"
                 >测试</el-button>
-                <el-button text size="small" @click="openEditModel(model)">
+                <el-button v-if="isFeatureEnabled('ai_model_edit')" text size="small" @click="openEditModel(model)">
                   <el-icon><Setting /></el-icon>
                 </el-button>
-                <el-popconfirm title="确认删除此模型？" @confirm="deleteModel(model.id)">
+                <el-popconfirm v-if="isFeatureEnabled('ai_model_edit')" title="确认删除此模型？" @confirm="deleteModel(model.id)">
                   <template #reference>
                     <el-button text size="small" type="danger" class="cs-model-del">删除</el-button>
                   </template>
@@ -200,7 +204,7 @@
 
           <!-- Add Model Row -->
           <div class="cs-add-model-bar">
-            <el-button type="primary" plain @click="openAddModelInChannel(activeChannel)">
+            <el-button v-if="isFeatureEnabled('ai_model_edit')" type="primary" plain @click="openAddModelInChannel(activeChannel)">
               <el-icon><Plus /></el-icon> 添加模型
             </el-button>
           </div>
@@ -234,7 +238,7 @@
       </el-form>
       <template #footer>
         <el-button @click="channelDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="channelSaving" @click="submitChannelForm">
+        <el-button v-if="isFeatureEnabled('ai_channel_edit')" type="primary" :loading="channelSaving" @click="submitChannelForm">
           {{ channelDialogIsNew ? '创建' : '保存' }}
         </el-button>
       </template>
@@ -268,7 +272,7 @@
       </el-form>
       <template #footer>
         <el-button @click="modelDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="modelSaving" @click="submitModelForm">保存</el-button>
+        <el-button v-if="isFeatureEnabled('ai_model_edit')" type="primary" :loading="modelSaving" @click="submitModelForm">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -279,9 +283,11 @@ import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete, ArrowDown, Setting, View, Hide } from '@element-plus/icons-vue'
 import { getAIModels, createAIModel, updateAIModel, deleteAIModel, testAIModel, setDefaultAIModel } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const models = ref([])
 const loading = ref(false)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const testingId = ref(null)
 const testResults = reactive({})
 const selectedChannelKey = ref(null)
@@ -676,7 +682,10 @@ const deleteModel = async (id) => {
 }
 const setDefault = async (row) => { await setDefaultAIModel(row.id); ElMessage.success(`${row.name} 已设为默认`); loadData() }
 
-onMounted(loadData)
+onMounted(() => {
+  loadFeatureFlags()
+  loadData()
+})
 </script>
 
 <style scoped>

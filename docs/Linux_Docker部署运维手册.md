@@ -1,20 +1,38 @@
 # Linux Docker 部署运维手册
 
-本文档只解决一件事：Linux 服务器如何部署、启动、更新、检查 SmartAsk。
+更新时间：2026-05-08
 
-如果你关心“Windows 测试环境改完后，如何发布到 Linux 正式环境，并保护数据源、数据集、提示词不丢”，请看：
+当前项目真实 Git 信息：
+
+```text
+Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
+当前可拉取发布分支：docker-setup
+```
+
+注意：Linux/Git 对分支名大小写敏感。已核验当前本地与 Gitee 远端存在的分支是 `docker-setup`；如果后续你在 Gitee 另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
+
+本文档只解决一件事：Linux 服务器如何部署、启动、更新、备份、回滚和检查 SmartAsk。
+
+Windows 用户机一键部署请看：
+
+```text
+docs/SmartAsk_部署与交付手册.md
+```
+
+Windows 测试环境发布到 Linux 正式环境，并保护生产运行态配置，请看：
 
 ```text
 docs/迁移发布与运行态配置保护方案.md
+docs/运行态配置导出导入操作手册.md
 ```
 
 ## 1. 服务器要求
 
 Linux 服务器需要安装：
 
-- Git。
-- Docker Engine。
-- Docker Compose Plugin。
+- Git
+- Docker Engine
+- Docker Compose Plugin
 
 检查命令：
 
@@ -34,43 +52,66 @@ sudo systemctl enable docker
 sudo systemctl start docker
 ```
 
-## 2. 拉取正确分支
+## 2. 拉取项目
 
-完整项目目前在 Gitee 的 `docker-setup` 分支。
-
-不要只执行：
+如果 Gitee 默认分支不是完整代码，直接 `git clone` 可能只看到 README。建议先确认分支：
 
 ```bash
-git clone https://gitee.com/tailin1/volcano-intelligent-questions.git
+git ls-remote --heads https://gitee.com/tailin1/volcano-intelligent-questions.git
 ```
 
-这可能只拉到默认分支，导致只看到 README。
-
-应该执行：
+完整项目当前应从 `docker-setup` 分支拉取：
 
 ```bash
 git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
 cd smartask
 ```
 
+不要只执行裸 `git clone`，否则可能拉到默认分支，只看到 README。如果已经拉错分支，可执行：
+
+```bash
+cd smartask
+git fetch --all
+git branch -a
+git checkout docker-setup
+```
+
 ## 3. 首次部署
 
-### 3.1 准备 .env
+### 3.1 准备 `.env`
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-必须修改：
+至少修改：
 
 ```text
 SMARTASK_SECRET_KEY
 SMARTASK_AI_API_KEY
+SMARTASK_AI_MODEL
+SMARTASK_AI_BASE_URL
+SMARTASK_ADMIN_USERNAME
 SMARTASK_ADMIN_PASSWORD
+SMARTASK_ADMIN_DISPLAY_NAME
 ```
 
 生产环境不要使用示例密码。
+
+如果启用飞书同步或飞书登录，还要配置：
+
+```text
+SMARTASK_FEISHU_APP_ID
+SMARTASK_FEISHU_APP_SECRET
+SMARTASK_FEISHU_BASE_ID
+SMARTASK_FEISHU_TABLE_ID
+SMARTASK_FEISHU_VIEW_ID
+FEISHU_APP_ID
+FEISHU_APP_SECRET
+BACKEND_URL
+FRONTEND_URL
+```
 
 ### 3.2 启动
 
@@ -85,7 +126,7 @@ docker compose ps
 curl http://localhost:5002/api/health
 ```
 
-后端健康检查正常时，应看到类似：
+健康检查正常时，会返回类似：
 
 ```json
 {"status":"running"}
@@ -99,12 +140,6 @@ curl http://localhost:5002/api/health
 http://服务器IP:8080
 ```
 
-如果是本机访问：
-
-```text
-http://localhost:8080
-```
-
 如服务器启用了防火墙，需要开放端口：
 
 ```bash
@@ -114,27 +149,54 @@ sudo ufw allow 5002/tcp
 
 云服务器还需要在安全组里开放端口。
 
-## 4. 日常启动、停止、重启
+## 4. 登录与权限
 
-### 4.1 启动
+系统启用登录拦截，未登录看不到系统内容。
+
+首次登录使用 `.env` 中的超级管理员账号：
+
+```text
+SMARTASK_ADMIN_USERNAME
+SMARTASK_ADMIN_PASSWORD
+```
+
+登录后建议先完成：
+
+1. 进入“员工权限配置”，新增管理员或普通用户。
+2. 新员工默认密码是 `12345678`。
+3. 员工首次登录后在右上角头像菜单修改密码。
+4. 超级管理员可在头像菜单进入“系统控制台”，控制左侧导航和页面按钮开关。
+
+相关运行态配置：
+
+```text
+config/employee_permissions.json
+config/feature_flags.json
+```
+
+这两个文件在 Docker 中通过 `./config:/app/config` 挂载，不会因为重建镜像丢失。
+
+## 5. 日常启动、停止、重启
+
+启动：
 
 ```bash
 docker compose up -d
 ```
 
-### 4.2 停止
+停止：
 
 ```bash
 docker compose stop
 ```
 
-### 4.3 重启
+重启：
 
 ```bash
 docker compose restart
 ```
 
-### 4.4 查看日志
+查看后端日志：
 
 ```bash
 docker compose logs -f backend
@@ -146,7 +208,7 @@ docker compose logs -f backend
 docker compose logs --tail=200 backend
 ```
 
-## 5. 日常更新代码
+## 6. 日常更新代码
 
 进入项目目录：
 
@@ -154,9 +216,19 @@ docker compose logs --tail=200 backend
 cd smartask
 ```
 
+更新前先备份：
+
+```bash
+mkdir -p backups
+docker compose exec -T postgres pg_dump -U "${SMARTASK_DB_USERNAME:-postgres}" -d "${SMARTASK_DB_DATABASE:-postgres}" > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
+tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config .env
+git rev-parse HEAD > backups/git_commit_$(date +%Y%m%d_%H%M%S).txt
+```
+
 拉取最新代码：
 
 ```bash
+git checkout docker-setup
 git pull --ff-only
 ```
 
@@ -173,13 +245,13 @@ docker compose ps
 curl http://localhost:5002/api/health
 ```
 
-如果页面仍显示旧样式，浏览器强制刷新：
+如果页面还是旧版本：
 
 ```text
 Ctrl + F5
 ```
 
-## 6. 常用端口
+## 7. 常用端口
 
 默认端口：
 
@@ -197,15 +269,13 @@ SMARTASK_BACKEND_PORT=5002
 SMARTASK_DOCKER_PG_PORT=5433
 ```
 
-如需修改端口，改 `.env` 后重新启动：
+如需修改端口，改 `.env` 后重启：
 
 ```bash
 docker compose up -d
 ```
 
-## 7. 数据保存在哪里
-
-Docker 部署时，重要数据不在容器临时文件里，而在 volume 或挂载目录里。
+## 8. 数据保存位置
 
 PostgreSQL 数据：
 
@@ -231,13 +301,31 @@ Docker volume: smartask_chroma
 项目目录/backend/logs
 ```
 
-环境变量：
+导入导出包：
 
 ```text
-项目目录/.env
+项目目录/backend/imports
 ```
 
-## 8. 禁止误操作
+备份：
+
+```text
+项目目录/backups
+```
+
+当前 `docker-compose.yml` 已挂载：
+
+```text
+./config:/app/config
+./backend/imports:/app/backend/imports
+./backups:/app/backups
+smartask_pg_data:/var/lib/postgresql/data
+smartask_chroma:/app/chroma_db
+```
+
+因此 `docker compose up -d --build` 不会删除生产运行态数据。
+
+## 9. 禁止误操作
 
 正式环境不要随便执行：
 
@@ -252,29 +340,53 @@ docker compose down -v
 - PostgreSQL 数据在 `smartask_pg_data`。
 - Chroma 数据在 `smartask_chroma`。
 
-如果执行了 `docker compose down -v`，正式数据库可能被删除。
-
 安全更新代码应使用：
 
 ```bash
+git checkout docker-setup
 git pull --ff-only
 docker compose up -d --build
 ```
 
-## 9. 最小备份命令
+## 10. 运行态导出/导入
 
-正式环境更新前，至少执行：
+如果你要把 Windows 测试环境配置同步到 Linux 正式环境，不建议直接覆盖数据库 volume。
+
+推荐做法：
+
+1. 在测试环境进入“迁移发布管理”。
+2. 点击“导出运行态包”。
+3. 在正式环境进入“迁移发布管理”。
+4. 上传运行态包。
+5. 先点“预检导入”。
+6. 确认影响范围后，再点“确认导入”。
+
+运行态包包含：
+
+- JSON 配置：数据源、模型、飞书同步、员工权限、系统控制台开关等。
+- PostgreSQL 书架表：数据集、字段字典、Golden SQL、Agent 提示词、报告模板等。
+
+正式导入前系统会自动生成备份包，误操作后可用备份包回滚。
+
+## 11. 手工备份与恢复
+
+### 11.1 手工备份
 
 ```bash
+cd smartask
 mkdir -p backups
-docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
-tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config
+docker compose exec -T postgres pg_dump -U "${SMARTASK_DB_USERNAME:-postgres}" -d "${SMARTASK_DB_DATABASE:-postgres}" > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
+tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config .env
 git rev-parse HEAD > backups/git_commit_$(date +%Y%m%d_%H%M%S).txt
 ```
 
-如果 `.env` 中数据库用户名或库名不是 `postgres`，需要替换 `-U postgres -d postgres`。
+如果 shell 没有加载 `.env`，可直接写实际用户名和库名：
 
-## 10. 基础恢复命令
+```bash
+docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
+```
+
+### 11.2 恢复数据库
 
 停止后端：
 
@@ -306,49 +418,47 @@ docker compose start backend
 curl http://localhost:5002/api/health
 ```
 
-## 11. 故障排查
+## 12. 故障排查
 
-### 11.1 后端不健康
+后端不健康：
 
 ```bash
 docker compose logs --tail=200 backend
 ```
 
-### 11.2 数据库不健康
+数据库不健康：
 
 ```bash
 docker compose logs --tail=200 postgres
 docker compose ps
 ```
 
-### 11.3 前端打不开
+前端打不开：
 
 ```bash
 docker compose logs --tail=200 frontend
 docker compose ps
-```
-
-确认端口：
-
-```bash
 ss -lntp | grep 8080
 ```
 
-### 11.4 页面还是旧版本
+系统控制台保存失败：
 
 ```bash
-docker compose up -d --build
+docker compose logs --tail=200 backend
+curl http://localhost:5002/api/health
+ls -ld config
 ```
 
-浏览器：
+常见原因：
 
-```text
-Ctrl + F5
-```
+- 当前登录账号不是超级管理员。
+- 后端仍是旧镜像，需要 `docker compose up -d --build`。
+- `config/` 目录没有写权限。
+- 浏览器缓存旧前端，按 `Ctrl + F5`。
 
-## 12. 给服务器管理员的简版命令
+## 13. 给服务器管理员的简版命令
 
-### 首次部署
+首次部署：
 
 ```bash
 git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
@@ -360,29 +470,24 @@ docker compose ps
 curl http://localhost:5002/api/health
 ```
 
-### 日常更新
+日常更新：
 
 ```bash
 cd smartask
+mkdir -p backups
+docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
+tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config .env
+git checkout docker-setup
 git pull --ff-only
 docker compose up -d --build
 docker compose ps
 curl http://localhost:5002/api/health
 ```
 
-### 更新前备份
-
-```bash
-cd smartask
-mkdir -p backups
-docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
-tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config
-```
-
-### 禁止命令
+禁止命令：
 
 ```bash
 docker compose down -v
 ```
 
-除非你明确要删除数据库，否则不要执行。
+除非你明确要删除数据库和向量库，否则不要执行。

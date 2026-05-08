@@ -48,6 +48,11 @@ export const saveEmployeePermissions = (employees) => api.put('/auth/employee-pe
 export const getFeishuLoginUrl = () => api.get('/auth/feishu/login-url')
 export const feishuInAppAuth = (authCode) => api.post('/feishu/auth', { auth_code: authCode })
 
+export const getFeatureFlags = () => api.get('/feature-flags')
+export const getAdminFeatureFlags = () => api.get('/admin/feature-flags')
+export const saveAdminFeatureFlags = (features) => api.put('/admin/feature-flags', { features })
+export const resetAdminFeatureFlags = () => api.post('/admin/feature-flags/reset')
+
 export const getRuntimeMigrationSummary = () => api.get('/runtime-migration/summary')
 export const exportRuntimeMigrationBundle = () => api.get('/runtime-migration/export', { responseType: 'blob' })
 export const previewRuntimeMigrationImport = (bundle, options = {}) =>
