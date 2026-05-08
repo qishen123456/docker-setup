@@ -158,11 +158,11 @@ vanna01.py
 task.md
 
 # Legacy directories (old React frontend, design docs)
-components/
-pages/
-data/
-火山引擎/
-火山引擎demo/
+/components/
+/pages/
+/data/
+/火山引擎/
+/火山引擎demo/
 
 # Backend legacy utilities (not part of running app)
 backend/add_dataset_columns.py
