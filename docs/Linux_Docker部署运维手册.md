@@ -420,6 +420,48 @@ curl http://localhost:5002/api/health
 
 ## 12. 故障排查
 
+### 12.1 一键生成诊断包
+
+如果 Linux 服务器部署失败、页面打不开、接口不健康，优先让服务器管理员在项目目录执行：
+
+```bash
+cd smartask
+bash doctor.sh
+```
+
+脚本会收集：
+
+- 系统版本、时间、磁盘和内存。
+- Git 分支、远端、当前 commit 和最近提交。
+- Docker / Docker Compose 版本。
+- `docker compose config`、容器状态、镜像、volume 和 network。
+- `backend`、`frontend`、`postgres` 最近日志。
+- 端口监听、后端健康检查、前端 8080 检查。
+- 脱敏后的 `.env` 摘要。
+
+生成后，把下面文件发给开发者：
+
+```text
+diagnostics/smartask_linux_diagnose_时间戳.zip
+```
+
+如果服务器没有安装 `zip`，脚本会自动生成：
+
+```text
+diagnostics/smartask_linux_diagnose_时间戳.tar.gz
+```
+
+如果怀疑是 Docker 镜像构建失败，需要额外采集构建日志：
+
+```bash
+cd smartask
+bash doctor.sh --with-build-log
+```
+
+说明：诊断包会对 `.env`、compose 配置和日志里的常见 `KEY`、`SECRET`、`TOKEN`、`PASSWORD`、`API_KEY` 做脱敏处理。
+
+### 12.2 手动排查命令
+
 后端不健康：
 
 ```bash
