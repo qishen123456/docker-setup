@@ -46,7 +46,8 @@ AGENT2_PROMPT = """
    - 业务代表统计：业务代表<>''。
 6. 涉及多个主体对比时，必须保留 条线、层级、节点名称、上级名称，禁止把多个主体合成一行。
 7. 追问场景应沿用上轮口径；如 scope_filter 已由确认流程给出，必须写入 WHERE。
-8. 只输出 SQL 正文，不要解释、不要 Markdown。
+8. 单体组织分析（如“某分公司/某代表处业绩怎么样”）必须返回完整管理链路：命中节点 + 子节点 + 孙级明细节点。推荐基于汇总结果使用 WITH RECURSIVE 命中链路，按 上级名称=父节点.节点名称 下钻，不能只写“节点名称=主体 OR 上级名称=主体”导致只返回直接下级。
+9. 只输出 SQL 正文，不要解释、不要 Markdown。
 """.strip()
 
 
@@ -131,6 +132,37 @@ def _sql_with_filter(where_clause: str) -> str:
     return f"{BASE_SQL}\nHAVING {where_clause}\nORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称\nLIMIT 10000;"
 
 
+def _sql_with_descendants(anchor_clause: str) -> str:
+    return f"""
+WITH RECURSIVE 汇总结果 AS (
+{BASE_SQL}
+),
+命中链路 AS (
+    SELECT *
+    FROM 汇总结果
+    WHERE {anchor_clause}
+    UNION ALL
+    SELECT 子节点.*
+    FROM 汇总结果 子节点
+    JOIN 命中链路 父节点
+      ON 子节点.上级名称 = 父节点.节点名称
+)
+SELECT *
+FROM 命中链路
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '分公司' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    WHEN '业务部' THEN 1
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000;
+""".strip()
+
+
 def build_syyb_payload(doc_text: str, dataset_meta: Dict[str, Any]) -> Dict[str, Any]:
     lld = f"""
 # 商用事业部智能问数 LLD
@@ -182,8 +214,8 @@ def build_syyb_payload(doc_text: str, dataset_meta: Dict[str, Any]) -> Dict[str,
 
     golden_sql = [
         ("aggregation", "商用事业部整体业绩怎么样？", f"{BASE_SQL}\nORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称\nLIMIT 10000;", ["整体", "全维度"]),
-        ("single_entity", "东部分公司业绩怎么样？", _sql_with_filter("节点名称 = '东部分公司' OR 上级名称 = '东部分公司'"), ["分公司", "东部"]),
-        ("single_entity", "安徽代表处业绩怎么样？", _sql_with_filter("节点名称 = '安徽代表处' OR 上级名称 = '安徽代表处'"), ["代表处", "安徽"]),
+        ("single_entity", "东部分公司业绩怎么样？", _sql_with_descendants("节点名称 = '东部分公司'"), ["分公司", "东部", "下钻"]),
+        ("single_entity", "安徽代表处业绩怎么样？", _sql_with_descendants("节点名称 = '安徽代表处'"), ["代表处", "安徽", "下钻"]),
         ("comparative", "东部分公司和南部分公司哪个完成得更好？", _sql_with_filter("节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')"), ["对比", "分公司"]),
         ("topn", "行业线 Top5 业务代表是谁？", f"{BASE_SQL}\nHAVING 条线 = '行业条线' AND 层级 = '业务代表'\nORDER BY 年度开单金额 DESC\nLIMIT 5;", ["行业", "TopN"]),
         ("risk", "达成率低于10%的单元有哪些？", f"{BASE_SQL}\nHAVING CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100, 2) ELSE 0 END < 10\nORDER BY 达成率 ASC\nLIMIT 100;", ["风险", "低达成"]),

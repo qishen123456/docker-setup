@@ -55,9 +55,10 @@ def main() -> int:
 
     # 2. Runtime config
     def _export_runtime():
-        from export_runtime_config import export_bundle as _exp
+        from runtime_migration import export_runtime_bundle, summarize_bundle
 
-        return _exp(os.path.join(out_dir, "runtime_config_bundle.json"))
+        bundle = export_runtime_bundle(os.path.join(out_dir, "runtime_config_bundle.json"))
+        return {"ok": True, "output_path": os.path.join(out_dir, "runtime_config_bundle.json"), "summary": summarize_bundle(bundle)}
 
     results["runtime_config"] = _run("export_runtime_config", _export_runtime)
 

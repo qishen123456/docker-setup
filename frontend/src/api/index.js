@@ -48,6 +48,15 @@ export const saveEmployeePermissions = (employees) => api.put('/auth/employee-pe
 export const getFeishuLoginUrl = () => api.get('/auth/feishu/login-url')
 export const feishuInAppAuth = (authCode) => api.post('/feishu/auth', { auth_code: authCode })
 
+export const getRuntimeMigrationSummary = () => api.get('/runtime-migration/summary')
+export const exportRuntimeMigrationBundle = () => api.get('/runtime-migration/export', { responseType: 'blob' })
+export const previewRuntimeMigrationImport = (bundle, options = {}) =>
+  api.post('/runtime-migration/preview', { bundle, ...options })
+export const importRuntimeMigrationBundle = (bundle, options = {}) =>
+  api.post('/runtime-migration/import', { bundle, ...options })
+export const createRuntimeMigrationBackup = () => api.post('/runtime-migration/backup')
+export const getRuntimeMigrationBackups = () => api.get('/runtime-migration/backups')
+
 export const getDataSources = () => api.get('/datasources')
 export const createDataSource = (data) => api.post('/datasources', data)
 export const updateDataSource = (id, data) => api.put(`/datasources/${id}`, data)

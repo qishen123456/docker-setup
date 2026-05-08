@@ -362,12 +362,15 @@
                       <p class="sa-office-copy">{{ office.summary }}</p>
                       <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
                         <p class="sa-chart-copy">{{ office.chartText }}</p>
-                        <div class="sa-office-drill-actions">
+                        <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
                           <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${businessDrillReport.detailLevelLabel}达成率`)" type="button">
                             <span class="sa-btn-label">放大查看</span>
                           </button>
                         </div>
-                        <div class="sa-office-chart" :ref="el => initPreviewChart(el, office.chartSpec, `side-office-${office.id}`)"></div>
+                        <div v-if="hasChartRows(office.chartSpec)" class="sa-office-chart" :ref="el => initPreviewChart(el, office.chartSpec, `side-office-${office.id}`)"></div>
+                        <div v-else class="sa-office-empty-drill">
+                          当前 SQL 结果未返回 {{ businessDrillReport.detailLevelLabel }} 明细。请重新问“{{ office.name }}下{{ businessDrillReport.detailLevelLabel }}业绩明细”或检查 SQL 是否包含下级层级。
+                        </div>
                       </div>
                     </article>
                   </div>
@@ -609,12 +612,15 @@
                 <p class="sa-office-copy">{{ office.summary }}</p>
                 <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
                   <p class="sa-chart-copy">{{ office.chartText }}</p>
-                  <div class="sa-office-drill-actions">
+                  <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
                     <button class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${dialogBusinessDrillReport.detailLevelLabel}达成率`)" type="button">
                       <span class="sa-btn-label">放大查看</span>
                     </button>
                   </div>
-                  <div class="sa-office-chart sa-office-chart-dialog" :ref="el => initPreviewChart(el, office.chartSpec, `dialog-office-${office.id}`)"></div>
+                  <div v-if="hasChartRows(office.chartSpec)" class="sa-office-chart sa-office-chart-dialog" :ref="el => initPreviewChart(el, office.chartSpec, `dialog-office-${office.id}`)"></div>
+                  <div v-else class="sa-office-empty-drill">
+                    当前 SQL 结果未返回 {{ dialogBusinessDrillReport.detailLevelLabel }} 明细。
+                  </div>
                 </div>
               </article>
             </div>
@@ -1213,6 +1219,10 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
   const offices = accordions.map((item) => {
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
+    const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
+    const narrative = String(item.narrative || '').trim()
+    const drillMatch = narrative.match(/下钻到.+$/)
+    const summaryText = narrative.replace(/下钻到.+$/, '').trim().replace(/[；;，,。\s]+$/, '') || narrative
     return {
       id: item.id || item.title,
       name: item.title || '未命名节点',
@@ -1220,10 +1230,10 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       tone: item.tone || 'neutral',
       rate: toNumber(rateKpi?.value),
       rateLabel: rateKpi?.value || '-',
-      childCount: Array.isArray(item.chart?.rows) ? item.chart.rows.length : 0,
+      childCount: chartRows.length,
       kpis: item.kpis || [],
-      summary: item.narrative || '',
-      chartText: item.narrative || '',
+      summary: summaryText,
+      chartText: chartRows.length ? (drillMatch?.[0] || '') : '',
       chartSpec: item.chart,
     }
   })
@@ -1523,6 +1533,8 @@ const buildSingleRowMetricCharts = (dataset) => {
     chartSpec: chart,
   }))
 }
+
+const hasChartRows = (chartSpec) => Array.isArray(chartSpec?.rows) && chartSpec.rows.length > 0
 
 const getReportSpecCharts = (dataset) => (
   Array.isArray(dataset?.report_spec?.charts)
@@ -2429,6 +2441,15 @@ const getStatusColor = (rate) => {
   return '#f5222d'
 }
 
+const getMetricColor = (column) => {
+  const text = String(column || '')
+  if (/任务|目标/i.test(text)) return '#1890ff'
+  if (/开单|完成|实际|销售/i.test(text)) return '#00b42a'
+  if (/剩余|缺口|差额/i.test(text)) return '#faad14'
+  if (/率|percent|rate/i.test(text)) return '#f59e0b'
+  return '#597ef7'
+}
+
 const sortRowsByCompletionRate = (rows = [], columns = []) => {
   const rateColumn = columns.find(column => isRateColumn(column)) || Object.keys(rows[0] || {}).find(column => isRateColumn(column))
   if (!rateColumn) return rows
@@ -2523,10 +2544,9 @@ const renderChartSpec = (chart, data) => {
           name: column,
           type: 'bar',
           barMaxWidth: 18,
-          itemStyle: { borderRadius: [4, 4, 0, 0] },
+          itemStyle: { borderRadius: [4, 4, 0, 0], color: getMetricColor(column) },
           data: categoryRows.map(row => ({
             value: row[column],
-            itemStyle: { color: getStatusColor(row[rateColumn]) },
           })),
         })),
         {
@@ -2535,6 +2555,7 @@ const renderChartSpec = (chart, data) => {
           yAxisIndex: 1,
           smooth: true,
           symbolSize: 6,
+          lineStyle: { width: 2.5, color: getMetricColor(rateColumn) },
           label: {
             show: true,
             position: 'top',
@@ -4068,6 +4089,17 @@ onUnmounted(() => {
   border-radius: 10px;
   border: 1px solid rgba(29, 33, 41, 0.08);
   background: #fff;
+}
+
+.sa-office-empty-drill {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px dashed rgba(24, 144, 255, 0.28);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .sa-office-chart-dialog {

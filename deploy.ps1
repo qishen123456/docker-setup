@@ -93,6 +93,7 @@ Test-EnvRequired -FilePath $envPath -Key "SMARTASK_ADMIN_PASSWORD" -InvalidValue
 
 New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backend\logs") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "config") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot "backups") | Out-Null
 
 $frontendPort = Read-EnvValue -FilePath $envPath -Key "SMARTASK_FRONTEND_PORT" -DefaultValue "8080"
 $backendPort = Read-EnvValue -FilePath $envPath -Key "SMARTASK_BACKEND_PORT" -DefaultValue "5002"

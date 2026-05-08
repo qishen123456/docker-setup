@@ -36,7 +36,7 @@ CAPTURED_FILES = [
     "feishu_sync.json",
     "sql_prompts.json",
     "app_config.json",
-    "query_history.json",
+    "employee_permissions.json",
 ]
 
 

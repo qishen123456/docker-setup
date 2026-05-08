@@ -47,6 +47,7 @@ services:
       - ./backend/logs:/app/backend/logs
       - ./config:/app/config
       - ./backend/imports:/app/backend/imports
+      - ./backups:/app/backups
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5002/api/health', timeout=3).status==200 else 1)\""]
       interval: 15s

@@ -32,6 +32,7 @@ TABLES = [
     "bs_common_questions",
     "bs_regression_cases",
     "bs_dataset_external_configs",
+    "bs_dataset_report_config",
 ]
 
 DEFAULT_OUTPUT = os.path.join(
@@ -39,6 +40,21 @@ DEFAULT_OUTPUT = os.path.join(
     "imports",
     "bookshelf_bundle.json",
 )
+
+
+def _ensure_optional_tables(cur):
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_dataset_report_config (
+            id          BIGSERIAL PRIMARY KEY,
+            dataset_id  BIGINT NOT NULL,
+            config_json JSONB NOT NULL DEFAULT '{}',
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(dataset_id)
+        );
+        """
+    )
 
 
 def _json_default(value: Any):
@@ -60,6 +76,7 @@ def export_bundle(output_path: str) -> Dict[str, Any]:
     }
 
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        _ensure_optional_tables(cur)
         for table in TABLES:
             cur.execute(f"SELECT * FROM {table} ORDER BY id ASC;")
             bundle["tables"][table] = [dict(row) for row in cur.fetchall()]

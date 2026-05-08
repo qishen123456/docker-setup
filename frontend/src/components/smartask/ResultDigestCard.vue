@@ -134,6 +134,19 @@ const sortedByRateAsc = computed(() => (
     .sort((a, b) => a.rate - b.rate)
 ))
 
+const sortedByRateDesc = computed(() => [...sortedByRateAsc.value].reverse())
+
+const levelSummary = computed(() => {
+  const counts = new Map()
+  normalizedRows.value.forEach((item) => {
+    const key = item.level || '明细'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  })
+  return Array.from(counts.entries()).map(([level, count]) => `${level}${count}个`).join('、')
+})
+
+const riskRows = computed(() => normalizedRows.value.filter(item => item.rate !== null && item.rate < 80))
+
 const groupedWorstLines = computed(() => {
   if (!asksLowerNode.value || !asksLowest.value) return []
   const groups = new Map()
@@ -165,6 +178,10 @@ const directAnswer = computed(() => {
   }
   const worst = sortedByRateAsc.value[0]
   if (worst && asksLowest.value) return `最低的是 ${worst.name}${worst.rateText ? `，达成率 ${worst.rateText}` : ''}。`
+  const best = sortedByRateDesc.value[0]
+  if (best && worst) {
+    return `本轮返回 ${rowCount.value || normalizedRows.value.length} 行结果，${best.name}达成最好${best.rateText ? `（${best.rateText}）` : ''}，${worst.name}压力最大${worst.rateText ? `（${worst.rateText}）` : ''}。`
+  }
   return usefulReportLines.value[0] || props.title || '本轮问数已完成。'
 })
 
@@ -176,6 +193,12 @@ const supportLines = computed(() => {
     return [
       second ? `次低是 ${second.name}${second.rateText ? `，达成率 ${second.rateText}` : ''}` : '',
       '右侧可查看完整明细、SQL 和报告。',
+    ].filter(Boolean)
+  }
+  if (normalizedRows.value.length) {
+    return [
+      levelSummary.value ? `覆盖层级：${levelSummary.value}` : '',
+      riskRows.value.length ? `低于80%的风险节点 ${riskRows.value.length} 个，建议先看右侧下钻明细。` : '暂无低于80%的明显风险节点。',
     ].filter(Boolean)
   }
   return usefulReportLines.value.slice(1, 3)

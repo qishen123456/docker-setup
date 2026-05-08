@@ -70,6 +70,12 @@ const routes = [
     meta: { title: '员工权限配置', roles: ['super_admin'] }
   },
   {
+    path: '/runtime-migration',
+    name: 'RuntimeMigration',
+    component: () => import('../views/RuntimeMigration.vue'),
+    meta: { title: '迁移发布管理', roles: ['super_admin'] }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFound.vue'),

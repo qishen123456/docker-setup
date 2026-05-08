@@ -30,6 +30,7 @@ IMPORT_ORDER = [
     "bs_common_questions",
     "bs_regression_cases",
     "bs_dataset_external_configs",
+    "bs_dataset_report_config",
 ]
 
 DELETE_ORDER = list(reversed(IMPORT_ORDER))
@@ -77,6 +78,18 @@ def _ensure_optional_tables(cur):
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_dataset_report_config (
+            id          BIGSERIAL PRIMARY KEY,
+            dataset_id  BIGINT NOT NULL,
+            config_json JSONB NOT NULL DEFAULT '{}',
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            updated_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(dataset_id)
         );
         """
     )

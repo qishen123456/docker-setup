@@ -249,7 +249,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
@@ -299,6 +299,7 @@ const menuItems = [
   { path: '/ai-models', label: '模型服务配置', icon: MagicStick, minRole: 'admin' },
   { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin' },
   { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin' },
+  { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin' },
   { path: '/employee-permissions', label: '员工权限配置', icon: Lock, minRole: 'super_admin' }
 ]
 
@@ -310,6 +311,7 @@ const subtitleMap = {
   '/ai-models': '配置默认模型、通道与调用参数',
   '/report-config': '维护数据集对应的报告模板与展示规范',
   '/feishu-sync': '管理飞书多维表格同步、日志与任务控制',
+  '/runtime-migration': '导出导入运行态配置，发布前自动备份可回滚',
   '/employee-permissions': '维护员工身份映射、角色与可访问范围'
 }
 
