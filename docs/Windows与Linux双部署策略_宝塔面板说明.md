@@ -238,15 +238,22 @@ doctor.sh
 
 ```text
 doctor.sh
-```
-
-后续建议补齐：
-
-```text
 deploy.sh
 update.sh
 backup.sh
 restore.sh
+check-release.sh
+```
+
+对应用途：
+
+```text
+deploy.sh         Linux 首次部署
+update.sh         Linux 日常更新
+backup.sh         Linux 备份 PG、config、.env、commit
+restore.sh        Linux 按备份恢复，必须 --confirm
+doctor.sh         Linux 诊断包
+check-release.sh  发布前检查
 ```
 
 ## 6. 建议的目录与文档结构
@@ -338,10 +345,10 @@ curl https://你的域名/api/health
 
 第二阶段：补齐 Linux 一键脚本。
 
-- `deploy.sh`：首次部署。
-- `update.sh`：备份、拉代码、重建、健康检查。
-- `backup.sh`：备份 PG、config、.env、当前 commit。
-- `restore.sh`：按备份恢复。
+- 已新增 `deploy.sh`：首次部署。
+- 已新增 `update.sh`：备份、拉代码、重建、健康检查。
+- 已新增 `backup.sh`：备份 PG、config、.env、当前 commit。
+- 已新增 `restore.sh`：按备份恢复，必须显式 `--confirm`。
 
 第三阶段：宝塔专项文档。
 
@@ -353,8 +360,8 @@ curl https://你的域名/api/health
 
 第四阶段：CI/发布检查。
 
-- 检查新文件是否被 `.gitignore` 误伤。
-- 检查前端 `npm run build`。
-- 检查 `docker compose config`。
-- 检查 Linux shell 脚本 LF 行尾。
-
+- 已新增 `check-release.sh`：检查新文件是否被 `.gitignore` 误伤。
+- 已新增 `check-release.sh`：检查重要新文件是否未 `git add`。
+- 已新增 `check-release.sh`：检查前端 `npm run build`。
+- 已新增 `check-release.sh`：检查 `docker compose config`。
+- 已新增 `check-release.sh`：检查 Linux shell 脚本 LF 行尾。

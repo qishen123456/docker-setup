@@ -115,6 +115,20 @@ FRONTEND_URL
 
 ### 3.2 启动
 
+推荐使用 Linux 一键脚本：
+
+```bash
+bash deploy.sh
+```
+
+如果希望启动后自动跑接口测试：
+
+```bash
+bash deploy.sh --run-tests
+```
+
+也可以手动执行 Docker Compose：
+
 ```bash
 docker compose up -d --build
 ```
@@ -215,6 +229,35 @@ docker compose logs --tail=200 backend
 ```bash
 cd smartask
 ```
+
+推荐使用 Linux 一键更新脚本：
+
+```bash
+cd smartask
+bash update.sh
+```
+
+脚本会自动执行：
+
+- 更新前备份。
+- 切到 `docker-setup` 分支。
+- `git pull --ff-only`。
+- `docker compose up -d --build`。
+- 后端健康检查。
+
+如需跳过拉代码，只用当前目录重建：
+
+```bash
+bash update.sh --no-pull
+```
+
+如需更新后自动跑接口测试：
+
+```bash
+bash update.sh --run-tests
+```
+
+手动更新流程如下。
 
 更新前先备份：
 
@@ -372,6 +415,21 @@ docker compose up -d --build
 
 ### 11.1 手工备份
 
+推荐：
+
+```bash
+cd smartask
+bash backup.sh
+```
+
+如只想备份配置，不导出数据库：
+
+```bash
+bash backup.sh --skip-db-dump
+```
+
+手动命令如下：
+
 ```bash
 cd smartask
 mkdir -p backups
@@ -387,6 +445,21 @@ docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smarta
 ```
 
 ### 11.2 恢复数据库
+
+推荐使用恢复脚本：
+
+```bash
+cd smartask
+bash restore.sh --backup-dir backups/时间戳 --confirm
+```
+
+默认不会恢复 `.env`，避免覆盖生产密钥。如确实需要恢复 `.env`：
+
+```bash
+bash restore.sh --backup-dir backups/时间戳 --confirm --restore-env
+```
+
+手动恢复命令如下。
 
 停止后端：
 
@@ -460,7 +533,24 @@ bash doctor.sh --with-build-log
 
 说明：诊断包会对 `.env`、compose 配置和日志里的常见 `KEY`、`SECRET`、`TOKEN`、`PASSWORD`、`API_KEY` 做脱敏处理。
 
-### 12.2 手动排查命令
+### 12.2 发布前检查
+
+开发者推送给 Linux/宝塔服务器前，建议先执行：
+
+```bash
+bash check-release.sh
+```
+
+检查内容：
+
+- 是否有新源码被 `.gitignore` 误伤。
+- 是否有重要新文件没有 `git add`。
+- 前端 `npm run build`。
+- `docker compose config`。
+- Linux shell 脚本是否为 LF 行尾。
+- 后端关键 Python 文件语法。
+
+### 12.3 手动排查命令
 
 后端不健康：
 
@@ -507,7 +597,7 @@ git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-question
 cd smartask
 cp .env.example .env
 nano .env
-docker compose up -d --build
+bash deploy.sh
 docker compose ps
 curl http://localhost:5002/api/health
 ```
@@ -516,12 +606,7 @@ curl http://localhost:5002/api/health
 
 ```bash
 cd smartask
-mkdir -p backups
-docker compose exec -T postgres pg_dump -U postgres -d postgres > backups/smartask_pg_$(date +%Y%m%d_%H%M%S).sql
-tar -czf backups/smartask_config_$(date +%Y%m%d_%H%M%S).tar.gz config .env
-git checkout docker-setup
-git pull --ff-only
-docker compose up -d --build
+bash update.sh
 docker compose ps
 curl http://localhost:5002/api/health
 ```
