@@ -141,6 +141,7 @@ const roles = [
   { value: 'user', label: '普通用户' }
 ]
 const roleOrder = roles.map((item) => item.value)
+const FEATURE_FLAGS_UPDATED_EVENT = 'smartask-feature-flags-updated'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -280,7 +281,7 @@ const handleSave = async () => {
   try {
     const res = await saveAdminFeatureFlags(buildPayload())
     features.value = structuredClone(res?.data?.features || {})
-    window.dispatchEvent(new Event('smartask-feature-flags-updated'))
+    window.dispatchEvent(new CustomEvent(FEATURE_FLAGS_UPDATED_EVENT, { detail: { source: 'admin-console', at: Date.now() } }))
     ElMessage.success('控制台配置已保存')
   } catch (error) {
     showRequestError(error, '控制台配置保存失败')
@@ -299,7 +300,7 @@ const handleReset = async () => {
   try {
     const res = await resetAdminFeatureFlags()
     features.value = structuredClone(res?.data?.features || {})
-    window.dispatchEvent(new Event('smartask-feature-flags-updated'))
+    window.dispatchEvent(new CustomEvent(FEATURE_FLAGS_UPDATED_EVENT, { detail: { source: 'admin-console-reset', at: Date.now() } }))
     ElMessage.success('已恢复默认权限矩阵')
   } catch (error) {
     showRequestError(error, '恢复默认权限失败')

@@ -272,9 +272,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Setting, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
-import { changePassword, clearAuthToken, getCurrentUser, getFeatureFlags, healthCheck, logout } from './api/index.js'
+import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
+import { useFeatureFlags } from './state/featureFlags.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +291,12 @@ const {
   requestRestore,
   setActiveHistory,
 } = useSmartAskHistory()
+const {
+  features: featureFlags,
+  ready: featureFlagsReady,
+  loadFeatureFlags,
+  clearFeatureFlags,
+} = useFeatureFlags()
 const collapsed = ref(false)
 const backendOk = ref(false)
 const authUser = ref(null)
@@ -305,8 +312,6 @@ const currentTime = ref('')
 const historyPanelRef = ref(null)
 const historyPanelHighlighted = ref(false)
 const historyDrawerVisible = ref(false)
-const featureFlags = ref({})
-const featureFlagsReady = ref(false)
 const userMenuVisible = ref(false)
 
 const roleRank = {
@@ -350,7 +355,8 @@ const isFeatureEnabled = (key) => {
   if (!key) return true
   const feature = featureFlags.value?.[key]
   if (!featureFlagsReady.value || !feature) return true
-  return Boolean(feature.available ?? feature.enabled)
+  if (typeof feature.available === 'boolean') return feature.available
+  return Boolean(feature.enabled)
 }
 const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessRole(item.minRole) && isFeatureEnabled(item.featureKey)))
 const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
@@ -386,32 +392,16 @@ const pingBackend = async () => {
   }
 }
 
-const loadFeatureFlags = async () => {
-  if (!authUser.value) {
-    featureFlags.value = {}
-    featureFlagsReady.value = false
-    return
-  }
-  try {
-    const res = await getFeatureFlags()
-    featureFlags.value = res?.data?.features || {}
-    featureFlagsReady.value = true
-  } catch {
-    featureFlags.value = {}
-    featureFlagsReady.value = false
-  }
-}
-
 const refreshAuthUser = async () => {
   try {
     const data = await getCurrentUser()
     authUser.value = data?.authenticated ? (data.user || {}) : null
     syncHistoryScope()
-    await loadFeatureFlags()
+    if (authUser.value) await loadFeatureFlags(true)
+    else clearFeatureFlags()
   } catch {
     authUser.value = null
-    featureFlags.value = {}
-    featureFlagsReady.value = false
+    clearFeatureFlags()
     syncHistoryScope()
   } finally {
     authReady.value = true
@@ -429,7 +419,8 @@ const syncHistoryScope = () => {
 const handleAuthenticated = async (user) => {
   authUser.value = user || null
   syncHistoryScope()
-  await loadFeatureFlags()
+  if (authUser.value) await loadFeatureFlags(true)
+  else clearFeatureFlags()
   authReady.value = true
   enforceRouteAccess()
 }
@@ -463,8 +454,7 @@ const submitPasswordChange = async () => {
     ElMessage.success('密码已修改，请重新登录')
     clearAuthToken()
     authUser.value = null
-    featureFlags.value = {}
-    featureFlagsReady.value = false
+    clearFeatureFlags()
     syncHistoryScope()
   } finally {
     passwordSaving.value = false
@@ -494,15 +484,13 @@ const handleLogout = async () => {
     await logout()
     clearAuthToken()
     authUser.value = null
-    featureFlags.value = {}
-    featureFlagsReady.value = false
+    clearFeatureFlags()
     syncHistoryScope()
     ElMessage.success('已退出登录')
   } catch {
     clearAuthToken()
     authUser.value = null
-    featureFlags.value = {}
-    featureFlagsReady.value = false
+    clearFeatureFlags()
     syncHistoryScope()
   }
   if (route.path !== '/smart-ask') {
@@ -616,7 +604,11 @@ const handleGlobalClick = () => {
 }
 
 const handleFeatureFlagsUpdated = async () => {
-  await loadFeatureFlags()
+  if (authUser.value) {
+    await loadFeatureFlags(true)
+  } else {
+    clearFeatureFlags()
+  }
   enforceRouteAccess()
 }
 

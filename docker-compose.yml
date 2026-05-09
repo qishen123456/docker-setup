@@ -25,6 +25,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        APT_MIRROR: ${SMARTASK_APT_MIRROR:-https://mirrors.aliyun.com}
     container_name: smartask-backend
     restart: unless-stopped
     env_file:

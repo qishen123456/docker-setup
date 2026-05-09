@@ -35,6 +35,7 @@ Thumbs.db
 logs/
 diagnostics/
 backups/
+backend/imports/*_backup_*.json
 
 # Env files
 .env

@@ -21,8 +21,9 @@ AGENT1_PROMPT = """
 3. 当问题包含“分公司/代表处/业务部/业务代表/条线”且可能产生统计口径歧义，先判断是否可由上下文消解；不可消解时触发确认。
 4. 多数据集候选接近时，必须返回 confirmation_question 与 2-4 个 options，每个 option 需要包含 dataset_id、label、scope_filter。
 5. 置信度高且上下文明确时不要打断用户，不要为了保险而反复确认。
-6. 统计上级层级时，必须提醒下游“不含下级明细行”的层级隔离口径。
-7. 输出偏好：若样本命中高，优先 direct_execute，否则 generate_sql。
+6. 单体组织分析要识别“管理链路”：事业部 -> 分公司/业务部 -> 代表处 -> 业务代表。用户问某分公司/代表处/业务部“怎么样”时，应让下游返回命中节点及全部下级节点，方便报告下钻。
+7. 统计上级层级时，必须提醒下游“不含下级明细行”的层级隔离口径，同时保留下级节点用于展开分析。
+8. 输出偏好：若样本命中高，优先 direct_execute，否则 generate_sql。
 """.strip()
 
 
@@ -36,17 +37,18 @@ AGENT2_PROMPT = """
 3. 年份口径固定：2026。
 
 必须遵守：
-1. 统一 CTE：WITH 字段提取 -> 基础数据 -> 维度汇总。
+1. 统一 CTE：WITH raw_data/字段提取 -> flattened_tree/层级树 -> summarized_nodes/汇总节点。单体组织分析优先使用 WITH RECURSIVE 递归下钻。
 2. JSONB 字段必须使用 jsonb_typeof 兼容数组/文本。
 3. 金额字段必须使用 regexp_replace(..., '[^0-9.-]', '', 'g') 清理后转 NUMERIC。
-4. WHERE 必须包含 当前年 = '2026'。
-5. 层级隔离：
+4. WHERE 必须包含 当前年 = '2026'；如果源数据当前年为空，可按 2026 兜底。
+5. 层级隔离和去重：
+   - 第一层必须按 分公司、代表处、业务代表、业务部 GROUP BY 后再汇总，避免源表重复行导致金额翻倍。
    - 代表处统计：代表处<>'' AND (业务代表 IS NULL OR 业务代表='')。
    - 分公司/业务部统计：(代表处 IS NULL OR 代表处='') AND (业务代表 IS NULL OR 业务代表='')。
    - 业务代表统计：业务代表<>''。
 6. 涉及多个主体对比时，必须保留 条线、层级、节点名称、上级名称，禁止把多个主体合成一行。
 7. 追问场景应沿用上轮口径；如 scope_filter 已由确认流程给出，必须写入 WHERE。
-8. 单体组织分析（如“某分公司/某代表处业绩怎么样”）必须返回完整管理链路：命中节点 + 子节点 + 孙级明细节点。推荐基于汇总结果使用 WITH RECURSIVE 命中链路，按 上级名称=父节点.节点名称 下钻，不能只写“节点名称=主体 OR 上级名称=主体”导致只返回直接下级。
+8. 单体组织分析（如“某分公司/某代表处业绩怎么样”）必须返回完整管理链路：命中节点 + 子节点 + 孙级明细节点。必须基于汇总结果使用 WITH RECURSIVE 命中链路，按 子节点.上级名称 = 父节点.节点名称 下钻，不能只写“节点名称=主体 OR 上级名称=主体”导致只返回直接下级。
 9. 只输出 SQL 正文，不要解释、不要 Markdown。
 """.strip()
 
@@ -60,10 +62,11 @@ AGENT3_PROMPT = """
 3. JSONB 提取是否使用 jsonb_typeof + ->> 兼容数组/文本。
 4. 金额是否使用 regexp_replace 清洗。
 5. 是否包含 当前年='2026'。
-6. 层级隔离是否正确，上级不含下级明细。
+6. 层级隔离是否正确，上级不含下级明细，且 raw_data 已按组织字段从源头去重。
 7. 达成率、剩余任务金额计算是否正确且避免除零。
 8. 多主体对比是否保留主体维度。
-9. 是否具备 LIMIT。
+9. 单体组织分析是否使用递归链路返回全量下级，不允许只返回直接下级。
+10. 是否具备 LIMIT。
 
 若发现问题，直接返回修正后的 final_sql。
 """.strip()
@@ -75,61 +78,94 @@ AGENT4_PROMPT = """
 要求：
 1. 先给结论：目标达成、风险层级、优先动作。
 2. 必须基于查询结果，不编造数据。
-3. 分层说明：事业部 -> 条线 -> 分公司/业务部 -> 代表处/业务代表。
+3. 分层说明：事业部 -> 条线 -> 分公司/业务部 -> 代表处 -> 业务代表；如果结果包含多层级，必须说明每层最高/最低风险节点。
 4. 追问场景必须读取上一轮分析摘要，沿用上一轮的口径与节点选择，只分析用户新增或替换的主体。
 5. 涉及对比时，必须明确对比对象、达成率差距、剩余任务差距。
-6. 给出 2-3 条可执行动作建议，避免空话。
+6. 禁止重复复读同一句结论；按“核心结论 -> 亮点 -> 风险 -> 建议”输出，给出 2-3 条可执行动作建议。
 """.strip()
 
 
 BASE_SQL = """
-WITH 字段提取 AS (
+WITH raw_data AS (
     SELECT
-        CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,
-        CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,
-        CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,
-        CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END AS 任务原始,
-        CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END AS 开单原始,
-        CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务部') = 'array' THEN fields->'业务部'->0->>'text' ELSE fields->>'业务部' END, '')) AS 业务部,
+        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
+        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
     FROM angel_group_data
+    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
+    GROUP BY 1, 2, 3, 4
 ),
-基础数据 AS (
+flattened_tree AS (
     SELECT
-        分公司, 代表处, 业务代表,
-        COALESCE(NULLIF(regexp_replace(任务原始, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 任务金额,
-        COALESCE(NULLIF(regexp_replace(开单原始, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 开单金额,
-        CASE WHEN 分公司 LIKE '%分公司' THEN '区域条线' WHEN 分公司 LIKE '%业务部' THEN '行业条线' ELSE '事业部层级' END AS 条线类型
-    FROM 字段提取
-    WHERE COALESCE(NULLIF(当前年, ''), '2026') = '2026'
+        CASE
+            WHEN 业务代表 <> '' THEN '业务代表'
+            WHEN 代表处 <> '' THEN '代表处'
+            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
+            WHEN 业务部 <> '' THEN '业务部'
+            WHEN 分公司 <> '' THEN '分公司'
+            ELSE '事业部'
+        END AS 层级,
+        CASE
+            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')
+            WHEN 代表处 <> '' THEN NULLIF(分公司, '')
+            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'
+            ELSE NULL
+        END AS 上级名称,
+        CASE
+            WHEN 业务代表 <> '' THEN 业务代表
+            WHEN 代表处 <> '' THEN 代表处
+            WHEN 分公司 <> '' THEN 分公司
+            WHEN 业务部 <> '' THEN 业务部
+            ELSE '商用事业部'
+        END AS 节点名称,
+        CASE
+            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'
+            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'
+            ELSE '事业部层级'
+        END AS 条线,
+        总任务金额,
+        年度开单金额
+    FROM raw_data
 ),
-维度汇总 AS (
-    SELECT '区域条线' AS 条线, 分公司 AS 上级名称, 代表处 AS 节点名称, '代表处' AS 层级, 任务金额, 开单金额
-    FROM 基础数据 WHERE 条线类型='区域条线' AND 代表处<>'' AND (业务代表 IS NULL OR 业务代表='')
-    UNION ALL
-    SELECT '区域条线','商用事业部',分公司,'分公司',任务金额,开单金额
-    FROM 基础数据 WHERE 条线类型='区域条线' AND (代表处 IS NULL OR 代表处='') AND (业务代表 IS NULL OR 业务代表='')
-    UNION ALL
-    SELECT '区域条线',代表处,业务代表,'业务代表',任务金额,开单金额
-    FROM 基础数据 WHERE 条线类型='区域条线' AND 代表处<>'' AND 业务代表<>''
-    UNION ALL
-    SELECT '行业条线',分公司,业务代表,'业务代表',任务金额,开单金额
-    FROM 基础数据 WHERE 条线类型='行业条线' AND 业务代表<>''
-    UNION ALL
-    SELECT '行业条线','商用事业部',分公司,'业务部',任务金额,开单金额
-    FROM 基础数据 WHERE 条线类型='行业条线' AND (业务代表 IS NULL OR 业务代表='')
+summarized_nodes AS (
+    SELECT
+        条线,
+        层级,
+        上级名称,
+        节点名称,
+        SUM(总任务金额) AS 总任务金额,
+        SUM(年度开单金额) AS 年度开单金额
+    FROM flattened_tree
+    WHERE 节点名称 <> ''
+    GROUP BY 条线, 层级, 上级名称, 节点名称
 )
-SELECT 条线, 层级, 节点名称, 上级名称,
-       SUM(任务金额) AS 总任务金额,
-       SUM(开单金额) AS 年度开单金额,
-       CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100, 2) ELSE 0 END AS 达成率,
-       ROUND(SUM(任务金额)-SUM(开单金额), 2) AS 剩余任务金额
-FROM 维度汇总
-GROUP BY 条线, 层级, 节点名称, 上级名称
+SELECT
+    条线,
+    层级,
+    节点名称,
+    上级名称,
+    总任务金额,
+    年度开单金额,
+    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,
+    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额
+FROM summarized_nodes
 """.strip()
 
 
-def _sql_with_filter(where_clause: str) -> str:
-    return f"{BASE_SQL}\nHAVING {where_clause}\nORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称\nLIMIT 10000;"
+def _sql_with_filter(where_clause: str, order_by: str = "条线 DESC, 层级 DESC, 上级名称, 节点名称", limit: int = 10000) -> str:
+    return f"""
+WITH 汇总结果 AS (
+{BASE_SQL}
+)
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+ORDER BY {order_by}
+LIMIT {limit};
+""".strip()
 
 
 def _sql_with_descendants(anchor_clause: str) -> str:
@@ -217,8 +253,8 @@ def build_syyb_payload(doc_text: str, dataset_meta: Dict[str, Any]) -> Dict[str,
         ("single_entity", "东部分公司业绩怎么样？", _sql_with_descendants("节点名称 = '东部分公司'"), ["分公司", "东部", "下钻"]),
         ("single_entity", "安徽代表处业绩怎么样？", _sql_with_descendants("节点名称 = '安徽代表处'"), ["代表处", "安徽", "下钻"]),
         ("comparative", "东部分公司和南部分公司哪个完成得更好？", _sql_with_filter("节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')"), ["对比", "分公司"]),
-        ("topn", "行业线 Top5 业务代表是谁？", f"{BASE_SQL}\nHAVING 条线 = '行业条线' AND 层级 = '业务代表'\nORDER BY 年度开单金额 DESC\nLIMIT 5;", ["行业", "TopN"]),
-        ("risk", "达成率低于10%的单元有哪些？", f"{BASE_SQL}\nHAVING CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100, 2) ELSE 0 END < 10\nORDER BY 达成率 ASC\nLIMIT 100;", ["风险", "低达成"]),
+        ("topn", "行业线 Top5 业务代表是谁？", _sql_with_filter("条线 = '行业条线' AND 层级 = '业务代表'", "年度开单金额 DESC", 5), ["行业", "TopN"]),
+        ("risk", "达成率低于10%的单元有哪些？", _sql_with_filter("达成率 < 10", "达成率 ASC", 100), ["风险", "低达成"]),
     ]
 
     return {

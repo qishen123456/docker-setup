@@ -292,7 +292,7 @@
                     </div>
                   </div>
 
-                  <div v-if="log.markdown" class="sa-log-section">
+                  <div v-if="log.markdown && !(log.kind === 'report-stage' && hasSideReport)" class="sa-log-section">
                     <div class="sa-log-section-title">{{ log.kind === 'report-stage' ? '报告内容' : '节点摘要' }}</div>
                     <div class="sa-log-markdown" v-html="renderMd(log.markdown)"></div>
                   </div>
@@ -323,6 +323,16 @@
                 </div>
 
                 <section v-if="businessDrillReport" class="sa-side-section sa-business-report">
+                  <div v-if="businessNarrativeSections.length" class="sa-management-narrative">
+                    <article
+                      v-for="section in businessNarrativeSections"
+                      :key="section.title"
+                      class="sa-management-narrative-card"
+                    >
+                      <div class="sa-management-narrative-title">{{ section.title }}</div>
+                      <div class="sa-report-md sa-report-md-compact sa-management-narrative-body" v-html="renderReportMd(section.body)"></div>
+                    </article>
+                  </div>
                   <div class="sa-business-summary">
                     <div>
                       <div class="sa-side-section-title">核心业绩看板</div>
@@ -381,7 +391,7 @@
                   </div>
                 </section>
 
-                <section v-if="sideReportCharts.length" class="sa-side-section sa-side-chart-gallery">
+                <section v-if="!businessDrillReport && sideReportCharts.length" class="sa-side-section sa-side-chart-gallery">
                   <div class="sa-side-section-head">
                     <div>
                       <div class="sa-side-section-title">图表分析</div>
@@ -500,7 +510,7 @@
                       class="sa-report-section-card"
                     >
                       <div class="sa-report-section-title">{{ section.title }}</div>
-                      <div class="sa-report-md sa-report-md-compact" v-html="renderMd(section.body)"></div>
+                      <div class="sa-report-md sa-report-md-compact" v-html="renderReportMd(section.body)"></div>
                     </article>
                   </div>
                   <div v-if="reportTableBlocks.length" class="sa-report-table-stack">
@@ -529,7 +539,7 @@
                       </div>
                     </article>
                   </div>
-                  <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderMd(latestReport)"></div>
+                  <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderReportMd(latestReport)"></div>
                   <div class="sa-download-row">
                     <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-secondary-btn" @click="openReportViewer">
                       <span class="sa-btn-label">查看大图</span>
@@ -690,10 +700,10 @@
                 class="sa-report-section-card sa-report-section-card-dialog"
               >
                 <div class="sa-report-section-title">{{ section.title }}</div>
-                <div class="sa-report-md" v-html="renderMd(section.body)"></div>
+                <div class="sa-report-md" v-html="renderReportMd(section.body)"></div>
               </article>
             </div>
-            <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderMd(reportViewerReport || latestReport)"></div>
+            <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderReportMd(reportViewerReport || latestReport)"></div>
           </section>
         </div>
       </div>
@@ -828,6 +838,8 @@ let panelScrollTimer = null
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
 const detailPanelVisible = computed(() => showPanel.value && isFeatureEnabled('debug_execution_trace'))
+const canViewCharts = computed(() => isFeatureEnabled('chart_viewer'))
+const canViewFullscreenReport = computed(() => isFeatureEnabled('report_fullscreen'))
 
 const statusBarText = computed(() => {
   const m = {
@@ -1708,34 +1720,65 @@ const reportNarrativeSections = computed(() => {
   const raw = String((reportViewerVisible.value ? reportViewerReport.value : latestReport.value) || '').trim()
   if (!raw) return []
 
-  const normalized = raw
-    .replace(/\r\n/g, '\n')
-    .replace(/^#\s+/gm, '## ')
-    .replace(/\n---\n/g, '\n\n')
+  const sections = splitReportSections(raw)
 
-  const parts = normalized.split(/\n(?=##\s+)/).map(item => item.trim()).filter(Boolean)
-  const sections = parts.map((part, index) => {
-    const lines = part.split('\n')
-    const heading = String(lines[0] || '').replace(/^##\s*/, '').trim()
-    const body = lines.slice(1).join('\n').trim()
-    return {
-      title: heading || `分析段落 ${index + 1}`,
-      body: body || part,
-    }
-  })
-
-  if (sections.length <= 1) {
+  if (!sections.length) {
     return [{
       title: reportViewerTitle.value || sideReportHeading.value,
-      body: raw,
+      body: normalizeReportMarkdown(raw),
     }]
   }
 
   return sections
 })
 
+const businessNarrativeSections = computed(() => (
+  reportNarrativeSections.value
+    .filter(section => !/^业绩分析报告$/.test(section.title))
+    .slice(0, 4)
+))
+
 // 方法
 const renderMd = (text) => marked.parse(text || '')
+const renderReportMd = (text) => marked.parse(normalizeReportMarkdown(text))
+
+const normalizeReportMarkdown = (text) => (
+  String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^#\s+/gm, '## ')
+    .replace(/\n---\n/g, '\n\n')
+    .replace(/[ \t]+•[ \t]*/g, '\n- ')
+    .replace(/^•[ \t]*/gm, '- ')
+    .replace(/([。！？；;])\s*(?=##|###)/g, '$1\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+)
+
+const splitReportSections = (text) => {
+  const normalized = normalizeReportMarkdown(text).replace(/^##\s*业绩分析报告\s*/i, '').trim()
+  if (!normalized) return []
+
+  const headingPattern = /^#{2,3}\s+(.+)$/gm
+  const matches = Array.from(normalized.matchAll(headingPattern))
+  if (!matches.length) {
+    return [{ title: '核心结论', body: normalized }]
+  }
+
+  const sections = []
+  const leading = normalized.slice(0, matches[0].index).trim()
+  if (leading) sections.push({ title: '核心结论', body: leading })
+
+  matches.forEach((match, index) => {
+    const title = String(match[1] || '').trim()
+    const start = Number(match.index || 0) + match[0].length
+    const end = index + 1 < matches.length ? Number(matches[index + 1].index || normalized.length) : normalized.length
+    const body = normalized.slice(start, end).trim()
+    if (!title || /^业绩分析报告$/.test(title)) return
+    if (body) sections.push({ title, body })
+  })
+
+  return sections
+}
 
 const togglePanel = () => { showPanel.value = !showPanel.value }
 const toggleThinking = (id) => { thinkingOpen[id] = !thinkingOpen[id] }
@@ -2752,6 +2795,18 @@ watch(() => pendingRestoreId.value, (historyId) => {
   restoreHistory(item)
   clearRestoreRequest()
 }, { flush: 'post', immediate: true })
+
+watch(canViewCharts, (allowed) => {
+  if (!allowed) {
+    chartViewerVisible.value = false
+  }
+})
+
+watch(canViewFullscreenReport, (allowed) => {
+  if (!allowed) {
+    reportViewerVisible.value = false
+  }
+})
 
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
@@ -3904,6 +3959,45 @@ onUnmounted(() => {
 
 .sa-business-report {
   gap: 12px;
+}
+
+.sa-management-narrative {
+  display: grid;
+  gap: 10px;
+}
+
+.sa-management-narrative-card {
+  padding: 12px 14px;
+  border: 1px solid #e8eefc;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.sa-management-narrative-title {
+  margin-bottom: 8px;
+  color: #165dff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.sa-management-narrative-body {
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.sa-management-narrative-body :deep(p) {
+  margin: 0 0 8px;
+}
+
+.sa-management-narrative-body :deep(ul) {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.sa-management-narrative-body :deep(li) {
+  margin: 4px 0;
 }
 
 .sa-business-summary {

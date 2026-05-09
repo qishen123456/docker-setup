@@ -45,6 +45,12 @@ SmartAsk Linux 一键部署脚本
   --run-stream-tests   额外运行流式问数测试，需要真实 AI Key。
   --force-import       强制重新导入元数据/业务数据，谨慎使用。
   --force-config       强制覆盖 config JSON，谨慎使用。
+
+镜像源环境变量：
+  SMARTASK_APT_MIRROR=https://mirrors.aliyun.com
+  SMARTASK_DOCKER_REGISTRY_MIRRORS=https://docker.m.daocloud.io,https://docker.1ms.run
+  SMARTASK_SKIP_APT_MIRROR=1
+  SMARTASK_SKIP_DOCKER_MIRROR=1
 EOF
       exit 0
       ;;
@@ -85,13 +91,242 @@ require_env() {
   fi
 }
 
-info "1/6 检查 Docker"
+is_root() {
+  [[ "$(id -u)" -eq 0 ]]
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+restart_docker_daemon() {
+  if command_exists systemctl; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl restart docker >/dev/null 2>&1 || {
+      warn "Docker 镜像源已写入，但 Docker 重启失败，请稍后手动执行: systemctl restart docker"
+      return 1
+    }
+    return 0
+  fi
+
+  if command_exists service; then
+    service docker restart >/dev/null 2>&1 || {
+      warn "Docker 镜像源已写入，但 Docker 重启失败，请稍后手动执行: service docker restart"
+      return 1
+    }
+    return 0
+  fi
+
+  warn "未找到 systemctl/service，Docker 镜像源已写入，请手动重启 Docker"
+  return 1
+}
+
+configure_docker_registry_mirror() {
+  if [[ "${SMARTASK_SKIP_DOCKER_MIRROR:-0}" == "1" ]]; then
+    warn "已跳过 Docker 镜像源配置: SMARTASK_SKIP_DOCKER_MIRROR=1"
+    return
+  fi
+
+  if ! is_root; then
+    warn "当前不是 root，跳过 Docker 镜像源配置。需要时请用 sudo/root 执行 deploy.sh"
+    return
+  fi
+
+  local mirrors
+  mirrors="$(read_env SMARTASK_DOCKER_REGISTRY_MIRRORS "${SMARTASK_DOCKER_REGISTRY_MIRRORS:-https://docker.m.daocloud.io,https://docker.1ms.run,https://hub-mirror.c.163.com,https://mirror.baidubce.com}")"
+
+  mkdir -p /etc/docker
+
+  local python_bin=""
+  if command_exists python3; then
+    python_bin="python3"
+  elif command_exists python; then
+    python_bin="python"
+  fi
+
+  if [[ -z "$python_bin" && -f /etc/docker/daemon.json ]]; then
+    warn "未找到 python，且 daemon.json 已存在；为避免覆盖已有 Docker 配置，跳过自动合并。"
+    return
+  fi
+
+  local backup=""
+  if [[ -f /etc/docker/daemon.json ]]; then
+    backup="/etc/docker/daemon.json.smartask.bak.$(date +%Y%m%d%H%M%S)"
+    cp -a /etc/docker/daemon.json "$backup"
+  fi
+
+  if [[ -n "$python_bin" ]]; then
+    SMARTASK_DOCKER_REGISTRY_MIRRORS="$mirrors" "$python_bin" <<'PY'
+import json
+import os
+from pathlib import Path
+
+path = Path("/etc/docker/daemon.json")
+raw = path.read_text(encoding="utf-8").strip() if path.exists() else ""
+data = {}
+if raw:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        data = {}
+
+mirrors = [
+    item.strip()
+    for item in os.environ.get("SMARTASK_DOCKER_REGISTRY_MIRRORS", "").replace("\n", ",").split(",")
+    if item.strip()
+]
+data["registry-mirrors"] = mirrors
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  else
+    cat >/etc/docker/daemon.json <<EOF
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://docker.1ms.run",
+    "https://hub-mirror.c.163.com",
+    "https://mirror.baidubce.com"
+  ]
+}
+EOF
+  fi
+
+  restart_docker_daemon || true
+  if [[ -n "$backup" ]]; then
+    ok "Docker 镜像源已更新，原配置备份: $backup"
+  else
+    ok "Docker 镜像源已更新"
+  fi
+}
+
+write_ubuntu_apt_sources() {
+  local codename="$1"
+  local mirror="$2"
+  local target="$3"
+
+  if [[ "$target" == *.sources ]]; then
+    cat >"$target" <<EOF
+Types: deb
+URIs: ${mirror}/ubuntu/
+Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+  else
+    cat >"$target" <<EOF
+deb ${mirror}/ubuntu/ ${codename} main restricted universe multiverse
+deb ${mirror}/ubuntu/ ${codename}-updates main restricted universe multiverse
+deb ${mirror}/ubuntu/ ${codename}-backports main restricted universe multiverse
+deb ${mirror}/ubuntu/ ${codename}-security main restricted universe multiverse
+EOF
+  fi
+}
+
+write_debian_apt_sources() {
+  local codename="$1"
+  local mirror="$2"
+  local target="$3"
+
+  if [[ "$target" == *.sources ]]; then
+    cat >"$target" <<EOF
+Types: deb
+URIs: ${mirror}/debian/
+Suites: ${codename} ${codename}-updates
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: ${mirror}/debian-security/
+Suites: ${codename}-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+  else
+    cat >"$target" <<EOF
+deb ${mirror}/debian/ ${codename} main contrib non-free non-free-firmware
+deb ${mirror}/debian/ ${codename}-updates main contrib non-free non-free-firmware
+deb ${mirror}/debian-security/ ${codename}-security main contrib non-free non-free-firmware
+EOF
+  fi
+}
+
+configure_apt_mirror() {
+  if [[ "${SMARTASK_SKIP_APT_MIRROR:-0}" == "1" ]]; then
+    warn "已跳过 APT 镜像源配置: SMARTASK_SKIP_APT_MIRROR=1"
+    return
+  fi
+
+  if ! command_exists apt-get; then
+    warn "当前系统不是 apt 系，跳过 APT 镜像源配置"
+    return
+  fi
+
+  if ! is_root; then
+    warn "当前不是 root，跳过 APT 镜像源配置。需要时请用 sudo/root 执行 deploy.sh"
+    return
+  fi
+
+  [[ -r /etc/os-release ]] || {
+    warn "未找到 /etc/os-release，跳过 APT 镜像源配置"
+    return
+  }
+
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  local os_id="${ID:-}"
+  local codename="${VERSION_CODENAME:-}"
+  local mirror
+  mirror="$(read_env SMARTASK_APT_MIRROR "${SMARTASK_APT_MIRROR:-https://mirrors.aliyun.com}")"
+
+  if [[ -z "$codename" ]] && command_exists lsb_release; then
+    codename="$(lsb_release -cs 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$codename" ]]; then
+    warn "未识别系统代号，跳过 APT 镜像源配置"
+    return
+  fi
+
+  local target="/etc/apt/sources.list"
+  if [[ "$os_id" == "ubuntu" && -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+    target="/etc/apt/sources.list.d/ubuntu.sources"
+  elif [[ "$os_id" == "debian" && -f /etc/apt/sources.list.d/debian.sources ]]; then
+    target="/etc/apt/sources.list.d/debian.sources"
+  fi
+
+  local backup="${target}.smartask.bak.$(date +%Y%m%d%H%M%S)"
+  [[ -f "$target" ]] && cp -a "$target" "$backup"
+
+  case "$os_id" in
+    ubuntu)
+      write_ubuntu_apt_sources "$codename" "$mirror" "$target"
+      ;;
+    debian)
+      write_debian_apt_sources "$codename" "$mirror" "$target"
+      ;;
+    *)
+      warn "暂不自动改写 $os_id 的 APT 源，已跳过"
+      return
+      ;;
+  esac
+
+  apt-get update || warn "APT 源已写入，但 apt-get update 失败；如网络受限，可稍后手动重试。备份: $backup"
+  ok "APT 镜像源已更新: $mirror，原配置备份: $backup"
+}
+
+info "1/7 检查 Docker"
 command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
 docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
 docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
 ok "Docker 可用"
 
-info "2/6 检查 .env"
+info "2/7 配置 Linux 镜像源"
+configure_apt_mirror
+configure_docker_registry_mirror
+docker info >/dev/null 2>&1 || fail "Docker 镜像源配置后 Docker 不可用，请执行: bash doctor.sh"
+ok "镜像源检查完成"
+
+info "3/7 检查 .env"
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
@@ -130,18 +365,18 @@ if [[ "$FORCE_CONFIG" -eq 1 ]]; then
   warn "--force-config 已开启，将覆盖 config JSON"
 fi
 
-info "3/6 校验 docker compose"
+info "4/7 校验 docker compose"
 docker compose config >/dev/null
 ok "docker-compose.yml 有效"
 
-info "4/6 构建并启动容器"
+info "5/7 构建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
   docker compose up -d
 else
   docker compose up -d --build
 fi
 
-info "5/6 等待后端健康检查"
+info "6/7 等待后端健康检查"
 READY=0
 for _ in $(seq 1 120); do
   if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
@@ -154,7 +389,7 @@ done
 docker compose ps
 [[ "$READY" -eq 1 ]] || fail "后端健康检查失败。请执行: bash doctor.sh"
 
-info "6/6 部署完成"
+info "7/7 部署完成"
 ok "后端健康检查通过"
 echo "  Frontend: http://服务器IP:${FRONTEND_PORT}"
 echo "  Backend:  http://服务器IP:${BACKEND_PORT}/api/health"

@@ -32,3 +32,15 @@ npm run dev
 http://localhost:5173/admin-console
 然后按 Ctrl + F5 强刷。
 如果这样还老样子，那就不是重启问题了，是 AdminConsole.vue 的 UI 本身还需要继续重构，我再接着把它改成更清晰的 DataWorks 风格权限矩阵。
+
+
+
+git push gitee docker-setup --force
+
+git status
+git add .
+git commit -m "chore: update smartask deployment"
+git push -u gitee docker-setup
+
+
+
