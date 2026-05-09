@@ -61,6 +61,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${SMARTASK_NPM_REGISTRY:-https://registry.npmmirror.com}
     container_name: smartask-frontend
     restart: unless-stopped
     depends_on:

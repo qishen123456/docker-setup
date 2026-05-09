@@ -48,6 +48,7 @@ SmartAsk Linux 一键部署脚本
 
 镜像源环境变量：
   SMARTASK_APT_MIRROR=https://mirrors.aliyun.com
+  SMARTASK_NPM_REGISTRY=https://registry.npmmirror.com
   SMARTASK_DOCKER_REGISTRY_MIRRORS=https://docker.m.daocloud.io,https://docker.1ms.run
   SMARTASK_SKIP_APT_MIRROR=1
   SMARTASK_SKIP_DOCKER_MIRROR=1
