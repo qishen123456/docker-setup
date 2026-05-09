@@ -5,7 +5,6 @@ Data source router for multi-source Vanna instances.
 from __future__ import annotations
 
 import base64
-import json
 import os
 import re
 import shutil
@@ -13,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from config_manager import decode_secret, get_default_ai_model
+from config_manager import decode_secret, get_default_ai_model, get_datasources
 
 
 class DataSourceRouter:
@@ -25,19 +24,11 @@ class DataSourceRouter:
     def load_data_source_config(self):
         self.data_sources = {}
         self.keywords = {}
-        config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config")
-        config_path = os.path.join(config_dir, "datasources.json")
-        local_path = os.path.join(config_dir, "datasources.local.json")
-        if os.path.exists(local_path):
-            config_path = local_path
-        try:
-            with open(config_path, "r", encoding="utf-8-sig") as f:
-                config = json.load(f)
-        except Exception:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
 
-        for db in config.get("databases", []):
+        # Always go through config_manager so Docker/.env overrides are honored.
+        # Otherwise backend-in-container may still read stale localhost datasources
+        # from config/datasources.json and fail with "数据源不存在".
+        for db in get_datasources():
             if not db.get("is_active"):
                 continue
             ds_id = int(db["id"])
