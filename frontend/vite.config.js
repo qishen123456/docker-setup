@@ -1,9 +1,16 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
+import { dirname, resolve } from 'node:path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const viteCacheDir = process.env.SMARTASK_VITE_CACHE_DIR || resolve(tmpdir(), 'smartask-vite-cache')
 
 export default defineConfig({
   plugins: [vue()],
+  cacheDir: viteCacheDir,
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')

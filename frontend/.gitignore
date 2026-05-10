@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite-cache
+node_modules/.vite-smartask
 *.local
 
 # Editor directories and files

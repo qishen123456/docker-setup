@@ -338,6 +338,7 @@ const setLogStatus = (key, status, detail, meta = {}) => {
 const appendLog = (entry) => {
   const index = state.logs.findIndex((item) => item.key === entry.key)
   const existing = index >= 0 ? state.logs[index] : null
+  const shouldPersist = entry?.persist !== false
   const fullEntry = createTimelineEvent({
     time: nowText(),
     status: 'pending',
@@ -364,7 +365,7 @@ const appendLog = (entry) => {
   else state.logs.push(fullEntry)
 
   state.updatedAt = new Date().toISOString()
-  persist()
+  if (shouldPersist) persist()
 }
 
 const wait = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
@@ -591,7 +592,7 @@ const getTraceStageMeta = (stage) => {
 const normalizeTraceStatus = (status, stage) => {
   const value = String(status || '').toLowerCase()
   if (value === 'error') return 'error'
-  if (value === 'fallback') return 'warning'
+  if (value === 'fallback') return String(stage || '').startsWith('confirmation.') ? 'warning' : 'running'
   if (stage === 'request.received') return 'success'
   if (['request', 'processing', 'delta', 'streaming'].includes(value)) return 'running'
   if (['response', 'parsed', 'info'].includes(value)) return 'success'
@@ -601,6 +602,7 @@ const normalizeTraceStatus = (status, stage) => {
 const buildTraceDetailLines = (stage, status, payload = {}) => {
   const lines = []
   const text = String(stage || '')
+  const isFallback = String(status || '').toLowerCase() === 'fallback'
 
   if (text === 'request.received') {
     lines.push(`开始执行任务：${payload.question || state.question || '当前业务问题'}`)
@@ -673,7 +675,11 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
     lines.push(`执行失败：${payload.error}`)
   }
 
-  if (payload.error && !lines.some(line => line.includes(payload.error))) {
+  if (isFallback) {
+    lines.push('模型输出格式不完整，已启用本地兜底规则继续推进，不需要手动确认。')
+  }
+
+  if (payload.error && !isFallback && !lines.some(line => line.includes(payload.error))) {
     lines.push(payload.error)
   }
 
@@ -738,6 +744,14 @@ const humanizeStreamPreview = (stage, value, source = '') => {
   }
 
   if (/agent2|生成.*SQL|SQL/i.test(scope)) {
+    const sqlLike = compact
+      .replace(/^```sql\s*/i, '')
+      .replace(/```$/i, '')
+      .replace(/^[{[]\s*"sql"\s*:\s*"?/i, '')
+      .trim()
+    if (/WITH\s+|SELECT\s+|FROM\s+|WHERE\s+|GROUP\s+BY|ORDER\s+BY|LIMIT/i.test(sqlLike)) {
+      return `SQL片段：${sqlLike.slice(-140)}`
+    }
     if (/WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT/i.test(compact)) return '已确认筛选、分组和排序条件，正在收束 SQL。'
     if (/FROM|JOIN|WITH/i.test(compact)) return '已确认查询表与字段来源，正在补齐过滤条件。'
     if (/SELECT|"\s*sql\s*"/i.test(compact)) return '已开始生成 SQL 主体，正在确认字段和指标。'
@@ -770,7 +784,7 @@ const buildTraceArtifacts = (stage, status, payload = {}, existing = null) => {
   const artifacts = {}
   const sqlText = String(payload.sql || payload.final_sql || '').trim()
 
-  if (text === 'pipeline.agent2_result' && sqlText) {
+  if ((text === 'pipeline.agent2_result' || text.startsWith('agent2.')) && sqlText) {
     artifacts.codeBlocks = [{ language: 'sql', title: '模型生成 SQL', code: sqlText }]
     artifacts.sql = sqlText
     artifacts.sqlTitle = '模型生成 SQL'
@@ -891,6 +905,7 @@ const applyTraceEvent = (payload = {}) => {
       ? (isReasoningDelta ? 'llm-reasoning' : 'llm-stream')
       : existing?.liveThoughtSource || '',
     lastStreamAt: isDelta ? Date.now() : existing?.lastStreamAt || 0,
+    persist: !isDelta,
     ...artifacts,
   })
 
@@ -902,15 +917,11 @@ const applyTraceEvent = (payload = {}) => {
 const formatDuration = (duration) => {
   const value = Number(duration)
   if (!Number.isFinite(value) || value <= 0) return ''
-  const seconds = value / 1000
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60)
-    const remain = seconds - minutes * 60
-    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
-    return `${minutes}m ${remainLabel}s`
-  }
-  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
-  return `${label}s`
+  const totalSeconds = Math.max(1, Math.round(value / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const remain = totalSeconds % 60
+  if (minutes > 0) return `${minutes}m ${remain}s`
+  return `${totalSeconds}s`
 }
 
 const normalizeSelectedDatasetIds = (selectedDatasetInput) => {

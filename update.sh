@@ -111,6 +111,7 @@ if [[ "$NO_BUILD" -eq 1 ]]; then
 else
   docker compose up -d --build
 fi
+echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
 FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"

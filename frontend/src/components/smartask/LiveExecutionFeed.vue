@@ -40,7 +40,7 @@
                 <TypewriterLine
                   v-if="lineIndex === activeThoughtLines.length - 1"
                   :text="line"
-                  :speed="18"
+                  :speed="28"
                 />
                 <span v-else>{{ line }}</span>
               </div>
@@ -79,21 +79,17 @@ const clockNow = ref(Date.now())
 const thoughtRef = ref(null)
 const clockTimer = setInterval(() => {
   clockNow.value = Date.now()
-}, 250)
+}, 1000)
 let thoughtScrollTimer = null
 
 const formatDuration = (duration) => {
   const value = Number(duration)
   if (!Number.isFinite(value) || value <= 0) return ''
-  const seconds = value / 1000
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60)
-    const remain = seconds - minutes * 60
-    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
-    return `${minutes}m ${remainLabel}s`
-  }
-  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
-  return `${label}s`
+  const totalSeconds = Math.max(1, Math.round(value / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const remain = totalSeconds % 60
+  if (minutes > 0) return `${minutes}m ${remain}s`
+  return `${totalSeconds}s`
 }
 
 const feedElapsedLabel = computed(() => {
@@ -193,6 +189,9 @@ const activeThoughtLabel = computed(() => {
 const toSafeProgressSnippet = (value, log = {}) => {
   const text = String(value || '').trim()
   if (!text) return ''
+  if (/^SQL片段：/i.test(text)) {
+    return text.replace(/\s+/g, ' ').slice(0, 120)
+  }
   if (/<\/?think>|```|^\s*[{[]|"\s*sql\s*"|dataset_id|option_id|score_hint|WITH\s+|SELECT\s+|FROM\s+/i.test(text)) {
     if (/理解|路由|口径|agent1/i.test(`${log?.key || ''} ${log?.title || ''}`)) {
       return '正在识别问题意图，并比较候选数据范围。'
@@ -297,7 +296,7 @@ watch(
     clearThoughtScrollTimer()
     if (props.mode !== 'live' || !activeThoughtLines.value.length) return
     scrollThoughtToBottom()
-    thoughtScrollTimer = setInterval(scrollThoughtToBottom, 120)
+    thoughtScrollTimer = setInterval(scrollThoughtToBottom, 300)
   },
   { immediate: true }
 )

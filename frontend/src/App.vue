@@ -189,7 +189,7 @@
               <span class="auth-user-avatar">{{ authUserInitial }}</span>
               <span class="auth-user-name">{{ authUserName }}</span>
               <span class="auth-user-role">{{ authRoleLabel }}</span>
-              <span class="auth-user-arrow">⌄</span>
+              <span class="auth-user-arrow" aria-hidden="true"></span>
             </button>
             <div v-if="userMenuVisible" class="auth-user-dropdown" @click.stop>
               <button
@@ -1941,8 +1941,16 @@ body,
   border-radius: 999px;
   color: #64748b;
   background: rgba(15, 118, 110, 0.08);
-  font-size: 13px;
-  line-height: 1;
+}
+
+.auth-user-arrow::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  transform: translateY(1px);
 }
 
 .auth-user-dropdown {

@@ -102,7 +102,7 @@ const clockNow = ref(Date.now())
 const liveLineRef = ref(null)
 const clockTimer = setInterval(() => {
   clockNow.value = Date.now()
-}, 250)
+}, 1000)
 let liveLineScrollTimer = null
 
 const statusLabel = (status) => ({
@@ -116,8 +116,10 @@ const statusLabel = (status) => ({
 const getNodeKey = (log, index) => log?.key || `${log?.title || 'node'}-${index}`
 
 const detailLines = (log) => {
+  const summaryKey = normalizeDisplayLine(log?.summary)
+  const withoutSummaryDuplicate = (lines) => lines.filter(line => normalizeDisplayLine(line) !== summaryKey)
   if (Array.isArray(log?.detailLines) && log.detailLines.length > 0) {
-    return uniqueDisplayLines(log.detailLines
+    return uniqueDisplayLines(withoutSummaryDuplicate(log.detailLines)
       .map(item => String(item || '').trim())
       .filter(Boolean)
       .filter(line => !isDurationLine(line) && !isRedundantRealtimePrintLine(line)))
@@ -196,15 +198,11 @@ const sectionLabel = (log) => {
 const formatDuration = (duration) => {
   const value = Number(duration)
   if (!Number.isFinite(value) || value <= 0) return ''
-  const seconds = value / 1000
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60)
-    const remain = seconds - minutes * 60
-    const remainLabel = remain.toFixed(remain >= 10 ? 0 : 1).replace(/\.0$/, '')
-    return `${minutes}m ${remainLabel}s`
-  }
-  const label = seconds.toFixed(seconds >= 10 ? 1 : 2).replace(/\.0$/, '').replace(/(\.\d*[1-9])0+$/, '$1')
-  return `${label}s`
+  const totalSeconds = Math.max(1, Math.round(value / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const remain = totalSeconds % 60
+  if (minutes > 0) return `${minutes}m ${remain}s`
+  return `${totalSeconds}s`
 }
 
 const nodeDurationLabel = (log) => {
@@ -223,6 +221,7 @@ const nodeStatusText = (log) => {
 }
 
 const latestLiveThought = (log) => {
+  if (log?.status !== 'running') return ''
   if (Array.isArray(log?.liveThoughtLines) && log.liveThoughtLines.length > 0) {
     return log.liveThoughtLines[log.liveThoughtLines.length - 1]
   }
@@ -255,6 +254,9 @@ const parseJsonPreview = (value) => {
 const structuredProgressPreview = (value, log = {}) => {
   const raw = String(value || '').trim()
   const scope = `${log?.key || ''} ${log?.title || ''} ${log?.summary || ''}`
+  if (/^SQL片段：/i.test(raw)) {
+    return raw.replace(/\s+/g, ' ').slice(0, 150)
+  }
   if (/<\/?think>|dataset_id|option_id|score_hint|confirm_question|need_confirm/i.test(raw)) {
     if (/理解|路由|口径|agent1/i.test(scope)) return '正在识别问题意图，并比较候选数据范围。'
     if (/确认|confirm/i.test(scope)) return '正在整理需要确认的统计口径。'
@@ -429,7 +431,7 @@ const startReveal = (log, index) => {
       if (cursor >= lines.length) {
         clearInterval(interval)
       }
-    }, 120)
+    }, 180)
     pushTimer(key, interval)
   }, log?.thought ? 190 : 80)
 
@@ -519,7 +521,7 @@ watch(
   () => {
     clearLiveLineScrollTimer()
     scrollLiveLineToBottom()
-    liveLineScrollTimer = setInterval(scrollLiveLineToBottom, 120)
+    liveLineScrollTimer = setInterval(scrollLiveLineToBottom, 300)
   },
   { immediate: true }
 )

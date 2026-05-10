@@ -22,9 +22,9 @@
         <small>不含 token、历史记录、local 配置</small>
       </article>
       <article class="metric-card">
-        <span>数据集</span>
+        <span>启用数据集</span>
         <strong>{{ datasetCount }}</strong>
-        <small>来自 bs_datasets</small>
+        <small>{{ inactiveDatasetCount ? `另有 ${inactiveDatasetCount} 个停用数据集随迁移包保留` : '来自 bs_datasets 当前启用项' }}</small>
       </article>
       <article class="metric-card">
         <span>书架记录</span>
@@ -189,7 +189,10 @@ const summaryStats = computed(() => {
   }
 })
 
-const datasetCount = computed(() => summary.value?.table_counts?.bs_datasets || 0)
+const datasetCount = computed(() => (
+  summary.value?.dataset_counts?.active ?? summary.value?.table_counts?.bs_datasets ?? 0
+))
+const inactiveDatasetCount = computed(() => Number(summary.value?.dataset_counts?.inactive || 0))
 const configPlan = computed(() => previewResult.value?.config_plan || [])
 const tablePlan = computed(() => {
   const plan = previewResult.value?.table_plan || {}

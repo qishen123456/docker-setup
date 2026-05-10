@@ -376,6 +376,7 @@ if [[ "$NO_BUILD" -eq 1 ]]; then
 else
   docker compose up -d --build
 fi
+ok "后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 info "6/7 等待后端健康检查"
 READY=0

@@ -75,6 +75,8 @@ config/feature_flags.json
 dist/
 build/
 frontend/.vite/
+frontend/.vite-cache/
+frontend/node_modules/.vite-smartask/
 .nuxt/
 .next/
 

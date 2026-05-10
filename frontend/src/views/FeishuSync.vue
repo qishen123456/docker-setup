@@ -612,7 +612,9 @@ const testConnection = async (row) => {
       app_id: row.app_id,
       app_secret: row.app_secret,
       base_id: row.base_id,
-      table_id: row.table_id
+      table_id: row.table_id,
+      view_id: row.view_id || '',
+      preview_limit: 20
     })
     if (result.success) ElMessage.success(result.message || '连接成功')
     else ElMessage.error(result.error || '连接失败')

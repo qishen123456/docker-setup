@@ -15,7 +15,7 @@ const props = defineProps({
   },
   speed: {
     type: Number,
-    default: 18,
+    default: 28,
   },
 })
 

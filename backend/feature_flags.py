@@ -346,7 +346,7 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
         },
         "dataset_autofill": {
             "label": "自动补齐",
-            "description": "数据资产页，控制自动补齐商用事业部按钮。",
+            "description": "数据资产页，控制基于 DDL 和数据集信息的智能补齐按钮。",
             "category": "按钮 · 数据资产管理",
             "module": "dataset_management",
             "module_label": "数据资产管理",

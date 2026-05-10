@@ -40,6 +40,7 @@ MIGRATIONS = [
     "20260330_bookshelf_schema.sql",
     "20260330_bookshelf_agent1_prompt_upgrade.sql",
     "20260430_report_config.sql",
+    "20260509_report_thresholds.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
@@ -223,6 +224,15 @@ def main() -> None:
             log(f"检测到 bs_datasets={existing}，开始首次数据导入...（force={force_import}）")
             _import_bookshelf_bundle()
             _import_angel_bundle()
+            # Report config migrations depend on bs_datasets rows. On a fresh
+            # Docker volume those rows are created by the bundle import above,
+            # so run these idempotent migrations once more after import.
+            for migration in ("20260430_report_config.sql", "20260509_report_thresholds.sql"):
+                try:
+                    _run_migration(migration)
+                except Exception as exc:
+                    log(f"导入后补跑迁移 {migration} 失败（非致命）: {exc}")
+                    traceback.print_exc()
         else:
             log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
 

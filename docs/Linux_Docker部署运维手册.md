@@ -1,6 +1,6 @@
 # Linux Docker 部署运维手册
 
-更新时间：2026-05-08
+更新时间：2026-05-10
 
 当前项目真实 Git 信息：
 
@@ -12,6 +12,12 @@ Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
 注意：Linux/Git 对分支名大小写敏感。已核验当前本地与 Gitee 远端存在的分支是 `docker-setup`；如果后续你在 Gitee 另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
 
 本文档只解决一件事：Linux 服务器如何部署、启动、更新、备份、回滚和检查 SmartAsk。
+
+本版部署重点：
+
+- 问数语义识别增强：用户说“东西部分公司”等合称时，后端会先通过 Agent1.5 和数据集画像解析为具体组织成员，再进入 SQL 与报告链路。
+- 报告模板配置自修复：后端启动时会幂等应用 `backend/migrations`；首次空库导入书架数据后，会补跑报告配置迁移，避免报告模板配置为空。
+- 报告风险线更新：商用事业部相关数据集统一使用 10% 风险线、15% 机构标杆线、20% 个人标杆线。
 
 Windows 用户机一键部署请看：
 
@@ -243,6 +249,7 @@ bash update.sh
 - 切到 `docker-setup` 分支。
 - `git pull --ff-only`。
 - `docker compose up -d --build`。
+- 后端启动时自动应用 `backend/migrations`，包含本次报告阈值与模板配置更新。
 - 后端健康检查。
 
 如需跳过拉代码，只用当前目录重建：
@@ -281,12 +288,25 @@ git pull --ff-only
 docker compose up -d --build
 ```
 
+说明：后端容器入口是 `python backend/bootstrap.py`，每次启动都会幂等执行 `backend/migrations`。首次空库会先导入书架与业务数据，再补跑报告配置迁移，确保新库也能写入报告模板配置。本次报告优化新增 `20260509_report_thresholds.sql`，会把商用事业部报告配置更新为“代表处 <10% 风险、10%-15% 中等、>=15% 标杆；业务代表 <10% 风险、10%-20% 中等、>=20% 标杆”。已有生产数据库不需要删除 volume，也不要执行 `docker compose down -v`。
+
 检查：
 
 ```bash
 docker compose ps
 curl http://localhost:5002/api/health
 ```
+
+检查报告模板配置是否已写入：
+
+```bash
+docker compose exec -T postgres psql \
+  -U "${SMARTASK_DB_USERNAME:-postgres}" \
+  -d "${SMARTASK_DB_DATABASE:-postgres}" \
+  -c "SELECT d.dataset_code, d.dataset_name, c.config_json->>'riskThreshold' AS risk_threshold, c.config_json ? 'officeRiskThreshold' AS has_office_threshold FROM bs_datasets d LEFT JOIN bs_dataset_report_config c ON c.dataset_id = d.id WHERE d.dataset_code IN ('angel_business_2026','angel_business_2026_phase1') OR d.dataset_name LIKE '%商用事业部%';"
+```
+
+正常结果应至少看到商用事业部数据集，`risk_threshold` 为 `10`，`has_office_threshold` 为 `t`。
 
 如果页面还是旧版本：
 
@@ -585,8 +605,23 @@ ls -ld config
 
 - 当前登录账号不是超级管理员。
 - 后端仍是旧镜像，需要 `docker compose up -d --build`。
+- 报告模板配置为空时，先确认后端已重启；bootstrap 会在导入数据后补跑 `20260430_report_config.sql` 和 `20260509_report_thresholds.sql`。
 - `config/` 目录没有写权限。
 - 浏览器缓存旧前端，按 `Ctrl + F5`。
+
+问数语义识别未生效，例如“东西部分公司业绩如何”仍只返回一个分公司：
+
+```bash
+docker compose logs --tail=200 backend
+docker compose up -d --build backend frontend
+curl http://localhost:5002/api/health
+```
+
+常见原因：
+
+- 后端镜像没有重建，仍在运行旧代码。
+- 浏览器页面仍使用旧前端缓存，需要 `Ctrl + F5`。
+- AI 模型配置不可用时，系统会使用数据集画像兜底解析；如果数据集画像缺失，请先确认书架数据已经导入。
 
 ## 13. 给服务器管理员的简版命令
 

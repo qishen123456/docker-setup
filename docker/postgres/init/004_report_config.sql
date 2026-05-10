@@ -30,15 +30,20 @@ SELECT id, '{
     {"name": "个人层", "values": ["业务代表", "业务员", "业务"]}
   ],
   "trackValues": {"org": "区域条线", "personal": "行业条线"},
-  "riskThreshold": 80,
+  "riskThreshold": 10,
+  "officeRiskThreshold": 10,
+  "officeBenchmarkThreshold": 15,
+  "personRiskThreshold": 10,
+  "personBenchmarkThreshold": 20,
   "signalRules": [
-    {"key": "rate", "op": ">=", "value": 100, "tone": "good",  "label": "绿灯"},
-    {"key": "rate", "op": ">=", "value": 80,  "tone": "warn",  "label": "黄灯"},
-    {"key": "rate", "op": "<",  "value": 80,  "tone": "danger","label": "红灯"}
+    {"key": "rate", "op": ">=", "value": 15, "tone": "good",  "label": "标杆"},
+    {"key": "rate", "op": ">=", "value": 10, "tone": "warn",  "label": "中等"},
+    {"key": "rate", "op": "<",  "value": 10, "tone": "danger","label": "风险"}
   ],
   "sections": ["core", "group", "risk", "strategy"],
   "reportTitle": "经营分析报告"
 }'::jsonb
 FROM bs_datasets
-WHERE dataset_code = 'angel_business_2026'
+WHERE dataset_code IN ('angel_business_2026', 'angel_business_2026_phase1')
+   OR dataset_name LIKE '%商用事业部%'
 ON CONFLICT (dataset_id) DO NOTHING;

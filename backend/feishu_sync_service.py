@@ -208,6 +208,49 @@ class FeishuSyncService:
                 raise RuntimeError(error_msg)
             return None
 
+    def preview_feishu_data(self, config: Dict, access_token: str, limit: int = 20, raise_error: bool = False) -> Dict:
+        """获取一页飞书样本，用于连通性测试；不代表全量记录数。"""
+        try:
+            preview_limit = max(1, min(int(limit or 20), 500))
+            write_log(config['id'], 'INFO', f'开始预览飞书数据, Base ID: {config["base_id"][:10]}..., Table ID: {config["table_id"][:10]}...')
+
+            url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{config['base_id']}/tables/{config['table_id']}/records"
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            params = {"page_size": preview_limit}
+            if config.get('view_id'):
+                params['view_id'] = config['view_id']
+
+            response = requests.get(url, headers=headers, params=params, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            if data.get("code") != 0:
+                error_msg = self._format_feishu_api_error(data)
+                write_log(config['id'], 'ERROR', error_msg)
+                if raise_error:
+                    raise RuntimeError(error_msg)
+                return {"records": [], "sample_count": 0, "has_more": False, "total": None, "error": error_msg}
+
+            payload = data.get("data", {}) or {}
+            items = payload.get("items", []) or []
+            return {
+                "records": items,
+                "sample_count": len(items),
+                "has_more": bool(payload.get("has_more") or payload.get("page_token")),
+                "total": payload.get("total"),
+                "page_size": preview_limit,
+                "view_id": config.get("view_id") or "",
+            }
+        except Exception as e:
+            raw_error = str(e)
+            error_msg = raw_error if raw_error.startswith("飞书接口返回错误") else f"预览飞书数据异常: {raw_error}"
+            write_log(config['id'], 'ERROR', error_msg)
+            if raise_error:
+                raise RuntimeError(error_msg)
+            return {"records": [], "sample_count": 0, "has_more": False, "total": None, "error": error_msg}
+
     def get_feishu_fields(self, config: Dict, access_token: str, raise_error: bool = False) -> Optional[List[Dict]]:
         """获取飞书表字段元数据。字段检测优先用它，避免空字段在记录样本里丢失。"""
         try:

@@ -4,6 +4,7 @@ Bookshelf management controller (dataset-isolated knowledge + prompts + golden S
 
 from flask import Blueprint, jsonify, request
 import os
+import re
 import sys
 import sqlite3
 from typing import Any, Dict, List
@@ -16,10 +17,36 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
 from config_manager import get_default_datasource, get_datasource_by_id, read_json
 import dataset_report_config as report_config_store
+from datasource_router import router as datasource_router
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
 repo = BookshelfRepository()
+
+
+def _is_read_only_sql(sql_text: str) -> bool:
+    normalized = re.sub(r"/\*.*?\*/", " ", str(sql_text or ""), flags=re.S)
+    normalized = re.sub(r"--.*?$", " ", normalized, flags=re.M).strip().lower()
+    if not normalized:
+        return False
+    if not (normalized.startswith("select") or normalized.startswith("with")):
+        return False
+    blocked = [
+        " insert ", " update ", " delete ", " drop ", " truncate ", " alter ",
+        " create ", " replace ", " grant ", " revoke ", " merge ", " call ",
+        " execute ", " vacuum ", " analyze ", " copy ",
+    ]
+    padded = f" {normalized} "
+    return not any(token in padded for token in blocked)
+
+
+def _wrap_preview_sql(sql_text: str, limit: int) -> str:
+    sql = str(sql_text or "").strip()
+    if sql.endswith(";"):
+        sql = sql[:-1].strip()
+    if ";" in sql:
+        raise ValueError("SQL 测试只允许单条只读查询。")
+    return f"SELECT * FROM (\n{sql}\n) AS __dataset_sql_preview LIMIT {limit}"
 
 
 def _normalize_synonym(value: str) -> str:
@@ -577,6 +604,63 @@ def get_bookshelf_dataset_full(dataset_id: int):
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": f"get dataset full failed: {exc}"}), 500
+
+
+@bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/sql-preview", methods=["POST"])
+def preview_bookshelf_dataset_sql(dataset_id: int):
+    try:
+        repo.ensure_schema()
+        payload = request.get_json() or {}
+        sql_text = str(payload.get("sql") or "").strip()
+        try:
+            limit = int(payload.get("limit") or 100)
+        except (TypeError, ValueError):
+            limit = 100
+        limit = max(1, min(limit, 10000))
+
+        if not sql_text:
+            return jsonify({"error": "SQL 不能为空。"}), 400
+        if not _is_read_only_sql(sql_text):
+            return jsonify({"error": "仅允许执行 SELECT / WITH 开头的只读 SQL。"}), 400
+
+        with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, dataset_name, source_id
+                FROM bs_datasets
+                WHERE id = %s AND is_active = TRUE;
+                """,
+                (dataset_id,),
+            )
+            dataset = cur.fetchone()
+        if not dataset:
+            return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
+        if dataset.get("source_id") is None:
+            return jsonify({"error": "当前数据集未绑定数据源，无法测试 SQL。"}), 400
+
+        preview_sql = _wrap_preview_sql(sql_text, limit)
+        dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
+        json_text = dataframe.to_json(orient="records", force_ascii=False, date_format="iso")
+        import json
+
+        records = json.loads(json_text)
+        columns = [str(col) for col in dataframe.columns.tolist()]
+        return jsonify({
+            "dataset_id": dataset_id,
+            "dataset_name": dataset.get("dataset_name"),
+            "source_id": dataset.get("source_id"),
+            "columns": columns,
+            "rows": records,
+            "row_count": len(records),
+            "limit": limit,
+            "preview_sql": preview_sql,
+        })
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except BookshelfConfigurationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"SQL 测试失败: {exc}"}), 500
 
 
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/full", methods=["PUT"])

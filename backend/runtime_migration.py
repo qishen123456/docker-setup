@@ -260,12 +260,20 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
 def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
     configs = bundle.get("configs") or {}
     tables = (bundle.get("bookshelf") or {}).get("tables") or bundle.get("tables") or {}
+    dataset_rows = tables.get("bs_datasets") or []
+    active_dataset_count = sum(1 for row in dataset_rows if isinstance(row, dict) and row.get("is_active") is not False)
+    inactive_dataset_count = sum(1 for row in dataset_rows if isinstance(row, dict) and row.get("is_active") is False)
     return {
         "type": bundle.get("type") or "unknown",
         "version": bundle.get("version"),
         "exported_at": bundle.get("exported_at"),
         "config_counts": {name: 1 for name in configs.keys()},
         "table_counts": {name: len(rows or []) for name, rows in tables.items()},
+        "dataset_counts": {
+            "active": active_dataset_count,
+            "inactive": inactive_dataset_count,
+            "total": len(dataset_rows or []),
+        },
         "config_files": list(configs.keys()),
     }
 

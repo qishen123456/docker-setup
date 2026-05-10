@@ -390,24 +390,40 @@ def test_feishu_connection():
                 "error": "获取访问令牌失败，请检查App ID和App Secret"
             })
         
-        # 测试获取数据（只获取前几条）
-        test_records = sync_service.get_feishu_data({
+        preview_limit = int(data.get('preview_limit') or 20)
+        # 测试获取数据：只取一页样本用于连通性检测，不代表全量记录数。
+        preview = sync_service.preview_feishu_data({
             'id': 0,
             'name': 'connection_test',
             'base_id': base_id,
             'table_id': table_id,
             'view_id': data.get('view_id', '')
-        }, access_token, limit=20)
+        }, access_token, limit=preview_limit)
         
-        if test_records is not None:
+        if not preview.get("error"):
+            total = preview.get("total")
+            sample_count = int(preview.get("sample_count") or 0)
+            has_more = bool(preview.get("has_more"))
+            scope_text = "当前视图" if data.get('view_id') else "当前表"
+            if total is not None:
+                message = f"连接成功，{scope_text}共{total}条记录，本次预览{sample_count}条"
+            elif has_more:
+                message = f"连接成功，{scope_text}至少{sample_count}条记录，本次仅预览前{sample_count}条"
+            else:
+                message = f"连接成功，{scope_text}预览到{sample_count}条记录"
             return jsonify({
                 "success": True,
-                "message": f"连接成功，共获取到{len(test_records)}条记录"
+                "message": message,
+                "sample_count": sample_count,
+                "page_size": preview.get("page_size"),
+                "has_more": has_more,
+                "total": total,
+                "is_preview": True,
             })
         else:
             return jsonify({
                 "success": False,
-                "error": "获取数据失败，请检查Base ID和Table ID"
+                "error": preview.get("error") or "获取数据失败，请检查Base ID、Table ID 和 View ID"
             })
             
     except Exception as e:

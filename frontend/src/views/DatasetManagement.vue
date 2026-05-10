@@ -46,7 +46,7 @@
                 <el-tag v-if="isDirty" type="warning" size="small" effect="plain" style="margin-left:8px">有未保存修改</el-tag>
               </div>
               <div class="header-actions">
-                <el-button v-if="isFeatureEnabled('dataset_autofill')" plain :disabled="!selectedDatasetId" @click="autofillSyybDataset">自动补齐商用事业部</el-button>
+                <el-button v-if="isFeatureEnabled('dataset_autofill')" plain :disabled="!selectedDatasetId" @click="autofillSelectedDataset">智能补齐</el-button>
                 <el-button v-if="isFeatureEnabled('dataset_delete')" type="danger" plain @click="removeDataset" :disabled="!selectedDatasetId">删除</el-button>
                 <el-button v-if="isFeatureEnabled('dataset_save')" type="primary" :disabled="!isDirty" @click="saveFull">保存书架内容</el-button>
               </div>
@@ -253,6 +253,48 @@
                     </template>
                   </el-table-column>
                 </el-table>
+              </el-tab-pane>
+
+              <!-- SQL 测试 -->
+              <el-tab-pane label="SQL 测试" name="sql_test">
+                <div class="sql-test-panel">
+                  <div class="sql-test-head">
+                    <div>
+                      <div class="section-title">只读 SQL 测试</div>
+                      <div class="muted-text">使用当前数据集绑定的数据源执行，仅允许 SELECT / WITH 查询，最多返回 10000 行。</div>
+                    </div>
+                    <div class="sql-test-actions">
+                      <span class="muted-text">最多行数</span>
+                      <el-input-number v-model="sqlPreviewLimit" :min="1" :max="10000" :step="100" size="small" controls-position="right" />
+                      <el-button size="small" type="primary" :loading="sqlPreviewLoading" @click="runSqlPreview">执行 SQL</el-button>
+                      <el-button size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('tsv')">复制表格</el-button>
+                      <el-button size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('json')">复制 JSON</el-button>
+                    </div>
+                  </div>
+                  <el-input
+                    v-model="sqlPreviewText"
+                    type="textarea"
+                    :rows="9"
+                    resize="vertical"
+                    class="mono-textarea sql-preview-editor"
+                    placeholder="输入 SELECT 或 WITH 查询，例如：SELECT * FROM your_table LIMIT 20"
+                  />
+                  <div v-if="sqlPreviewMeta" class="sql-preview-meta">
+                    返回 {{ sqlPreviewMeta.row_count }} 行，最多 {{ sqlPreviewMeta.limit }} 行
+                  </div>
+                  <el-table v-if="sqlPreviewColumns.length" :data="sqlPreviewRows" border size="small" max-height="360" class="sql-preview-table">
+                    <el-table-column
+                      v-for="column in sqlPreviewColumns"
+                      :key="column"
+                      :label="column"
+                      min-width="150"
+                      show-overflow-tooltip
+                    >
+                      <template #default="{ row }">{{ formatPreviewCell(row[column]) }}</template>
+                    </el-table-column>
+                  </el-table>
+                  <el-empty v-else description="执行 SQL 后在这里查看返回数据" :image-size="72" />
+                </div>
               </el-tab-pane>
 
               <!-- 外部配置 -->
@@ -465,7 +507,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
-  getBookshelfDatasets, getDataSources, getSourceTables,
+  getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
   saveBookshelfDatasetFull, updateBookshelfDataset
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
@@ -480,6 +522,12 @@ const activeTab = ref('common_questions')
 const isDirty = ref(false)
 const newDatasetSourceId = ref(null)
 const qualitySummary = ref(null)
+const sqlPreviewText = ref('')
+const sqlPreviewLimit = ref(100)
+const sqlPreviewLoading = ref(false)
+const sqlPreviewColumns = ref([])
+const sqlPreviewRows = ref([])
+const sqlPreviewMeta = ref(null)
 const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const datasetForm = reactive({ dataset_code: '', dataset_name: '', business_domain: '', source_id: null, description: '', is_active: true })
@@ -499,6 +547,7 @@ const isSyybDataset = computed(() => {
   const text = [datasetForm.dataset_name, datasetForm.dataset_code, datasetForm.business_domain].filter(Boolean).join(' ')
   return /商用事业部|安吉尔商用|angel_business/i.test(text)
 })
+const selectedDatasetName = computed(() => datasetForm.dataset_name || datasets.value.find(item => item.id === selectedDatasetId.value)?.dataset_name || '当前数据集')
 
 const SYYB_DEFAULT_DDL = `CREATE TABLE angel_group_data (
   id BIGINT,
@@ -783,19 +832,277 @@ const mergeCollection = (collectionName, items, keyFn) => {
   })
 }
 
-const autofillSyybDataset = async () => {
+const quoteIdent = (name) => `"${String(name || '').replace(/"/g, '""')}"`
+const quoteTable = (name) => String(name || '').split('.').filter(Boolean).map(quoteIdent).join('.')
+const compactName = (value, fallback = '当前数据集') => String(value || fallback).trim() || fallback
+const semanticNameOf = (columnName) => {
+  const raw = String(columnName || '').trim()
+  const lower = raw.toLowerCase()
+  const compound = [
+    [/(order|deal|sale).*(no|code|number)$/, '订单编号'],
+    [/(order|deal|sale).*(amount|money|amt|price)$/, '订单金额'],
+    [/(order|deal|sale).*(count|qty|quantity)$/, '订单数量'],
+    [/(order|deal|sale).*(status|state)$/, '订单状态'],
+    [/(order|deal|sale).*(date|day)$/, '订单日期'],
+    [/(region|area|province|city).*name$/, '区域名称'],
+    [/(dept|department).*name$/, '部门名称'],
+    [/(customer|client).*name$/, '客户名称'],
+    [/(product|sku).*name$/, '产品名称'],
+    [/(employee|staff|sales).*name$/, '员工名称'],
+    [/(company|org|organization).*name$/, '组织名称'],
+  ].find(([pattern]) => pattern.test(lower))
+  if (compound) return compound[1]
+  const mapped = [
+    [/^(id|.*_id)$/, '编号'],
+    [/(name|title|label|名称|姓名)$/, '名称'],
+    [/(code|编码|编号)$/, '编码'],
+    [/(date|day|日期)$/, '日期'],
+    [/(time|created_at|updated_at|时间)$/, '时间'],
+    [/(amount|money|amt|price|金额|价格|费用)$/, '金额'],
+    [/(count|qty|quantity|数量)$/, '数量'],
+    [/(rate|ratio|percent|比例|率)$/, '比例'],
+    [/(status|state|状态)$/, '状态'],
+    [/(type|category|分类|类型)$/, '类型'],
+    [/(dept|department|部门)$/, '部门'],
+    [/(org|organization|company|公司|组织)$/, '组织'],
+    [/(region|area|province|city|区域|省|市)$/, '区域'],
+  ].find(([pattern]) => pattern.test(lower) || pattern.test(raw))
+  if (mapped) return mapped[1]
+  return raw
+    .replace(/^fields[._-]?/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || raw || '字段'
+}
+const parseDdlColumns = (schema) => {
+  const ddl = String(schema?.ddl_sql || '')
+  const tableName = compactName(schema?.table_name, 'unknown_table')
+  const columns = []
+  const colRegex = /^\s*["`']?([\w\u4e00-\u9fa5]+)["`']?\s+([a-zA-Z][\w]*(?:\s*\([^)]*\))?)/gm
+  let match
+  while ((match = colRegex.exec(ddl)) !== null) {
+    const colName = match[1]
+    const lower = colName.toLowerCase()
+    if (['constraint', 'primary', 'unique', 'index', 'check', 'foreign', 'create', 'alter', 'table', 'key'].includes(lower)) continue
+    columns.push({
+      table_name: tableName,
+      column_name: colName,
+      jsonb_key: '',
+      semantic_name: semanticNameOf(colName),
+      data_type: match[2] || 'text',
+      enum_mapping: {},
+      extraction_rule: '',
+      is_active: true,
+    })
+  }
+  return columns
+}
+const isNumericType = (type) => /int|numeric|decimal|double|float|real|money|number/i.test(String(type || ''))
+const isTextLikeType = (type) => /char|text|varchar|uuid|jsonb?|enum/i.test(String(type || ''))
+const buildSelectList = (columns) => {
+  const selected = (columns || []).slice(0, 8)
+  if (selected.length === 0) return '*'
+  return selected.map(col => `${quoteIdent(col.column_name)} AS ${quoteIdent(col.semantic_name || col.column_name)}`).join(',\n  ')
+}
+const truncateText = (value, max = 3600) => {
+  const text = String(value || '').trim()
+  return text.length > max ? `${text.slice(0, max)}\n...已截断，完整 DDL 以数据集书架为准。` : text
+}
+const buildPromptDdlContext = (schemas) => schemas
+  .map(item => `表：${item.table_name}\n${truncateText(item.ddl_sql, 2200)}`)
+  .join('\n\n')
+const buildPromptDictionaryContext = (items) => (items || [])
+  .slice(0, 80)
+  .map(item => `- ${item.table_name}.${item.column_name}：${item.semantic_name || item.column_name}，类型=${item.data_type || 'unknown'}${item.jsonb_key ? `，JSON key=${item.jsonb_key}` : ''}`)
+  .join('\n')
+const buildAgent1Prompt = ({ datasetName, domain, promptTableNames }) => `你是 Agent1（语义路由与口径守卫）。
+当前数据集：「${datasetName}」
+业务域：「${domain}」
+可用表：${promptTableNames}
+
+职责：
+1. 判断用户问题是否应命中当前数据集。
+2. 从问题中提取统计对象、指标、时间范围、筛选条件、排序/TopN/对比意图。
+3. 用户说“这个、那个、继续下钻、换成上月”等省略表达时，优先沿用上一轮数据集和口径。
+4. 如果实体、指标、时间或字段口径不清，先追问；不要让 Agent2 猜字段或猜业务规则。
+5. 不得虚构 DDL、数据字典、LLD 中不存在的字段。`
+const buildAgent2Prompt = ({ datasetName, domain, schemas, dictionaryForBuild, promptTableNames }) => `你是 Agent2（SQL 生成专家），你的输出质量直接决定问数是否可信。
+当前数据集：「${datasetName}」
+业务域：「${domain}」
+可用表：${promptTableNames}
+
+硬性规则：
+1. 只生成 PostgreSQL 只读 SQL，禁止 INSERT、UPDATE、DELETE、TRUNCATE、DROP、ALTER、CREATE。
+2. 只能使用下方 DDL 和数据字典中出现的表、字段、JSON key；字段不存在时不要猜，必须要求补充口径。
+3. SQL 必须能独立执行；表名、字段名需要正确引用；聚合查询必须保证 GROUP BY 合法。
+4. 明细查询默认 LIMIT 100；Top/排名查询默认 LIMIT 20；除非用户明确要求更多。
+5. 输出列使用中文别名，让 Agent4 可以直接写报告。
+6. 金额、数量、比例等指标必须按字段类型谨慎处理：数值字段可直接聚合；文本金额必须先清洗再转 numeric；无法确认类型时先给保守 SQL 或追问。
+7. 用户要求对比时，要同时返回所有对比对象，不得只返回其中一个。
+8. 用户要求下钻时，要先返回上一级摘要，再返回下一层明细；不能用明细直接替代管理层级结论。
+9. 如果涉及时间但数据集中没有明确时间字段，必须说明无法按时间过滤或要求用户补充时间字段。
+10. 如果查询意图与当前 DDL 不匹配，返回需要澄清的原因，不要硬造 SQL。
+
+DDL 上下文：
+${buildPromptDdlContext(schemas)}
+
+字段语义：
+${buildPromptDictionaryContext(dictionaryForBuild) || '暂无字段字典，请优先依据 DDL 字段名谨慎推断。'}`
+const buildAgent3Prompt = ({ datasetName }) => `你是 Agent3（SQL 复核官）。
+当前数据集：「${datasetName}」
+
+复核重点：
+1. SQL 是否只读、安全。
+2. 表名、字段名、JSON key 是否来自当前数据集 DDL/字典。
+3. 聚合、GROUP BY、ORDER BY、SELECT DISTINCT 是否符合 PostgreSQL 语法。
+4. 明细查询是否有限制返回行数。
+5. 对比场景是否遗漏用户要求的任一对象。
+6. 下钻场景是否保留管理层级，不直接跳到过细明细。
+
+发现问题时，优先修正 SQL；无法修正时明确指出缺少哪个字段或口径。`
+const buildAgent4Prompt = ({ datasetName, domain }) => `你是 Agent4（报告生成与业务解读官）。
+当前数据集：「${datasetName}」
+业务域：「${domain}」
+
+报告规则：
+1. 必须基于 SQL 结果说话，不得编造查询结果之外的数字、排名、原因或建议。
+2. 开头先回答用户问题，用 1-3 句话给出核心结论；不要把字段逐项堆成流水账。
+3. 对比问题必须同时呈现各对象核心指标，并明确差异、领先/落后、风险点。
+4. 下钻问题必须先说上层概览，再说下层贡献或拖累，不要只给长名单。
+5. 输出结构优先采用：核心结论、关键指标对比、风险/异常、建议动作。
+6. 如果结果为空，要说明可能原因：筛选条件未命中、字段口径缺失、时间范围不匹配或数据未同步。
+7. 当查询结果字段不足以支撑判断时，明确说“当前结果不足以判断”，并建议补充字段或追问。`
+const buildGenericAutofillTemplate = () => {
+  const datasetName = compactName(datasetForm.dataset_name)
+  const domain = compactName(datasetForm.business_domain, '未分类业务域')
+  const schemas = full.schema_definition.filter(item => String(item.table_name || '').trim() && String(item.ddl_sql || '').trim())
+  const dictionary = schemas.flatMap(parseDdlColumns)
+  const dictionaryForBuild = [...full.data_dictionary, ...dictionary]
+  const firstSchema = schemas[0]
+  const firstTable = quoteTable(firstSchema?.table_name)
+  const firstColumns = dictionaryForBuild.filter(item => item.table_name === firstSchema?.table_name)
+  const numericCol = firstColumns.find(item => isNumericType(item.data_type))
+  const dimensionCol = firstColumns.find(item => isTextLikeType(item.data_type) && !/id|编号|编码/i.test(`${item.column_name}${item.semantic_name}`))
+  const hasJsonbFields = firstColumns.some(item => item.column_name === 'fields' && /jsonb?/i.test(item.data_type))
+  const goldenSql = []
+  if (firstTable) {
+    goldenSql.push({
+      intent_type: 'summary',
+      question: `${datasetName}一共有多少条记录？`,
+      sql_text: `SELECT COUNT(*) AS "记录数"\nFROM ${firstTable};`,
+      tags: [datasetName, '汇总'],
+      quality_score: 82,
+    })
+    goldenSql.push({
+      intent_type: 'detail',
+      question: `${datasetName}最近有哪些明细数据？`,
+      sql_text: `SELECT\n  ${buildSelectList(firstColumns)}\nFROM ${firstTable}\nLIMIT 20;`,
+      tags: [datasetName, '明细'],
+      quality_score: 80,
+    })
+    if (dimensionCol) {
+      goldenSql.push({
+        intent_type: 'aggregation',
+        question: `${datasetName}按${dimensionCol.semantic_name}分布如何？`,
+        sql_text: `SELECT\n  ${quoteIdent(dimensionCol.column_name)} AS ${quoteIdent(dimensionCol.semantic_name)},\n  COUNT(*) AS "记录数"\nFROM ${firstTable}\nGROUP BY ${quoteIdent(dimensionCol.column_name)}\nORDER BY "记录数" DESC\nLIMIT 20;`,
+        tags: [datasetName, dimensionCol.semantic_name],
+        quality_score: 82,
+      })
+    }
+    if (numericCol) {
+      goldenSql.push({
+        intent_type: 'metric_summary',
+        question: `${datasetName}${numericCol.semantic_name}合计是多少？`,
+        sql_text: `SELECT SUM(${quoteIdent(numericCol.column_name)}) AS ${quoteIdent(`${numericCol.semantic_name}合计`)}\nFROM ${firstTable};`,
+        tags: [datasetName, numericCol.semantic_name],
+        quality_score: 82,
+      })
+    }
+    if (dimensionCol && numericCol) {
+      goldenSql.push({
+        intent_type: 'topn',
+        question: `${datasetName}按${dimensionCol.semantic_name}看${numericCol.semantic_name}排名如何？`,
+        sql_text: `SELECT\n  ${quoteIdent(dimensionCol.column_name)} AS ${quoteIdent(dimensionCol.semantic_name)},\n  SUM(${quoteIdent(numericCol.column_name)}) AS ${quoteIdent(`${numericCol.semantic_name}合计`)}\nFROM ${firstTable}\nGROUP BY ${quoteIdent(dimensionCol.column_name)}\nORDER BY ${quoteIdent(`${numericCol.semantic_name}合计`)} DESC\nLIMIT 20;`,
+        tags: [datasetName, dimensionCol.semantic_name, numericCol.semantic_name],
+        quality_score: 84,
+      })
+    }
+    if (hasJsonbFields) {
+      goldenSql.push({
+        intent_type: 'schema_probe',
+        question: `${datasetName}JSON 字段里有哪些 key？`,
+        sql_text: `SELECT key AS "字段名", COUNT(*) AS "出现次数"\nFROM ${firstTable}, LATERAL jsonb_object_keys(fields) AS key\nGROUP BY key\nORDER BY "出现次数" DESC\nLIMIT 50;`,
+        tags: [datasetName, 'JSONB'],
+        quality_score: 80,
+      })
+    }
+    while (goldenSql.length < 3) {
+      goldenSql.push({
+        intent_type: 'detail',
+        question: `${datasetName}样例数据${goldenSql.length + 1}怎么看？`,
+        sql_text: `SELECT\n  ${buildSelectList(firstColumns)}\nFROM ${firstTable}\nLIMIT 20 OFFSET ${(goldenSql.length - 1) * 20};`,
+        tags: [datasetName, '样例'],
+        quality_score: 78,
+      })
+    }
+  }
+  const promptTableNames = schemas.map(item => item.table_name).join('、') || '已维护 DDL 的表'
+  return {
+    common_questions: [
+      { question_text: `${datasetName}一共有多少条记录？`, sort_order: 10, is_active: true },
+      { question_text: `${datasetName}最近有哪些明细数据？`, sort_order: 20, is_active: true },
+      ...(dimensionCol ? [{ question_text: `${datasetName}按${dimensionCol.semantic_name}分布如何？`, sort_order: 30, is_active: true }] : []),
+      ...(numericCol ? [{ question_text: `${datasetName}${numericCol.semantic_name}合计是多少？`, sort_order: 40, is_active: true }] : []),
+      ...(dimensionCol && numericCol ? [{ question_text: `${datasetName}按${dimensionCol.semantic_name}看${numericCol.semantic_name}排名如何？`, sort_order: 50, is_active: true }] : []),
+    ],
+    regression_cases: [
+      { case_type: 'summary', question_text: `${datasetName}一共有多少条记录？`, expected_focus: '应命中当前数据集，并返回总记录数。', expected_intent: 'generate_sql', sort_order: 10, is_active: true },
+      { case_type: 'detail', question_text: `${datasetName}最近有哪些明细数据？`, expected_focus: '应基于当前 DDL 返回明细列表，并限制返回行数。', expected_intent: 'generate_sql', sort_order: 20, is_active: true },
+      ...(dimensionCol ? [{ case_type: 'aggregation', question_text: `${datasetName}按${dimensionCol.semantic_name}分布如何？`, expected_focus: `应按${dimensionCol.semantic_name}聚合统计。`, expected_intent: 'generate_sql', sort_order: 30, is_active: true }] : []),
+    ],
+    synonyms: [
+      { synonym: datasetName, normalized_synonym: datasetName, weight: 10 },
+      ...(datasetForm.dataset_code ? [{ synonym: datasetForm.dataset_code, normalized_synonym: datasetName, weight: 8 }] : []),
+      ...(datasetForm.business_domain ? [{ synonym: datasetForm.business_domain, normalized_synonym: datasetName, weight: 6 }] : []),
+    ],
+    lld_documents: [{
+      version: full.lld_documents.length + 1,
+      title: `${datasetName}智能问数基础口径`,
+      content: `# ${datasetName}智能问数基础口径\n\n## 业务域\n${domain}\n\n## 数据范围\n当前数据集基于已维护 DDL 自动生成基础问数配置，涉及表：${promptTableNames}。\n\n## 字段口径\n字段语义优先使用数据字典；字典缺失时只能依据 DDL 字段名进行谨慎推断，不得编造未出现在 DDL 或业务描述中的字段。\n\n## SQL 红线\n只允许生成只读 SQL；必须使用当前数据集维护的表结构和字段；聚合、排序、筛选条件需要与用户问题一致；无法判断业务口径时先追问。`,
+      redline_rules: ['只读 SQL', '不得编造字段', '口径不清先追问', '结果必须限制返回行数'],
+      is_active: true,
+    }],
+    data_dictionary: dictionary,
+    golden_sql_samples: goldenSql.slice(0, 6),
+    agent_prompts: [
+      { agent_no: 1, prompt_key: 'default', prompt_content: buildAgent1Prompt({ datasetName, domain, promptTableNames }), is_active: true },
+      { agent_no: 2, prompt_key: 'default', prompt_content: buildAgent2Prompt({ datasetName, domain, schemas, dictionaryForBuild, promptTableNames }), is_active: true },
+      { agent_no: 3, prompt_key: 'default', prompt_content: buildAgent3Prompt({ datasetName }), is_active: true },
+      { agent_no: 4, prompt_key: 'default', prompt_content: buildAgent4Prompt({ datasetName, domain }), is_active: true },
+    ],
+    external_configs: [{
+      config_type: 'dataset_meta',
+      config_key: 'sql_generation_profile',
+      config_value: { db_type: 'postgresql', readonly: true, tables: schemas.map(item => item.table_name) },
+      is_active: true,
+    }],
+  }
+}
+
+const autofillSelectedDataset = async () => {
   if (!selectedDatasetId.value) return
-  if (!isSyybDataset.value) {
-    ElMessage.warning('当前选中的不是商用事业部数据集，未执行自动补齐。')
+  const hasUsableDdl = full.schema_definition.some(item => String(item.table_name || '').trim() && String(item.ddl_sql || '').trim())
+  const sourceId = datasetForm.source_id || newDatasetSourceId.value || dataSources.value[0]?.id || null
+  if (!isSyybDataset.value && !hasUsableDdl) {
+    ElMessage.warning(`请先为「${selectedDatasetName.value}」维护至少一张表的 DDL，再执行智能补齐。`)
     return
   }
-  const sourceId = datasetForm.source_id || newDatasetSourceId.value || dataSources.value[0]?.id || null
-  if (!sourceId) {
+  if (isSyybDataset.value && !sourceId) {
     ElMessage.warning('请先为当前数据集选择一个数据源。')
     return
   }
   try {
-    await ElMessageBox.confirm('将为当前商用事业部数据集自动补齐 LLD、字典、DDL、Golden SQL 与 Agent Prompt，并立即保存。确认继续？', '自动补齐商用事业部', {
+    await ElMessageBox.confirm(`将根据「${selectedDatasetName.value}」当前已维护的 DDL 和基础信息，重点补齐字段字典与 4 个 Agent Prompt（尤其 Agent2 SQL 生成、Agent4 报告解读），并补充少量常见问题和 Golden SQL 样例。确认继续？`, '智能补齐数据集', {
       type: 'info',
       confirmButtonText: '开始补齐',
       cancelButtonText: '取消',
@@ -804,12 +1111,20 @@ const autofillSyybDataset = async () => {
     return
   }
 
-  const template = createSyybTemplate(sourceId)
-  if (!datasetForm.dataset_name) datasetForm.dataset_name = '商用事业部'
-  if (!datasetForm.dataset_code) datasetForm.dataset_code = 'angel_business_2026'
-  if (!datasetForm.business_domain) datasetForm.business_domain = '安吉尔商用事业部销售业绩分析'
-  if (!datasetForm.description) datasetForm.description = '商用事业部（飞书多维表格）四 Agent 模板'
-  if (!datasetForm.source_id) datasetForm.source_id = sourceId
+  const template = isSyybDataset.value ? createSyybTemplate(sourceId) : buildGenericAutofillTemplate()
+  if (!isSyybDataset.value && template.data_dictionary.length === 0 && full.data_dictionary.length === 0) {
+    ElMessage.warning('当前 DDL 暂未解析出字段，请检查 DDL 是否包含标准列定义。')
+    return
+  }
+  if (isSyybDataset.value) {
+    if (!datasetForm.dataset_name) datasetForm.dataset_name = '商用事业部'
+    if (!datasetForm.dataset_code) datasetForm.dataset_code = 'angel_business_2026'
+    if (!datasetForm.business_domain) datasetForm.business_domain = '安吉尔商用事业部销售业绩分析'
+    if (!datasetForm.description) datasetForm.description = '商用事业部（飞书多维表格）四 Agent 模板'
+    if (!datasetForm.source_id) datasetForm.source_id = sourceId
+  } else if (!datasetForm.description) {
+    datasetForm.description = `${selectedDatasetName.value}智能问数数据集`
+  }
 
   mergeCollection('common_questions', template.common_questions, item => item.question_text)
   mergeCollection('regression_cases', template.regression_cases, item => `${item.case_type}|${item.question_text}`)
@@ -821,7 +1136,7 @@ const autofillSyybDataset = async () => {
   mergeCollection('agent_prompts', template.agent_prompts, item => `${item.agent_no}|${item.prompt_key}`)
   mergeCollection('external_configs', template.external_configs, item => `${item.config_type}|${item.config_key}`)
 
-  activeTab.value = 'golden'
+  activeTab.value = 'prompts'
   markDirty()
   await saveFull()
 }
@@ -967,6 +1282,7 @@ const loadDataSources = async () => {
 const selectDataset = async (dataset) => {
   selectedDatasetId.value = dataset.id
   applyDataset(dataset)
+  resetSqlPreview()
   const r = await getBookshelfDatasetFull(dataset.id)
   FULL_COLLECTION_KEYS.forEach(key => { full[key] = r[key] || [] })
   qualitySummary.value = r.quality_summary || null
@@ -1063,6 +1379,63 @@ const addSchema = () => openSchemaEditor()
 const ddlPreview = (t) => { const n = String(t || '').replace(/\s+/g, ' ').trim(); return n ? (n.length > 120 ? n.slice(0, 120) + '...' : n) : '暂无 DDL' }
 const jsonString = (v) => { try { return JSON.stringify(v || {}, null, 2) } catch { return '{}' } }
 
+const resetSqlPreview = () => {
+  sqlPreviewColumns.value = []
+  sqlPreviewRows.value = []
+  sqlPreviewMeta.value = null
+}
+const formatPreviewCell = (value) => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+const runSqlPreview = async () => {
+  if (!selectedDatasetId.value) return
+  if (!String(sqlPreviewText.value || '').trim()) {
+    ElMessage.warning('请先输入要测试的 SQL。')
+    return
+  }
+  sqlPreviewLoading.value = true
+  try {
+    const result = await previewBookshelfDatasetSql(selectedDatasetId.value, {
+      sql: sqlPreviewText.value,
+      limit: sqlPreviewLimit.value,
+    })
+    sqlPreviewColumns.value = result.columns || []
+    sqlPreviewRows.value = result.rows || []
+    sqlPreviewMeta.value = result
+    ElMessage.success(`SQL 执行成功，返回 ${result.row_count || 0} 行`)
+  } finally {
+    sqlPreviewLoading.value = false
+  }
+}
+const copyText = async (text) => {
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+const copySqlPreview = async (format = 'tsv') => {
+  if (!sqlPreviewRows.value.length) return
+  const text = format === 'json'
+    ? JSON.stringify(sqlPreviewRows.value, null, 2)
+    : [
+        sqlPreviewColumns.value.join('\t'),
+        ...sqlPreviewRows.value.map(row => sqlPreviewColumns.value.map(column => formatPreviewCell(row[column]).replace(/\t/g, ' ').replace(/\r?\n/g, ' ')).join('\t')),
+      ].join('\n')
+  await copyText(text)
+  ElMessage.success(format === 'json' ? '已复制 JSON' : '已复制表格数据')
+}
+
 onMounted(async () => {
   await loadFeatureFlags()
   await Promise.all([loadDatasets(), loadDataSources()])
@@ -1092,6 +1465,14 @@ onMounted(async () => {
 .quality-gaps { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-body, #4e5969); line-height: 1.6; }
 .toolbar { margin-bottom: 10px; display: flex; gap: 8px; }
 .section-title { margin: 18px 0 10px; font-weight: 700; font-size: 14px; color: var(--text-title, #1d2129); }
+.muted-text { color: var(--text-muted, #86909c); font-size: 12px; line-height: 1.5; }
+.sql-test-panel { display: flex; flex-direction: column; gap: 12px; }
+.sql-test-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.sql-test-head .section-title { margin-top: 0; }
+.sql-test-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.sql-preview-editor { margin-top: 2px; }
+.sql-preview-meta { color: var(--text-muted, #86909c); font-size: 12px; }
+.sql-preview-table { width: 100%; }
 .text-preview { font-size: 12px; color: var(--text-body, #4e5969); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .schema-name-cell { font-weight: 600; color: var(--text-title, #1d2129); }
 .ddl-preview-line { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 12px; line-height: 1.4; color: var(--text-body, #4e5969); word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }

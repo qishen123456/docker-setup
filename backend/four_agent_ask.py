@@ -20,7 +20,7 @@ from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
 from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
-from dataset_dimension_profiles import find_group_matches, get_dataset_profile
+from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
 import dataset_report_config as report_config_store
 from report_spec_builder import build_report_spec
 from memory import ShortTermMemoryStore
@@ -488,6 +488,7 @@ class FourAgentAskService:
             review_summary,
             error_message,
             self._safe_dict(context.get("report_config")) or report_config_store.get_default_config(),
+            self._safe_dict(context.get("resolved_entities")),
         )
         if layered:
             return layered
@@ -599,6 +600,7 @@ class FourAgentAskService:
         review_summary: str = "",
         error_message: str = "",
         report_config: Optional[Dict[str, Any]] = None,
+        resolved_entities: Optional[Dict[str, Any]] = None,
     ) -> str:
         if not isinstance(rows, list) or not rows:
             return ""
@@ -611,6 +613,7 @@ class FourAgentAskService:
         rate_metric = metric_by_key.get("rate") or next((item for item in metrics if item.get("format") == "percent"), {})
         task_metric = metric_by_key.get("task") or next((item for item in metrics if "任务" in str(item.get("label") or item.get("column") or "")), {})
         actual_metric = metric_by_key.get("actual") or next((item for item in metrics if any(token in str(item.get("label") or item.get("column") or "") for token in ("完成", "开单", "销售"))), {})
+        remain_metric = metric_by_key.get("remain") or next((item for item in metrics if any(token in str(item.get("label") or item.get("column") or "") for token in ("剩余", "缺口", "差额"))), {})
 
         name_col = str(config.get("nameColumn") or "节点名称")
         parent_col = str(config.get("parentColumn") or "上级名称")
@@ -619,10 +622,19 @@ class FourAgentAskService:
         task_col = str(task_metric.get("column") or "")
         actual_col = str(actual_metric.get("column") or "")
         rate_col = str(rate_metric.get("column") or "")
+        remain_col = str(remain_metric.get("column") or "")
         levels = [item for item in (config.get("levels") or []) if isinstance(item, dict)]
-        risk_threshold = self._to_float(config.get("riskThreshold"))
+        risk_threshold = (
+            self._to_float(config.get("personRiskThreshold"))
+            or self._to_float(config.get("officeRiskThreshold"))
+            or self._to_float(config.get("riskThreshold"))
+        )
         if risk_threshold is None:
-            risk_threshold = 80
+            risk_threshold = 10
+        if risk_threshold > 50:
+            risk_threshold = 10
+        office_benchmark = self._to_float(config.get("officeBenchmarkThreshold")) or 15
+        person_benchmark = self._to_float(config.get("personBenchmarkThreshold")) or 20
 
         required_columns = {name_col, level_col, rate_col}
         if parent_col:
@@ -737,6 +749,69 @@ class FourAgentAskService:
             query_subjects = list(dict.fromkeys(normalized_text(row, parent_col) for row in valid_rows[:8] if normalized_text(row, parent_col)))
 
         subject_label = "、".join(query_subjects[:6]) or question or dataset_name
+        resolved_names = self._resolved_entity_names({"resolved_entities": resolved_entities or {}})
+        is_comparison = len(resolved_names) > 1 or bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
+        if is_comparison and len(top_section["rows"]) >= 2:
+            compared = sorted(
+                [row for row in top_section["rows"] if row_rate(row) is not None],
+                key=lambda row: row_rate(row) or 0,
+                reverse=True,
+            )[:2]
+            if len(compared) >= 2:
+                first, second = compared[0], compared[1]
+                first_rate = row_rate(first)
+                second_rate = row_rate(second)
+                rate_gap = (first_rate or 0) - (second_rate or 0)
+                first_name = row_name(first)
+                second_name = row_name(second)
+                first_task = self._to_float(first.get(task_col)) if task_col else None
+                second_task = self._to_float(second.get(task_col)) if task_col else None
+                first_actual = self._to_float(first.get(actual_col)) if actual_col else None
+                second_actual = self._to_float(second.get(actual_col)) if actual_col else None
+                first_remain = self._to_float(first.get(remain_col)) if remain_col else None
+                second_remain = self._to_float(second.get(remain_col)) if remain_col else None
+
+                child_rows = [row for row in valid_rows if normalized_text(row, parent_col) in {first_name, second_name}]
+                child_level_names = list(dict.fromkeys(normalized_text(row, level_col) for row in child_rows if normalized_text(row, level_col)))
+                child_level_label = " / ".join(child_level_names[:2]) or "下级节点"
+                child_top = rank_items(child_rows, True, 3)
+                child_risk = rank_items([row for row in child_rows if (row_rate(row) or 0) < risk_threshold], False, 5)
+                leader = first_name if rate_gap >= 0 else second_name
+                learner = second_name if rate_gap >= 0 else first_name
+                lines = [
+                    f"# {first_name} vs {second_name} 业绩对比分析报告",
+                    "",
+                    "## 一、核心结论",
+                    (
+                        f"{first_name}整体达成率{self._format_metric(first_rate, '%')}，"
+                        f"比{second_name}的{self._format_metric(second_rate, '%')}"
+                        f"{'高' if rate_gap >= 0 else '低'}{self._format_metric(abs(rate_gap), '')}个百分点；"
+                        f"当前对标方向是 {learner} 向 {leader} 学习高达成节点的目标拆解和项目推进节奏。"
+                    ),
+                    "",
+                    "## 二、关键指标对标",
+                    f"| 指标 | {first_name} | {second_name} | 差距 |",
+                    "|---|---:|---:|---:|",
+                    f"| 总任务金额 | {self._format_metric(first_task)} | {self._format_metric(second_task)} | - |",
+                    f"| 已完成金额 | {self._format_metric(first_actual)} | {self._format_metric(second_actual)} | {self._format_metric((first_actual or 0) - (second_actual or 0))} |",
+                    f"| 整体达成率 | {self._format_metric(first_rate, '%')} | {self._format_metric(second_rate, '%')} | {self._format_metric(rate_gap, '')}pct |",
+                    f"| 剩余缺口金额 | {self._format_metric(first_remain)} | {self._format_metric(second_remain)} | {self._format_metric((first_remain or 0) - (second_remain or 0))} |",
+                    "",
+                    "## 三、层级差异核心看点",
+                    f"1. **{child_level_label}标杆节点**：{format_rank(child_top)}，优先复盘其客户跟进节奏和目标拆解方式。",
+                    f"2. **{child_level_label}风险节点**：{format_rank(child_risk)}，低于{self._format_metric(risk_threshold, '%')}的节点要优先跟进缺口。",
+                    "",
+                    "## 四、落地建议",
+                    f"✅ **{learner}向{leader}对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。",
+                    f"⚠️ **{leader}保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。",
+                    f"🔴 **共同改进项**：先针对低达成{child_level_label}建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。",
+                ]
+                if review_summary:
+                    lines.extend(["", f"> SQL复核：{review_summary}"])
+                if error_message:
+                    lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
+                return "\n".join(lines)
+
         lines = [
             "## 业绩分析报告",
             "",
@@ -825,6 +900,7 @@ class FourAgentAskService:
             "dataset_name": dataset.get("dataset_name"),
             "source_id": dataset.get("source_id"),
             "report_config": context.get("report_config") or report_config_store.get_default_config(),
+            "resolved_entities": context.get("resolved_entities"),
             "agent3_review": safe_review,
             "columns": safe_result.get("columns", []),
             "rows": safe_result.get("rows", []),
@@ -1261,8 +1337,247 @@ class FourAgentAskService:
             "levels": config.get("levels") or [],
             "riskThreshold": config.get("riskThreshold"),
             "agentReportGuidance": config.get("agentReportGuidance", ""),
+            "resolvedQuestionScope": context.get("resolved_entities") or {},
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def _profile_catalog(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+        catalog = []
+        for level in profile.get("levels") or []:
+            if not isinstance(level, dict):
+                continue
+            members = [str(item).strip() for item in (level.get("members") or []) if str(item).strip()]
+            groups = []
+            for group in level.get("groups") or []:
+                if isinstance(group, dict):
+                    groups.append(
+                        {
+                            "group_name": group.get("group_name"),
+                            "aliases": group.get("aliases") or [],
+                            "members": group.get("members") or [],
+                        }
+                    )
+            catalog.append(
+                {
+                    "dimension_name": level.get("dimension_name"),
+                    "aliases": level.get("aliases") or [],
+                    "members": members[:80],
+                    "groups": groups[:20],
+                }
+            )
+        return catalog
+
+    @staticmethod
+    def _profile_member_map(profile: Dict[str, Any]) -> Dict[str, str]:
+        member_map: Dict[str, str] = {}
+        for level in profile.get("levels") or []:
+            if not isinstance(level, dict):
+                continue
+            for member in level.get("members") or []:
+                value = str(member or "").strip()
+                if value:
+                    member_map[value] = str(level.get("dimension_name") or "").strip()
+        return member_map
+
+    @staticmethod
+    def _normalize_entity_resolution(
+        raw: Dict[str, Any],
+        fallback: Dict[str, Any],
+        profile: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        member_map = FourAgentAskService._profile_member_map(profile)
+        ordered_members: List[str] = []
+        entities_by_dimension: Dict[str, Dict[str, Any]] = {}
+
+        for entity in raw.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            dimension_name = str(entity.get("dimension_name") or "").strip()
+            for member in entity.get("members") or []:
+                member_name = str(member or "").strip()
+                if not member_name or member_name not in member_map:
+                    continue
+                resolved_dimension = dimension_name or member_map.get(member_name) or ""
+                if member_name not in ordered_members:
+                    ordered_members.append(member_name)
+                bucket = entities_by_dimension.setdefault(
+                    resolved_dimension,
+                    {
+                        "dimension_name": resolved_dimension,
+                        "members": [],
+                        "matched_phrase": str(entity.get("matched_phrase") or entity.get("matched_alias") or "").strip(),
+                        "source": str(raw.get("source") or entity.get("source") or "llm_semantic"),
+                    },
+                )
+                if member_name not in bucket["members"]:
+                    bucket["members"].append(member_name)
+
+        if not ordered_members:
+            for member in fallback.get("all_members") or []:
+                member_name = str(member or "").strip()
+                if not member_name or member_name not in member_map or member_name in ordered_members:
+                    continue
+                ordered_members.append(member_name)
+                dimension_name = member_map.get(member_name) or ""
+                bucket = entities_by_dimension.setdefault(
+                    dimension_name,
+                    {
+                        "dimension_name": dimension_name,
+                        "members": [],
+                        "matched_phrase": "",
+                        "source": "profile_semantic",
+                    },
+                )
+                bucket["members"].append(member_name)
+        else:
+            for member in fallback.get("all_members") or []:
+                member_name = str(member or "").strip()
+                if not member_name or member_name not in member_map or member_name in ordered_members:
+                    continue
+                ordered_members.append(member_name)
+                dimension_name = member_map.get(member_name) or ""
+                bucket = entities_by_dimension.setdefault(
+                    dimension_name,
+                    {
+                        "dimension_name": dimension_name,
+                        "members": [],
+                        "matched_phrase": "",
+                        "source": "profile_semantic",
+                    },
+                )
+                bucket["members"].append(member_name)
+
+        scope_mode = str(raw.get("scope_mode") or raw.get("intent") or fallback.get("scope_mode") or "").lower()
+        if len(ordered_members) > 1:
+            scope_mode = "compare"
+        elif len(ordered_members) == 1 and scope_mode not in {"aggregate", "ranking"}:
+            scope_mode = "single"
+        elif not ordered_members:
+            scope_mode = "unknown"
+
+        confidence = raw.get("confidence", fallback.get("confidence", 0))
+        try:
+            confidence_value = float(confidence)
+        except Exception:
+            confidence_value = 0
+
+        return {
+            "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else str(raw.get("intent") or fallback.get("intent") or "unknown")),
+            "scope_mode": scope_mode,
+            "entities": list(entities_by_dimension.values()),
+            "all_members": ordered_members,
+            "confidence": confidence_value,
+            "source": str(raw.get("source") or ("llm_semantic" if ordered_members else fallback.get("source") or "unknown")),
+        }
+
+    @staticmethod
+    def _profile_scope_hint(question: str, profile: Dict[str, Any], fallback: Dict[str, Any]) -> bool:
+        if fallback.get("all_members"):
+            return True
+        normalized_question = re.sub(r"\s+", "", str(question or ""))
+        for level in profile.get("levels") or []:
+            if not isinstance(level, dict):
+                continue
+            terms = [level.get("dimension_name"), *(level.get("aliases") or [])]
+            for term in terms:
+                if term and str(term) in normalized_question:
+                    return True
+        return False
+
+    def _resolve_question_entities(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        trace: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        dataset = self._safe_dict(context.get("dataset"))
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if not profile:
+            return {
+                "intent": "unknown",
+                "scope_mode": "unknown",
+                "entities": [],
+                "all_members": [],
+                "confidence": 0,
+                "source": "no_profile",
+            }
+
+        fallback = resolve_member_mentions(question, profile)
+        if not self._profile_scope_hint(question, profile, fallback):
+            return fallback
+
+        system_prompt = (
+            "你是 Agent1.5 语义口径解析器。你的任务不是生成 SQL，而是把用户问题中的组织、层级、集合或并列表达，"
+            "映射到给定数据集画像里的候选成员。只能从候选 members 中选择，不允许编造成员；如果用户使用简称、合称、"
+            "并列词或省略后缀，需要结合候选成员理解真实统计对象。"
+        )
+        user_prompt = f"""
+用户问题：
+{question}
+
+数据集画像候选维度：
+{json.dumps(self._profile_catalog(profile), ensure_ascii=False, indent=2)}
+
+规则：
+1. 只从候选 members 中选择成员，不能输出候选外名称。
+2. 用户表达多个同层级对象时，scope_mode=compare，并保持用户表达顺序。
+3. 用户只表达一个组织对象时，scope_mode=single。
+4. 用户表达集合口径但没有要求分别比较时，scope_mode=aggregate；若有“分别/各/对比/比较/谁更/差异”等比较意图，scope_mode=compare。
+5. 不确定时 entities 留空，不要硬猜。
+
+请输出 JSON：
+{{
+  "intent": "compare|single|aggregate|ranking|unknown",
+  "scope_mode": "compare|single|aggregate|ranking|unknown",
+  "entities": [
+    {{
+      "dimension_name": "候选维度名",
+      "members": ["候选成员名"],
+      "matched_phrase": "用户原话中触发的短语",
+      "reason": "一句话说明"
+    }}
+  ],
+  "confidence": 0.0
+}}
+"""
+        raw = self._chat_json(
+            system_prompt,
+            user_prompt,
+            fallback,
+            trace=trace,
+            stage="agent1.entity_resolution",
+            agent_name="Agent1.5",
+        )
+        resolved = self._normalize_entity_resolution(raw, fallback, profile)
+        self._append_trace(
+            trace,
+            "pipeline.entity_resolution",
+            "info",
+            dataset_id=dataset.get("id"),
+            dataset_name=dataset.get("dataset_name"),
+            resolved_entities=resolved,
+        )
+        return resolved
+
+    @staticmethod
+    def _resolved_entity_names(context: Dict[str, Any]) -> List[str]:
+        resolved = context.get("resolved_entities") if isinstance(context, dict) else {}
+        if not isinstance(resolved, dict):
+            return []
+        names: List[str] = []
+        for name in resolved.get("all_members") or []:
+            value = str(name or "").strip()
+            if value and value not in names:
+                names.append(value)
+        for entity in resolved.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            for name in entity.get("members") or []:
+                value = str(name or "").strip()
+                if value and value not in names:
+                    names.append(value)
+        return names
 
     @staticmethod
     def _tokenize(text: str) -> set:
@@ -1373,6 +1688,9 @@ class FourAgentAskService:
         match = first_match["match"]
         dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
         members = [str(x).strip() for x in (match.get("members") or []) if str(x).strip()]
+        matched_alias = str(match.get("matched_alias") or match.get("group_name") or "")
+        if members and self._should_auto_expand_profile_group(question, matched_alias, members):
+            return None
         member_text = "、".join(members)
         return {
             "requires_confirmation": True,
@@ -1414,6 +1732,20 @@ class FourAgentAskService:
             "candidate_dataset_ids": [int(dataset["id"])],
             "resolved_entities_preview": members,
         }
+
+    @staticmethod
+    def _should_auto_expand_profile_group(question: str, matched_alias: str, members: List[str]) -> bool:
+        if len(members) <= 1:
+            return False
+        text = re.sub(r"\s+", "", str(question or ""))
+        alias = re.sub(r"\s+", "", str(matched_alias or ""))
+        if not alias:
+            return False
+        explicit_group_markers = ("三大", "3大", "三个", "各", "所有", "全部", "每个", "分别", "对比", "比较", "排名", "排行")
+        intent_markers = ("业绩", "表现", "情况", "如何", "怎么样", "达成", "开单", "任务", "缺口", "对比", "比较", "排名", "排行")
+        return any(marker in alias or marker in text for marker in explicit_group_markers) and any(
+            marker in text for marker in intent_markers
+        )
 
     def _detect_ambiguity(self, question: str, ranked_candidates: List[Tuple[Dict[str, Any], int]]) -> Optional[Dict[str, Any]]:
         if not ranked_candidates:
@@ -1607,6 +1939,25 @@ class FourAgentAskService:
         best_sample_score = int(best_sample.get("match_score", 0))
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
         route_margin = best_score - runner_up_score
+        profile_scope_resolved = str(arbiter_result.get("reason") or "") == "profile_scope_resolved" and bool(auto_pick_dataset_ids)
+        if profile_scope_resolved:
+            return {
+                "dataset_ids": auto_pick_dataset_ids,
+                "intent": "detail",
+                "refined_query": arbiter_result.get("refined_query") or question,
+                "requires_confirmation": False,
+                "decision": "direct_execute",
+                "match_score": max(best_score, 82),
+                "route_margin": route_margin,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": "profile_scope_resolved",
+                "split_queries": [
+                    {"dataset_id": item, "sub_query": arbiter_result.get("refined_query") or question}
+                    for item in auto_pick_dataset_ids
+                ],
+            }
+
         if best_score < 70 and len(ranked) > 1:
             best_dataset_name = best_dataset.get("dataset_name") or f"数据集 {best_dataset['id']}"
             options = self._normalize_confirmation_options(
@@ -1853,13 +2204,19 @@ ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
 
-        entity_names = []
-        for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
-            cleaned = match.strip("，,、 和与及的业绩情况表现")
-            if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
-                continue
-            if cleaned and cleaned not in entity_names:
-                entity_names.append(cleaned)
+        entity_names = self._resolved_entity_names(context)
+        if not entity_names:
+            profile = get_dataset_profile(dataset_code, dataset_name)
+            if profile:
+                semantic_fallback = resolve_member_mentions(normalized_question, profile)
+                entity_names = [str(item).strip() for item in (semantic_fallback.get("all_members") or []) if str(item).strip()]
+        if not entity_names:
+            for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
+                cleaned = match.strip("，,、 和与及的业绩情况表现")
+                if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
+                    continue
+                if cleaned and cleaned not in entity_names:
+                    entity_names.append(cleaned)
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             return f"""
@@ -1986,16 +2343,21 @@ LIMIT 100
             and any(token in normalized_question for token in ["代表处", "业务代表", "业务员"])
             and any(token in normalized_question for token in ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"])
         )
-        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking):
+        force_resolved_scope_rule = bool(rule_based_sql and self._resolved_entity_names(context))
+        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule):
             self._append_trace(
                 trace,
-                "agent2.sql_generate.grouped_rule" if force_grouped_ranking else "agent2.sql_generate.rule_based",
+                "agent2.sql_generate.grouped_rule" if force_grouped_ranking else (
+                    "agent2.sql_generate.resolved_scope_rule" if force_resolved_scope_rule else "agent2.sql_generate.rule_based"
+                ),
                 "info",
                 sql=self._truncate_text(rule_based_sql, 12000),
             )
             return {
                 "sql": rule_based_sql,
-                "notes": "grouped hierarchy ranking rule" if force_grouped_ranking else "rule based sql fallback",
+                "notes": "grouped hierarchy ranking rule" if force_grouped_ranking else (
+                    "semantic entity scope resolved; used stable hierarchy sql" if force_resolved_scope_rule else "rule based sql fallback"
+                ),
             }
         seed_block = ""
         if seed_sql:
@@ -2325,10 +2687,10 @@ LLD：
         )
         global_report_standard = """
 你现在是一个智能数据分析报告生成引擎。生成报告时必须遵循以下全局标准：
-1. 动态布局：先识别意图。对比查询使用左右对称对比结构；单体查询使用“核心 KPI -> 趋势/对比图 -> 细分维度”的纵向结构；列表或排名查询突出名次、差距和 Top/Bottom。
+1. 动态布局：先识别意图。对比查询使用“核心结论 -> 关键指标对标 -> 层级差异核心看点 -> 落地建议”的对称结构；单体查询使用“核心 KPI -> 层级分布 -> 细分明细”的纵向结构；列表或排名查询突出名次、差距和 Top/Bottom。
 2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用“万”；100万-1亿取整“万”；1亿以上保留2位小数“亿”。不得随意生成金额格式。
-3. 视觉引导：完成率按红绿灯解释，>=100% 为绿灯，80%-100% 为黄灯，<80% 为红灯；涉及多维度排序时默认按完成率降序。
-4. 分析文本：严禁重复主语和长篇段落。必须采用“核心结论 -> 亮点分析 • -> 问题诊断 • -> 改进建议”的结构。
+3. 视觉引导：代表处按达成率分层，<10% 为风险，10%-15% 为中等，>15% 为标杆；业务代表按 <10% 风险、10%-20% 中等、>20% 标杆解释；涉及多维度排序时默认按达成率降序。
+4. 分析文本：严禁重复主语和长篇段落。单体分析采用“核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议”的结构；多组织对比必须明确“谁领先、差多少、谁向谁学、改什么”。
 5. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
 """.strip()
         system_prompt = f"{system_prompt}\n\n{global_report_standard}"
@@ -2416,6 +2778,11 @@ Agent3 复核结果：
             dataset_meta = self._safe_dict(context.get("dataset"))
             report_config = report_config_store.get_config(int(dataset_id)) or report_config_store.get_default_config()
             context["report_config"] = report_config
+            context["resolved_entities"] = self._resolve_question_entities(
+                route.get("refined_query", question),
+                context,
+                trace=trace,
+            )
             self._append_trace(
                 trace,
                 "pipeline.dataset_context",
@@ -2434,6 +2801,7 @@ Agent3 复核结果：
                     "level": report_config.get("levelColumn"),
                     "track": report_config.get("trackColumn"),
                 },
+                resolved_entities=context.get("resolved_entities"),
             )
             prompts = context.get("agent_prompts", {})
             agent2_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(2, []))
@@ -2579,6 +2947,7 @@ Agent3 复核结果：
                 report_config=report_config,
                 sql=final_sql,
                 review=review,
+                resolved_entities=context.get("resolved_entities"),
             )
             self._append_trace(
                 trace,
@@ -2604,6 +2973,7 @@ Agent3 复核结果：
                     "dataset_name": context["dataset"]["dataset_name"],
                     "source_id": context["dataset"]["source_id"],
                     "report_config": report_config,
+                    "resolved_entities": context.get("resolved_entities"),
                     "agent3_review": review,
                     "columns": result["columns"],
                     "rows": result["rows"],

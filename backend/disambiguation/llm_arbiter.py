@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List
 
+from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
 from .option_builder import build_dataset_options, fallback_confirmation
 from .scoring import CandidateContext, needs_llm_arbitration, score_snapshot
 
@@ -21,11 +22,14 @@ class DisambiguationArbiter:
         chat_json: ChatJsonFn,
         trace: Any = None,
     ) -> Dict[str, Any]:
-        candidates = self._candidate_payload(candidate_contexts)
+        candidates = self._candidate_payload(question, candidate_contexts)
         if not candidates:
             return {"need_confirm": False, "options": [], "auto_pick_option_id": ""}
 
         fallback = self._fallback(question, candidates, candidate_contexts)
+        profile_auto_pick = self._profile_auto_pick(candidates)
+        if profile_auto_pick:
+            return profile_auto_pick
         if not self.should_arbitrate(question, candidate_contexts, history):
             return {"need_confirm": False, "options": [], "auto_pick_option_id": "", "reason": "high_confidence"}
 
@@ -33,6 +37,7 @@ class DisambiguationArbiter:
 你是智能问数的数据集与统计口径仲裁器。
 你只能根据候选数据集、候选分数、Golden SQL、数据字典摘要和对话历史判断是否需要确认。
 不要硬编码字段名集合；如果上下文已经能消解追问，应自动选择并给出 auto_pick_option_id。
+如果候选数据集的 resolved_profile_scope 已经把用户合称、简称或集合口径映射为明确成员，优先相信画像映射，不要把数据集名称误判为唯一业务对象。
 如果多个数据集或统计口径都合理，必须让用户确认。
 只输出 JSON。
 """.strip()
@@ -64,7 +69,7 @@ class DisambiguationArbiter:
         result = chat_json(system_prompt, user_prompt, fallback, trace, "disambiguation.arbiter", "DisambiguationArbiter")
         return self._normalize(result, candidates, fallback)
 
-    def _candidate_payload(self, candidate_contexts: List[CandidateContext]) -> List[Dict[str, Any]]:
+    def _candidate_payload(self, question: str, candidate_contexts: List[CandidateContext]) -> List[Dict[str, Any]]:
         payload = []
         for dataset, context, score in candidate_contexts[:5]:
             dataset_id = int(dataset.get("id") or 0)
@@ -72,6 +77,7 @@ class DisambiguationArbiter:
                 continue
             samples = context.get("golden_sql_samples") or []
             dictionary = context.get("data_dictionary") or []
+            profile_scope = self._profile_scope_payload(question, dataset)
             payload.append(
                 {
                     "dataset_id": dataset_id,
@@ -82,9 +88,70 @@ class DisambiguationArbiter:
                     "sample_questions": [item.get("question") for item in samples[:3] if item.get("question")],
                     "dictionary_terms": [item.get("semantic_name") or item.get("column_name") for item in dictionary[:20]],
                     "has_lld": bool(str((context.get("lld_document") or {}).get("content") or "").strip()),
+                    "resolved_profile_scope": profile_scope,
                 }
             )
         return payload
+
+    @staticmethod
+    def _profile_scope_payload(question: str, dataset: Dict[str, Any]) -> Dict[str, Any]:
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if not profile:
+            return {}
+        resolved = resolve_member_mentions(question, profile)
+        groups = find_group_matches(question, profile)
+        return {
+            "intent": resolved.get("intent"),
+            "scope_mode": resolved.get("scope_mode"),
+            "all_members": resolved.get("all_members") or [],
+            "entities": resolved.get("entities") or [],
+            "matched_groups": [
+                {
+                    "group_name": item.get("group_name"),
+                    "matched_alias": item.get("matched_alias"),
+                    "dimension_name": item.get("dimension_name"),
+                    "members": item.get("members") or [],
+                }
+                for item in groups
+            ],
+        }
+
+    @staticmethod
+    def _profile_auto_pick(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+        hits = [
+            item for item in candidates
+            if (item.get("resolved_profile_scope") or {}).get("all_members")
+        ]
+        if not hits:
+            return {}
+        first = hits[0]
+        first_members = [
+            str(item).strip()
+            for item in ((first.get("resolved_profile_scope") or {}).get("all_members") or [])
+            if str(item).strip()
+        ]
+        if len(first_members) <= 1:
+            return {}
+        same_scope_hits = []
+        first_member_set = set(first_members)
+        for item in hits:
+            members = {
+                str(member).strip()
+                for member in ((item.get("resolved_profile_scope") or {}).get("all_members") or [])
+                if str(member).strip()
+            }
+            if members == first_member_set:
+                same_scope_hits.append(item)
+        if len(same_scope_hits) != len(hits):
+            return {}
+        return {
+            "need_confirm": False,
+            "confirm_question": "",
+            "options": build_dataset_options([first]),
+            "auto_pick_option_id": f"arbiter_dataset_{first['dataset_id']}",
+            "refined_query": "",
+            "reason": "profile_scope_resolved",
+        }
 
     def _fallback(self, question: str, candidates: List[Dict[str, Any]], candidate_contexts: List[CandidateContext]) -> Dict[str, Any]:
         scores = score_snapshot(candidate_contexts)

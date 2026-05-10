@@ -28,7 +28,14 @@
             <div class="sa-msg-list">
               <div v-for="msg in messages" :key="msg.id" class="sa-msg-wrap">
                 <!-- 用户气泡 -->
-                <UserBubble v-if="msg.role === 'user'" :content="msg.content" />
+                <UserBubble
+                  v-if="msg.role === 'user'"
+                  :content="msg.content"
+                  :disabled="isRunning"
+                  @copy="copyQuestion(msg)"
+                  @edit="editQuestion(msg)"
+                  @rerun="rerunQuestion(msg)"
+                />
 
                 <!-- AI 回复 -->
                 <div v-else class="sa-ai-wrap">
@@ -341,7 +348,14 @@
                     <span class="sa-business-risk-pill" :class="businessDrillReport.riskTone">{{ businessDrillReport.riskLabel }}</span>
                   </div>
                   <div class="sa-kpi-shelf sa-kpi-shelf-compact">
-                    <div v-for="metric in businessDrillReport.kpis" :key="metric.label" class="sa-kpi-card">
+                    <div
+                      v-for="metric in sideBusinessMetricCards"
+                      :key="`${metric.subject || 'metric'}-${metric.label}`"
+                      class="sa-kpi-card"
+                      :class="{ 'is-subject-metric': metric.subject }"
+                      :style="metric.accentStyle"
+                    >
+                      <div v-if="metric.subject" class="sa-kpi-subject">{{ metric.subject }}</div>
                       <div class="sa-kpi-value">{{ metric.value }}</div>
                       <div class="sa-kpi-label">{{ metric.label }}</div>
                     </div>
@@ -352,37 +366,139 @@
                         <div class="sa-side-section-title">各{{ businessDrillReport.compareLevelLabel }}对比分析</div>
                         <p class="sa-chart-copy">{{ businessDrillReport.officeCompareText }}</p>
                       </div>
-                      <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(businessDrillReport.officeCompareSpec, `各${businessDrillReport.compareLevelLabel}对比分析`)" type="button">
-                        <span class="sa-btn-label">放大查看</span>
+                    </div>
+                    <div class="sa-compare-matrix is-compact">
+                      <div class="sa-compare-row is-head">
+                        <span>{{ businessDrillReport.compareLevelLabel }}</span>
+                        <span>总任务</span>
+                        <span>已完成</span>
+                        <span>缺口</span>
+                        <span>达成率</span>
+                        <span>进度</span>
+                        <span>标签</span>
+                      </div>
+                      <button
+                        v-for="(office, officeIndex) in businessDrillReport.offices"
+                        :key="`side-compare-row-${office.id}`"
+                        class="sa-compare-row"
+                        :style="getOfficeAccentStyle(office, officeIndex)"
+                        type="button"
+                        @click="toggleOfficeDrill(office.id)"
+                      >
+                        <span class="sa-detail-name">{{ office.name }}</span>
+                        <span>{{ getOfficeKpiLabel(office, 'task') }}</span>
+                        <span>{{ getOfficeKpiLabel(office, 'actual') }}</span>
+                        <span>{{ getOfficeKpiLabel(office, 'remain') }}</span>
+                        <span class="sa-detail-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                        <span class="sa-detail-progress">
+                          <i class="sa-office-bar-track"><b class="is-rate" :class="office.tone" :style="{ width: `${office.progress}%` }"></b></i>
+                        </span>
+                        <span class="sa-detail-tag" :class="office.tone">{{ office.tag }}</span>
                       </button>
                     </div>
-                    <div class="sa-office-overview-chart" :ref="el => el && businessDrillReport?.officeCompareSpec && initPreviewChart(el, businessDrillReport.officeCompareSpec, 'side-office-overview')"></div>
                   </div>
                   <div class="sa-office-card-list">
                     <article
-                      v-for="office in businessDrillReport.offices"
+                      v-for="(office, officeIndex) in businessDrillReport.offices"
                       :key="`side-office-${office.id}`"
                       class="sa-office-card"
+                      :style="getOfficeAccentStyle(office, officeIndex)"
                     >
                       <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
                         <div>
-                          <div class="sa-office-name">{{ office.name }}</div>
+                          <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
                           <div class="sa-office-subtitle">{{ office.childCount }} 个{{ businessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                         </div>
-                        <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                        <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                       </button>
                       <div class="sa-office-kpis">
                         <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
                       </div>
                       <p class="sa-office-copy">{{ office.summary }}</p>
                       <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
-                        <p class="sa-chart-copy">{{ office.chartText }}</p>
-                        <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
-                          <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${businessDrillReport.detailLevelLabel}达成率`)" type="button">
-                            <span class="sa-btn-label">放大查看</span>
-                          </button>
+                        <div class="sa-drill-path">
+                          <span>{{ office.name }}</span>
+                          <i></i>
+                          <strong>{{ businessDrillReport.detailLevelLabel }}</strong>
                         </div>
-                        <div v-if="hasChartRows(office.chartSpec)" class="sa-office-chart" :ref="el => initPreviewChart(el, office.chartSpec, `side-office-${office.id}`)"></div>
+                        <div class="sa-drill-insight-grid">
+                          <div class="sa-drill-insight-card is-good">
+                            <span>下钻亮点</span>
+                            <strong>{{ getDrillBestText(office) }}</strong>
+                          </div>
+                          <div class="sa-drill-insight-card is-risk">
+                            <span>重点压力</span>
+                            <strong>{{ getDrillWorstText(office) }}</strong>
+                          </div>
+                        </div>
+                        <p class="sa-chart-copy sa-chart-copy-drill">{{ office.chartText }}</p>
+                        <div v-if="office.detailRows?.length" class="sa-office-detail-wrap">
+                          <div class="sa-drill-table-head">
+                            <span>{{ businessDrillReport.detailLevelLabel }}明细</span>
+                            <small>按达成率排序，点击上层卡片可收起</small>
+                          </div>
+                          <div class="sa-office-detail-table">
+                            <div class="sa-office-detail-row is-head">
+                              <span>{{ businessDrillReport.detailLevelLabel }}</span>
+                              <span>任务/已完成</span>
+                              <span>剩余缺口</span>
+                              <span>达成率</span>
+                              <span>达成进度</span>
+                              <span>标签</span>
+                            </div>
+                            <div v-for="person in office.detailRows" :key="`${office.id}-${person.name}`" class="sa-office-detail-row">
+                              <span class="sa-detail-name">{{ person.name }}</span>
+                              <span>{{ person.taskLabel }} / {{ person.actualLabel }}</span>
+                              <span>{{ person.remainLabel }}</span>
+                              <span class="sa-detail-rate" :class="person.tone">{{ person.rateLabel }}</span>
+                              <span class="sa-detail-progress">
+                                <i class="sa-office-bar-track"><b class="is-rate" :class="person.tone" :style="{ width: `${person.progress}%` }"></b></i>
+                              </span>
+                              <span class="sa-detail-tag" :class="person.tone">{{ person.label }}</span>
+                            </div>
+                          </div>
+                          <div v-if="office.drillGroups?.length" class="sa-rep-drill-list">
+                            <div class="sa-rep-drill-title">继续下钻到业务员</div>
+                            <article
+                              v-for="group in office.drillGroups"
+                              :key="`${office.id}-${group.id}`"
+                              class="sa-rep-drill-card"
+                            >
+                              <button
+                                class="sa-rep-drill-head"
+                                type="button"
+                                @click="toggleOfficeDrill(`rep-${office.id}-${group.id}`)"
+                              >
+                                <div>
+                                  <div class="sa-rep-drill-name">{{ group.name }} <span class="sa-office-tag">{{ group.tag }}</span></div>
+                                  <div class="sa-rep-drill-subtitle">{{ group.childCount }} 个{{ group.detailLevelLabel }} · {{ group.parentName || office.name }}</div>
+                                </div>
+                                <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                              </button>
+                              <p v-if="group.summary" class="sa-rep-drill-summary">{{ group.summary }}</p>
+                              <div v-if="isOfficeExpanded(`rep-${office.id}-${group.id}`)" class="sa-office-detail-table sa-rep-person-table">
+                                <div class="sa-office-detail-row is-head">
+                                  <span>{{ group.detailLevelLabel }}</span>
+                                  <span>任务/已完成</span>
+                                  <span>剩余缺口</span>
+                                  <span>达成率</span>
+                                  <span>达成进度</span>
+                                  <span>标签</span>
+                                </div>
+                                <div v-for="person in group.detailRows" :key="`${office.id}-${group.id}-${person.name}`" class="sa-office-detail-row">
+                                  <span class="sa-detail-name">{{ person.name }}</span>
+                                  <span>{{ person.taskLabel }} / {{ person.actualLabel }}</span>
+                                  <span>{{ person.remainLabel }}</span>
+                                  <span class="sa-detail-rate" :class="person.tone">{{ person.rateLabel }}</span>
+                                  <span class="sa-detail-progress">
+                                    <i class="sa-office-bar-track"><b class="is-rate" :class="person.tone" :style="{ width: `${person.progress}%` }"></b></i>
+                                  </span>
+                                  <span class="sa-detail-tag" :class="person.tone">{{ person.label }}</span>
+                                </div>
+                              </div>
+                            </article>
+                          </div>
+                        </div>
                         <div v-else class="sa-office-empty-drill">
                           当前 SQL 结果未返回 {{ businessDrillReport.detailLevelLabel }} 明细。请重新问“{{ office.name }}下{{ businessDrillReport.detailLevelLabel }}业绩明细”或检查 SQL 是否包含下级层级。
                         </div>
@@ -588,7 +704,14 @@
             <section v-if="reportDialogMetricCards.length" class="sa-report-stage-section sa-report-stage-metrics">
               <div class="sa-report-stage-title">关键指标</div>
               <div class="sa-kpi-shelf">
-                <div v-for="metric in reportDialogMetricCards" :key="metric.label" class="sa-kpi-card">
+                <div
+                  v-for="metric in reportDialogMetricCards"
+                  :key="metric.label"
+                  class="sa-kpi-card"
+                  :class="{ 'is-subject-metric': metric.subject }"
+                  :style="metric.accentStyle"
+                >
+                  <div v-if="metric.subject" class="sa-kpi-subject">{{ metric.subject }}</div>
                   <div class="sa-kpi-value">{{ metric.value }}</div>
                   <div class="sa-kpi-label">{{ metric.label }}</div>
                 </div>
@@ -596,43 +719,162 @@
             </section>
           </div>
 
+          <section v-if="dialogBusinessDrillReport && businessNarrativeSections.length" class="sa-report-stage-section sa-report-narrative-stage">
+            <div class="sa-report-stage-title">经营解读</div>
+            <div class="sa-management-narrative is-dialog">
+              <article
+                v-for="section in businessNarrativeSections"
+                :key="`dialog-narrative-${section.title}`"
+                class="sa-management-narrative-card"
+              >
+                <div class="sa-management-narrative-title">{{ section.title }}</div>
+                <div class="sa-report-md sa-report-md-compact sa-management-narrative-body" v-html="renderReportMd(section.body)"></div>
+              </article>
+            </div>
+          </section>
+
           <section v-if="dialogBusinessDrillReport" class="sa-report-stage-section sa-office-report-stage">
             <div class="sa-report-stage-title">{{ dialogBusinessDrillReport.compareLevelLabel }}下钻分析</div>
-            <div v-if="dialogBusinessDrillReport.officeCompareSpec" class="sa-report-chart-card sa-office-overview-dialog">
+            <div v-if="dialogCoreConclusion" class="sa-report-core-conclusion">
+              <span>核心判断</span>
+              <strong>{{ dialogCoreConclusion }}</strong>
+            </div>
+            <div v-if="dialogBusinessDrillReport.offices?.length" class="sa-report-chart-card sa-office-overview-dialog">
               <div class="sa-report-chart-head">
                 <div>
                   <div class="sa-report-chart-title">各{{ dialogBusinessDrillReport.compareLevelLabel }}对比分析</div>
                   <div class="sa-report-chart-subtitle">{{ dialogBusinessDrillReport.officeCompareText }}</div>
                 </div>
-                <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(dialogBusinessDrillReport.officeCompareSpec, `各${dialogBusinessDrillReport.compareLevelLabel}对比分析`)">放大查看</button>
               </div>
-              <div class="sa-report-chart-canvas" :ref="el => el && dialogBusinessDrillReport?.officeCompareSpec && initPreviewChart(el, dialogBusinessDrillReport.officeCompareSpec, 'dialog-office-overview')"></div>
+              <div class="sa-compare-matrix">
+                <div class="sa-compare-row is-head">
+                  <span>{{ dialogBusinessDrillReport.compareLevelLabel }}</span>
+                  <span>总任务</span>
+                  <span>已完成</span>
+                  <span>剩余缺口</span>
+                  <span>达成率</span>
+                  <span>达成进度</span>
+                  <span>标签</span>
+                </div>
+                <button
+                  v-for="(office, officeIndex) in dialogBusinessDrillReport.offices"
+                  :key="`compare-row-${office.id}`"
+                  class="sa-compare-row"
+                  :style="getOfficeAccentStyle(office, officeIndex)"
+                  type="button"
+                  @click="toggleOfficeDrill(office.id)"
+                >
+                  <span class="sa-detail-name">{{ office.name }}</span>
+                  <span>{{ getOfficeKpiLabel(office, 'task') }}</span>
+                  <span>{{ getOfficeKpiLabel(office, 'actual') }}</span>
+                  <span>{{ getOfficeKpiLabel(office, 'remain') }}</span>
+                  <span class="sa-detail-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                  <span class="sa-detail-progress">
+                    <i class="sa-office-bar-track"><b class="is-rate" :class="office.tone" :style="{ width: `${office.progress}%` }"></b></i>
+                  </span>
+                  <span class="sa-detail-tag" :class="office.tone">{{ office.tag }}</span>
+                </button>
+              </div>
             </div>
             <div class="sa-office-report-grid">
               <article
-                v-for="office in dialogBusinessDrillReport.offices"
+                v-for="(office, officeIndex) in dialogBusinessDrillReport.offices"
                 :key="`dialog-office-${office.id}`"
                 class="sa-office-card sa-office-card-dialog"
+                :style="getOfficeAccentStyle(office, officeIndex)"
               >
                 <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
                   <div>
-                    <div class="sa-office-name">{{ office.name }}</div>
+                    <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
                     <div class="sa-office-subtitle">{{ office.childCount }} 个{{ dialogBusinessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                   </div>
-                  <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}</span>
+                  <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                 </button>
-                <div class="sa-office-kpis">
-                  <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
-                </div>
                 <p class="sa-office-copy">{{ office.summary }}</p>
                 <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
-                  <p class="sa-chart-copy">{{ office.chartText }}</p>
-                  <div v-if="hasChartRows(office.chartSpec)" class="sa-office-drill-actions">
-                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-office-chart-open" @click="openChartViewer(office.chartSpec, `${office.name}${dialogBusinessDrillReport.detailLevelLabel}达成率`)" type="button">
-                      <span class="sa-btn-label">放大查看</span>
-                    </button>
+                  <div class="sa-drill-path">
+                    <span>{{ office.name }}</span>
+                    <i></i>
+                    <strong>{{ dialogBusinessDrillReport.detailLevelLabel }}</strong>
                   </div>
-                  <div v-if="hasChartRows(office.chartSpec)" class="sa-office-chart sa-office-chart-dialog" :ref="el => initPreviewChart(el, office.chartSpec, `dialog-office-${office.id}`)"></div>
+                  <div class="sa-drill-insight-grid">
+                    <div class="sa-drill-insight-card is-good">
+                      <span>下钻亮点</span>
+                      <strong>{{ getDrillBestText(office) }}</strong>
+                    </div>
+                    <div class="sa-drill-insight-card is-risk">
+                      <span>重点压力</span>
+                      <strong>{{ getDrillWorstText(office) }}</strong>
+                    </div>
+                  </div>
+                  <p class="sa-chart-copy sa-chart-copy-drill">{{ office.chartText }}</p>
+                  <div v-if="office.detailRows?.length" class="sa-office-detail-wrap is-dialog">
+                    <div class="sa-drill-table-head">
+                      <span>{{ dialogBusinessDrillReport.detailLevelLabel }}明细</span>
+                      <small>按达成率排序，点击上层卡片可收起</small>
+                    </div>
+                    <div class="sa-office-detail-table">
+                      <div class="sa-office-detail-row is-head">
+                        <span>{{ dialogBusinessDrillReport.detailLevelLabel }}</span>
+                        <span>任务/已完成</span>
+                        <span>剩余缺口</span>
+                        <span>达成率</span>
+                        <span>达成进度</span>
+                        <span>标签</span>
+                      </div>
+                      <div v-for="person in office.detailRows" :key="`${office.id}-${person.name}`" class="sa-office-detail-row">
+                        <span class="sa-detail-name">{{ person.name }}</span>
+                        <span>{{ person.taskLabel }} / {{ person.actualLabel }}</span>
+                        <span>{{ person.remainLabel }}</span>
+                        <span class="sa-detail-rate" :class="person.tone">{{ person.rateLabel }}</span>
+                        <span class="sa-detail-progress">
+                          <i class="sa-office-bar-track"><b class="is-rate" :class="person.tone" :style="{ width: `${person.progress}%` }"></b></i>
+                        </span>
+                        <span class="sa-detail-tag" :class="person.tone">{{ person.label }}</span>
+                      </div>
+                    </div>
+                    <div v-if="office.drillGroups?.length" class="sa-rep-drill-list is-dialog">
+                      <div class="sa-rep-drill-title">继续下钻到业务员</div>
+                      <article
+                        v-for="group in office.drillGroups"
+                        :key="`${office.id}-${group.id}`"
+                        class="sa-rep-drill-card"
+                      >
+                        <button
+                          class="sa-rep-drill-head"
+                          type="button"
+                          @click="toggleOfficeDrill(`rep-${office.id}-${group.id}`)"
+                        >
+                          <div>
+                            <div class="sa-rep-drill-name">{{ group.name }} <span class="sa-office-tag">{{ group.tag }}</span></div>
+                            <div class="sa-rep-drill-subtitle">{{ group.childCount }} 个{{ group.detailLevelLabel }} · {{ group.parentName || office.name }}</div>
+                          </div>
+                          <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                        </button>
+                        <p v-if="group.summary" class="sa-rep-drill-summary">{{ group.summary }}</p>
+                        <div v-if="isOfficeExpanded(`rep-${office.id}-${group.id}`)" class="sa-office-detail-table sa-rep-person-table">
+                          <div class="sa-office-detail-row is-head">
+                            <span>{{ group.detailLevelLabel }}</span>
+                            <span>任务/已完成</span>
+                            <span>剩余缺口</span>
+                            <span>达成率</span>
+                            <span>达成进度</span>
+                            <span>标签</span>
+                          </div>
+                          <div v-for="person in group.detailRows" :key="`${office.id}-${group.id}-${person.name}`" class="sa-office-detail-row">
+                            <span class="sa-detail-name">{{ person.name }}</span>
+                            <span>{{ person.taskLabel }} / {{ person.actualLabel }}</span>
+                            <span>{{ person.remainLabel }}</span>
+                            <span class="sa-detail-rate" :class="person.tone">{{ person.rateLabel }}</span>
+                            <span class="sa-detail-progress">
+                              <i class="sa-office-bar-track"><b class="is-rate" :class="person.tone" :style="{ width: `${person.progress}%` }"></b></i>
+                            </span>
+                            <span class="sa-detail-tag" :class="person.tone">{{ person.label }}</span>
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
                   <div v-else class="sa-office-empty-drill">
                     当前 SQL 结果未返回 {{ dialogBusinessDrillReport.detailLevelLabel }} 明细。
                   </div>
@@ -903,7 +1145,7 @@ const reportSceneTemplate = computed(() => {
   const specTemplate = sourceDatasets.find(item => item?.report_spec?.layoutTemplate)?.report_spec?.layoutTemplate
   if (specTemplate) return specTemplate
   const questionText = String(session.state.question || query.value || '')
-  if (/对比|比较|哪个|谁更|差异| vs |VS/.test(questionText)) return 'comparison'
+  if (/对比|比较|哪个|谁更|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText)) return 'comparison'
   if (/排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
   return 'detail'
 })
@@ -1169,15 +1411,137 @@ const getNodeMetricValue = (node, metric) => {
   return toNumber(node.raw?.[metric.column])
 }
 
-const getRateTone = (rate) => {
+const getRateTone = (rate, benchmark = 15, risk = 10) => {
   const value = toNumber(rate)
   if (value === null) return 'neutral'
-  if (value >= 100) return 'good'
-  if (value >= 80) return 'warn'
+  if (value >= benchmark) return 'good'
+  if (value >= risk) return 'warn'
   return 'danger'
 }
 
-const getToneLabel = (tone) => ({ good: '表现优秀', warn: '接近目标', danger: '风险偏高' }[tone] || '待观察')
+const getToneLabel = (tone) => ({ good: '区域标杆', warn: '中等达成', danger: '低达成风险' }[tone] || '待观察')
+
+const getRateTag = (rate, benchmark = 15, risk = 10, goodLabel = '标杆') => {
+  const tone = getRateTone(rate, benchmark, risk)
+  if (tone === 'good') return `✅ ${goodLabel}`
+  if (tone === 'warn') return '🟡 中等'
+  if (tone === 'danger') return '⚠️ 风险'
+  return '未分级'
+}
+
+const subjectAccentPalette = [
+  { accent: '#165dff', soft: 'rgba(22, 93, 255, 0.08)', border: 'rgba(22, 93, 255, 0.22)' },
+  { accent: '#00a870', soft: 'rgba(0, 168, 112, 0.08)', border: 'rgba(0, 168, 112, 0.22)' },
+  { accent: '#ff7d00', soft: 'rgba(255, 125, 0, 0.09)', border: 'rgba(255, 125, 0, 0.24)' },
+  { accent: '#7b61ff', soft: 'rgba(123, 97, 255, 0.08)', border: 'rgba(123, 97, 255, 0.22)' },
+]
+
+const getSubjectAccent = (index = 0) => subjectAccentPalette[Math.abs(index) % subjectAccentPalette.length]
+
+const getOfficeAccentStyle = (_office, index = 0) => {
+  const color = getSubjectAccent(index)
+  return {
+    '--office-accent': color.accent,
+    '--office-accent-soft': color.soft,
+    '--office-accent-border': color.border,
+  }
+}
+
+const decorateMetricCards = (kpis = [], offices = []) => (
+  (kpis || []).map((item) => {
+    const label = item.label || item.key || ''
+    const officeIndex = offices.findIndex(office => label.startsWith(office.name))
+    if (officeIndex < 0) {
+      return {
+        label,
+        value: item.value ?? item.displayValue ?? formatDisplayValue(item.value),
+      }
+    }
+    const office = offices[officeIndex]
+    const color = getSubjectAccent(officeIndex)
+    return {
+      label: label.replace(office.name, ''),
+      value: item.value ?? item.displayValue ?? formatDisplayValue(item.value),
+      subject: office.name,
+      accentStyle: {
+        '--metric-accent': color.accent,
+        '--metric-accent-soft': color.soft,
+        '--metric-accent-border': color.border,
+      },
+    }
+  }).filter(item => item.label)
+)
+
+const getOfficeKpiLabel = (office, type) => {
+  const matchers = {
+    task: /总任务|任务金额|目标/i,
+    actual: /年度开单|开单|完成|实际|销售/i,
+    remain: /剩余|缺口|差额|remain/i,
+    rate: /达成率|percent|rate/i,
+  }
+  const matcher = matchers[type]
+  const item = (office?.kpis || []).find(kpi => matcher?.test(kpi.label || ''))
+  return item?.value || '-'
+}
+
+const getDrillBestText = (office) => {
+  const rows = Array.isArray(office?.detailRows) ? office.detailRows : []
+  const best = rows.filter(item => item.rate !== null && item.rate !== undefined)
+    .sort((left, right) => (right.rate || 0) - (left.rate || 0))[0]
+  if (!best) return office?.highlight || '暂无下级明细'
+  return `${best.name} ${best.rateLabel || '-'}`
+}
+
+const getDrillWorstText = (office) => {
+  const rows = Array.isArray(office?.detailRows) ? office.detailRows : []
+  const worst = rows.filter(item => item.rate !== null && item.rate !== undefined)
+    .sort((left, right) => (left.rate || 0) - (right.rate || 0))[0]
+  if (!worst) return office?.riskSummary || '暂无风险明细'
+  return `${worst.name} ${worst.rateLabel || '-'}`
+}
+
+const findColumn = (columns = [], matcher) => columns.find(column => matcher(String(column || ''))) || ''
+
+const buildOfficeDetailRows = (chartSpec = {}) => {
+  const rows = Array.isArray(chartSpec.rows) ? chartSpec.rows : []
+  const columns = Array.isArray(chartSpec.columns) && chartSpec.columns.length
+    ? chartSpec.columns
+    : Object.keys(rows[0] || {})
+  const nameColumn = columns[0] || '名称'
+  const rateColumn = findColumn(columns, column => isRateColumn(column)) || '达成率'
+  const taskColumn = findColumn(columns, column => /任务|目标/i.test(column) && !/剩余|缺口/i.test(column))
+  const actualColumn = findColumn(columns, column => /开单|完成|实际|销售/i.test(column))
+  const remainColumn = findColumn(columns, column => /剩余|缺口|差额|remain/i.test(column))
+
+  return rows.map((row) => {
+    const rate = toNumber(row?.[rateColumn]) || 0
+    const remain = toNumber(row?.[remainColumn]) || 0
+    const task = toNumber(row?.[taskColumn]) || 0
+    const actual = toNumber(row?.[actualColumn]) || 0
+    const label = row?.标签 || getRateTag(rate, 20, 10)
+    return {
+      name: row?.[nameColumn] || row?.名称 || '-',
+      rate,
+      rateLabel: isRateColumn(rateColumn) ? `${rate.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%` : formatDisplayValue(rate),
+      task,
+      taskLabel: taskColumn ? formatAmount(task) : '-',
+      actual,
+      actualLabel: actualColumn ? formatAmount(actual) : '-',
+      remain,
+      remainLabel: remainColumn ? formatAmount(remain) : '-',
+      label,
+      tone: label.includes('风险') ? 'danger' : label.includes('中等') ? 'warn' : label.includes('标杆') ? 'good' : getRateTone(rate, 20, 10),
+      progress: Math.max(0, Math.min(100, rate)),
+      gapProgress: 0,
+    }
+  }).map((row, _index, list) => {
+    const maxRemain = Math.max(...list.map(item => item.remain || 0), 1)
+    return {
+      ...row,
+      gapProgress: Math.max(0, Math.min(100, ((row.remain || 0) / maxRemain) * 100)),
+    }
+  })
+}
 
 const getDescendantNodes = (node) => {
   const output = []
@@ -1219,9 +1583,9 @@ const getComparisonNodes = (model) => {
 }
 
 const getDetailNodes = (node) => {
-  const descendants = getDescendantNodes(node)
-  const leafDescendants = descendants.filter(isLeafNode)
-  return leafDescendants.length ? leafDescendants : descendants
+  const directChildren = (node?.children || []).filter(item => item?.name)
+  if (directChildren.length) return directChildren
+  return getDescendantNodes(node).filter(item => item?.name)
 }
 
 const hasBusinessDrillDataset = (datasets) => (
@@ -1241,20 +1605,53 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
     const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
     const narrative = String(item.narrative || '').trim()
-    const drillMatch = narrative.match(/下钻到.+$/)
-    const summaryText = narrative.replace(/下钻到.+$/, '').trim().replace(/[；;，,。\s]+$/, '') || narrative
+    const detailRows = buildOfficeDetailRows(item.chart)
+    const drillGroups = (Array.isArray(item.drillGroups) ? item.drillGroups : [])
+      .map((group) => {
+        const groupRateKpi = (group.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
+        const groupRows = buildOfficeDetailRows(group.chart)
+        return {
+          id: group.id || `${item.id || item.title}-${group.title}`,
+          name: group.title || '未命名下级节点',
+          parentName: group.parentName || item.title || '',
+          tone: group.tone || 'neutral',
+          tag: group.tag || getRateTag(groupRateKpi?.value, 15, 10, '代表处标杆'),
+          rate: toNumber(groupRateKpi?.value),
+          rateLabel: groupRateKpi?.value || '-',
+          progress: Math.max(0, Math.min(100, toNumber(groupRateKpi?.value) || 0)),
+          childCount: groupRows.length,
+          kpis: group.kpis || [],
+          summary: String(group.narrative || '').trim(),
+          chartText: group.detailNarrative || (groupRows.length ? `${group.title || '当前节点'}继续下钻到${group.detailLevelLabel || '业务员'}。` : ''),
+          detailLevelLabel: group.detailLevelLabel || '业务员',
+          detailRows: groupRows,
+        }
+      })
+      .filter(group => group.detailRows.length > 0)
+    const summaryText = narrative
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('；') || narrative
     return {
       id: item.id || item.title,
       name: item.title || '未命名节点',
       parentName: item.parentName || item.levelLabel || '',
       tone: item.tone || 'neutral',
+      tag: item.tag || getRateTag(rateKpi?.value, 15, 10, '区域标杆'),
+      highlight: item.highlight || '',
+      rankLabel: item.rankLabel || '',
       rate: toNumber(rateKpi?.value),
       rateLabel: rateKpi?.value || '-',
+      progress: Math.max(0, Math.min(100, toNumber(rateKpi?.value) || 0)),
       childCount: chartRows.length,
       kpis: item.kpis || [],
       summary: summaryText,
-      chartText: chartRows.length ? (drillMatch?.[0] || '') : '',
+      chartText: item.detailNarrative || (detailRows.length ? '业务代表明细按达成率从高到低排序。' : ''),
       chartSpec: item.chart,
+      detailRows,
+      drillGroups,
     }
   })
   const riskCount = offices.filter(item => item.tone === 'danger').length
@@ -1272,7 +1669,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     compareLevelLabel,
     detailLevelLabel,
     officeCompareSpec: overviewChart,
-    officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '柱形图对比关键金额指标，折线图对比达成率。',
+    officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '一行一个同层级对象，对齐展示任务、开单、缺口、达成率和进度条；展开后查看下一层级。',
     summary,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
@@ -1307,8 +1704,8 @@ const buildBusinessDrillReport = (dataset) => {
       .sort((a, b) => (getNodeMetricValue(a, rateMetric) || 0) - (getNodeMetricValue(b, rateMetric) || 0))
     const sortedPeopleDesc = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))
     const rate = getNodeMetricValue(office, rateMetric)
-    const tone = getRateTone(rate)
-    const riskPeople = sortedPeople.filter(item => getRateTone(getNodeMetricValue(item, rateMetric)) === 'danger')
+    const tone = getRateTone(rate, 15, 10)
+    const riskPeople = sortedPeople.filter(item => getRateTone(getNodeMetricValue(item, rateMetric), 20, 10) === 'danger')
     const bestPerson = sortedPeopleDesc[0]
     const worstPerson = sortedPeople[0]
     const formatPersonMetric = (person, metric) => (
@@ -1322,13 +1719,17 @@ const buildBusinessDrillReport = (dataset) => {
       const rateText = formatPersonMetric(person, rateMetric)
       return `${person.name}开单${actualText} / 任务${taskText}，达成率${rateText}${remainMetric ? `，剩余缺口${remainText}` : ''}`
     }
-    const chartRows = sortedPeopleDesc.map(person => ({
+    const chartRows = sortedPeopleDesc.map(person => {
+      const personRate = getNodeMetricValue(person, rateMetric) || 0
+      return {
       名称: person.name,
-      [rateMetric.label || rateMetric.column || '达成率']: getNodeMetricValue(person, rateMetric) || 0,
+      [rateMetric.label || rateMetric.column || '达成率']: personRate,
       [actualMetric?.label || actualMetric?.column || '完成']: getNodeMetricValue(person, actualMetric) || 0,
       [taskMetric?.label || taskMetric?.column || '任务']: getNodeMetricValue(person, taskMetric) || 0,
       ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(person, remainMetric) || 0 } : {}),
-    }))
+      标签: getRateTag(personRate, 20, 10),
+    }
+    })
     const officeKpis = [
       taskMetric ? { label: taskMetric.label || taskMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) } : null,
       actualMetric ? { label: actualMetric.label || actualMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) } : null,
@@ -1343,25 +1744,33 @@ const buildBusinessDrillReport = (dataset) => {
       tone,
       rate,
       rateLabel: formatMetricByDefinition(rate, rateMetric),
+      progress: Math.max(0, Math.min(100, rate || 0)),
       childCount: sortedPeople.length,
       kpis: officeKpis,
-      summary: `${office.name}当前达成率为${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；开单${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}，任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'}${remainMetric ? `，剩余缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${riskPeople.length ? `其中 ${riskPeople.length} 个${detailLevelLabel}低于风险线，需要优先跟进金额缺口和项目转化。` : `当前暂无明显低达成风险${detailLevelLabel}。`}`,
+      tag: getRateTag(rate, 15, 10, '区域标杆'),
+      highlight: bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : '',
+      rankLabel: '',
+      summary: `${office.name}达成率${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'} / 已完成${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}${remainMetric ? ` / 缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : `暂无${detailLevelLabel}明细`}；${riskPeople.length ? `${riskPeople.length} 个${detailLevelLabel}低于10%风险线` : `暂无低于10%的风险${detailLevelLabel}`}。`,
       chartText: `${office.name}下钻到${detailLevelLabel}层：${bestPerson ? `最高为${describePerson(bestPerson)}` : `暂无${detailLevelLabel}明细`}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
       chartSpec: {
-        chartType: 'combo',
-        title: `${office.name}${detailLevelLabel}达成率`,
+        chartType: 'horizontalDrill',
+        title: `${office.name}${detailLevelLabel}达成率与缺口`,
         columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
         rows: chartRows,
       },
+      detailRows: buildOfficeDetailRows({
+        columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
+        rows: chartRows,
+      }),
     }
-  }).sort((a, b) => (a.rate || 0) - (b.rate || 0))
+  }).sort((a, b) => (b.rate || 0) - (a.rate || 0))
 
   const kpis = (config.metrics || []).map(metric => ({
     label: metric.label || metric.column || metric.key,
     value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric),
   })).filter(item => item.value !== '-')
-  const worstOffice = offices[0]
-  const bestOffice = [...offices].sort((a, b) => (b.rate || 0) - (a.rate || 0))[0]
+  const bestOffice = offices[0]
+  const worstOffice = [...offices].sort((a, b) => (a.rate || 0) - (b.rate || 0))[0]
   const riskCount = offices.filter(item => item.tone === 'danger').length
   const officeCompareRows = offices.map(office => ({
     名称: office.name,
@@ -1371,8 +1780,8 @@ const buildBusinessDrillReport = (dataset) => {
     [rateMetric.label || rateMetric.column || '达成率']: office.rate || 0,
   })).sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
   const officeCompareSpec = {
-    chartType: 'combo',
-    title: `各${compareLevelLabel}任务、开单与达成率对比`,
+    chartType: 'horizontalRateBar',
+    title: `各${compareLevelLabel}达成率排序`,
     columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
     rows: officeCompareRows,
   }
@@ -1383,7 +1792,7 @@ const buildBusinessDrillReport = (dataset) => {
     compareLevelLabel,
     detailLevelLabel,
     officeCompareSpec,
-    officeCompareText: `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。柱形图对比开单、任务和缺口，折线图对比达成率。`,
+    officeCompareText: `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。一行一个同层级对象，对齐展示金额和进度条。`,
     summary: `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
@@ -1670,12 +2079,17 @@ const reportDialogCharts = computed(() => {
   return deduped
 })
 
-const reportDialogMetricCards = computed(() => (
-  (reportViewerVisible.value
-    ? (reportViewerDatasets.value[0] ? getMetricCards(reportViewerDatasets.value[0]) : [])
-    : resultPreviews.value[0]?.metricCards
-  ) || []
-))
+const reportDialogMetricCards = computed(() => {
+  const source = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
+  const drillReport = source.map(buildBusinessDrillReport).find(Boolean)
+  if (drillReport?.kpis?.length) return decorateMetricCards(drillReport.kpis, drillReport.offices).slice(0, 8)
+  return (
+    (reportViewerVisible.value
+      ? (reportViewerDatasets.value[0] ? getMetricCards(reportViewerDatasets.value[0]) : [])
+      : resultPreviews.value[0]?.metricCards
+    ) || []
+  )
+})
 
 const reportTableBlocks = computed(() => (
   buildReportTableBlocks(reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value)
@@ -1685,18 +2099,116 @@ const businessDrillReport = computed(() => (
   latestDatasets.value.map(buildBusinessDrillReport).find(Boolean) || null
 ))
 
+const sideBusinessMetricCards = computed(() => (
+  businessDrillReport.value
+    ? decorateMetricCards(businessDrillReport.value.kpis, businessDrillReport.value.offices).slice(0, 8)
+    : []
+))
+
 const dialogBusinessDrillReport = computed(() => {
   const source = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
   return source.map(buildBusinessDrillReport).find(Boolean) || null
 })
 
+const dialogCoreConclusion = computed(() => {
+  const report = dialogBusinessDrillReport.value
+  const offices = report?.offices || []
+  if (offices.length >= 2) {
+    const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
+    const leader = ranked[0]
+    const follower = ranked[1]
+    if (leader && follower) {
+      const diff = Math.abs((leader.rate || 0) - (follower.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
+      return `${leader.name}当前领先${follower.name}，达成率高${diff}个百分点；建议继续下钻代表处，定位差距来自哪些区域单元。`
+    }
+  }
+  const reportText = String(reportViewerReport.value || latestReport.value || '').trim()
+  const match = reportText.match(/(?:核心结论|结论)[:：]?\s*([^。\n]{12,120}。?)/)
+  if (match?.[1]) return match[1].trim()
+  return report?.summary || ''
+})
+
+const getOfficeMetricText = (office, type) => getOfficeKpiLabel(office, type) || '-'
+
+const buildComparisonMetricTable = (offices = []) => {
+  if (!offices.length) return ''
+  const displayOffices = offices.length <= 4
+    ? offices
+    : [offices[0], offices[1], offices[offices.length - 2], offices[offices.length - 1]]
+        .filter((item, index, list) => item && list.findIndex(row => row.name === item.name) === index)
+  const header = ['指标', ...displayOffices.map(item => item.name)]
+  const rows = [
+    ['总任务金额', ...displayOffices.map(item => getOfficeMetricText(item, 'task'))],
+    ['已完成金额', ...displayOffices.map(item => getOfficeMetricText(item, 'actual'))],
+    ['整体达成率', ...displayOffices.map(item => getOfficeMetricText(item, 'rate'))],
+    ['剩余缺口金额', ...displayOffices.map(item => getOfficeMetricText(item, 'remain'))],
+  ]
+  const table = [
+    `| ${header.join(' | ')} |`,
+    `| ${header.map(() => '---').join(' | ')} |`,
+    ...rows.map(row => `| ${row.join(' | ')} |`),
+  ].join('\n')
+  const levelLabel = dialogBusinessDrillReport.value?.compareLevelLabel || businessDrillReport.value?.compareLevelLabel || '对象'
+  const note = offices.length > 4 ? `\n\n本次对象较多，表内展示最高/次高/次低/最低摘要，完整 ${offices.length} 个${levelLabel}见下方对比分析表。` : ''
+  return `${table}${note}`
+}
+
+const buildBusinessNarrativeSections = (report) => {
+  const offices = report?.offices || []
+  if (!report || !offices.length) return []
+  const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
+  const best = ranked[0] || offices[0]
+  const worst = ranked[ranked.length - 1] || offices[offices.length - 1]
+  const diff = best?.rate !== null && worst?.rate !== null
+    ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
+    : ''
+  const visibleNames = offices.length <= 4
+    ? offices.map(item => item.name).join('、')
+    : `${offices.length} 个${report.compareLevelLabel}`
+  const riskOffices = offices.filter(item => item.tone === 'danger')
+  const riskText = riskOffices.length
+    ? `${riskOffices.slice(0, 3).map(item => item.name).join('、')}处于低达成风险${riskOffices.length > 3 ? `等 ${riskOffices.length} 个对象` : ''}`
+    : '当前同层级对象暂无低达成风险'
+  return [
+    {
+      title: '一、核心结论',
+      body: diff
+        ? `${best.name}整体达成率${best.rateLabel}，比${worst.name}高${diff}个百分点；本次比较对象为${visibleNames}，建议先看同层级差异，再下钻直接下级定位原因。`
+        : report.summary,
+    },
+    {
+      title: '二、关键指标对标',
+      body: buildComparisonMetricTable(offices),
+    },
+    {
+      title: '三、层级差异核心看点',
+      body: [
+        `1. 最高达成对象：${best.name}，达成率${best.rateLabel}。`,
+        `2. 当前压力对象：${worst.name}，达成率${worst.rateLabel}。`,
+        `3. 风险提示：${riskText}。`,
+      ].join('\n'),
+    },
+    {
+      title: '四、落地建议',
+      body: `先围绕${worst.name}下钻${report.detailLevelLabel}，对比${best.name}的高达成节点做目标拆解、客户推进节奏和项目转化复盘；完整对象排序以“各${report.compareLevelLabel}对比分析”表为准。`,
+    },
+  ]
+}
+
 const reportSummaryBullets = computed(() => {
   const bullets = []
   const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
   const primary = sourceDatasets[0]
+  const drillReport = sourceDatasets.map(buildBusinessDrillReport).find(Boolean)
   const names = sourceDatasets.map(item => item.dataset_name).filter(Boolean)
   if (session.state.question) bullets.push(`原始问题：${session.state.question}`)
   bullets.push(`报告模板：${reportSceneTemplateLabel.value}`)
+  if (drillReport) {
+    const nextLevelText = drillReport.offices?.some(item => item.drillGroups?.length)
+      ? `，再从${drillReport.detailLevelLabel}继续下钻到业务员`
+      : ''
+    bullets.push(`分析口径：先横向比较 ${drillReport.offices.length} 个${drillReport.compareLevelLabel}，再纵向展开${drillReport.detailLevelLabel}${nextLevelText}。`)
+  }
   if (names.length) bullets.push(`命中数据集：${names.join('、')}`)
   if (sourceDatasets.length) {
     const totalRows = sourceDatasets.reduce((sum, item) => sum + Number(item?.row_count || item?.rows?.length || 0), 0)
@@ -1706,7 +2218,7 @@ const reportSummaryBullets = computed(() => {
   if (reviewSummary) bullets.push(`SQL 复核结论：${reviewSummary}`)
   const sample = primary?.rows?.[0]
   const columns = primary?.columns || []
-  if (sample && columns.length) {
+  if (!drillReport && sample && columns.length) {
     const snippet = columns.slice(0, 3).map(column => `${column}=${sample[column]}`).join('；')
     if (snippet) bullets.push(`样例结果：${snippet}`)
   }
@@ -1732,11 +2244,13 @@ const reportNarrativeSections = computed(() => {
   return sections
 })
 
-const businessNarrativeSections = computed(() => (
-  reportNarrativeSections.value
+const businessNarrativeSections = computed(() => {
+  const generated = buildBusinessNarrativeSections(dialogBusinessDrillReport.value || businessDrillReport.value)
+  if (generated.length) return generated
+  return reportNarrativeSections.value
     .filter(section => !/^业绩分析报告$/.test(section.title))
     .slice(0, 4)
-))
+})
 
 // 方法
 const renderMd = (text) => marked.parse(text || '')
@@ -2064,6 +2578,100 @@ const getVisualPreviews = (msg) => (
     }))
     .filter(item => item.chartSpec)
 )
+
+const focusComposer = (selectAll = false) => nextTick(() => {
+  const textarea = document.querySelector('.sa-textarea')
+  if (!(textarea instanceof HTMLTextAreaElement)) return
+  textarea.focus()
+  const end = textarea.value.length
+  textarea.setSelectionRange(selectAll ? 0 : end, end)
+})
+
+const writeClipboard = async (text) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'readonly')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+const copyQuestion = async (msg) => {
+  const text = String(msg?.content || '').trim()
+  if (!text) return
+  try {
+    await writeClipboard(text)
+    ElMessage.success('问题已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动复制')
+  }
+}
+
+const editQuestion = (msg) => {
+  const text = String(msg?.content || '').trim()
+  if (!text) return
+  if (isRunning.value) {
+    ElMessage.warning('当前正在执行，停止后再修改问题')
+    return
+  }
+  query.value = text
+  focusComposer(true)
+  ElMessage.success('已放入输入框，修改后按 Enter 发送')
+}
+
+const clearMessageRuntimeState = (items = []) => {
+  items.forEach((item) => {
+    if (!item?.id) return
+    delete thinkingOpen[item.id]
+    delete confirmationDrafts[item.id]
+    delete confirmationSubmitting[item.id]
+  })
+}
+
+const rerunQuestion = async (msg) => {
+  const text = String(msg?.content || '').trim()
+  if (!text || isRunning.value) return
+
+  const userIndex = messages.findIndex(item => item.id === msg.id)
+  if (userIndex < 0) return
+
+  const removed = messages.splice(userIndex + 1)
+  clearMessageRuntimeState(removed)
+  session.resetSession()
+  clearChatUiState()
+
+  const aid = ++msgCounter
+  const aiMsg = { id: aid, role: 'ai', loading: true, data: null }
+  messages.splice(userIndex + 1, 0, aiMsg)
+  thinkingOpen[aid] = true
+
+  query.value = ''
+  showPanel.value = true
+  scheduleChatScroll(24, 'smooth')
+  startTimer()
+
+  try {
+    const res = await session.startAsk(text, datasetId.value, modelId.value)
+    aiMsg.loading = false
+    aiMsg.data = res || { aborted: true }
+    thinkingOpen[aid] = false
+    scheduleChatScroll(48, 'smooth')
+  } catch (err) {
+    aiMsg.loading = false
+    aiMsg.data = { error: err.response?.data?.error || err.message || '系统繁忙' }
+    query.value = text
+    scheduleChatScroll(36, 'smooth')
+  } finally {
+    stopTimer()
+  }
+}
 
 const handleSend = async () => {
   const text = query.value.trim()
@@ -2487,8 +3095,8 @@ const loadQuestions = async () => {
 const getStatusColor = (rate) => {
   const value = toNumber(rate)
   if (value === null) return '#1890ff'
-  if (value >= 100) return '#00b42a'
-  if (value >= 80) return '#faad14'
+  if (value >= 15) return '#00b42a'
+  if (value >= 10) return '#faad14'
   return '#f5222d'
 }
 
@@ -2621,6 +3229,75 @@ const renderChartSpec = (chart, data) => {
           })),
         },
       ],
+    })
+    return
+  }
+
+  if (data.chartType === 'horizontalRateBar' || data.chartType === 'horizontalDrill') {
+    const categoryRows = sortedRows.slice(0, 12).reverse()
+    const rateColumn = numericColumns.find(column => isRateColumn(column)) || numericColumns[numericColumns.length - 1]
+    const remainColumn = numericColumns.find(column => /剩余|缺口|remain/i.test(column))
+    const series = [
+      {
+        name: rateColumn,
+        type: 'bar',
+        barMaxWidth: 14,
+        itemStyle: { borderRadius: [0, 5, 5, 0] },
+        label: {
+          show: true,
+          position: 'right',
+          color: '#4e5969',
+          fontSize: 10,
+          formatter: ({ value }) => `${formatDisplayValue(value)}%`,
+        },
+        data: categoryRows.map(row => ({
+          value: row[rateColumn],
+          itemStyle: { color: getStatusColor(row[rateColumn]) },
+        })),
+      },
+    ]
+    if (data.chartType === 'horizontalDrill' && remainColumn) {
+      series.push({
+        name: remainColumn,
+        type: 'bar',
+        barMaxWidth: 10,
+        itemStyle: { borderRadius: [0, 4, 4, 0], color: '#ff9a2e' },
+        label: {
+          show: true,
+          position: 'right',
+          color: '#86909c',
+          fontSize: 10,
+          formatter: ({ value }) => formatAmount(value),
+        },
+        data: categoryRows.map(row => row[remainColumn]),
+      })
+    }
+    chart.setOption({
+      backgroundColor: 'transparent',
+      color: colorPalette,
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: {
+        show: series.length > 1,
+        top: 2,
+        right: 8,
+        itemWidth: 10,
+        itemHeight: 8,
+        textStyle: { color: '#4e5969', fontSize: 10 },
+      },
+      grid: { left: 78, right: 58, top: series.length > 1 ? 34 : 14, bottom: 18, containLabel: true },
+      xAxis: {
+        type: 'value',
+        axisLabel: { color: '#86909c', fontSize: 11, formatter: value => `${value}%` },
+        splitLine: { lineStyle: { color: '#f2f3f5', type: 'dashed' } },
+      },
+      yAxis: {
+        type: 'category',
+        data: categoryRows.map(row => row[labelColumn]),
+        axisLabel: { color: '#4e5969', fontSize: 11 },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series,
     })
     return
   }
@@ -3662,6 +4339,34 @@ onUnmounted(() => {
   text-align: center;
   background: #fff;
 }
+
+.sa-kpi-card.is-subject-metric {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--metric-accent-border);
+  background: linear-gradient(180deg, var(--metric-accent-soft) 0%, #ffffff 72%);
+}
+
+.sa-kpi-card.is-subject-metric::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--metric-accent);
+}
+
+.sa-kpi-subject {
+  margin-bottom: 4px;
+  color: var(--metric-accent);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.sa-kpi-card.is-subject-metric .sa-kpi-value {
+  color: var(--metric-accent);
+}
+
 .sa-kpi-value {
   font-size: 22px;
   font-weight: 700;
@@ -3966,6 +4671,11 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.sa-management-narrative.is-dialog {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .sa-management-narrative-card {
   padding: 12px 14px;
   border: 1px solid #e8eefc;
@@ -4051,6 +4761,27 @@ onUnmounted(() => {
   background: #f2f3f5;
 }
 
+.sa-office-rate {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.1;
+}
+
+.sa-office-rate small {
+  font-size: 9px;
+  font-weight: 600;
+  color: currentColor;
+  opacity: 0.8;
+}
+
+.sa-office-tag {
+  margin-left: 6px;
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .sa-kpi-shelf-compact .sa-kpi-card {
   min-width: calc(50% - 4px);
   padding: 10px;
@@ -4093,7 +4824,7 @@ onUnmounted(() => {
 }
 
 .sa-office-card {
-  border: 1px solid rgba(29, 33, 41, 0.08);
+  border: 1px solid var(--office-accent-border, rgba(29, 33, 41, 0.08));
   border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
@@ -4101,6 +4832,7 @@ onUnmounted(() => {
 
 .sa-office-card-dialog {
   border-radius: 14px;
+  border-color: var(--office-accent-border, rgba(29, 33, 41, 0.08));
 }
 
 .sa-office-card-head {
@@ -4117,8 +4849,26 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
+.sa-office-card .sa-office-card-head {
+  background: linear-gradient(90deg, var(--office-accent-soft, #fbfcff) 0%, #fbfcff 72%);
+  border-left: 4px solid var(--office-accent, transparent);
+}
+
+.sa-office-card-dialog .sa-office-card-head {
+  background: linear-gradient(90deg, var(--office-accent-soft, #fbfcff) 0%, #fbfcff 72%);
+  border-left: 4px solid var(--office-accent, transparent);
+}
+
 .sa-office-card-head:hover {
   background: #f7faff;
+}
+
+.sa-office-card .sa-office-card-head:hover {
+  background: linear-gradient(90deg, var(--office-accent-soft, #f7faff) 0%, #f7faff 72%);
+}
+
+.sa-office-card-dialog .sa-office-card-head:hover {
+  background: linear-gradient(90deg, var(--office-accent-soft, #f7faff) 0%, #f7faff 72%);
 }
 
 .sa-office-name {
@@ -4169,8 +4919,124 @@ onUnmounted(() => {
 
 .sa-office-drill {
   margin: 0 12px 12px;
-  padding-top: 10px;
+  position: relative;
+  padding: 12px 0 0 14px;
   border-top: 1px dashed rgba(29, 33, 41, 0.1);
+}
+
+.sa-office-drill::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 13px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--office-accent-soft, rgba(22, 93, 255, 0.12));
+  border: 1px solid var(--office-accent-border, rgba(22, 93, 255, 0.16));
+}
+
+.sa-drill-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--office-accent-soft, #f7faff);
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sa-drill-path i {
+  width: 18px;
+  height: 1px;
+  background: var(--office-accent, #165dff);
+  position: relative;
+}
+
+.sa-drill-path i::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--office-accent, #165dff);
+  border-right: 1px solid var(--office-accent, #165dff);
+  transform: rotate(45deg);
+}
+
+.sa-drill-path strong {
+  color: var(--office-accent, #165dff);
+}
+
+.sa-drill-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sa-drill-insight-card {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: #ffffff;
+}
+
+.sa-drill-insight-card span {
+  display: block;
+  margin-bottom: 4px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sa-drill-insight-card strong {
+  display: block;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.sa-drill-insight-card.is-good {
+  border-color: rgba(0, 180, 42, 0.16);
+  background: #f7fff9;
+}
+
+.sa-drill-insight-card.is-risk {
+  border-color: rgba(245, 63, 63, 0.14);
+  background: #fffafa;
+}
+
+.sa-chart-copy-drill {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.sa-drill-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: -4px;
+  color: #1d2129;
+}
+
+.sa-drill-table-head span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sa-drill-table-head small {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .sa-office-drill-actions {
@@ -4207,6 +5073,341 @@ onUnmounted(() => {
 
 .sa-office-chart-dialog {
   height: 320px;
+}
+
+.sa-office-detail-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.sa-office-detail-wrap.is-dialog {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sa-office-detail-table {
+  overflow: hidden;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sa-office-detail-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) minmax(118px, 1.12fr) minmax(78px, 0.78fr) minmax(66px, 0.64fr) minmax(124px, 1fr) minmax(74px, 0.74fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: #344054;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sa-office-detail-row:nth-child(odd):not(.is-head) {
+  background: #fbfcfd;
+}
+
+.sa-office-detail-row.is-head {
+  min-height: 32px;
+  color: #86909c;
+  background: #f7f8fa;
+  font-weight: 700;
+}
+
+.sa-detail-name {
+  color: #1d2129;
+  font-weight: 700;
+}
+
+.sa-detail-rate,
+.sa-detail-tag {
+  font-weight: 700;
+}
+
+.sa-detail-progress {
+  min-width: 0;
+}
+
+.sa-detail-rate.good,
+.sa-detail-tag.good {
+  color: #00b42a;
+}
+
+.sa-detail-rate.warn,
+.sa-detail-tag.warn {
+  color: #ff7d00;
+}
+
+.sa-detail-rate.danger,
+.sa-detail-tag.danger {
+  color: #f53f3f;
+}
+
+.sa-office-bars {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.sa-office-bar-row {
+  display: grid;
+  grid-template-columns: minmax(54px, 74px) minmax(0, 1fr) minmax(48px, 64px);
+  gap: 8px;
+  align-items: center;
+  color: #4e5969;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sa-office-bar-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-office-bar-row strong {
+  color: #1d2129;
+  font-size: 11px;
+  text-align: right;
+}
+
+.sa-office-bar-row.is-gap {
+  margin-top: -2px;
+}
+
+.sa-office-bar-track {
+  display: block;
+  position: relative;
+  height: 8px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.sa-office-bar-track i,
+.sa-office-bar-track b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 2px;
+  border-radius: inherit;
+}
+
+.sa-office-bar-track .is-rate.good {
+  background: #00b42a;
+}
+
+.sa-office-bar-track .is-rate.warn {
+  background: #ffb020;
+}
+
+.sa-office-bar-track .is-rate.danger {
+  background: #f53f3f;
+}
+
+.sa-office-bar-track .is-gap {
+  background: #ff9a2e;
+}
+
+.sa-compare-matrix {
+  overflow: hidden;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.sa-compare-row {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(110px, 1.05fr) minmax(88px, 0.8fr) minmax(88px, 0.8fr) minmax(88px, 0.8fr) minmax(70px, 0.65fr) minmax(220px, 1.4fr) minmax(82px, 0.75fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(29, 33, 41, 0.06);
+  background: transparent;
+  color: #344054;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.sa-compare-row:not(.is-head) {
+  background: linear-gradient(90deg, var(--office-accent-soft, transparent) 0%, #ffffff 46%);
+}
+
+.sa-compare-row:not(.is-head)::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--office-accent);
+}
+
+.sa-compare-row:last-child {
+  border-bottom: 0;
+}
+
+button.sa-compare-row {
+  cursor: pointer;
+}
+
+button.sa-compare-row:hover {
+  background: linear-gradient(90deg, var(--office-accent-soft, #f8fbff) 0%, #f8fbff 70%);
+}
+
+.sa-compare-row.is-head {
+  min-height: 36px;
+  color: #86909c;
+  background: #f7f8fa;
+  font-weight: 700;
+}
+
+.sa-compare-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-compare-matrix.is-compact .sa-compare-row {
+  grid-template-columns: minmax(78px, 1fr) minmax(64px, 0.75fr) minmax(64px, 0.75fr) minmax(62px, 0.75fr) minmax(58px, 0.7fr) minmax(92px, 1fr) minmax(70px, 0.72fr);
+  min-height: 38px;
+  padding: 8px 10px;
+  gap: 7px;
+  font-size: 11px;
+}
+
+.sa-compare-matrix.is-compact .sa-compare-row.is-head {
+  min-height: 32px;
+}
+
+.sa-compare-matrix.is-compact .sa-office-bar-track {
+  height: 7px;
+}
+
+.sa-compare-row .sa-detail-name {
+  color: var(--office-accent);
+}
+
+.sa-compare-row .sa-detail-rate {
+  color: var(--office-accent);
+}
+
+.sa-compare-row .sa-office-bar-track .is-rate {
+  background: var(--office-accent);
+}
+
+.sa-rep-drill-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(29, 33, 41, 0.08);
+}
+
+.sa-rep-drill-list.is-dialog {
+  margin-top: 4px;
+}
+
+.sa-rep-drill-title {
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sa-rep-drill-card {
+  overflow: hidden;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.sa-rep-drill-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sa-rep-drill-head:hover {
+  background: rgba(24, 144, 255, 0.05);
+}
+
+.sa-rep-drill-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sa-rep-drill-subtitle {
+  margin-top: 2px;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.sa-rep-drill-summary {
+  margin: 0;
+  padding: 0 10px 9px;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.sa-rep-person-table {
+  margin: 0 10px 10px;
+}
+
+@media (max-width: 900px) {
+  .sa-office-detail-wrap,
+  .sa-office-detail-wrap.is-dialog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-drill-insight-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-drill-table-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .sa-office-detail-table {
+    overflow-x: auto;
+  }
+
+  .sa-office-detail-row {
+    min-width: 760px;
+  }
+
+  .sa-compare-matrix {
+    overflow-x: auto;
+  }
+
+  .sa-compare-row {
+    min-width: 860px;
+  }
+
+  .sa-management-narrative.is-dialog {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .sa-wide-btn {
@@ -4499,12 +5700,45 @@ onUnmounted(() => {
   align-self: stretch;
 }
 
+.sa-report-stage-metrics .sa-kpi-shelf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sa-report-stage-metrics .sa-kpi-card {
+  min-width: 0;
+}
+
 .sa-report-stage-title {
   margin-bottom: 12px;
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   color: #1d2129;
+}
+
+.sa-report-core-conclusion {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(22, 93, 255, 0.14);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.sa-report-core-conclusion span {
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sa-report-core-conclusion strong {
+  color: #1d2129;
+  font-size: 15px;
+  line-height: 1.7;
+  font-weight: 800;
 }
 
 .sa-report-bullet-list {

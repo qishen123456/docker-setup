@@ -105,6 +105,7 @@ export const updateBookshelfDataset = (id, data) => api.put(`/bookshelves/datase
 export const deleteBookshelfDataset = (id) => api.delete(`/bookshelves/datasets/${id}`)
 export const getBookshelfDatasetFull = (id) => api.get(`/bookshelves/datasets/${id}/full`)
 export const saveBookshelfDatasetFull = (id, data) => api.put(`/bookshelves/datasets/${id}/full`, data)
+export const previewBookshelfDatasetSql = (id, data) => api.post(`/bookshelves/datasets/${id}/sql-preview`, data)
 export const getSourceTables = (sourceId) => api.get(`/bookshelves/source-tables?source_id=${sourceId}`)
 export const getCommonQuestions = (datasetId) =>
   datasetId ? api.get(`/bookshelves/common-questions?dataset_id=${datasetId}`) : api.get('/bookshelves/common-questions')
