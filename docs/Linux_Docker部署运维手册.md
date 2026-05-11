@@ -1,6 +1,6 @@
 # Linux Docker 部署运维手册
 
-更新时间：2026-05-10
+更新时间：2026-05-11
 
 当前项目真实 Git 信息：
 
@@ -16,6 +16,7 @@ Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
 本版部署重点：
 
 - 问数语义识别增强：用户说“东西部分公司”等合称时，后端会先通过 Agent1.5 和数据集画像解析为具体组织成员，再进入 SQL 与报告链路。
+- 报告场景与模板契约治理：后端新增统一场景识别与报告契约健康检查，部署自检会验证“对比分析”场景和模板契约模块是否随镜像生效。
 - 报告模板配置自修复：后端启动时会幂等应用 `backend/migrations`；首次空库导入书架数据后，会补跑报告配置迁移，避免报告模板配置为空。
 - 报告风险线更新：商用事业部相关数据集统一使用 10% 风险线、15% 机构标杆线、20% 个人标杆线。
 
@@ -131,6 +132,18 @@ bash deploy.sh
 
 ```bash
 bash deploy.sh --run-tests
+```
+
+从 2026-05-11 版本开始，`deploy.sh` 在后端健康检查通过后，会默认执行容器内自检：
+
+```bash
+docker compose exec -T backend python /app/scripts/verify_deployment.py
+```
+
+自检会覆盖 PostgreSQL、关键表、HTTP 接口、报告场景识别和报告模板契约模块。只有你明确要快速启动、稍后再查时，才建议跳过：
+
+```bash
+bash deploy.sh --skip-verify
 ```
 
 也可以手动执行 Docker Compose：
@@ -251,6 +264,7 @@ bash update.sh
 - `docker compose up -d --build`。
 - 后端启动时自动应用 `backend/migrations`，包含本次报告阈值与模板配置更新。
 - 后端健康检查。
+- 容器内自检：PostgreSQL、关键表、HTTP 接口、报告场景识别、报告模板契约。
 
 如需跳过拉代码，只用当前目录重建：
 
@@ -262,6 +276,12 @@ bash update.sh --no-pull
 
 ```bash
 bash update.sh --run-tests
+```
+
+如需只做健康检查、不做容器内自检：
+
+```bash
+bash update.sh --skip-verify
 ```
 
 手动更新流程如下。
@@ -568,7 +588,8 @@ bash check-release.sh
 - 前端 `npm run build`。
 - `docker compose config`。
 - Linux shell 脚本是否为 LF 行尾。
-- 后端关键 Python 文件语法。
+- 后端与 `scripts/` 下全部 Python 文件语法。
+- 报告场景识别与模板契约烟雾测试。
 
 ### 12.3 手动排查命令
 

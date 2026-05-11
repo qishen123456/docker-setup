@@ -5,6 +5,7 @@
 - PostgreSQL 可连接
 - 关键 schema 表存在 (bs_datasets, angel_group_data 等)
 - bs_datasets 已导入数据
+- 报告场景识别与报告模板契约校验模块可用
 - Flask /api/health 健康
 - /api/datasources 与 /api/ai-models 返回 200
 
@@ -124,6 +125,49 @@ def _check_http() -> List[Tuple[str, bool, str]]:
     return out
 
 
+def _check_report_contract() -> List[Tuple[str, bool, str]]:
+    out: List[Tuple[str, bool, str]] = []
+    try:
+        from report_contract_health import validate_report_contract
+        from report_scene_registry import detect_report_scene
+    except Exception as exc:
+        return [("report_contract", False, f"无法 import 报告契约模块: {exc}")]
+
+    try:
+        scene = detect_report_scene("东部和西部业绩对比", None, 2)
+        ok = scene.get("key") == "comparative" and scene.get("layout") == "comparison"
+        out.append(("report_scene", ok, f"scene={scene.get('key')}, layout={scene.get('layout')}"))
+    except Exception as exc:
+        out.append(("report_scene", False, f"场景识别失败: {exc}"))
+        scene = {"required_contract": ["nameColumn", "metrics"]}
+
+    sample_config = {
+        "nameColumn": "节点名称",
+        "parentColumn": "上级名称",
+        "levelColumn": "层级",
+        "trackColumn": "条线",
+        "metrics": [
+            {"key": "task", "label": "任务", "column": "任务金额", "format": "amount"},
+            {"key": "actual", "label": "开单", "column": "开单金额", "format": "amount"},
+            {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+        ],
+        "analysisDimensions": [{"key": "level", "column": "层级"}],
+        "signalRules": [{"key": "rate", "dangerBelow": 0.1, "goodAbove": 0.2}],
+        "sqlOutputContract": {
+            "requiredColumns": ["节点名称", "层级", "任务金额", "开单金额", "达成率"]
+        },
+    }
+    sample_columns = ["节点名称", "上级名称", "层级", "条线", "任务金额", "开单金额", "达成率"]
+    try:
+        contract = validate_report_contract(sample_config, sample_columns, scene)
+        ok = bool(contract.get("used")) and contract.get("score", 0) >= 85
+        out.append(("report_contract", ok, f"score={contract.get('score')}, level={contract.get('level')}"))
+    except Exception as exc:
+        out.append(("report_contract", False, f"契约校验失败: {exc}"))
+
+    return out
+
+
 def main() -> int:
     print("==================================================")
     print(" SmartAsk 部署自检")
@@ -143,6 +187,13 @@ def main() -> int:
         if not ok:
             overall_ok = False
 
+    print("--- 报告链路检查 ---")
+    for name, ok, msg in _check_report_contract():
+        flag = "PASS" if ok else "FAIL"
+        print(f"[{flag}] {name:32s} — {msg}")
+        if not ok:
+            overall_ok = False
+
     print("--- HTTP 接口检查 ---")
     for path, ok, msg in _check_http():
         flag = "PASS" if ok else "FAIL"
@@ -152,9 +203,9 @@ def main() -> int:
 
     print("==================================================")
     if overall_ok:
-        print("✅ 全部自检通过")
+        print("[OK] 全部自检通过")
         return 0
-    print("⚠️ 存在不通过项，请按上面 FAIL 行排查")
+    print("[WARN] 存在不通过项，请按上面 FAIL 行排查")
     return 1
 
 

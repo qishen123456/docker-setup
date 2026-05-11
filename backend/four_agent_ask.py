@@ -2776,7 +2776,9 @@ Agent3 复核结果：
         for dataset_id in dataset_ids:
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
             dataset_meta = self._safe_dict(context.get("dataset"))
-            report_config = report_config_store.get_config(int(dataset_id)) or report_config_store.get_default_config()
+            saved_report_config = report_config_store.get_config(int(dataset_id))
+            report_config_source = "dataset_config" if saved_report_config else "default"
+            report_config = saved_report_config or report_config_store.get_default_config()
             context["report_config"] = report_config
             context["resolved_entities"] = self._resolve_question_entities(
                 route.get("refined_query", question),
@@ -2973,12 +2975,22 @@ Agent3 复核结果：
                     "dataset_name": context["dataset"]["dataset_name"],
                     "source_id": context["dataset"]["source_id"],
                     "report_config": report_config,
+                    "report_config_source": report_config_source,
                     "resolved_entities": context.get("resolved_entities"),
                     "agent3_review": review,
                     "columns": result["columns"],
                     "rows": result["rows"],
                     "row_count": result["row_count"],
                     "report_spec": report_spec,
+                    "report_debug": {
+                        "dataset_id": context["dataset"]["id"],
+                        "dataset_name": context["dataset"]["dataset_name"],
+                        "report_config_source": report_config_source,
+                        "scene": (report_spec.get("debug") or {}).get("scene"),
+                        "contract": (report_spec.get("debug") or {}).get("contract"),
+                        "layoutTemplate": report_spec.get("layoutTemplate"),
+                        "analysisMode": report_spec.get("analysisMode"),
+                    },
                     "analysis": analysis_text,
                     "sql": final_sql,
                 }
@@ -3004,6 +3016,7 @@ Agent3 复核结果：
             },
             "report_config": primary.get("report_config"),
             "report_spec": primary.get("report_spec"),
+            "report_debug": primary.get("report_debug"),
             "data_source": primary["dataset_name"] if len(dataset_results) == 1 else f"跨 {len(dataset_results)} 个数据集",
             "sql": primary["sql"],
             "columns": primary["columns"],

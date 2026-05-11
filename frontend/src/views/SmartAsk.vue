@@ -404,12 +404,27 @@
                       class="sa-office-card"
                       :style="getOfficeAccentStyle(office, officeIndex)"
                     >
-                      <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
-                        <div>
+                      <button
+                        class="sa-office-card-head"
+                        type="button"
+                        :aria-expanded="String(isOfficeExpanded(office.id))"
+                        @click="toggleOfficeDrill(office.id)"
+                      >
+                        <div class="sa-office-head-main">
                           <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
                           <div class="sa-office-subtitle">{{ office.childCount }} 个{{ businessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                         </div>
-                        <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
+                        <span class="sa-office-head-actions">
+                          <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
+                          <span
+                            class="sa-office-drill-toggle"
+                            :class="{ 'is-open': isOfficeExpanded(office.id) }"
+                            :title="isOfficeExpanded(office.id) ? '收起下钻明细' : `展开查看${office.childCount || 0}个${businessDrillReport.detailLevelLabel}`"
+                          >
+                            <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
+                            <i></i>
+                          </span>
+                        </span>
                       </button>
                       <div class="sa-office-kpis">
                         <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
@@ -469,11 +484,21 @@
                                 type="button"
                                 @click="toggleOfficeDrill(`rep-${office.id}-${group.id}`)"
                               >
-                                <div>
+                                <div class="sa-office-head-main">
                                   <div class="sa-rep-drill-name">{{ group.name }} <span class="sa-office-tag">{{ group.tag }}</span></div>
                                   <div class="sa-rep-drill-subtitle">{{ group.childCount }} 个{{ group.detailLevelLabel }} · {{ group.parentName || office.name }}</div>
                                 </div>
-                                <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                                <span class="sa-office-head-actions">
+                                  <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                                  <span
+                                    class="sa-office-drill-toggle is-small"
+                                    :class="{ 'is-open': isOfficeExpanded(`rep-${office.id}-${group.id}`) }"
+                                    :title="isOfficeExpanded(`rep-${office.id}-${group.id}`) ? '收起业务员明细' : '展开业务员明细'"
+                                  >
+                                    <span>{{ isOfficeExpanded(`rep-${office.id}-${group.id}`) ? '收起' : '业务员' }}</span>
+                                    <i></i>
+                                  </span>
+                                </span>
                               </button>
                               <p v-if="group.summary" class="sa-rep-drill-summary">{{ group.summary }}</p>
                               <div v-if="isOfficeExpanded(`rep-${office.id}-${group.id}`)" class="sa-office-detail-table sa-rep-person-table">
@@ -783,12 +808,27 @@
                 class="sa-office-card sa-office-card-dialog"
                 :style="getOfficeAccentStyle(office, officeIndex)"
               >
-                <button class="sa-office-card-head" type="button" @click="toggleOfficeDrill(office.id)">
-                  <div>
+                <button
+                  class="sa-office-card-head"
+                  type="button"
+                  :aria-expanded="String(isOfficeExpanded(office.id))"
+                  @click="toggleOfficeDrill(office.id)"
+                >
+                  <div class="sa-office-head-main">
                     <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
                     <div class="sa-office-subtitle">{{ office.childCount }} 个{{ dialogBusinessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
                   </div>
-                  <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
+                  <span class="sa-office-head-actions">
+                    <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
+                    <span
+                      class="sa-office-drill-toggle"
+                      :class="{ 'is-open': isOfficeExpanded(office.id) }"
+                      :title="isOfficeExpanded(office.id) ? '收起下钻明细' : `展开查看${office.childCount || 0}个${dialogBusinessDrillReport.detailLevelLabel}`"
+                    >
+                      <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
+                      <i></i>
+                    </span>
+                  </span>
                 </button>
                 <p class="sa-office-copy">{{ office.summary }}</p>
                 <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
@@ -845,11 +885,21 @@
                           type="button"
                           @click="toggleOfficeDrill(`rep-${office.id}-${group.id}`)"
                         >
-                          <div>
+                          <div class="sa-office-head-main">
                             <div class="sa-rep-drill-name">{{ group.name }} <span class="sa-office-tag">{{ group.tag }}</span></div>
                             <div class="sa-rep-drill-subtitle">{{ group.childCount }} 个{{ group.detailLevelLabel }} · {{ group.parentName || office.name }}</div>
                           </div>
-                          <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                          <span class="sa-office-head-actions">
+                            <span class="sa-office-rate" :class="group.tone">{{ group.rateLabel }}</span>
+                            <span
+                              class="sa-office-drill-toggle is-small"
+                              :class="{ 'is-open': isOfficeExpanded(`rep-${office.id}-${group.id}`) }"
+                              :title="isOfficeExpanded(`rep-${office.id}-${group.id}`) ? '收起业务员明细' : '展开业务员明细'"
+                            >
+                              <span>{{ isOfficeExpanded(`rep-${office.id}-${group.id}`) ? '收起' : '业务员' }}</span>
+                              <i></i>
+                            </span>
+                          </span>
                         </button>
                         <p v-if="group.summary" class="sa-rep-drill-summary">{{ group.summary }}</p>
                         <div v-if="isOfficeExpanded(`rep-${office.id}-${group.id}`)" class="sa-office-detail-table sa-rep-person-table">
@@ -4861,6 +4911,85 @@ onUnmounted(() => {
 
 .sa-office-card-head:hover {
   background: #f7faff;
+}
+
+.sa-office-head-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sa-office-head-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sa-office-drill-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 48px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #4e5969;
+  line-height: 1;
+  opacity: 0.82;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+}
+
+.sa-office-card-head:hover .sa-office-drill-toggle,
+.sa-rep-drill-head:hover .sa-office-drill-toggle,
+.sa-office-drill-toggle.is-open {
+  border-color: var(--office-accent-border, rgba(22, 93, 255, 0.18));
+  background: #ffffff;
+  color: var(--office-accent, #165dff);
+  opacity: 1;
+}
+
+.sa-office-drill-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sa-office-drill-toggle i {
+  width: 6px;
+  height: 6px;
+  margin-top: -2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.sa-office-drill-toggle.is-open {
+  background: var(--office-accent-soft, #f7faff);
+}
+
+.sa-office-drill-toggle.is-open i {
+  margin-top: 2px;
+  transform: rotate(225deg);
+}
+
+.sa-office-drill-toggle.is-small {
+  min-width: 54px;
+  min-height: 22px;
+  padding: 0 7px;
+}
+
+.sa-office-drill-toggle.is-small span {
+  font-size: 10px;
 }
 
 .sa-office-card .sa-office-card-head:hover {

@@ -7,6 +7,7 @@ SKIP_BACKUP=0
 RUN_TESTS=0
 RUN_STREAM_TESTS=0
 BRANCH="docker-setup"
+SKIP_VERIFY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS=1
       shift
       ;;
+    --skip-verify)
+      SKIP_VERIFY=1
+      shift
+      ;;
     --branch)
       BRANCH="${2:-docker-setup}"
       shift 2
@@ -51,6 +56,7 @@ SmartAsk Linux 更新脚本
   --skip-backup       跳过更新前备份，不建议生产环境使用。
   --run-tests         更新后运行接口测试。
   --run-stream-tests  额外运行流式问数测试，需要真实 AI Key。
+  --skip-verify       跳过容器内自检，仅做健康检查。
 EOF
       exit 0
       ;;
@@ -128,6 +134,13 @@ done
 
 docker compose ps
 [[ "$READY" -eq 1 ]] || fail "后端健康检查失败。请执行: bash doctor.sh"
+
+if [[ "$SKIP_VERIFY" -eq 0 ]]; then
+  info "运行容器内自检"
+  docker compose exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
+else
+  warn "已跳过容器内自检: --skip-verify"
+fi
 
 echo ""
 echo "[OK] 更新完成。页面如仍旧，请浏览器 Ctrl+F5。"

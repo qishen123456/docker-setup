@@ -42,6 +42,12 @@
     <div v-if="supportLines.length" class="sa-boss-answer-points" :class="{ 'is-drill': isComparisonDigest }">
       <span v-for="(line, index) in supportLines.slice(0, 2)" :key="index">{{ line }}</span>
     </div>
+
+    <div v-if="reportDebugItems.length" class="sa-report-debug-strip">
+      <span v-for="item in reportDebugItems" :key="item.label" :class="`is-${item.tone || 'neutral'}`">
+        {{ item.label }}：{{ item.value }}
+      </span>
+    </div>
   </section>
 </template>
 
@@ -198,6 +204,43 @@ const reportConfig = computed(() => (
   || {}
 ))
 const riskThreshold = computed(() => Number(reportConfig.value?.officeRiskThreshold || reportConfig.value?.riskThreshold || 10))
+const reportDebug = computed(() => (
+  props.dataset?.report_debug
+  || props.dataset?.report_spec?.debug
+  || datasetList.value.find(item => item?.report_debug)?.report_debug
+  || {}
+))
+
+const reportDebugItems = computed(() => {
+  const scene = reportDebug.value?.scene || reportDebug.value?.debug?.scene || {}
+  const contract = reportDebug.value?.contract || reportDebug.value?.debug?.contract || {}
+  const layout = reportDebug.value?.layoutTemplate || props.dataset?.report_spec?.layoutTemplate || ''
+  const items = []
+  if (scene?.label || scene?.key) {
+    items.push({ label: '场景', value: scene.label || scene.key, tone: 'info' })
+  }
+  if (layout) {
+    items.push({ label: '界面', value: layout, tone: 'neutral' })
+  }
+  if (reportDebug.value?.report_config_source) {
+    items.push({
+      label: '报告契约',
+      value: reportDebug.value.report_config_source === 'dataset_config' ? '数据集配置' : '默认配置',
+      tone: reportDebug.value.report_config_source === 'dataset_config' ? 'success' : 'warning',
+    })
+  }
+  if (Number.isFinite(Number(contract?.score))) {
+    items.push({
+      label: '契约健康',
+      value: `${contract.score}/100`,
+      tone: contract.level === 'healthy' ? 'success' : contract.level === 'danger' ? 'danger' : 'warning',
+    })
+  }
+  if (Array.isArray(contract?.missing) && contract.missing.length) {
+    items.push({ label: '缺失', value: contract.missing.slice(0, 3).join('、'), tone: 'danger' })
+  }
+  return items
+})
 
 const targetRows = computed(() => {
   if (!asksLowerNode.value) return normalizedRows.value
@@ -684,6 +727,47 @@ const supportLines = computed(() => {
   content: '·';
   margin-left: 12px;
   color: #c9cdd4;
+}
+
+.sa-report-debug-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.sa-report-debug-strip span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: #f7f8fa;
+  color: #4e5969;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sa-report-debug-strip .is-success {
+  border-color: rgba(0, 180, 42, 0.2);
+  background: #f3fff7;
+  color: #178a3b;
+}
+
+.sa-report-debug-strip .is-warning {
+  border-color: rgba(255, 125, 0, 0.22);
+  background: #fff8f0;
+  color: #b45f00;
+}
+
+.sa-report-debug-strip .is-danger {
+  border-color: rgba(245, 63, 63, 0.22);
+  background: #fff5f5;
+  color: #c73737;
+}
+
+.sa-report-debug-strip .is-info {
+  border-color: rgba(22, 93, 255, 0.18);
+  background: #f4f8ff;
+  color: #245bd6;
 }
 
 @media (max-width: 760px) {

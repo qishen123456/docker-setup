@@ -6,6 +6,7 @@ RUN_TESTS=0
 RUN_STREAM_TESTS=0
 FORCE_IMPORT=0
 FORCE_CONFIG=0
+SKIP_VERIFY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,6 +31,10 @@ while [[ $# -gt 0 ]]; do
       FORCE_CONFIG=1
       shift
       ;;
+    --skip-verify)
+      SKIP_VERIFY=1
+      shift
+      ;;
     -h|--help)
       cat <<'EOF'
 SmartAsk Linux 一键部署脚本
@@ -45,6 +50,7 @@ SmartAsk Linux 一键部署脚本
   --run-stream-tests   额外运行流式问数测试，需要真实 AI Key。
   --force-import       强制重新导入元数据/业务数据，谨慎使用。
   --force-config       强制覆盖 config JSON，谨慎使用。
+  --skip-verify        跳过容器内自检，仅做健康检查。
 
 镜像源环境变量：
   SMARTASK_APT_MIRROR=https://mirrors.aliyun.com
@@ -315,19 +321,19 @@ configure_apt_mirror() {
   ok "APT 镜像源已更新: $mirror，原配置备份: $backup"
 }
 
-info "1/7 检查 Docker"
+info "1/8 检查 Docker"
 command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
 docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
 docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
 ok "Docker 可用"
 
-info "2/7 配置 Linux 镜像源"
+info "2/8 配置 Linux 镜像源"
 configure_apt_mirror
 configure_docker_registry_mirror
 docker info >/dev/null 2>&1 || fail "Docker 镜像源配置后 Docker 不可用，请执行: bash doctor.sh"
 ok "镜像源检查完成"
 
-info "3/7 检查 .env"
+info "3/8 检查 .env"
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
@@ -366,11 +372,11 @@ if [[ "$FORCE_CONFIG" -eq 1 ]]; then
   warn "--force-config 已开启，将覆盖 config JSON"
 fi
 
-info "4/7 校验 docker compose"
+info "4/8 校验 docker compose"
 docker compose config >/dev/null
 ok "docker-compose.yml 有效"
 
-info "5/7 构建并启动容器"
+info "5/8 构建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
   docker compose up -d
 else
@@ -378,7 +384,7 @@ else
 fi
 ok "后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
-info "6/7 等待后端健康检查"
+info "6/8 等待后端健康检查"
 READY=0
 for _ in $(seq 1 120); do
   if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
@@ -391,7 +397,14 @@ done
 docker compose ps
 [[ "$READY" -eq 1 ]] || fail "后端健康检查失败。请执行: bash doctor.sh"
 
-info "7/7 部署完成"
+if [[ "$SKIP_VERIFY" -eq 0 ]]; then
+  info "7/8 运行容器内自检"
+  docker compose exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
+else
+  warn "已跳过容器内自检: --skip-verify"
+fi
+
+info "8/8 部署完成"
 ok "后端健康检查通过"
 echo "  Frontend: http://服务器IP:${FRONTEND_PORT}"
 echo "  Backend:  http://服务器IP:${BACKEND_PORT}/api/health"

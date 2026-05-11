@@ -102,24 +102,65 @@ if [[ -n "$PYTHON_BIN" ]]; then
 import ast
 from pathlib import Path
 
-files = [
-    "backend/app.py",
-    "backend/feature_flags.py",
-    "backend/controllers/feature_flags.py",
-    "backend/runtime_migration.py",
-    "backend/export_runtime_config.py",
-]
+files = []
+for root in (Path("backend"), Path("scripts")):
+    if root.exists():
+        files.extend(sorted(root.rglob("*.py")))
+
 for file in files:
-    ast.parse(Path(file).read_text(encoding="utf-8"), filename=file)
-print("PY_AST_OK")
+    ast.parse(Path(file).read_text(encoding="utf-8-sig"), filename=str(file))
+print(f"PY_AST_OK {len(files)} files")
 PY
   then
-    mark_ok "后端关键文件 AST 通过"
+    mark_ok "后端与脚本 AST 通过"
   else
-    mark_fail "后端关键文件 AST 失败"
+    mark_fail "后端与脚本 AST 失败"
   fi
 else
   mark_fail "未找到 python/python3，无法检查后端语法"
+fi
+
+section "报告场景与模板契约烟雾测试"
+if [[ -n "$PYTHON_BIN" ]]; then
+  if "$PYTHON_BIN" -B - <<'PY'
+import sys
+
+sys.path.insert(0, "backend")
+
+from report_contract_health import validate_report_contract
+from report_scene_registry import detect_report_scene
+
+scene = detect_report_scene("东部和西部业绩对比", None, 2)
+assert scene["key"] == "comparative", scene
+assert scene["layout"] == "comparison", scene
+
+config = {
+    "nameColumn": "节点名称",
+    "parentColumn": "上级名称",
+    "levelColumn": "层级",
+    "trackColumn": "条线",
+    "metrics": [
+        {"key": "task", "label": "任务", "column": "任务金额", "format": "amount"},
+        {"key": "actual", "label": "开单", "column": "开单金额", "format": "amount"},
+        {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+    ],
+    "analysisDimensions": [{"key": "level", "column": "层级"}],
+    "signalRules": [{"key": "rate", "dangerBelow": 0.1, "goodAbove": 0.2}],
+    "sqlOutputContract": {
+        "requiredColumns": ["节点名称", "层级", "任务金额", "开单金额", "达成率"]
+    },
+}
+columns = ["节点名称", "上级名称", "层级", "条线", "任务金额", "开单金额", "达成率"]
+contract = validate_report_contract(config, columns, scene)
+assert contract["used"] is True, contract
+assert contract["score"] >= 85, contract
+print(f"REPORT_CONTRACT_OK scene={scene['key']} score={contract['score']}")
+PY
+  then
+    mark_ok "报告场景与模板契约通过"
+  else
+    mark_fail "报告场景与模板契约失败"
+  fi
 fi
 
 echo ""

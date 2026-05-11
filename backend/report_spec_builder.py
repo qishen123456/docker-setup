@@ -2,6 +2,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 from dataset_dimension_profiles import get_dataset_profile, resolve_member_mentions
+from report_contract_health import validate_report_contract
+from report_scene_registry import detect_report_scene, layout_for_scene
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -162,26 +164,11 @@ def _level_label(nodes: List[Dict[str, Any]], fallback: str) -> str:
 
 
 def _detect_mode(question: str, focus_node: Optional[Dict[str, Any]], selected_count: int) -> str:
-    text = question or ""
-    if re.search(r"排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低", text):
-        return "ranking"
-    if selected_count > 1 or re.search(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", text, re.I):
-        return "comparative"
-    if re.search(r"为什么|原因|归因|下滑|异常|差距", text):
-        return "diagnostic"
-    if focus_node:
-        return "detail"
-    if re.search(r"风险|缺口", text):
-        return "diagnostic"
-    return "detail"
+    return detect_report_scene(question, focus_node, selected_count).get("key", "detail")
 
 
 def _layout_template(mode: str) -> str:
-    if mode == "comparative":
-        return "comparison"
-    if mode == "ranking":
-        return "ranking"
-    return "detail"
+    return layout_for_scene(mode)
 
 
 def _effective_thresholds(config: Dict[str, Any]) -> Dict[str, float]:
@@ -272,9 +259,9 @@ def build_report_spec(
 
     metrics = [item for item in config.get("metrics") or [] if isinstance(item, dict)]
     task_metric = _metric_by_key(config, "task", ["任务", "目标"])
-    actual_metric = _metric_by_key(config, "actual", ["开单", "完成", "实际", "销售"])
+    actual_metric = _metric_by_key(config, "actual", ["开单", "成交", "营收", "收入", "完成", "实际", "销售"])
     rate_metric = _metric_by_key(config, "rate", ["率", "percent", "rate"])
-    remain_metric = _metric_by_key(config, "remain", ["剩余", "缺口", "差额"])
+    remain_metric = _metric_by_key(config, "remain", ["剩余", "待完成", "缺口", "差额"])
 
     resolved_names = _resolved_member_names(resolved_entities)
     if not resolved_names:
@@ -309,7 +296,9 @@ def build_report_spec(
         comparison_nodes = [node for node in parent_nodes if node.get("depth", 0) == max_depth]
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
 
-    mode = _detect_mode(question, focus_node if not explicit_comparative else None, len(matched_nodes))
+    scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes))
+    mode = scene.get("key", "detail")
+    contract_health = validate_report_contract(config, columns, scene)
     compare_label = _level_label(comparison_nodes, "下一层级")
     detail_nodes = [item for node in comparison_nodes for item in _drill_children(node)]
     detail_label = _level_label(detail_nodes, "明细层级")
@@ -638,6 +627,17 @@ def build_report_spec(
         "question": question,
         "analysisMode": mode,
         "layoutTemplate": _layout_template(mode),
+        "debug": {
+            "scene": scene,
+            "contract": contract_health,
+            "report_config_used": bool(config),
+            "standard_columns": {
+                "name": config.get("nameColumn"),
+                "parent": config.get("parentColumn"),
+                "level": config.get("levelColumn"),
+                "track": config.get("trackColumn"),
+            },
+        },
         "dataset": {
             "id": dataset.get("id") or dataset.get("dataset_id"),
             "code": dataset.get("dataset_code"),
