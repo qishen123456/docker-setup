@@ -534,13 +534,16 @@ def build_report_spec(
             f"{len(risk_children)} 个{node_detail_label}低于{direct_risk_threshold:.0f}%风险线"
             if risk_children else f"暂无低于{direct_risk_threshold:.0f}%的风险{node_detail_label}"
         )
+        node_rank_value = node_rank.get(node.get("id"), 0)
+        node_rank_label = _rate_rank_label(node_rank_value)
+        node_rank_suffix = f"（{node_rank_label}）" if node_rank_value else ""
         accordions.append({
             "id": node["id"],
             "title": node["name"],
             "parentName": node.get("parentName"),
             "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
             "detailLevelLabel": node_detail_label,
-            "rankLabel": _rate_rank_label(node_rank.get(node.get("id"), 0)),
+            "rankLabel": node_rank_label,
             "tag": node_tag,
             "highlight": highlight,
             "riskSummary": risk_text,
@@ -554,7 +557,7 @@ def build_report_spec(
                 if metric
             ],
             "narrative": f"【{node['name']}】 {node_tag} 达成率 {node_rate}"
-                         f"{f'（{_rate_rank_label(node_rank.get(node.get('id'), 0))}）' if node_rank.get(node.get('id')) else ''}\n"
+                         f"{node_rank_suffix}\n"
                          f"任务{node_task} / 已完成{node_actual}"
                          f"{f' / 缺口{node_remain}' if remain_metric else ''}\n"
                          f"{highlight}；{risk_text}\n"

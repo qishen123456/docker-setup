@@ -106,6 +106,39 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+wait_for_backend_health() {
+  local port="$1"
+  local attempts="${2:-120}"
+  local url="http://127.0.0.1:${port}/api/health"
+  local attempt elapsed
+
+  command_exists curl || fail "未找到 curl，无法执行健康检查。请先安装 curl，或手动访问: $url"
+
+  echo "  健康检查地址: $url"
+  for attempt in $(seq 1 "$attempts"); do
+    if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      echo ""
+      ok "后端健康检查通过: $url"
+      return 0
+    fi
+
+    elapsed=$((attempt * 2))
+    if (( attempt % 5 == 0 )); then
+      echo ""
+      warn "仍在等待后端启动，已等待 ${elapsed}s / $((attempts * 2))s"
+      docker compose ps backend || true
+    else
+      printf "."
+    fi
+    sleep 2
+  done
+
+  echo ""
+  warn "后端健康检查超时，最近 backend 日志如下："
+  docker compose logs --tail=120 backend || true
+  return 1
+}
+
 restart_docker_daemon() {
   if command_exists systemctl; then
     systemctl daemon-reload >/dev/null 2>&1 || true
@@ -385,17 +418,8 @@ fi
 ok "后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 info "6/8 等待后端健康检查"
-READY=0
-for _ in $(seq 1 120); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
-    READY=1
-    break
-  fi
-  sleep 2
-done
-
+wait_for_backend_health "$BACKEND_PORT" 120 || fail "后端健康检查失败。请执行: bash doctor.sh"
 docker compose ps
-[[ "$READY" -eq 1 ]] || fail "后端健康检查失败。请执行: bash doctor.sh"
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "7/8 运行容器内自检"
@@ -405,7 +429,6 @@ else
 fi
 
 info "8/8 部署完成"
-ok "后端健康检查通过"
 echo "  Frontend: http://服务器IP:${FRONTEND_PORT}"
 echo "  Backend:  http://服务器IP:${BACKEND_PORT}/api/health"
 echo "  Postgres: 服务器IP:${PG_PORT} (容器内 5432)"

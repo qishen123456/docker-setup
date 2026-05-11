@@ -74,6 +74,39 @@ info() { echo ""; echo "==> $*"; }
 warn() { echo "  [WARN] $*"; }
 fail() { echo "  [ERR] $*" >&2; exit 1; }
 
+wait_for_backend_health() {
+  local port="$1"
+  local attempts="${2:-90}"
+  local url="http://127.0.0.1:${port}/api/health"
+  local attempt elapsed
+
+  command -v curl >/dev/null 2>&1 || fail "未找到 curl，无法执行健康检查。请先安装 curl，或手动访问: $url"
+
+  echo "  健康检查地址: $url"
+  for attempt in $(seq 1 "$attempts"); do
+    if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      echo ""
+      echo "  [OK] 后端健康检查通过: $url"
+      return 0
+    fi
+
+    elapsed=$((attempt * 2))
+    if (( attempt % 5 == 0 )); then
+      echo ""
+      warn "仍在等待后端启动，已等待 ${elapsed}s / $((attempts * 2))s"
+      docker compose ps backend || true
+    else
+      printf "."
+    fi
+    sleep 2
+  done
+
+  echo ""
+  warn "后端健康检查超时，最近 backend 日志如下："
+  docker compose logs --tail=120 backend || true
+  return 1
+}
+
 read_env() {
   local key="$1"
   local default="${2:-}"
@@ -123,17 +156,8 @@ BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
 FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"
 
 info "等待后端健康检查"
-READY=0
-for _ in $(seq 1 90); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
-    READY=1
-    break
-  fi
-  sleep 2
-done
-
+wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
 docker compose ps
-[[ "$READY" -eq 1 ]] || fail "后端健康检查失败。请执行: bash doctor.sh"
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"
