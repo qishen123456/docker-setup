@@ -56,8 +56,12 @@ SmartAsk Linux 一键部署脚本
   SMARTASK_APT_MIRROR=https://mirrors.aliyun.com
   SMARTASK_NPM_REGISTRY=https://registry.npmmirror.com
   SMARTASK_DOCKER_REGISTRY_MIRRORS=https://docker.m.daocloud.io,https://docker.1ms.run
+  SMARTASK_CONFIGURE_APT_MIRROR=1
   SMARTASK_SKIP_APT_MIRROR=1
   SMARTASK_SKIP_DOCKER_MIRROR=1
+
+说明：
+  默认不会改写宿主机 /etc/apt 源。确需改写时再设置 SMARTASK_CONFIGURE_APT_MIRROR=1。
 EOF
       exit 0
       ;;
@@ -84,7 +88,19 @@ read_env() {
     return
   fi
   local value
-  value="$(grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true)"
+  value="$(
+    grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" .env \
+      | tail -n1 \
+      | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${key}=//" \
+      | tr -d '\r' \
+      | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+      || true
+  )"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
   echo "${value:-$default}"
 }
 
@@ -93,8 +109,15 @@ require_env() {
   local value
   value="$(read_env "$key" "")"
   [[ -n "$value" ]] || fail ".env 缺少必填项: $key"
-  if [[ "$value" =~ please|请填写|AI_API_KEY|SECRET_KEY ]]; then
+  local lower="${value,,}"
+  if [[ "$lower" =~ please|change-me|changeme|placeholder|example|dummy|请填写|占位|ai_api_key|secret_key ]]; then
     fail ".env 中 $key 仍是占位符，请先填写真实值"
+  fi
+  if [[ "$key" == "SMARTASK_SECRET_KEY" && "$value" == "vanna-local-secret-2026" ]]; then
+    fail ".env 中 $key 仍是开发默认值，请先改成随机密钥"
+  fi
+  if [[ "$key" == "SMARTASK_ADMIN_PASSWORD" && "$lower" =~ ^(admin123456|123456|password)$ ]]; then
+    fail ".env 中 $key 不能使用弱密码，请先填写强密码"
   fi
 }
 
@@ -309,33 +332,50 @@ write_debian_apt_sources() {
   local codename="$1"
   local mirror="$2"
   local target="$3"
+  local components="main contrib non-free"
+
+  case "$codename" in
+    bookworm|trixie|forky|sid)
+      components="main contrib non-free non-free-firmware"
+      ;;
+  esac
 
   if [[ "$target" == *.sources ]]; then
     cat >"$target" <<EOF
 Types: deb
 URIs: ${mirror}/debian/
 Suites: ${codename} ${codename}-updates
-Components: main contrib non-free non-free-firmware
+Components: ${components}
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 Types: deb
 URIs: ${mirror}/debian-security/
 Suites: ${codename}-security
-Components: main contrib non-free non-free-firmware
+Components: ${components}
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
   else
     cat >"$target" <<EOF
-deb ${mirror}/debian/ ${codename} main contrib non-free non-free-firmware
-deb ${mirror}/debian/ ${codename}-updates main contrib non-free non-free-firmware
-deb ${mirror}/debian-security/ ${codename}-security main contrib non-free non-free-firmware
+deb ${mirror}/debian/ ${codename} ${components}
+deb ${mirror}/debian/ ${codename}-updates ${components}
+deb ${mirror}/debian-security/ ${codename}-security ${components}
 EOF
   fi
 }
 
 configure_apt_mirror() {
-  if [[ "${SMARTASK_SKIP_APT_MIRROR:-0}" == "1" ]]; then
+  local skip_flag
+  local configure_flag
+  skip_flag="$(read_env SMARTASK_SKIP_APT_MIRROR "${SMARTASK_SKIP_APT_MIRROR:-0}")"
+  configure_flag="$(read_env SMARTASK_CONFIGURE_APT_MIRROR "${SMARTASK_CONFIGURE_APT_MIRROR:-0}")"
+
+  if [[ "$skip_flag" == "1" ]]; then
     warn "已跳过 APT 镜像源配置: SMARTASK_SKIP_APT_MIRROR=1"
+    return
+  fi
+
+  if [[ "$configure_flag" != "1" ]]; then
+    warn "默认不改写宿主机 APT 源。如确需改写，请在 .env 设置 SMARTASK_CONFIGURE_APT_MIRROR=1"
     return
   fi
 

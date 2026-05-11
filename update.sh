@@ -158,7 +158,19 @@ read_env() {
     return
   fi
   local value
-  value="$(grep -E "^${key}=" .env | tail -n1 | cut -d= -f2- || true)"
+  value="$(
+    grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" .env \
+      | tail -n1 \
+      | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${key}=//" \
+      | tr -d '\r' \
+      | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+      || true
+  )"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
   echo "${value:-$default}"
 }
 

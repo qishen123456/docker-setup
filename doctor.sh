@@ -107,7 +107,7 @@ run_shell "system_os_release" "cat /etc/os-release || true"
 run_cmd "system_date" date
 run_cmd "disk_usage" df -h
 run_cmd "memory" free -h
-run_shell "ports" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2); FRONTEND_PORT=\${FRONTEND_PORT:-8080}; BACKEND_PORT=\$(grep -E '^SMARTASK_BACKEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2); BACKEND_PORT=\${BACKEND_PORT:-5002}; PG_PORT=\$(grep -E '^SMARTASK_DOCKER_PG_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2); PG_PORT=\${PG_PORT:-5433}; ss -lntp 2>/dev/null | grep -E \":\${FRONTEND_PORT}|:\${BACKEND_PORT}|:5432|:\${PG_PORT}\" || netstat -lntp 2>/dev/null | grep -E \":\${FRONTEND_PORT}|:\${BACKEND_PORT}|:5432|:\${PG_PORT}\" || true"
+run_shell "ports" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); FRONTEND_PORT=\${FRONTEND_PORT:-8080}; BACKEND_PORT=\$(grep -E '^SMARTASK_BACKEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); BACKEND_PORT=\${BACKEND_PORT:-5002}; PG_PORT=\$(grep -E '^SMARTASK_DOCKER_PG_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); PG_PORT=\${PG_PORT:-5433}; ss -lntp 2>/dev/null | grep -E \":\${FRONTEND_PORT}|:\${BACKEND_PORT}|:5432|:\${PG_PORT}\" || netstat -lntp 2>/dev/null | grep -E \":\${FRONTEND_PORT}|:\${BACKEND_PORT}|:5432|:\${PG_PORT}\" || true"
 
 echo "==> 收集 Git 信息"
 run_cmd "git_status" git status --short
@@ -144,9 +144,9 @@ done
 
 echo "==> 健康检查"
 run_shell "health_backend_5002" "curl -fsS --max-time 8 http://127.0.0.1:5002/api/health"
-run_shell "health_backend_env_port" "BACKEND_PORT=\$(grep -E '^SMARTASK_BACKEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2); BACKEND_PORT=\${BACKEND_PORT:-5002}; curl -fsS --max-time 8 http://127.0.0.1:\$BACKEND_PORT/api/health"
+run_shell "health_backend_env_port" "BACKEND_PORT=\$(grep -E '^SMARTASK_BACKEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); BACKEND_PORT=\${BACKEND_PORT:-5002}; curl -fsS --max-time 8 http://127.0.0.1:\$BACKEND_PORT/api/health"
 run_shell "health_frontend_8080" "curl -I --max-time 8 http://127.0.0.1:8080"
-run_shell "health_frontend_env_port" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2); FRONTEND_PORT=\${FRONTEND_PORT:-8080}; curl -I --max-time 8 http://127.0.0.1:\$FRONTEND_PORT"
+run_shell "health_frontend_env_port" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); FRONTEND_PORT=\${FRONTEND_PORT:-8080}; curl -I --max-time 8 http://127.0.0.1:\$FRONTEND_PORT"
 
 echo "==> 生成脱敏配置摘要"
 redact_file ".env" "$DIAG_DIR/env_redacted.txt"

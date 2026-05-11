@@ -26,7 +26,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
-        APT_MIRROR: ${SMARTASK_APT_MIRROR:-https://mirrors.aliyun.com}
+        # Use ${VAR-default} instead of ${VAR:-default} so users can set
+        # SMARTASK_APT_MIRROR= to keep the official Debian image sources.
+        APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
     container_name: smartask-backend
     restart: unless-stopped
     env_file:

@@ -1593,14 +1593,13 @@ const getSingleOrgConclusion = (report) => {
   const actual = getReportKpiText(report, 'actual')
   const rate = getReportKpiText(report, 'rate')
   const remain = getReportKpiText(report, 'remain')
-  const remainText = remain && remain !== '-' ? `，剩余缺口 ${remain}` : ''
   const toneLabel = {
     good: '整体进度相对领先',
     warn: '整体进度偏滞后',
     danger: '整体进度明显滞后',
     neutral: '整体进度已形成初步判断',
   }[getSingleOrgRateTone(report)]
-  return `${focusName}${toneLabel}，年度总任务 ${task}，当前开单 ${actual}，整体达成率 ${rate}${remainText}。`
+  return `${focusName}${toneLabel}，年度总任务 ${task}，当前开单 ${actual}，整体达成率 ${rate}，剩余缺口 ${remain}。`
 }
 
 const getSingleOrgRankContext = (report) => {
@@ -5841,13 +5840,11 @@ button.sa-compare-row:hover {
   font-size: 11px;
   font-weight: 600;
   height: 34px;
-  text-align: left;
 }
 
 .sa-mini-table :deep(.el-table__body-wrapper td) {
   font-size: 11px;
   color: #1d2129;
-  text-align: left;
 }
 
 .sa-mini-table :deep(.el-table__row:nth-child(even) td) {
@@ -5864,13 +5861,11 @@ button.sa-compare-row:hover {
   font-size: 11px;
   font-weight: 600;
   height: 34px;
-  text-align: left;
 }
 
 .sa-preview :deep(.el-table__body-wrapper td) {
   font-size: 11px;
   color: #1d2129;
-  text-align: left;
 }
 
 .sa-preview :deep(.el-table__row:nth-child(even) td) {
@@ -6260,13 +6255,11 @@ button.sa-compare-row:hover {
   font-size: 11px;
   font-weight: 600;
   height: 34px;
-  text-align: left;
 }
 
 .sa-preview-table-report :deep(.el-table__body-wrapper td) {
   font-size: 11px;
   color: #1d2129;
-  text-align: left;
 }
 
 .sa-preview-table-report :deep(.el-table__row:nth-child(even) td) {

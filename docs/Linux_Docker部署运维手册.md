@@ -106,6 +106,32 @@ SMARTASK_ADMIN_DISPLAY_NAME
 
 生产环境不要使用示例密码。
 
+Docker Compose 自带 PostgreSQL 时，保持下面口径即可：
+
+```text
+SMARTASK_DB_HOST=postgres
+SMARTASK_DB_PORT=5432
+SMARTASK_DOCKER_PG_PORT=5433
+```
+
+说明：`SMARTASK_DB_HOST` / `SMARTASK_DB_PORT` 是容器内后端访问 PostgreSQL 的地址；`SMARTASK_DOCKER_PG_PORT` 才是宿主机对外映射端口。不要把 Docker 内部数据库地址写成 `localhost:5433`，否则容器内会连到自己而不是 PostgreSQL 容器。
+
+Linux 脚本会兼容 Windows 复制过来的 `.env` 换行、引号和空格；但 `.env` 仍建议使用纯文本保存，不要带富文本格式。
+
+APT 说明：`deploy.sh` 默认不会改写宿主机 `/etc/apt` 源，避免影响公司服务器原有软件源。`SMARTASK_APT_MIRROR` 只用于 Docker build 阶段改写 Python 基础镜像内的 Debian 源。只有明确要改宿主机 APT 源时，才在 `.env` 或命令前设置：
+
+```bash
+SMARTASK_CONFIGURE_APT_MIRROR=1 bash deploy.sh
+```
+
+如果 Docker build 阶段 APT 镜像源访问异常，可以把 `.env` 里的 `SMARTASK_APT_MIRROR` 改成官方源或留空：
+
+```text
+SMARTASK_APT_MIRROR=http://deb.debian.org
+# 或
+SMARTASK_APT_MIRROR=
+```
+
 如果启用飞书同步或飞书登录，还要配置：
 
 ```text
