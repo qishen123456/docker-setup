@@ -106,11 +106,54 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+render_progress_bar() {
+  local current="$1"
+  local total="$2"
+  local message="${3:-}"
+  local width=30
+  local percent=$((current * 100 / total))
+  local filled=$((current * width / total))
+  local empty=$((width - filled))
+  local bar_done bar_left
+
+  bar_done="$(printf "%${filled}s" "" | tr ' ' '#')"
+  bar_left="$(printf "%${empty}s" "" | tr ' ' '-')"
+  printf "\r  [%s%s] %3d%% %ds/%ds %s" "$bar_done" "$bar_left" "$percent" "$((current * 2))" "$((total * 2))" "$message"
+}
+
+backend_container_health() {
+  docker inspect smartask-backend \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    2>/dev/null || true
+}
+
+dump_backend_diagnostics() {
+  local url="$1"
+
+  echo ""
+  warn "后端健康检查失败，开始输出诊断信息"
+  echo ""
+  echo "---- docker compose ps ----"
+  docker compose ps || true
+  echo ""
+  echo "---- backend container state ----"
+  docker inspect smartask-backend \
+    --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} exit={{.State.ExitCode}} error={{.State.Error}}' \
+    2>/dev/null || true
+  echo ""
+  echo "---- curl health ----"
+  curl -vS --max-time 8 "$url" || true
+  echo ""
+  echo "---- backend logs tail 180 ----"
+  docker compose logs --tail=180 backend || true
+  echo ""
+}
+
 wait_for_backend_health() {
   local port="$1"
   local attempts="${2:-120}"
   local url="http://127.0.0.1:${port}/api/health"
-  local attempt elapsed
+  local attempt status
 
   command_exists curl || fail "未找到 curl，无法执行健康检查。请先安装 curl，或手动访问: $url"
 
@@ -122,20 +165,20 @@ wait_for_backend_health() {
       return 0
     fi
 
-    elapsed=$((attempt * 2))
-    if (( attempt % 5 == 0 )); then
+    status="$(backend_container_health)"
+    render_progress_bar "$attempt" "$attempts" "backend=${status:-unknown}"
+
+    if [[ "$status" == "healthy" ]]; then
       echo ""
-      warn "仍在等待后端启动，已等待 ${elapsed}s / $((attempts * 2))s"
-      docker compose ps backend || true
-    else
-      printf "."
+      warn "宿主机 $url 暂未返回成功，但 backend 容器健康检查已 healthy，继续执行后续自检。"
+      return 0
     fi
+
     sleep 2
   done
 
   echo ""
-  warn "后端健康检查超时，最近 backend 日志如下："
-  docker compose logs --tail=120 backend || true
+  dump_backend_diagnostics "$url"
   return 1
 }
 
