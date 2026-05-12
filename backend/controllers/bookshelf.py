@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import sqlite3
+import time
 from typing import Any, Dict, List
 
 import psycopg2
@@ -18,6 +19,7 @@ from bookshelf_repository import BookshelfConfigurationError, BookshelfRepositor
 from config_manager import get_default_datasource, get_datasource_by_id, read_json
 import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
+from dataset_copilot import CopilotError, DatasetCopilot
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
@@ -59,6 +61,106 @@ def _parse_json_like(value: Any, default: Any):
     if isinstance(value, (dict, list)):
         return value
     return default
+
+
+def _slugify_dataset_code(value: str) -> str:
+    text = re.sub(r"[^A-Za-z0-9_]+", "_", str(value or "").strip()).strip("_").lower()
+    if not text:
+        text = f"ai_dataset_{int(time.time())}"
+    if not re.match(r"^[A-Za-z_]", text):
+        text = f"dataset_{text}"
+    return text[:96]
+
+
+def _infer_dataset_meta_from_prompt(doc_text: str, payload: Dict[str, Any]) -> Dict[str, str]:
+    text = str(doc_text or "")
+
+    def first_match(patterns: List[str]) -> str:
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.I | re.M)
+            if match:
+                return str(match.group(1) or "").strip(" ：:-\t\r\n`'\"")
+        return ""
+
+    table_name = first_match([
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_\".]+)",
+        r"表名[：:\s]+([A-Za-z0-9_.]+)",
+        r"数据源表[：:\s]+`?([A-Za-z0-9_.]+)`?",
+    ])
+    table_comment = first_match([
+        r"COMMENT\s+ON\s+TABLE\s+[A-Za-z0-9_\".]+\s+IS\s+'([^']+)'",
+        r"COMMENT\s+ON\s+TABLE\s+[A-Za-z0-9_\".]+\s+IS\s+\"([^\"]+)\"",
+    ])
+    dataset_name = str(payload.get("dataset_name") or "").strip() or first_match([
+        r"数据集名称[：:\s]+(.+)",
+        r"数据集[：:\s]+(.+)",
+        r"^#\s+(.+?)(?:数据集|任务|分析|LLD|设计文档).*$",
+    ])
+    if not dataset_name:
+        dataset_name = table_comment or (f"{table_name} 智能问数数据集" if table_name else f"AI生成数据集 {time.strftime('%Y%m%d%H%M%S')}")
+    dataset_name = re.sub(r"[#`*_]+", "", dataset_name).strip()[:80]
+
+    business_domain = str(payload.get("business_domain") or "").strip() or first_match([
+        r"业务域[：:\s]+(.+)",
+        r"适用范围[：:\s]+(.+)",
+    ])
+    if not business_domain:
+        business_domain = dataset_name
+
+    dataset_code = str(payload.get("dataset_code") or "").strip()
+    if not dataset_code:
+        dataset_code = _slugify_dataset_code(table_name or dataset_name)
+
+    return {
+        "dataset_code": dataset_code,
+        "dataset_name": dataset_name,
+        "business_domain": business_domain[:120],
+        "description": str(payload.get("description") or f"由大段提示词自动生成：{dataset_name}")[:240],
+    }
+
+
+def _build_style_reference(style_dataset_id: Any) -> str:
+    try:
+        dataset_id = int(style_dataset_id or 0)
+    except (TypeError, ValueError):
+        return ""
+    if dataset_id <= 0:
+        return ""
+    try:
+        context = repo.get_dataset_context(dataset_id, "", top_k_samples=8)
+    except Exception:
+        return ""
+    dataset = context.get("dataset") or {}
+    lld = context.get("lld_document") or {}
+    prompts = context.get("agent_prompts") or {}
+    samples = context.get("golden_sql_samples") or []
+    schema = context.get("schema_definition") or []
+    dictionary = context.get("data_dictionary") or []
+    prompt_lines: List[str] = []
+    for agent_no, rows in prompts.items():
+        for item in rows[:2]:
+            prompt_lines.append(f"Agent{agent_no}: {str(item.get('prompt_content') or '')[:1200]}")
+    sample_lines = [
+        f"Q: {item.get('question')}\nSQL:\n{str(item.get('sql_text') or '')[:1600]}"
+        for item in samples[:4]
+    ]
+    schema_lines = [
+        f"表 {item.get('table_name')}:\n{str(item.get('ddl_sql') or '')[:1400]}"
+        for item in schema[:3]
+    ]
+    dictionary_lines = [
+        f"{item.get('table_name')}.{item.get('column_name')} jsonb={item.get('jsonb_key') or '-'} => {item.get('semantic_name')}"
+        for item in dictionary[:30]
+    ]
+    return "\n\n".join([
+        "## 参考数据集样式（只参考结构，不复制业务实体）",
+        f"数据集：{dataset.get('dataset_name')} / {dataset.get('dataset_code')}",
+        f"LLD 摘要：{str(lld.get('content') or '')[:1800]}",
+        "DDL 风格：\n" + "\n\n".join(schema_lines),
+        "字段字典风格：\n" + "\n".join(dictionary_lines),
+        "Golden SQL 风格：\n" + "\n\n".join(sample_lines),
+        "Agent Prompt 风格：\n" + "\n\n".join(prompt_lines),
+    ]).strip()
 
 
 def _validate_full_payload(payload: Dict[str, Any]) -> List[str]:
@@ -369,6 +471,65 @@ def create_bookshelf_dataset():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": f"create dataset failed: {exc}"}), 500
+
+
+@bookshelf_bp.route("/api/bookshelves/datasets/generate-from-prompt", methods=["POST"])
+def generate_bookshelf_dataset_from_prompt():
+    try:
+        payload = request.get_json() or {}
+        doc_text = str(payload.get("doc_text") or "").strip()
+        if len(doc_text) < 80:
+            return jsonify({"error": "请粘贴更完整的提示词、DDL、字段字典或业务口径，至少 80 字。"}), 400
+
+        source_id = payload.get("source_id")
+        style_reference = _build_style_reference(payload.get("style_dataset_id"))
+        enriched_doc = doc_text
+        if style_reference:
+            enriched_doc = f"{doc_text}\n\n{style_reference}"
+
+        meta = _infer_dataset_meta_from_prompt(doc_text, payload)
+        dataset_meta = {
+            "id": 0,
+            "dataset_code": meta["dataset_code"],
+            "dataset_name": meta["dataset_name"],
+            "business_domain": meta["business_domain"],
+            "source_id": source_id,
+            "description": meta["description"],
+        }
+        try:
+            copilot = DatasetCopilot(
+                model=payload.get("model") or None,
+                base_url=payload.get("base_url") or None,
+                api_key=payload.get("api_key") or None,
+                max_tokens=int(payload.get("max_tokens") or 8192),
+                use_json_mode=bool(payload.get("use_json_mode") or False),
+            )
+            generated = copilot.generate(
+                dataset_meta=dataset_meta,
+                doc_text=enriched_doc,
+                sample_rows_text=str(payload.get("sample_rows_text") or ""),
+                retries=int(payload.get("retries") or 1),
+                doc_max_chars=int(payload.get("doc_max_chars") or 30000),
+            )
+        except CopilotError as exc:
+            return jsonify({"error": f"数据集生成失败: {exc}"}), 500
+
+        if source_id is not None:
+            for item in generated.get("schema_definition") or []:
+                if isinstance(item, dict) and item.get("source_id") is None:
+                    item["source_id"] = int(source_id)
+
+        validation_errors = _validate_full_payload(generated)
+        summary = _build_quality_summary(generated)
+        return jsonify({
+            "dataset_meta": meta,
+            "payload": generated,
+            "quality_summary": summary,
+            "validation_errors": validation_errors,
+            "style_applied": bool(style_reference),
+        })
+    except Exception as exc:
+        return jsonify({"error": f"generate dataset from prompt failed: {exc}"}), 500
 
 
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>", methods=["PUT"])

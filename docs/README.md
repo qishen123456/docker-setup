@@ -39,8 +39,33 @@ git push gitee docker-setup --force
 
 git status
 git add .
-git commit -m "chore: update smartask deployment"
+git commit -m "chore: update smartask LIN ONE"
 git push -u gitee docker-setup
 
 
 
+cd /opt/smartask/smartask
+
+docker compose ps
+curl -I http://127.0.0.1:8080
+curl http://127.0.0.1:8080/api/health
+curl http://127.0.0.1:5002/api/health
+
+
+cd /opt/smartask/smartask
+
+curl -I --max-time 8 http://47.107.96.192:8080
+curl -I --max-time 8 http://127.0.0.1:8080
+curl -I --max-time 8 -H "Host: 47.107.96.192" http://127.0.0.1:8080
+
+ss -lntp | grep ':8080'
+docker compose logs --tail=80 frontend
+同时检查阿里云安全组和宝塔防火墙是否放行：
+
+firewall-cmd --list-ports 2>/dev/null || true
+iptables -L -n | grep 8080 || true
+
+
+SMARTASK_FRONTEND_PORT=8888
+BACKEND_URL=http://47.107.96.192:8888
+FRONTEND_URL=http://47.107.96.192:8888

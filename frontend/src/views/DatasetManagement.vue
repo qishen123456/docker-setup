@@ -6,7 +6,10 @@
           <template #header>
             <div class="header-row">
               <div class="panel-title">数据集列表</div>
-              <el-button v-if="isFeatureEnabled('dataset_create')" type="primary" size="small" @click="createDataset">新建</el-button>
+              <div class="header-actions compact-actions">
+                <el-button v-if="isFeatureEnabled('dataset_autofill')" plain size="small" @click="openPromptDatasetDialog">提示词生成</el-button>
+                <el-button v-if="isFeatureEnabled('dataset_create')" type="primary" size="small" @click="createDataset">新建</el-button>
+              </div>
             </div>
           </template>
 
@@ -444,6 +447,57 @@
       </template>
     </el-dialog>
 
+    <!-- 大段提示词生成数据集 -->
+    <el-dialog v-model="promptDatasetVisible" title="根据提示词生成新数据集" width="820px" destroy-on-close top="5vh">
+      <div class="prompt-generate-shell">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="把 DDL、fields 字段字典、LLD、Agent2/Agent4 提示词、示例 SQL 粘贴进来，系统会生成一套新的数据集书架内容。"
+        />
+        <el-form label-width="112px" class="prompt-generate-form">
+          <el-row :gutter="12">
+            <el-col :span="12">
+              <el-form-item label="绑定数据源">
+                <el-select v-model="promptDatasetForm.source_id" clearable style="width:100%">
+                  <el-option v-for="source in dataSources" :key="source.id" :label="source.name" :value="source.id" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="参考样式">
+                <el-select v-model="promptDatasetForm.style_dataset_id" clearable placeholder="可选：参考当前某个数据集的书架风格" style="width:100%">
+                  <el-option v-for="item in datasets" :key="item.id" :label="item.dataset_name" :value="item.id" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="8"><el-form-item label="名称覆盖"><el-input v-model="promptDatasetForm.dataset_name" placeholder="可空，AI 自动推断" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="编码覆盖"><el-input v-model="promptDatasetForm.dataset_code" placeholder="可空，AI 自动推断" /></el-form-item></el-col>
+            <el-col :span="8"><el-form-item label="业务域覆盖"><el-input v-model="promptDatasetForm.business_domain" placeholder="可空，AI 自动推断" /></el-form-item></el-col>
+          </el-row>
+          <el-form-item label="大段提示词">
+            <el-input
+              v-model="promptDatasetForm.doc_text"
+              type="textarea"
+              :rows="18"
+              resize="vertical"
+              class="mono-textarea"
+              placeholder="粘贴 DDL、字段字典、业务口径、报告要求、Agent 提示词、示例 SQL 等内容..."
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="promptDatasetVisible = false">取消</el-button>
+        <el-button type="primary" :loading="promptDatasetLoading" @click="generateDatasetFromPrompt">
+          生成并保存新数据集
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 从数据源拉表 dialog -->
     <el-dialog v-model="sourceDialogVisible" title="从数据源拉表进数据集" width="72%">
       <div class="toolbar-col" style="margin-bottom:10px">
@@ -507,7 +561,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
-  getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
+  generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
   saveBookshelfDatasetFull, updateBookshelfDataset
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
@@ -533,9 +587,19 @@ const sqlPreviewLoading = ref(false)
 const sqlPreviewColumns = ref([])
 const sqlPreviewRows = ref([])
 const sqlPreviewMeta = ref(null)
+const promptDatasetVisible = ref(false)
+const promptDatasetLoading = ref(false)
 const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const datasetForm = reactive({ dataset_code: '', dataset_name: '', business_domain: '', source_id: null, description: '', is_active: true })
+const promptDatasetForm = reactive({
+  source_id: null,
+  style_dataset_id: null,
+  dataset_name: '',
+  dataset_code: '',
+  business_domain: '',
+  doc_text: '',
+})
 const full = reactive({
   common_questions: [], regression_cases: [], synonyms: [], lld_documents: [], data_dictionary: [],
   schema_definition: [], table_relations: [], golden_sql_samples: [],
@@ -1355,6 +1419,114 @@ const saveFull = async () => {
   }
 }
 
+// ========== 大段提示词生成新数据集 ==========
+const resetPromptDatasetForm = () => {
+  promptDatasetForm.source_id = datasetForm.source_id || newDatasetSourceId.value || dataSources.value[0]?.id || null
+  promptDatasetForm.style_dataset_id = selectedDatasetId.value || null
+  promptDatasetForm.dataset_name = ''
+  promptDatasetForm.dataset_code = ''
+  promptDatasetForm.business_domain = ''
+  promptDatasetForm.doc_text = ''
+}
+
+const openPromptDatasetDialog = () => {
+  resetPromptDatasetForm()
+  promptDatasetVisible.value = true
+}
+
+const uniqueDatasetCode = (code) => {
+  const base = String(code || `dataset_${Date.now()}`)
+    .trim()
+    .replace(/[^A-Za-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80) || `dataset_${Date.now()}`
+  const exists = datasets.value.some(item => String(item.dataset_code || '').toLowerCase() === base.toLowerCase())
+  return exists ? `${base}_${Date.now().toString().slice(-6)}` : base
+}
+
+const buildGeneratedFullPayload = (generatedPayload) => {
+  const payload = {}
+  FULL_COLLECTION_KEYS.forEach(key => { payload[key] = Array.isArray(generatedPayload?.[key]) ? generatedPayload[key] : [] })
+  if (generatedPayload?.report_config && typeof generatedPayload.report_config === 'object') {
+    payload.report_config = generatedPayload.report_config
+  }
+  return payload
+}
+
+const generateDatasetFromPrompt = async () => {
+  const docText = String(promptDatasetForm.doc_text || '').trim()
+  if (docText.length < 80) {
+    ElMessage.warning('请粘贴更完整的提示词、DDL、字段字典或业务口径，至少 80 字。')
+    return
+  }
+  const sourceId = promptDatasetForm.source_id || newDatasetSourceId.value || dataSources.value[0]?.id || null
+  if (!sourceId) {
+    ElMessage.warning('请先选择或配置一个数据源。')
+    return
+  }
+
+  promptDatasetLoading.value = true
+  let createdDatasetId = null
+  try {
+    const generated = await generateBookshelfDatasetFromPrompt({
+      doc_text: docText,
+      source_id: sourceId,
+      style_dataset_id: promptDatasetForm.style_dataset_id || undefined,
+      dataset_name: promptDatasetForm.dataset_name || undefined,
+      dataset_code: promptDatasetForm.dataset_code || undefined,
+      business_domain: promptDatasetForm.business_domain || undefined,
+    })
+    const validationErrors = generated.validation_errors || []
+    if (validationErrors.length) {
+      await ElMessageBox.alert(validationErrors.join('<br/>'), '生成结果还不完整', {
+        confirmButtonText: '知道了',
+        dangerouslyUseHTMLString: true,
+        type: 'warning',
+      })
+      return
+    }
+
+    const meta = generated.dataset_meta || {}
+    const createPayload = {
+      dataset_code: uniqueDatasetCode(meta.dataset_code || promptDatasetForm.dataset_code),
+      dataset_name: meta.dataset_name || promptDatasetForm.dataset_name || 'AI生成数据集',
+      business_domain: meta.business_domain || promptDatasetForm.business_domain || meta.dataset_name || 'AI生成数据集',
+      source_id: sourceId,
+      description: meta.description || `由大段提示词自动生成：${meta.dataset_name || promptDatasetForm.dataset_name || 'AI生成数据集'}`,
+    }
+    const created = await createBookshelfDataset(createPayload)
+    createdDatasetId = created.dataset?.id
+    if (!createdDatasetId) throw new Error('数据集创建成功但未返回 ID')
+
+    await saveBookshelfDatasetFull(createdDatasetId, buildGeneratedFullPayload(generated.payload || {}))
+    promptDatasetVisible.value = false
+    ElMessage.success(`已生成并保存「${createPayload.dataset_name}」`)
+    await loadDatasets()
+    const target = datasets.value.find(item => Number(item.id) === Number(createdDatasetId))
+    if (target) await selectDataset(target)
+  } catch (err) {
+    const details = err?.response?.data?.details
+    if (Array.isArray(details) && details.length) {
+      await ElMessageBox.alert(details.join('<br/>'), '保存前校验未通过', {
+        confirmButtonText: '知道了',
+        dangerouslyUseHTMLString: true,
+        type: 'warning',
+      })
+    } else if (err?.response?.status === 404 && err?.response?.data?.error === 'API not found') {
+      ElMessage.error('后端还没有加载“提示词生成数据集”接口，请重建/重启后端服务。')
+    } else {
+      ElMessage.error(err?.response?.data?.error || err?.message || '生成数据集失败')
+    }
+    if (createdDatasetId) {
+      await loadDatasets()
+      const target = datasets.value.find(item => Number(item.id) === Number(createdDatasetId))
+      if (target) await selectDataset(target)
+    }
+  } finally {
+    promptDatasetLoading.value = false
+  }
+}
+
 // ========== 从数据源拉表 ==========
 const sourceDialogVisible = ref(false); const sourceDialogSourceId = ref(null)
 const sourceTables = ref([]); const selectedSourceTables = ref([])
@@ -1468,6 +1640,7 @@ onMounted(async () => {
 .panel-title { font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; color: var(--text-title, #1d2129); }
 .header-row { display: flex; align-items: center; justify-content: space-between; }
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.compact-actions { gap: 6px; }
 .toolbar-col { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .dataset-tile { padding: 12px 14px; border-radius: var(--radius-card, 12px); margin-bottom: 8px; border: 1px solid var(--border, #e5e6eb); background: var(--bg-card, #fff); cursor: pointer; transition: all var(--duration-normal, 220ms) var(--ease-out); }
 .dataset-tile:hover { border-color: var(--border-hover, #c9cdd4); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
@@ -1497,5 +1670,7 @@ onMounted(async () => {
 .schema-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .schema-editor-subtitle { margin-top: 6px; color: var(--text-muted, #86909c); font-size: 13px; }
 .schema-editor-form { flex: 1; }
+.prompt-generate-shell { display: flex; flex-direction: column; gap: 14px; }
+.prompt-generate-form { margin-top: 2px; }
 .mono-textarea :deep(textarea) { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 13px; line-height: 1.6; }
 </style>
