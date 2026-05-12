@@ -280,6 +280,13 @@ info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
 docker compose ps
 
+info "同步内置数据集模板"
+if docker compose exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
+  echo "  [OK] 内置数据集模板已同步"
+else
+  warn "内置数据集模板同步失败，不影响容器运行；请执行: docker compose logs --tail=120 backend"
+fi
+
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"
   docker compose exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
