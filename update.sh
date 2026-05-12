@@ -48,6 +48,7 @@ SmartAsk Linux 更新脚本
   bash update.sh
   bash update.sh --run-tests
   bash update.sh --no-pull
+  bash update.sh --pip-index-url https://mirrors.aliyun.com/pypi/simple/
 
 参数：
   --branch NAME        指定更新分支，默认 docker-setup。
@@ -57,8 +58,19 @@ SmartAsk Linux 更新脚本
   --run-tests         更新后运行接口测试。
   --run-stream-tests  额外运行流式问数测试，需要真实 AI Key。
   --skip-verify       跳过容器内自检，仅做健康检查。
+  --pip-index-url URL  指定 Docker 构建时的 pip 镜像源，默认读取 .env 或使用阿里云源。
+  --pip-trusted-host HOST
+                     指定 pip trusted-host，默认读取 .env 或 mirrors.aliyun.com。
 EOF
       exit 0
+      ;;
+    --pip-index-url)
+      export SMARTASK_PIP_INDEX_URL="${2:-}"
+      shift 2
+      ;;
+    --pip-trusted-host)
+      export SMARTASK_PIP_TRUSTED_HOST="${2:-}"
+      shift 2
       ;;
     *)
       echo "未知参数: $1"
@@ -221,6 +233,21 @@ else
   warn "已跳过 Git 拉取"
 fi
 
+BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
+FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"
+SMARTASK_PIP_INDEX_URL="${SMARTASK_PIP_INDEX_URL:-$(read_env SMARTASK_PIP_INDEX_URL https://mirrors.aliyun.com/pypi/simple/)}"
+SMARTASK_PIP_TRUSTED_HOST="${SMARTASK_PIP_TRUSTED_HOST:-$(read_env SMARTASK_PIP_TRUSTED_HOST mirrors.aliyun.com)}"
+SMARTASK_PIP_TIMEOUT="${SMARTASK_PIP_TIMEOUT:-$(read_env SMARTASK_PIP_TIMEOUT 120)}"
+SMARTASK_PIP_RETRIES="${SMARTASK_PIP_RETRIES:-$(read_env SMARTASK_PIP_RETRIES 8)}"
+export SMARTASK_PIP_INDEX_URL SMARTASK_PIP_TRUSTED_HOST SMARTASK_PIP_TIMEOUT SMARTASK_PIP_RETRIES
+
+if [[ "$NO_BUILD" -eq 0 ]]; then
+  info "Docker 构建下载源"
+  echo "  pip index : ${SMARTASK_PIP_INDEX_URL:-官方默认源}"
+  echo "  pip host  : ${SMARTASK_PIP_TRUSTED_HOST:-未设置}"
+  echo "  pip retry : timeout=${SMARTASK_PIP_TIMEOUT}s retries=${SMARTASK_PIP_RETRIES}"
+fi
+
 info "校验 docker compose"
 docker compose config >/dev/null
 
@@ -231,9 +258,6 @@ else
   docker compose up -d --build
 fi
 echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
-
-BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
-FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"

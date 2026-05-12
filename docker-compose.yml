@@ -29,6 +29,10 @@ services:
         # Use ${VAR-default} instead of ${VAR:-default} so users can set
         # SMARTASK_APT_MIRROR= to keep the official Debian image sources.
         APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
+        PIP_INDEX_URL: ${SMARTASK_PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${SMARTASK_PIP_TRUSTED_HOST-mirrors.aliyun.com}
+        PIP_TIMEOUT: ${SMARTASK_PIP_TIMEOUT-120}
+        PIP_RETRIES: ${SMARTASK_PIP_RETRIES-8}
     container_name: smartask-backend
     restart: unless-stopped
     env_file:
