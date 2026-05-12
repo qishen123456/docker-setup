@@ -74,6 +74,30 @@ info() { echo ""; echo "==> $*"; }
 warn() { echo "  [WARN] $*"; }
 fail() { echo "  [ERR] $*" >&2; exit 1; }
 
+LOCAL_STASH_CREATED=0
+LOCAL_STASH_NOTE=""
+
+save_local_git_changes() {
+  local status_text timestamp local_dir
+  status_text="$(git status --porcelain --untracked-files=no)"
+  if [[ -z "$status_text" ]]; then
+    return 0
+  fi
+
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local_dir="$SCRIPT_DIR/backups/local_git_changes_${timestamp}"
+  mkdir -p "$local_dir"
+  git status --short --untracked-files=no > "$local_dir/git_status.txt" || true
+  git diff > "$local_dir/tracked_changes.patch" || true
+  git diff --staged > "$local_dir/staged_changes.patch" || true
+
+  warn "检测到服务器 tracked 文件存在本地改动，已保存到: $local_dir"
+  warn "这些改动会先进入 git stash，避免 git pull 覆盖失败。"
+  git stash push -m "smartask-update-${timestamp}" >/dev/null
+  LOCAL_STASH_CREATED=1
+  LOCAL_STASH_NOTE="本地 tracked 改动已暂存到 git stash: smartask-update-${timestamp}；补丁备份目录: $local_dir"
+}
+
 render_progress_bar() {
   local current="$1"
   local total="$2"
@@ -190,6 +214,7 @@ fi
 if [[ "$NO_PULL" -eq 0 ]]; then
   info "拉取最新代码"
   git fetch --all
+  save_local_git_changes
   git checkout "$BRANCH"
   git pull --ff-only
 else
@@ -224,6 +249,10 @@ fi
 echo ""
 echo "[OK] 更新完成。页面如仍旧，请浏览器 Ctrl+F5。"
 echo "用户访问地址: http://服务器IP:${FRONTEND_PORT}"
+if [[ "$LOCAL_STASH_CREATED" -eq 1 ]]; then
+  warn "$LOCAL_STASH_NOTE"
+  warn "如需查看: git stash list；如需人工恢复某项改动，请先确认新版本配置后再 git stash show -p stash@{0}"
+fi
 
 if [[ "$RUN_TESTS" -eq 1 ]]; then
   info "运行集成测试"
