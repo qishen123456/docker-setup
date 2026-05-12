@@ -3250,6 +3250,7 @@ const getConfirmationScopeSummary = (msg) => {
 const doConfirm = async (opt, msg) => {
   startTimer()
   if (msg?.id) confirmationSubmitting[msg.id] = true
+  const originalData = msg?.data ? JSON.parse(JSON.stringify(msg.data)) : null
   if (msg) {
     msg.loading = true
     msg.data = {
@@ -3272,9 +3273,19 @@ const doConfirm = async (opt, msg) => {
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
     scheduleChatScroll(36, 'smooth')
   } catch (error) {
-    if (msg) msg.loading = false
+    if (msg) {
+      msg.loading = false
+      if (originalData?.requires_confirmation) {
+        msg.data = {
+          ...originalData,
+          requires_confirmation: true,
+          error: '',
+        }
+      }
+    }
     if (msg?.id) confirmationSubmitting[msg.id] = false
-    ElMessage.error(error?.response?.data?.error || '提交失败')
+    ElMessage.error(error?.response?.data?.error || error?.message || '提交失败')
+    scheduleChatScroll(36, 'smooth')
   }
   finally { stopTimer() }
 }

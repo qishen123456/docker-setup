@@ -1584,6 +1584,57 @@ class FourAgentAskService:
         parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
         return {item for item in parts if item.strip()}
 
+    @staticmethod
+    def _normalize_compact_text(text: Any) -> str:
+        return re.sub(r"\s+", "", str(text or "")).lower()
+
+    def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any]) -> int:
+        normalized_question = self._normalize_compact_text(question)
+        if not normalized_question:
+            return 0
+
+        alias_candidates = [
+            dataset.get("dataset_name", ""),
+            dataset.get("business_domain", ""),
+            *(dataset.get("synonyms", []) or []),
+        ]
+        subject_suffixes = (
+            "事业部",
+            "分公司",
+            "代表处",
+            "业务部",
+            "数据集",
+            "结果指标",
+            "销售业绩分析",
+            "业绩分析",
+        )
+        generic_aliases = {"业绩", "分析", "数据", "指标", "结果", "结果指标", "销售业绩"}
+        score = 0
+        for alias in alias_candidates:
+            normalized_alias = self._normalize_compact_text(alias)
+            if len(normalized_alias) < 2:
+                continue
+            if normalized_alias in generic_aliases:
+                continue
+            if normalized_alias in normalized_question:
+                score = max(score, 95)
+            elif len(normalized_alias) >= 3 and normalized_alias in normalized_question.replace("的", ""):
+                score = max(score, 90)
+
+            business_terms = set()
+            for suffix in subject_suffixes:
+                if suffix in normalized_alias:
+                    prefix = normalized_alias.split(suffix, 1)[0]
+                    if len(prefix) >= 2:
+                        business_terms.add(prefix)
+            for match in re.findall(r"([\u4e00-\u9fff]{2,}?)(?:事业部|分公司|代表处|业务部)", normalized_alias):
+                if len(match) >= 2:
+                    business_terms.add(match)
+            for term in business_terms:
+                if term and term in normalized_question:
+                    score = max(score, 90)
+        return score
+
     def _compute_dataset_match(self, question: str, dataset: Dict[str, Any], context: Dict[str, Any]) -> int:
         q_tokens = self._tokenize(question)
         if not q_tokens:
@@ -1597,7 +1648,8 @@ class FourAgentAskService:
         synonym_overlap = len(q_tokens.intersection(dataset_tokens))
         sample_score = max([int(item.get("match_score", 0)) for item in context.get("golden_sql_samples", [])] or [0])
         schema_hit = 1 if any(token in dataset_tokens for token in ("日期", "时间", "金额", "分公司", "事业部", "区域")) else 0
-        score = synonym_overlap * 12 + min(sample_score, 90) + schema_hit * 4
+        name_hit_score = self._dataset_alias_match_score(question, dataset)
+        score = synonym_overlap * 12 + min(sample_score, 90) + schema_hit * 4 + name_hit_score
         return min(score, 100)
 
     @staticmethod
@@ -1896,6 +1948,32 @@ class FourAgentAskService:
 
         candidate_contexts.sort(key=lambda item: item[2], reverse=True)
         ranked = [(item[0], item[2]) for item in candidate_contexts]
+        best_dataset, best_context, best_score = candidate_contexts[0]
+        runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
+        route_margin = best_score - runner_up_score
+        best_alias_score = self._dataset_alias_match_score(question, best_dataset)
+        runner_alias_score = (
+            self._dataset_alias_match_score(question, candidate_contexts[1][0])
+            if len(candidate_contexts) > 1
+            else 0
+        )
+        if best_alias_score >= 90 and best_alias_score > runner_alias_score and route_margin >= 12:
+            return {
+                "dataset_ids": [best_dataset["id"]],
+                "intent": "detail",
+                "refined_query": question,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": best_score,
+                "route_margin": route_margin,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": "explicit_dataset_alias",
+                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                "split_queries": [
+                    {"dataset_id": best_dataset["id"], "sub_query": question}
+                ],
+            }
 
         history = conversation_context or []
         arbiter_result = self.disambiguation_arbiter.evaluate(
@@ -1934,11 +2012,8 @@ class FourAgentAskService:
                     auto_pick_dataset_ids = [int(item) for item in option.get("dataset_ids", [])]
                     break
 
-        best_dataset, best_context, best_score = candidate_contexts[0]
         best_sample = (best_context.get("golden_sql_samples") or [{}])[0]
         best_sample_score = int(best_sample.get("match_score", 0))
-        runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
-        route_margin = best_score - runner_up_score
         profile_scope_resolved = str(arbiter_result.get("reason") or "") == "profile_scope_resolved" and bool(auto_pick_dataset_ids)
         if profile_scope_resolved:
             return {

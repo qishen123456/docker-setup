@@ -1,49 +1,82 @@
 <template>
   <section v-if="dataset || report" class="sa-boss-answer">
-    <div class="sa-boss-answer-mainline">
-      <div class="sa-boss-answer-copy">
-        <div class="sa-boss-answer-row">
-          <span class="sa-boss-answer-label">问题：</span>
-          <span class="sa-boss-answer-question">{{ questionLabel }}</span>
-        </div>
-        <div class="sa-boss-answer-row">
-          <span class="sa-boss-answer-label">结论：</span>
-          <div v-if="isComparisonDigest" class="sa-comparison-digest">
-            <div class="sa-comparison-verdict">{{ comparisonVerdict }}</div>
-            <div class="sa-comparison-card-grid" :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`">
-              <article
-                v-for="row in visibleComparisonDigestRows"
-                :key="row.name"
-                class="sa-comparison-card"
-                :class="{ 'is-leader': row.name === comparisonLeader?.name }"
-              >
-                <div class="sa-comparison-card-head">
-                  <span>{{ row.name }}</span>
-                  <strong>{{ row.rateText || '-' }}</strong>
-                </div>
-                <div class="sa-comparison-metrics">
-                  <span>开单 {{ row.actualText || '-' }}</span>
-                  <span>任务 {{ row.taskText || '-' }}</span>
-                  <span>缺口 {{ row.remainText || '-' }}</span>
-                </div>
-              </article>
-            </div>
-            <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
-              <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
-            </div>
-          </div>
-          <span v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</span>
-        </div>
+    <div class="sa-boss-answer-head">
+      <div class="sa-boss-answer-title-block">
+        <div class="sa-boss-answer-kicker">经营分析报告</div>
+        <h3 class="sa-boss-answer-title">{{ questionLabel }}</h3>
       </div>
-
       <button class="sa-boss-answer-link" @click="$emit('viewDetails')">查看详情</button>
     </div>
 
-    <div v-if="supportLines.length" class="sa-boss-answer-points" :class="{ 'is-drill': isComparisonDigest }">
-      <span v-for="(line, index) in supportLines.slice(0, 2)" :key="index">{{ line }}</span>
+    <div class="sa-core-section">
+      <div class="sa-section-label">一、核心结论</div>
+      <div class="sa-core-body">
+        <div v-if="isComparisonDigest" class="sa-comparison-digest">
+          <div class="sa-comparison-verdict">{{ comparisonVerdict }}</div>
+          <div class="sa-comparison-card-grid" :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`">
+            <article
+              v-for="row in visibleComparisonDigestRows"
+              :key="row.name"
+              class="sa-comparison-card"
+              :class="{ 'is-leader': row.name === comparisonLeader?.name }"
+            >
+              <div class="sa-comparison-card-head">
+                <span>{{ row.name }}</span>
+                <strong>{{ row.rateText || '-' }}</strong>
+              </div>
+              <div class="sa-comparison-metrics">
+                <span>开单 {{ row.actualText || '-' }}</span>
+                <span>任务 {{ row.taskText || '-' }}</span>
+                <span>缺口 {{ row.remainText || '-' }}</span>
+              </div>
+            </article>
+          </div>
+          <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
+            <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
+          </div>
+        </div>
+        <p v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</p>
+      </div>
     </div>
 
-    <div v-if="reportDebugItems.length" class="sa-report-debug-strip">
+    <div v-if="primaryKpiCards.length" class="sa-report-mini-section">
+      <div class="sa-section-label">二、关键指标</div>
+      <div class="sa-kpi-grid" :class="`is-count-${Math.min(primaryKpiCards.length, 4)}`">
+        <article v-for="card in primaryKpiCards" :key="card.key" class="sa-kpi-card" :class="`is-${card.tone}`">
+          <div class="sa-kpi-value">{{ card.value }}</div>
+          <div class="sa-kpi-label">{{ card.label }}</div>
+          <div v-if="card.hint" class="sa-kpi-hint">{{ card.hint }}</div>
+        </article>
+      </div>
+    </div>
+
+    <div v-if="insightCards.length" class="sa-report-mini-section">
+      <div class="sa-section-label">三、结构看板</div>
+      <div class="sa-insight-grid">
+        <article v-for="item in insightCards" :key="item.label" class="sa-insight-card" :class="`is-${item.tone}`">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.desc }}</small>
+        </article>
+      </div>
+    </div>
+
+    <div v-if="supportLines.length || actionItems.length" class="sa-report-mini-section sa-advice-section">
+      <div v-if="supportLines.length" class="sa-advice-block">
+        <div class="sa-section-label">四、重点发现</div>
+        <ol class="sa-advice-list">
+          <li v-for="(line, index) in supportLines.slice(0, 3)" :key="`support-${index}`">{{ line }}</li>
+        </ol>
+      </div>
+      <div v-if="actionItems.length" class="sa-advice-block">
+        <div class="sa-section-label">五、建议动作</div>
+        <ol class="sa-advice-list">
+          <li v-for="(line, index) in actionItems" :key="`action-${index}`">{{ line }}</li>
+        </ol>
+      </div>
+    </div>
+
+    <div v-if="reportDebugItems.length" class="sa-report-debug-strip" aria-label="报告状态">
       <span v-for="item in reportDebugItems" :key="item.label" :class="`is-${item.tone || 'neutral'}`">
         {{ item.label }}：{{ item.value }}
       </span>
@@ -242,6 +275,92 @@ const reportDebugItems = computed(() => {
   return items
 })
 
+const reportSpec = computed(() => props.dataset?.report_spec || datasetList.value.find(item => item?.report_spec)?.report_spec || {})
+
+const metricTone = (label, value) => {
+  const text = `${label || ''} ${value || ''}`
+  const numeric = toNumber(value)
+  if (/达成率|完成率|rate|percent/i.test(text)) {
+    if (numeric === null) return 'neutral'
+    if (numeric >= 15) return 'good'
+    if (numeric >= riskThreshold.value) return 'warn'
+    return 'danger'
+  }
+  if (/剩余|缺口|风险/.test(text)) return 'danger'
+  return 'neutral'
+}
+
+const metricHint = (label) => {
+  if (/总任务|任务金额|目标/i.test(label)) return '年度目标总量'
+  if (/年度开单|开单金额|开单|完成|实际|销售/i.test(label)) return '当前已完成金额'
+  if (/达成率|完成率|rate|percent/i.test(label)) return '整体推进进度'
+  if (/剩余|缺口|差额|remain/i.test(label)) return '后续需推进缺口'
+  return ''
+}
+
+const normalizeMetricCard = (item, index) => {
+  const label = cleanText(item?.label || item?.name || item?.key || `指标${index + 1}`)
+  const value = cleanText(item?.displayValue ?? item?.value ?? '')
+  if (!label || !value) return null
+  return {
+    key: cleanText(item?.key || `${label}-${index}`),
+    label,
+    value,
+    hint: cleanText(item?.hint || metricHint(label)),
+    tone: item?.tone || metricTone(label, value),
+  }
+}
+
+const resolveFocusRow = (items = []) => {
+  const focusName = cleanText(reportSpec.value?.scope?.focusNode || '')
+  if (focusName) {
+    return items.find(item => item.name === focusName)
+      || items.find(item => item.name && (item.name.includes(focusName) || focusName.includes(item.name)))
+      || null
+  }
+  const question = questionLabel.value
+  return items.find(item => item.name && question.includes(item.name) && !/业务代表|业务员/.test(item.level))
+    || items.find(item => item.name && !item.parent)
+    || null
+}
+
+const resolveFocusDrillRows = (items = []) => {
+  const focusRow = resolveFocusRow(items)
+  const focusName = cleanText(reportSpec.value?.scope?.focusNode || focusRow?.name || '')
+  const withRate = (source) => source.filter(item => item.name !== focusName && item.rate !== null)
+  if (!focusName) return withRate(items)
+  const directChildren = withRate(items.filter(item => item.parent === focusName))
+  if (directChildren.length) return directChildren
+  const nextLevelRows = withRate(items.filter(item => item.level && item.level !== focusRow?.level))
+  return nextLevelRows.length ? nextLevelRows : withRate(items)
+}
+
+const primaryKpiCards = computed(() => {
+  const kpis = Array.isArray(reportSpec.value?.kpis) ? reportSpec.value.kpis : []
+  const normalized = kpis.map(normalizeMetricCard).filter(Boolean)
+  if (normalized.length) {
+    if (isComparisonDigest.value && normalized.length > 4) {
+      const rateCards = normalized.filter(item => /达成率|完成率|rate|percent/i.test(item.label))
+      const summaryCards = normalized.filter(item => /^累计|整体|数量|最高|最低|首尾/.test(item.label))
+      return [...summaryCards, ...rateCards].filter((item, index, list) => (
+        list.findIndex(card => card.key === item.key) === index
+      )).slice(0, 6)
+    }
+    return normalized.slice(0, isComparisonDigest.value ? 6 : 4)
+  }
+
+  const focusRow = resolveFocusRow(normalizedRows.value)
+  const source = isComparisonDigest.value ? comparisonDigestRows.value : [focusRow || sortedByRateDesc.value[0]].filter(Boolean)
+  const first = source[0]
+  if (!first) return []
+  return [
+    first.taskText ? { key: 'task', label: '总任务金额', value: first.taskText, hint: '年度目标总量', tone: 'neutral' } : null,
+    first.actualText ? { key: 'actual', label: '年度开单金额', value: first.actualText, hint: '当前已完成金额', tone: 'neutral' } : null,
+    first.rateText ? { key: 'rate', label: '达成率', value: first.rateText, hint: '整体推进进度', tone: metricTone('达成率', first.rateText) } : null,
+    first.remainText ? { key: 'remain', label: '剩余任务金额', value: first.remainText, hint: '后续需推进缺口', tone: 'danger' } : null,
+  ].filter(Boolean)
+})
+
 const targetRows = computed(() => {
   if (!asksLowerNode.value) return normalizedRows.value
   const label = lowerNodeLabel.value
@@ -267,6 +386,64 @@ const levelSummary = computed(() => {
 })
 
 const riskRows = computed(() => normalizedRows.value.filter(item => item.rate !== null && item.rate < riskThreshold.value))
+
+const bestRow = computed(() => {
+  const source = isComparisonDigest.value
+    ? comparisonDigestRows.value.filter(item => item.rate !== null)
+    : resolveFocusDrillRows(normalizedRows.value)
+  return [...source].sort((a, b) => b.rate - a.rate)[0] || null
+})
+
+const worstRow = computed(() => {
+  const source = isComparisonDigest.value
+    ? comparisonDigestRows.value.filter(item => item.rate !== null)
+    : resolveFocusDrillRows(normalizedRows.value)
+  return [...source].sort((a, b) => a.rate - b.rate)[0] || null
+})
+
+const insightCards = computed(() => {
+  const cards = []
+  const compareCount = comparisonDigestRows.value.length
+  const totalRows = rowCount.value || normalizedRows.value.length
+  if (compareCount >= 2) {
+    cards.push({
+      label: '对比对象',
+      value: `${compareCount} 个${comparisonLevelLabel.value}`,
+      desc: compareCount > 4 ? '首屏聚焦最高、最低和整体差异' : '已纳入本轮横向对比',
+      tone: 'info',
+    })
+  } else if (totalRows) {
+    cards.push({
+      label: '数据覆盖',
+      value: `${totalRows} 行`,
+      desc: levelSummary.value || '已返回可分析数据',
+      tone: 'info',
+    })
+  }
+  if (bestRow.value) {
+    cards.push({
+      label: '当前标杆',
+      value: bestRow.value.name,
+      desc: bestRow.value.rateText ? `达成率 ${bestRow.value.rateText}` : '表现相对靠前',
+      tone: 'good',
+    })
+  }
+  if (worstRow.value) {
+    cards.push({
+      label: '重点压力',
+      value: worstRow.value.name,
+      desc: worstRow.value.rateText ? `达成率 ${worstRow.value.rateText}` : '建议优先复核',
+      tone: 'danger',
+    })
+  }
+  cards.push({
+    label: '风险节点',
+    value: `${riskRows.value.length} 个`,
+    desc: riskRows.value.length ? `低于 ${riskThreshold.value}% 风险线` : `暂无低于 ${riskThreshold.value}% 的节点`,
+    tone: riskRows.value.length ? 'warn' : 'good',
+  })
+  return cards.slice(0, 4)
+})
 
 const resolvedMemberNames = computed(() => {
   const payloads = [
@@ -493,6 +670,67 @@ const usefulReportLines = computed(() => (
     .slice(0, 4)
 ))
 
+const getPrimaryKpiText = (matcher) => (
+  primaryKpiCards.value.find(item => matcher.test(item.label || ''))?.value || ''
+)
+
+const singleFocusRow = computed(() => resolveFocusRow(normalizedRows.value))
+
+const singleFocusName = computed(() => (
+  cleanText(reportSpec.value?.scope?.focusNode || '')
+  || singleFocusRow.value?.name
+  || resolvedMemberNames.value[0]
+  || ''
+))
+
+const singleRateText = computed(() => (
+  getPrimaryKpiText(/达成率|完成率|rate|percent/i) || singleFocusRow.value?.rateText || ''
+))
+
+const singleRateTone = computed(() => metricTone('达成率', singleRateText.value))
+
+const focusDrillRows = computed(() => {
+  const rows = resolveFocusDrillRows(normalizedRows.value)
+  if (singleFocusName.value) return rows
+  return rows.filter(item => item.name !== singleFocusRow.value?.name)
+})
+
+const focusDrillRank = computed(() => {
+  const ranked = [...focusDrillRows.value].sort((a, b) => b.rate - a.rate)
+  return {
+    best: ranked[0] || null,
+    worst: ranked[ranked.length - 1] || null,
+  }
+})
+
+const singleOrgConclusion = computed(() => {
+  if (isComparisonDigest.value) return ''
+  const subject = singleFocusName.value || '当前主体'
+  const task = getPrimaryKpiText(/总任务|任务金额|目标/i) || singleFocusRow.value?.taskText || ''
+  const actual = getPrimaryKpiText(/年度开单|开单|完成|实际|销售/i) || singleFocusRow.value?.actualText || ''
+  const rate = singleRateText.value
+  const remain = getPrimaryKpiText(/剩余|缺口|差额|remain/i) || singleFocusRow.value?.remainText || ''
+  if (!task && !actual && !rate && !remain) return ''
+  const toneText = {
+    good: '整体进度相对靠前',
+    warn: '整体进度需要重点跟进',
+    danger: '整体进度明显承压',
+    neutral: '已形成整体业绩判断',
+  }[singleRateTone.value] || '已形成整体业绩判断'
+  const metrics = [
+    task ? `年度总任务 ${task}` : '',
+    actual ? `当前开单 ${actual}` : '',
+    rate ? `整体达成率 ${rate}` : '',
+    remain ? `剩余缺口 ${remain}` : '',
+  ].filter(Boolean)
+  const { best, worst } = focusDrillRank.value
+  const drillLevel = best?.level || worst?.level || '下级节点'
+  const drillText = best && worst && best.name !== worst.name
+    ? `下级${drillLevel}中，${best.name}表现最好${best.rateText ? `（${best.rateText}）` : ''}，${worst.name}压力最大${worst.rateText ? `（${worst.rateText}）` : ''}。`
+    : ''
+  return `${subject}${toneText}，${metrics.join('，')}。${drillText}`
+})
+
 const directAnswer = computed(() => {
   if (comparisonRows.value.length >= 2) {
     const rows = comparisonRows.value
@@ -505,6 +743,7 @@ const directAnswer = computed(() => {
   if (asksLowerNode.value && asksLowest.value && groupedWorstLines.value.length) {
     return `已按上级组织拆开看，不能把所有${lowerNodeLabel.value}直接混在一起比。`
   }
+  if (singleOrgConclusion.value) return singleOrgConclusion.value
   const worst = sortedByRateAsc.value[0]
   if (worst && asksLowest.value) return `最低的是 ${worst.name}${worst.rateText ? `，达成率 ${worst.rateText}` : ''}。`
   const best = sortedByRateDesc.value[0]
@@ -534,6 +773,19 @@ const supportLines = computed(() => {
       '右侧可查看完整明细、SQL 和报告。',
     ].filter(Boolean)
   }
+  if (singleOrgConclusion.value) {
+    const { best, worst: pressure } = focusDrillRank.value
+    const drillLabel = best?.level || pressure?.level || '下级节点'
+    return [
+      levelSummary.value ? `覆盖范围：${levelSummary.value}` : '',
+      best && pressure && best.name !== pressure.name
+        ? `${drillLabel}分化：${best.name}达成率${best.rateText || '-'}，${pressure.name}达成率${pressure.rateText || '-'}。`
+        : '',
+      riskRows.value.length
+        ? `风险提醒：低于${riskThreshold.value}%风险线的节点 ${riskRows.value.length} 个，建议优先下钻定位缺口来源。`
+        : `风险提醒：暂无低于${riskThreshold.value}%风险线的明显节点。`,
+    ].filter(Boolean)
+  }
   if (normalizedRows.value.length) {
     return [
       levelSummary.value ? `覆盖层级：${levelSummary.value}` : '',
@@ -542,61 +794,239 @@ const supportLines = computed(() => {
   }
   return usefulReportLines.value.slice(1, 3)
 })
+
+const actionItems = computed(() => {
+  const actions = []
+  if (comparisonDigestRows.value.length >= 2) {
+    const leader = comparisonLeader.value
+    const pressure = worstRow.value
+    if (leader) actions.push(`先复盘${leader.name}的高达成路径，提炼目标拆解、客户跟进和项目推进节奏。`)
+    if (pressure) actions.push(`优先下钻${pressure.name}，定位低达成节点的项目缺口和责任人推进状态。`)
+    actions.push(`保持同层级横向比较，再向下一层级展开，避免用业务员明细直接替代管理层级判断。`)
+    return actions.slice(0, 3)
+  }
+  if (riskRows.value.length) {
+    const names = riskRows.value.slice(0, 3).map(item => item.name).join('、')
+    actions.push(`优先跟进${names}等低达成节点，形成周度缺口推进清单。`)
+  }
+  if (bestRow.value) {
+    actions.push(`复盘${bestRow.value.name}的有效动作，把标杆经验同步给同层级低达成节点。`)
+  }
+  if (worstRow.value && worstRow.value !== bestRow.value) {
+    actions.push(`对${worstRow.value.name}做下一层下钻，确认是任务体量、项目阶段还是客户转化问题。`)
+  }
+  if (!actions.length && usefulReportLines.value.length > 1) {
+    actions.push(usefulReportLines.value[1])
+  }
+  return actions.slice(0, 3)
+})
 </script>
 
 <style scoped>
 .sa-boss-answer {
   width: 100%;
-  padding: 11px 13px;
-  border-radius: 13px;
+  padding: 15px 17px 16px;
+  border-radius: 16px;
   border: 1px solid rgba(22, 93, 255, 0.12);
-  background: #ffffff;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055);
 }
 
-.sa-boss-answer-mainline {
+.sa-boss-answer-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(29, 33, 41, 0.06);
 }
 
-.sa-boss-answer-copy {
+.sa-boss-answer-title-block {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 
-.sa-boss-answer-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
+.sa-boss-answer-kicker,
+.sa-section-label {
+  color: #165dff;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 800;
 }
 
-.sa-boss-answer-label {
-  flex-shrink: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  font-weight: 700;
+.sa-boss-answer-title {
+  margin: 0;
   color: #1d2129;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 800;
+  word-break: break-word;
 }
 
-.sa-boss-answer-question {
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: #1d2129;
+.sa-core-section,
+.sa-report-mini-section {
+  margin-top: 13px;
+}
+
+.sa-core-body {
+  margin-top: 8px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(22, 93, 255, 0.1);
+  background: #f8fbff;
 }
 
 .sa-boss-answer-conclusion {
+  margin: 0;
   min-width: 0;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.75;
   color: #1d2129;
   font-weight: 700;
+}
+
+.sa-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.sa-kpi-grid.is-count-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sa-kpi-grid.is-count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sa-kpi-grid.is-count-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sa-kpi-card {
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.035);
+}
+
+.sa-kpi-value {
+  color: #165dff;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.sa-kpi-label {
+  margin-top: 5px;
+  color: #1d2129;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sa-kpi-hint {
+  margin-top: 2px;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sa-kpi-card.is-good .sa-kpi-value {
+  color: #00a870;
+}
+
+.sa-kpi-card.is-warn .sa-kpi-value {
+  color: #ff7d00;
+}
+
+.sa-kpi-card.is-danger .sa-kpi-value {
+  color: #f53f3f;
+}
+
+.sa-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 9px;
+}
+
+.sa-insight-card {
+  min-width: 0;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(29, 33, 41, 0.07);
+  background: #f7f9fc;
+}
+
+.sa-insight-card span,
+.sa-insight-card small {
+  display: block;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sa-insight-card strong {
+  display: block;
+  margin: 4px 0 3px;
+  color: #1d2129;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.sa-insight-card.is-good {
+  background: #f2fff7;
+  border-color: rgba(0, 180, 42, 0.16);
+}
+
+.sa-insight-card.is-warn {
+  background: #fffaf2;
+  border-color: rgba(255, 125, 0, 0.18);
+}
+
+.sa-insight-card.is-danger {
+  background: #fff7f7;
+  border-color: rgba(245, 63, 63, 0.16);
+}
+
+.sa-insight-card.is-info {
+  background: #f5f8ff;
+  border-color: rgba(22, 93, 255, 0.12);
+}
+
+.sa-advice-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sa-advice-block {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(22, 93, 255, 0.1);
+  background: #ffffff;
+}
+
+.sa-advice-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.sa-advice-list li + li {
+  margin-top: 4px;
 }
 
 .sa-comparison-digest {
@@ -771,8 +1201,21 @@ const supportLines = computed(() => {
 }
 
 @media (max-width: 760px) {
-  .sa-boss-answer-mainline {
+  .sa-boss-answer-head {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sa-kpi-grid,
+  .sa-kpi-grid.is-count-2,
+  .sa-kpi-grid.is-count-3,
+  .sa-insight-grid,
+  .sa-advice-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-kpi-value {
+    font-size: 22px;
   }
 
   .sa-comparison-card-grid {
@@ -786,6 +1229,11 @@ const supportLines = computed(() => {
 }
 
 @media (min-width: 761px) and (max-width: 900px) {
+  .sa-kpi-grid,
+  .sa-insight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .sa-comparison-card-grid.is-count-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

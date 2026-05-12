@@ -511,6 +511,11 @@ import {
   saveBookshelfDatasetFull, updateBookshelfDataset
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
+import {
+  dedupeGoldenSqlSamples,
+  extractSqlSamplesFromPrompts,
+  mergeAutofillCollection,
+} from '../utils/datasetAutofillPromptMining.js'
 
 // ========== 基础状态 ==========
 const datasets = ref([])
@@ -821,15 +826,8 @@ LIMIT 100`,
   ],
 })
 
-const mergeCollection = (collectionName, items, keyFn) => {
-  items.forEach((item) => {
-    const key = keyFn(item)
-    const list = full[collectionName]
-    const index = list.findIndex(existing => keyFn(existing) === key)
-    const copy = JSON.parse(JSON.stringify(item))
-    if (index >= 0) list[index] = { ...list[index], ...copy }
-    else list.push(copy)
-  })
+const mergeCollection = (collectionName, items, keyFn, options = {}) => {
+  mergeAutofillCollection(full[collectionName], items, keyFn, options)
 }
 
 const quoteIdent = (name) => `"${String(name || '').replace(/"/g, '""')}"`
@@ -978,13 +976,14 @@ const buildGenericAutofillTemplate = () => {
   const schemas = full.schema_definition.filter(item => String(item.table_name || '').trim() && String(item.ddl_sql || '').trim())
   const dictionary = schemas.flatMap(parseDdlColumns)
   const dictionaryForBuild = [...full.data_dictionary, ...dictionary]
+  const promptSqlSamples = extractSqlSamplesFromPrompts(full.agent_prompts, datasetName)
   const firstSchema = schemas[0]
   const firstTable = quoteTable(firstSchema?.table_name)
   const firstColumns = dictionaryForBuild.filter(item => item.table_name === firstSchema?.table_name)
   const numericCol = firstColumns.find(item => isNumericType(item.data_type))
   const dimensionCol = firstColumns.find(item => isTextLikeType(item.data_type) && !/id|编号|编码/i.test(`${item.column_name}${item.semantic_name}`))
   const hasJsonbFields = firstColumns.some(item => item.column_name === 'fields' && /jsonb?/i.test(item.data_type))
-  const goldenSql = []
+  const goldenSql = [...promptSqlSamples]
   if (firstTable) {
     goldenSql.push({
       intent_type: 'summary',
@@ -1046,19 +1045,34 @@ const buildGenericAutofillTemplate = () => {
       })
     }
   }
+  const promptQuestions = promptSqlSamples
+    .filter(item => !/^.+样例 SQL \d+$/.test(item.question || ''))
+    .slice(0, 3)
   const promptTableNames = schemas.map(item => item.table_name).join('、') || '已维护 DDL 的表'
   return {
+    __meta: {
+      prompt_sql_count: promptSqlSamples.length,
+    },
     common_questions: [
       { question_text: `${datasetName}一共有多少条记录？`, sort_order: 10, is_active: true },
       { question_text: `${datasetName}最近有哪些明细数据？`, sort_order: 20, is_active: true },
       ...(dimensionCol ? [{ question_text: `${datasetName}按${dimensionCol.semantic_name}分布如何？`, sort_order: 30, is_active: true }] : []),
       ...(numericCol ? [{ question_text: `${datasetName}${numericCol.semantic_name}合计是多少？`, sort_order: 40, is_active: true }] : []),
       ...(dimensionCol && numericCol ? [{ question_text: `${datasetName}按${dimensionCol.semantic_name}看${numericCol.semantic_name}排名如何？`, sort_order: 50, is_active: true }] : []),
+      ...promptQuestions.map((item, index) => ({ question_text: item.question, sort_order: 60 + index * 10, is_active: true })),
     ],
     regression_cases: [
       { case_type: 'summary', question_text: `${datasetName}一共有多少条记录？`, expected_focus: '应命中当前数据集，并返回总记录数。', expected_intent: 'generate_sql', sort_order: 10, is_active: true },
       { case_type: 'detail', question_text: `${datasetName}最近有哪些明细数据？`, expected_focus: '应基于当前 DDL 返回明细列表，并限制返回行数。', expected_intent: 'generate_sql', sort_order: 20, is_active: true },
       ...(dimensionCol ? [{ case_type: 'aggregation', question_text: `${datasetName}按${dimensionCol.semantic_name}分布如何？`, expected_focus: `应按${dimensionCol.semantic_name}聚合统计。`, expected_intent: 'generate_sql', sort_order: 30, is_active: true }] : []),
+      ...promptQuestions.map((item, index) => ({
+        case_type: 'prompt_example',
+        question_text: item.question,
+        expected_focus: '应优先参考已维护 Agent2/Agent4 中的样例 SQL 和业务逻辑。',
+        expected_intent: 'generate_sql',
+        sort_order: 40 + index * 10,
+        is_active: true,
+      })),
     ],
     synonyms: [
       { synonym: datasetName, normalized_synonym: datasetName, weight: 10 },
@@ -1073,7 +1087,7 @@ const buildGenericAutofillTemplate = () => {
       is_active: true,
     }],
     data_dictionary: dictionary,
-    golden_sql_samples: goldenSql.slice(0, 6),
+    golden_sql_samples: dedupeGoldenSqlSamples(goldenSql).slice(0, 12),
     agent_prompts: [
       { agent_no: 1, prompt_key: 'default', prompt_content: buildAgent1Prompt({ datasetName, domain, promptTableNames }), is_active: true },
       { agent_no: 2, prompt_key: 'default', prompt_content: buildAgent2Prompt({ datasetName, domain, schemas, dictionaryForBuild, promptTableNames }), is_active: true },
@@ -1130,14 +1144,17 @@ const autofillSelectedDataset = async () => {
   mergeCollection('regression_cases', template.regression_cases, item => `${item.case_type}|${item.question_text}`)
   mergeCollection('synonyms', template.synonyms, item => item.synonym)
   mergeCollection('lld_documents', template.lld_documents, item => `${item.version}|${item.title}`)
-  mergeCollection('data_dictionary', template.data_dictionary, item => `${item.table_name}|${item.column_name}|${item.jsonb_key}`)
+  mergeCollection('data_dictionary', template.data_dictionary, item => `${item.table_name}|${item.column_name}|${item.jsonb_key}`, { preserveExisting: true })
   mergeCollection('schema_definition', template.schema_definition, item => item.table_name)
-  mergeCollection('golden_sql_samples', template.golden_sql_samples, item => item.question)
-  mergeCollection('agent_prompts', template.agent_prompts, item => `${item.agent_no}|${item.prompt_key}`)
+  mergeCollection('golden_sql_samples', template.golden_sql_samples, item => item.question, { preserveExisting: true })
+  mergeCollection('agent_prompts', template.agent_prompts, item => `${item.agent_no}|${item.prompt_key}`, { preservePromptContent: true })
   mergeCollection('external_configs', template.external_configs, item => `${item.config_type}|${item.config_key}`)
 
   activeTab.value = 'prompts'
   markDirty()
+  if (!isSyybDataset.value && template.__meta?.prompt_sql_count) {
+    ElMessage.success(`已从 Agent2/Agent4 提取 ${template.__meta.prompt_sql_count} 条样例 SQL，并保留原有 Prompt 内容。`)
+  }
   await saveFull()
 }
 

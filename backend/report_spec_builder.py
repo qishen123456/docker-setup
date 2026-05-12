@@ -30,14 +30,26 @@ def _format_value(value: Any, metric: Dict[str, Any]) -> str:
     if metric.get("format") == "percent":
         return f"{numeric:.2f}%"
     if metric.get("format") == "amount":
-        return _format_amount(numeric)
+        return _format_amount(numeric, _metric_unit_hint(metric))
     if numeric == int(numeric):
         return f"{int(numeric):,}"
     return f"{numeric:.2f}"
 
 
-def _format_amount(value: float) -> str:
+def _metric_unit_hint(metric: Optional[Dict[str, Any]]) -> str:
+    if not metric:
+        return ""
+    return f"{metric.get('label', '')}{metric.get('column', '')}{metric.get('unit', '')}"
+
+
+def _format_amount(value: float, unit_hint: str = "") -> str:
     abs_value = abs(value)
+    if "万元" in unit_hint or "_万元" in unit_hint:
+        if abs_value < 10000:
+            if value == int(value):
+                return f"{int(value)}万"
+            return f"{value:.2f}".rstrip("0").rstrip(".") + "万"
+        return f"{value / 10000:.2f}".rstrip("0").rstrip(".") + "亿"
     if abs_value < 10000:
         if value == int(value):
             return str(int(value))
@@ -61,10 +73,47 @@ def _metric_by_key(config: Dict[str, Any], key: str, fallback_tokens: List[str])
     return None
 
 
+def _infer_metric_from_columns(columns: List[str], key: str, label: str, tokens: List[str], fmt: str) -> Optional[Dict[str, Any]]:
+    channel_tokens = ("线下", "新零售", "燃气", "地产", "定制")
+    scored: List[tuple] = []
+    for column in columns:
+        text = str(column or "")
+        if not text:
+            continue
+        score = 0
+        if any(token in text for token in tokens):
+            score += 20
+        if "总" in text or "整体" in text:
+            score += 12
+        if "万元" in text:
+            score += 4
+        if key == "task" and any(token in text for token in ("实际", "开单", "完成", "达成")):
+            score -= 30
+        if key == "actual" and any(token in text for token in ("任务", "目标", "剩余", "缺口", "达成率")):
+            score -= 30
+        if key == "rate" and "率" not in text:
+            score -= 30
+        if key == "remain" and not any(token in text for token in ("剩余", "缺口", "差额", "待完成")):
+            score -= 30
+        if any(token in text for token in channel_tokens):
+            score -= 8
+        if score > 0:
+            scored.append((score, text))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return {"key": key, "label": label, "column": scored[0][1], "format": fmt}
+
+
 def _row_value(row: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> Optional[float]:
     if not metric:
         return None
     return _to_float(row.get(metric.get("column")))
+
+
+def _row_sort_value(row: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> float:
+    value = _row_value(row, metric)
+    return value if value is not None else 0.0
 
 
 def _infer_level(row: Dict[str, Any], config: Dict[str, Any], level_col: str) -> Dict[str, str]:
@@ -254,6 +303,17 @@ def build_report_spec(
 ) -> Dict[str, Any]:
     config = report_config or {}
     rows = rows if isinstance(rows, list) else []
+    available_columns = [str(item) for item in (columns or []) if str(item or "").strip()]
+    if not available_columns:
+        seen_columns = []
+        for row in rows[:5]:
+            if not isinstance(row, dict):
+                continue
+            for key in row.keys():
+                text = str(key or "")
+                if text and text not in seen_columns:
+                    seen_columns.append(text)
+        available_columns = seen_columns
     tree = _build_tree(rows, config)
     nodes = tree["nodes"]
 
@@ -262,6 +322,33 @@ def build_report_spec(
     actual_metric = _metric_by_key(config, "actual", ["开单", "成交", "营收", "收入", "完成", "实际", "销售"])
     rate_metric = _metric_by_key(config, "rate", ["率", "percent", "rate"])
     remain_metric = _metric_by_key(config, "remain", ["剩余", "待完成", "缺口", "差额"])
+
+    def metric_available(metric: Optional[Dict[str, Any]]) -> bool:
+        if not metric:
+            return False
+        column = str(metric.get("column") or "")
+        if not column:
+            return False
+        return column in available_columns or any(
+            isinstance(row, dict) and _row_value(row, metric) is not None
+            for row in rows[:20]
+        )
+
+    if not metric_available(task_metric):
+        task_metric = _infer_metric_from_columns(available_columns, "task", "总任务", ["任务", "目标"], "amount")
+    if not metric_available(actual_metric):
+        actual_metric = _infer_metric_from_columns(available_columns, "actual", "总实际", ["实际", "开单", "完成", "营收", "收入", "销售"], "amount")
+    if not metric_available(rate_metric):
+        rate_metric = _infer_metric_from_columns(available_columns, "rate", "达成率", ["达成率", "完成率", "率"], "percent")
+    if not metric_available(remain_metric):
+        remain_metric = _infer_metric_from_columns(available_columns, "remain", "剩余缺口", ["剩余", "缺口", "差额", "待完成"], "amount")
+    metrics = [
+        metric for metric in [task_metric, actual_metric, rate_metric, remain_metric]
+        if metric
+    ] + [
+        metric for metric in metrics
+        if metric and metric not in [task_metric, actual_metric, rate_metric, remain_metric]
+    ]
 
     resolved_names = _resolved_member_names(resolved_entities)
     if not resolved_names:
@@ -301,6 +388,7 @@ def build_report_spec(
     contract_health = validate_report_contract(config, columns, scene)
     compare_label = _level_label(comparison_nodes, "下一层级")
     detail_nodes = [item for node in comparison_nodes for item in _drill_children(node)]
+    has_drill_detail = bool(detail_nodes)
     detail_label = _level_label(detail_nodes, "明细层级")
 
     chart_metrics = [metric for metric in [actual_metric, task_metric, remain_metric, rate_metric] if metric]
@@ -424,15 +512,17 @@ def build_report_spec(
     thresholds = _effective_thresholds(config)
     ranked_comparison_nodes = sorted(
         comparison_nodes,
-        key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0,
+        key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0,
         reverse=True,
     )
     node_rank = {node.get("id"): index + 1 for index, node in enumerate(ranked_comparison_nodes)}
     for node in ranked_comparison_nodes:
         drill_children = _drill_children(node)
+        if not drill_children:
+            continue
         node_detail_label = _level_label(drill_children, detail_label)
-        sorted_children = sorted(drill_children, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0)
-        sorted_children_desc = sorted(sorted_children, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)
+        sorted_children = sorted(drill_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0)
+        sorted_children_desc = sorted(sorted_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)
         worst = sorted_children[0] if sorted_children else None
         best = sorted_children_desc[0] if sorted_children_desc else None
         rate = _row_value(node["raw"], rate_metric) if rate_metric else None
@@ -461,7 +551,7 @@ def build_report_spec(
             group_detail_label = _level_label(grandchildren, "下一层级")
             sorted_grandchildren = sorted(
                 grandchildren,
-                key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0,
+                key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0,
                 reverse=True,
             )
             child_rate = _row_value(child["raw"], rate_metric) if rate_metric else None
@@ -572,7 +662,7 @@ def build_report_spec(
             "drillGroups": [item for item in (build_drill_group(child) for child in sorted_children_desc) if item],
         })
 
-    rate_sorted_nodes = sorted(comparison_nodes, key=lambda item: _row_value(item["raw"], rate_metric) if rate_metric else 0)
+    rate_sorted_nodes = sorted(comparison_nodes, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0)
     best_node = rate_sorted_nodes[-1] if rate_sorted_nodes else None
     worst_node = rate_sorted_nodes[0] if rate_sorted_nodes else None
 
@@ -654,7 +744,15 @@ def build_report_spec(
         "kpis": kpis,
         "sections": [
             {"key": "overview", "title": "总体判断", "narrative": "；".join(summary_parts)},
-            {"key": "drill", "title": f"{compare_label}下钻分析", "narrative": f"先横向比较{compare_label}，再纵向展开直接下级{detail_label}；业务员明细作为下一层证据，不直接替代管理层级判断。"},
+            {
+                "key": "drill",
+                "title": f"{compare_label}{'下钻' if has_drill_detail else '对比'}分析",
+                "narrative": (
+                    f"先横向比较{compare_label}，再纵向展开直接下级{detail_label}；业务员明细作为下一层证据，不直接替代管理层级判断。"
+                    if has_drill_detail
+                    else f"当前结果只返回到{compare_label}层级，先做横向对比；未返回下一层明细时不展示下钻卡片，避免误导。"
+                ),
+            },
         ],
         "charts": [overview_chart] if overview_chart else [],
         "accordions": accordions,

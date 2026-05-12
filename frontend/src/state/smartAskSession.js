@@ -1795,6 +1795,19 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
         selectedDatasetIds.length > 0 ? selectedDatasetIds : fallbackCandidateIds,
       )
     }
+    state.status = 'waiting_confirmation'
+    state.error = ''
+    setLogStatus('boss-confirm', 'warning', optionLabel, {
+      summary: '确认提交失败，已恢复确认卡片，可重新选择口径后继续。',
+      thought: '',
+      detailLines: [
+        '确认提交失败，系统已保留本次确认卡片。',
+        errorMessage ? `失败原因：${errorMessage}` : '失败原因：后端未返回明确错误信息。',
+        '请重新选择口径，或稍后再试。',
+      ],
+      time: nowText(),
+    })
+    persist()
     throw error
   }
 }
