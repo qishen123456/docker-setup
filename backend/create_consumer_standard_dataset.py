@@ -16,6 +16,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from psycopg2.extras import Json, RealDictCursor
+
 
 DATASET_CODE = "consumer_business_standard_v1"
 DATASET_NAME = "消费者事业部任务达成分析（标准版）"
@@ -576,6 +578,334 @@ def build_payload(source_id: int) -> Dict[str, Any]:
     }
 
 
+def _json_value(value: Any) -> Json:
+    return Json(value if value is not None else {})
+
+
+def _ensure_optional_tables(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_common_questions (
+            id BIGSERIAL PRIMARY KEY,
+            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
+            question_text TEXT NOT NULL,
+            sort_order INT NOT NULL DEFAULT 100,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_dataset_external_configs (
+            id BIGSERIAL PRIMARY KEY,
+            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
+            config_type VARCHAR(64) NOT NULL,
+            config_key VARCHAR(128) NOT NULL,
+            config_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(dataset_id, config_type, config_key)
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_regression_cases (
+            id BIGSERIAL PRIMARY KEY,
+            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
+            case_type VARCHAR(32) NOT NULL DEFAULT 'summary',
+            question_text TEXT NOT NULL,
+            expected_focus TEXT NOT NULL DEFAULT '',
+            expected_intent VARCHAR(32) NOT NULL DEFAULT 'generate_sql',
+            sort_order INT NOT NULL DEFAULT 100,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bs_dataset_report_config (
+            id BIGSERIAL PRIMARY KEY,
+            dataset_id BIGINT NOT NULL,
+            config_json JSONB NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(dataset_id)
+        );
+        """
+    )
+    cur.execute("ALTER TABLE bs_schema_definitions ADD COLUMN IF NOT EXISTS source_id BIGINT;")
+
+
+def resolve_source_id(cur, explicit_source_id: int = 0) -> int:
+    if explicit_source_id:
+        return int(explicit_source_id)
+    cur.execute(
+        """
+        SELECT source_id
+        FROM bs_datasets
+        WHERE (dataset_name LIKE '%消费者%' OR dataset_code ILIKE '%consumer%')
+          AND source_id IS NOT NULL
+        ORDER BY CASE WHEN dataset_code = %s THEN 0 ELSE 1 END, updated_at DESC
+        LIMIT 1;
+        """,
+        (DATASET_CODE,),
+    )
+    row = cur.fetchone()
+    if row and row.get("source_id") is not None:
+        return int(row["source_id"])
+    try:
+        from config_manager import get_default_datasource
+
+        ds = get_default_datasource() or {}
+        if ds.get("id") is not None:
+            return int(ds["id"])
+    except Exception:
+        pass
+    return 1
+
+
+def apply_payload_direct(source_id: int = 0) -> Dict[str, Any]:
+    """Apply the standard dataset directly to Bookshelf tables.
+
+    This is the same logical destination as the frontend Dataset Management
+    save action, but usable from Docker bootstrap before Flask starts.
+    """
+    from bookshelf_repository import BookshelfRepository
+
+    repo = BookshelfRepository()
+    repo.ensure_schema()
+
+    with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        _ensure_optional_tables(cur)
+        source_id = resolve_source_id(cur, source_id)
+        payload = build_payload(source_id)
+        cur.execute(
+            """
+            INSERT INTO bs_datasets(dataset_code, dataset_name, business_domain, source_id, description, is_active)
+            VALUES (%s, %s, %s, %s, %s, TRUE)
+            ON CONFLICT (dataset_code)
+            DO UPDATE SET
+                dataset_name = EXCLUDED.dataset_name,
+                business_domain = EXCLUDED.business_domain,
+                source_id = COALESCE(EXCLUDED.source_id, bs_datasets.source_id),
+                description = EXCLUDED.description,
+                is_active = TRUE,
+                updated_at = NOW()
+            RETURNING id;
+            """,
+            (
+                DATASET_CODE,
+                DATASET_NAME,
+                "消费者事业部年度任务达成与业务线分析",
+                source_id,
+                "标准版消费者事业部数据集，用于对比旧数据集问数效果；业务字段全部从 fields JSONB 读取。",
+            ),
+        )
+        dataset_id = int(cur.fetchone()["id"])
+
+        for table_name in (
+            "bs_dataset_synonyms",
+            "bs_lld_documents",
+            "bs_data_dictionary_items",
+            "bs_schema_definitions",
+            "bs_table_relations",
+            "bs_golden_sql_samples",
+            "bs_agent_prompt_fragments",
+            "bs_common_questions",
+            "bs_regression_cases",
+            "bs_dataset_external_configs",
+        ):
+            cur.execute(f"DELETE FROM {table_name} WHERE dataset_id = %s;", (dataset_id,))
+        cur.execute("DELETE FROM bs_dataset_report_config WHERE dataset_id = %s;", (dataset_id,))
+
+        for item in payload["synonyms"]:
+            synonym = str(item.get("synonym") or "").strip()
+            if not synonym:
+                continue
+            cur.execute(
+                """
+                INSERT INTO bs_dataset_synonyms(dataset_id, synonym, normalized_synonym, weight)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (dataset_id, synonym, synonym.lower(), int(item.get("weight") or 1)),
+            )
+
+        for item in payload["lld_documents"]:
+            cur.execute(
+                """
+                INSERT INTO bs_lld_documents(dataset_id, version, title, content, redline_rules, is_active, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, 'bootstrap');
+                """,
+                (
+                    dataset_id,
+                    int(item.get("version") or 1),
+                    item.get("title") or "消费者事业部任务达成分析 LLD（标准版）",
+                    item.get("content") or "",
+                    _json_value(item.get("redline_rules") or []),
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["data_dictionary"]:
+            cur.execute(
+                """
+                INSERT INTO bs_data_dictionary_items(
+                    dataset_id, table_name, column_name, jsonb_key, semantic_name,
+                    data_type, enum_mapping, extraction_rule, is_active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                """,
+                (
+                    dataset_id,
+                    item.get("table_name") or TABLE_NAME,
+                    item.get("column_name") or "",
+                    item.get("jsonb_key") or None,
+                    item.get("semantic_name") or "",
+                    item.get("data_type") or "text",
+                    _json_value(item.get("enum_mapping") or {}),
+                    item.get("extraction_rule") or "",
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["schema_definition"]:
+            cur.execute(
+                """
+                INSERT INTO bs_schema_definitions(dataset_id, table_name, ddl_sql, description, is_active, source_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (dataset_id, table_name)
+                DO UPDATE SET
+                    ddl_sql = EXCLUDED.ddl_sql,
+                    description = EXCLUDED.description,
+                    is_active = EXCLUDED.is_active,
+                    source_id = EXCLUDED.source_id,
+                    updated_at = NOW();
+                """,
+                (
+                    dataset_id,
+                    item.get("table_name") or TABLE_NAME,
+                    item.get("ddl_sql") or DDL_SQL,
+                    item.get("description") or "",
+                    bool(item.get("is_active", True)),
+                    source_id,
+                ),
+            )
+
+        for item in payload["golden_sql_samples"]:
+            cur.execute(
+                """
+                INSERT INTO bs_golden_sql_samples(
+                    dataset_id, intent_type, question, sql_text, tags, quality_score, is_active, created_by
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'bootstrap');
+                """,
+                (
+                    dataset_id,
+                    item.get("intent_type") or "detail",
+                    item.get("question") or "",
+                    item.get("sql_text") or "",
+                    _json_value(item.get("tags") or []),
+                    int(item.get("quality_score") or 80),
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["agent_prompts"]:
+            cur.execute(
+                """
+                INSERT INTO bs_agent_prompt_fragments(
+                    dataset_id, agent_no, prompt_key, prompt_content, is_active, created_by
+                )
+                VALUES (%s, %s, %s, %s, %s, 'bootstrap');
+                """,
+                (
+                    dataset_id,
+                    int(item.get("agent_no") or 0),
+                    item.get("prompt_key") or "default",
+                    item.get("prompt_content") or "",
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["common_questions"]:
+            cur.execute(
+                """
+                INSERT INTO bs_common_questions(dataset_id, question_text, sort_order, is_active)
+                VALUES (%s, %s, %s, %s);
+                """,
+                (
+                    dataset_id,
+                    item.get("question_text") or "",
+                    int(item.get("sort_order") or 100),
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["regression_cases"]:
+            cur.execute(
+                """
+                INSERT INTO bs_regression_cases(
+                    dataset_id, case_type, question_text, expected_focus, expected_intent, sort_order, is_active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                """,
+                (
+                    dataset_id,
+                    item.get("case_type") or "summary",
+                    item.get("question_text") or "",
+                    item.get("expected_focus") or "",
+                    item.get("expected_intent") or "generate_sql",
+                    int(item.get("sort_order") or 100),
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        for item in payload["external_configs"]:
+            cur.execute(
+                """
+                INSERT INTO bs_dataset_external_configs(
+                    dataset_id, config_type, config_key, config_value, is_active
+                )
+                VALUES (%s, %s, %s, %s, %s);
+                """,
+                (
+                    dataset_id,
+                    item.get("config_type") or "",
+                    item.get("config_key") or "",
+                    _json_value(item.get("config_value") or {}),
+                    bool(item.get("is_active", True)),
+                ),
+            )
+
+        cur.execute(
+            """
+            INSERT INTO bs_dataset_report_config(dataset_id, config_json)
+            VALUES (%s, %s)
+            ON CONFLICT (dataset_id)
+            DO UPDATE SET config_json = EXCLUDED.config_json, updated_at = NOW();
+            """,
+            (dataset_id, _json_value(payload.get("report_config") or {})),
+        )
+        cur.execute("UPDATE bs_datasets SET updated_at = NOW() WHERE id = %s;", (dataset_id,))
+        conn.commit()
+
+    return {
+        "ok": True,
+        "dataset_id": dataset_id,
+        "dataset_code": DATASET_CODE,
+        "source_id": source_id,
+        "dictionary_count": len(payload["data_dictionary"]),
+        "golden_sql_count": len(payload["golden_sql_samples"]),
+        "agent_prompt_count": len(payload["agent_prompts"]),
+    }
+
+
 def request_json(base_url: str, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -619,6 +949,7 @@ def main() -> int:
     parser.add_argument("--base-url", default=os.getenv("SMARTASK_BASE_URL", "http://127.0.0.1:5002"))
     parser.add_argument("--source-id", type=int, default=int(os.getenv("SMARTASK_CONSUMER_SOURCE_ID", "0") or 0))
     parser.add_argument("--dry-run", action="store_true", help="Only write payload JSON; do not call backend API.")
+    parser.add_argument("--direct", action="store_true", help="Write directly to Bookshelf tables instead of calling HTTP API.")
     parser.add_argument(
         "--output",
         default=str(Path(__file__).resolve().parent / "imports" / "consumer_business_standard_dataset_payload.json"),
@@ -627,7 +958,7 @@ def main() -> int:
 
     existing = None
     inferred_source_id = None
-    if not args.dry_run:
+    if not args.dry_run and not args.direct:
         existing, inferred_source_id = find_existing_dataset(args.base_url)
     source_id = args.source_id or inferred_source_id or 5
     payload = build_payload(source_id)
@@ -639,6 +970,11 @@ def main() -> int:
 
     if args.dry_run:
         print("[OK] dry-run only, dataset not applied.")
+        return 0
+
+    if args.direct:
+        result = apply_payload_direct(source_id=source_id)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
     if existing:

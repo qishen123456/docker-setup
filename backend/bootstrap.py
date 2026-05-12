@@ -6,12 +6,14 @@ Order of operations (each step is best-effort and idempotent):
     2. Apply schema migrations under backend/migrations (BEGIN/COMMIT-stripped, dollar-quote-aware)
     3. Restore runtime config bundle into config/*.json (only fills missing keys, never clobbers user edits)
     4. First boot only: import bookshelf_bundle.json + angel_group_data_bundle.json
-    5. Hand off to app.py via os.execv
+    5. Sync idempotent built-in dataset templates that should ship with code
+    6. Hand off to app.py via os.execv
 
 Env switches:
     SMARTASK_BOOTSTRAP_SKIP_DB=1            -> skip DB step entirely, only start Flask
     SMARTASK_BOOTSTRAP_FORCE_IMPORT=1       -> import bundles even if bs_datasets is non-empty
     SMARTASK_BOOTSTRAP_FORCE_CONFIG=1       -> overwrite existing config files from runtime bundle
+    SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1      -> skip built-in dataset template sync
 """
 from __future__ import annotations
 
@@ -191,6 +193,24 @@ def _import_angel_bundle() -> None:
         traceback.print_exc()
 
 
+def _sync_builtin_datasets() -> None:
+    if os.getenv("SMARTASK_BOOTSTRAP_SKIP_BUILTINS", "").lower() in {"1", "true", "yes"}:
+        log("SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1，跳过内置数据集模板同步")
+        return
+    try:
+        from create_consumer_standard_dataset import apply_payload_direct
+
+        result = apply_payload_direct()
+        log(
+            "已同步内置数据集模板: "
+            f"{result.get('dataset_code')} id={result.get('dataset_id')} "
+            f"golden={result.get('golden_sql_count')}"
+        )
+    except Exception as exc:
+        log(f"同步内置数据集模板失败（非致命）: {exc}")
+        traceback.print_exc()
+
+
 def main() -> None:
     log("========== SmartAsk Bootstrap 开始 ==========")
 
@@ -235,6 +255,8 @@ def main() -> None:
                     traceback.print_exc()
         else:
             log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
+
+        _sync_builtin_datasets()
 
     log("========== Bootstrap 完成，启动 Flask ==========")
     app_path = os.path.join(CURRENT_DIR, "app.py")
