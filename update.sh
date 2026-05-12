@@ -131,6 +131,22 @@ backend_container_health() {
     2>/dev/null || true
 }
 
+cleanup_compose_recreate_leftovers() {
+  local ids
+  ids="$(
+    docker ps -a --format '{{.ID}} {{.Names}}' \
+      | awk '$2 ~ /^[0-9a-f]+_smartask-(backend|frontend|postgres)$/ {print $1}' \
+      || true
+  )"
+  if [[ -z "$ids" ]]; then
+    return 0
+  fi
+
+  warn "检测到上次 Docker Compose 重建中断留下的临时容器，准备清理。"
+  echo "$ids" | xargs -r docker rm -f >/dev/null || true
+  warn "临时容器已清理，继续更新。"
+}
+
 dump_backend_diagnostics() {
   local url="$1"
 
@@ -250,6 +266,7 @@ fi
 
 info "校验 docker compose"
 docker compose config >/dev/null
+cleanup_compose_recreate_leftovers
 
 info "重建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
