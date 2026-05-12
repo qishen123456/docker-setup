@@ -2558,6 +2558,72 @@ Agent1 路由结果：
         result["sql"] = sql_text
         return result
 
+    def _repair_sql_after_execution_error(
+        self,
+        question: str,
+        route: Dict[str, Any],
+        context: Dict[str, Any],
+        failed_sql: str,
+        error_message: str,
+        dataset_prompt: str,
+        trace: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        system_prompt = self._get_agent_prompt(
+            2,
+            "你是 Agent2 SQL 修复专家，负责根据真实执行错误修复 PostgreSQL 只读 SQL。",
+        )
+        user_prompt = f"""
+用户问题：
+{question}
+
+Agent1 路由结果：
+{json.dumps(route, ensure_ascii=False)}
+
+执行失败的 SQL：
+{failed_sql}
+
+数据库返回的真实错误：
+{error_message}
+
+数据集专属提示（Agent2）：
+{dataset_prompt}
+
+报告配置（用于 SQL 输出别名和报告结构，不是源表物理字段清单）：
+{self._build_report_config_prompt(context)}
+
+书架上下文和真实 DDL：
+{self._build_context_blob(context)}
+
+修复要求：
+1. 只输出可以直接执行的只读 PostgreSQL SQL。
+2. 必须以真实 DDL 为准；如果表只有 id / record_id / fields / created_time / updated_time / sync_time，业务字段必须从 fields JSONB 中读取。
+3. 不允许直接引用不存在的物理列，例如 “层级级别”、“节点名称”、“上级名称”、“达成率”；这些只能在 SELECT/CTE 中用别名生成后，在外层查询引用。
+4. 如果原 SQL 的层级判断合理，可以保留其分析思路，但必须修正字段读取方式和别名作用域。
+5. 修复后仍要满足报告配置要求：尽量输出 条线、层级、节点名称、上级名称 以及关键指标列。
+6. 不要输出解释性文字、Markdown 或省略号。
+
+请输出 JSON：
+{{
+  "sql": "修复后的 PostgreSQL SQL",
+  "notes": "修复说明"
+}}
+""".strip()
+        result = self._chat_json(
+            system_prompt,
+            user_prompt,
+            {"sql": "", "notes": "sql repair fallback"},
+            trace=trace,
+            stage="agent2.sql_repair",
+            agent_name="Agent2Repair",
+        )
+        sql_text = (result.get("sql") or "").strip()
+        sql_text = re.sub(r"^```sql\s*", "", sql_text, flags=re.IGNORECASE).strip()
+        sql_text = re.sub(r"\s*```$", "", sql_text).strip()
+        if "..." in sql_text or not self._is_read_only_sql(sql_text):
+            sql_text = ""
+        result["sql"] = sql_text
+        return result
+
     def _agent3_review(
         self,
         question: str,
@@ -2989,23 +3055,84 @@ Agent3 复核结果：
                     error=str(exec_error),
                     traceback=traceback.format_exc(),
                 )
-                steps.append(
-                    {
-                        "title": "系统执行 SQL",
-                        "duration": round((time.time() - step_started) * 1000, 2),
-                        "status": "warning",
-                    }
+                repair_started = time.time()
+                repair_result = self._repair_sql_after_execution_error(
+                    question=question,
+                    route=route,
+                    context=context,
+                    failed_sql=final_sql,
+                    error_message=str(exec_error),
+                    dataset_prompt=agent2_prompt,
+                    trace=trace,
                 )
-                dataset_results.append(
-                    self._build_graceful_dataset_result(
-                        question=question,
-                        context=context,
-                        review=review,
-                        result={"columns": [], "rows": [], "row_count": 0},
-                        sql_text=final_sql,
+                repaired_sql = (repair_result.get("sql") or "").strip()
+                repair_succeeded = False
+                if repaired_sql:
+                    try:
+                        repair_review = self._agent3_review(question, route, repaired_sql, context, agent3_prompt, trace=trace)
+                        repaired_final_sql = (repair_review.get("final_sql") or repaired_sql).strip()
+                        if not self._is_read_only_sql(repaired_final_sql):
+                            raise ValueError("SQL 自动修复结果未通过只读校验")
+                        result = self._execute_sql(
+                            context["dataset"]["source_id"],
+                            repaired_final_sql,
+                            trace=trace,
+                            dataset_name=dataset_meta.get("dataset_name", ""),
+                        )
+                        final_sql = repaired_final_sql
+                        review = repair_review
+                        repair_succeeded = True
+                        self._append_trace(
+                            trace,
+                            "pipeline.execute_sql.repaired",
+                            "info",
+                            dataset_id=dataset_id,
+                            dataset_name=dataset_meta.get("dataset_name"),
+                            sql=self._truncate_text(final_sql, 12000),
+                            notes=repair_result.get("notes", ""),
+                        )
+                        steps.append(
+                            {
+                                "title": "SQL 自动修复",
+                                "duration": round((time.time() - repair_started) * 1000, 2),
+                                "status": "success",
+                            }
+                        )
+                    except Exception as repair_error:
+                        self._append_trace(
+                            trace,
+                            "pipeline.execute_sql.repair_failed",
+                            "error",
+                            dataset_id=dataset_id,
+                            dataset_name=dataset_meta.get("dataset_name"),
+                            error=str(repair_error),
+                            traceback=traceback.format_exc(),
+                        )
+                        steps.append(
+                            {
+                                "title": "SQL 自动修复",
+                                "duration": round((time.time() - repair_started) * 1000, 2),
+                                "status": "warning",
+                            }
+                        )
+                if not repair_succeeded:
+                    steps.append(
+                        {
+                            "title": "系统执行 SQL",
+                            "duration": round((time.time() - step_started) * 1000, 2),
+                            "status": "warning",
+                        }
                     )
-                )
-                continue
+                    dataset_results.append(
+                        self._build_graceful_dataset_result(
+                            question=question,
+                            context=context,
+                            review=review,
+                            result={"columns": [], "rows": [], "row_count": 0},
+                            sql_text=final_sql,
+                        )
+                    )
+                    continue
             steps.append(
                 {
                     "title": "系统执行 SQL",
