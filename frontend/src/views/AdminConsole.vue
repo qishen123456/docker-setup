@@ -2,30 +2,36 @@
   <div class="console-page">
     <section class="console-hero">
       <div class="hero-copy">
-        <span class="hero-kicker">{{ activeConsoleTab === 'logs' ? '日志审计' : '权限矩阵' }}</span>
+        <span class="hero-kicker">{{ activeHero.kicker }}</span>
         <h1>系统控制台</h1>
-        <p>{{ activeConsoleTab === 'logs' ? '集中查看登录访问、接口报错和低置信度问答，保留问题、思考过程、SQL 与答案。' : '按身份勾选左侧导航和页面按钮权限。勾选即代表该身份可见，取消即隐藏。' }}</p>
+        <p>{{ activeHero.description }}</p>
       </div>
       <div class="hero-actions">
         <template v-if="activeConsoleTab === 'permissions'">
           <el-button plain :loading="loading" @click="loadFlags">刷新</el-button>
+          <el-button plain @click="toggleAdminFloat">{{ adminFloatEnabled ? '关闭悬浮入口' : '开启悬浮入口' }}</el-button>
           <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
           <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
         </template>
+        <template v-else-if="activeConsoleTab === 'data'">
+          <el-button plain :loading="dataPermissionLoading" @click="loadDataPermissions">刷新数据权限</el-button>
+          <el-button type="primary" :loading="dataPermissionSaving" @click="saveDataPermissionRules">保存数据权限</el-button>
+        </template>
         <template v-else>
           <el-button plain :loading="logLoading" @click="loadLogData">刷新日志</el-button>
-          <el-button plain type="danger" :loading="logClearing" @click="handleClearLogs">清理旧日志</el-button>
+          <el-button plain type="danger" :loading="logClearing" @click="handleClearLogs">清理查询日期内日志</el-button>
         </template>
       </div>
     </section>
 
     <section class="console-tabs">
       <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="activeConsoleTab = 'permissions'">权限配置</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="activeConsoleTab = 'data'; ensureDataPermissionsLoaded()">数据权限</button>
       <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="activeConsoleTab = 'logs'; ensureLogsLoaded()">日志管理</button>
     </section>
 
-    <template v-if="activeConsoleTab === 'permissions'">
-    <section class="summary-strip">
+    <template v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'">
+    <section v-if="activeConsoleTab === 'permissions'" class="summary-strip">
       <div><strong>{{ navigationItems.length }}</strong><span>导航项</span></div>
       <div><strong>{{ buttonItems.length }}</strong><span>按钮项</span></div>
       <div><strong>{{ enabledButtonCount }}</strong><span>已开放按钮</span></div>
@@ -33,6 +39,114 @@
     </section>
 
     <el-skeleton v-if="loading && !featureList.length" :rows="8" animated />
+
+    <template v-else-if="activeConsoleTab === 'data'">
+      <section class="summary-strip data-summary-strip">
+        <div><strong>{{ dataPermissionRows.length }}</strong><span>数据集</span></div>
+        <div><strong>{{ restrictedDatasetCount }}</strong><span>受限数据集</span></div>
+        <div><strong>{{ dataPermissionEmployees.length }}</strong><span>可指定员工</span></div>
+        <div><strong>{{ departmentOptionCount }}</strong><span>部门选项</span></div>
+      </section>
+
+      <section class="data-permission-card" v-loading="dataPermissionLoading">
+        <div class="data-permission-toolbar">
+          <div>
+            <span class="card-kicker">数据可见范围</span>
+            <h2>按角色、部门或员工授权数据集</h2>
+            <p>公开数据集所有登录员工可见；受限数据集仅匹配下方条件的员工可见。</p>
+          </div>
+        </div>
+        <el-table :data="dataPermissionRows" border stripe class="data-permission-table">
+          <el-table-column label="数据集" min-width="210" fixed>
+            <template #default="{ row }">
+              <strong>{{ row.dataset_name }}</strong>
+              <small>{{ row.business_domain || row.dataset_code }}</small>
+            </template>
+          </el-table-column>
+          <el-table-column label="模式" width="120">
+            <template #default="{ row }">
+              <el-select v-model="row.rule.mode" style="width: 96px">
+                <el-option label="公开" value="public" />
+                <el-option label="受限" value="restricted" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="角色" min-width="170">
+            <template #default="{ row }">
+              <el-select v-model="row.rule.allowed_roles" multiple collapse-tags collapse-tags-tooltip placeholder="选择角色">
+                <el-option label="管理员" value="admin" />
+                <el-option label="普通用户" value="user" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="部门" min-width="210">
+            <template #default="{ row }">
+              <el-select
+                v-model="row.rule.allowed_departments"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="如：东部分公司"
+              >
+                <el-option v-for="item in departmentOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="岗位" min-width="190">
+            <template #default="{ row }">
+              <el-select
+                v-model="row.rule.allowed_positions"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="如：总经理"
+              >
+                <el-option v-for="item in positionOptions" :key="item" :label="item" :value="item" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="指定员工" min-width="230">
+            <template #default="{ row }">
+              <el-select v-model="row.rule.allowed_employee_ids" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择员工">
+                <el-option
+                  v-for="item in enabledDataPermissionEmployees"
+                  :key="item.id"
+                  :label="employeeOptionLabel(item)"
+                  :value="item.id"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="组织/分公司预留" min-width="260">
+            <template #default="{ row }">
+              <div class="scope-fields">
+                <el-input v-model="row.rule.scope.company_field" placeholder="字段，如 分公司" />
+                <el-select
+                  v-model="row.rule.scope.company_values"
+                  multiple
+                  filterable
+                  allow-create
+                  default-first-option
+                  collapse-tags
+                  placeholder="值，如 东部分公司"
+                />
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="180">
+            <template #default="{ row }">
+              <el-input v-model="row.rule.note" placeholder="权限说明" />
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
+    </template>
 
     <template v-else>
       <section class="permission-card">
@@ -165,8 +279,19 @@
             <el-option label="warning" value="warning" />
             <el-option label="error" value="error" />
           </el-select>
+          <el-date-picker
+            v-model="logFilters.date_range"
+            type="daterange"
+            unlink-panels
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 280px"
+          />
           <el-input v-model="logFilters.keyword" clearable placeholder="搜索用户、路径、问题、SQL、答案..." @keyup.enter="loadLogs" />
           <el-button type="primary" :loading="logLoading" @click="loadLogs">查询</el-button>
+          <el-button plain :loading="logExporting" @click="exportFilteredLogs">导出</el-button>
         </div>
 
         <el-table :data="logs" border stripe v-loading="logLoading" class="log-table">
@@ -287,10 +412,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   clearSystemLogs,
   getAdminFeatureFlags,
+  getDataPermissions,
   getSystemLogDetail,
   getSystemLogs,
   getSystemLogStats,
   resetAdminFeatureFlags,
+  saveDataPermissions,
   saveAdminFeatureFlags,
 } from '../api/index.js'
 
@@ -301,6 +428,8 @@ const roles = [
 ]
 const roleOrder = roles.map((item) => item.value)
 const FEATURE_FLAGS_UPDATED_EVENT = 'smartask-feature-flags-updated'
+const ADMIN_CONSOLE_FLOAT_HIDDEN_KEY = 'smartask_admin_console_float_hidden'
+const ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT = 'smartask-admin-console-float-toggle'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -308,19 +437,52 @@ const resetting = ref(false)
 const features = ref({})
 const openModules = ref(['runtime_migration', 'employee_permissions'])
 const activeConsoleTab = ref('permissions')
+const dataPermissionLoading = ref(false)
+const dataPermissionSaving = ref(false)
+const dataPermissionRows = ref([])
+const dataPermissionEmployees = ref([])
 const logs = ref([])
 const logStats = ref({})
 const totalLogs = ref(0)
 const logLoading = ref(false)
 const logClearing = ref(false)
+const logExporting = ref(false)
 const logPage = ref(1)
 const logPageSize = ref(100)
 const logDetailVisible = ref(false)
 const selectedLog = ref(null)
+const adminFloatEnabled = ref(false)
+const allFetchedLogs = ref([])
 const logFilters = ref({
   category: '',
   level: '',
   keyword: '',
+  date_range: [],
+})
+
+const uniqueOptionList = (items) => Array.from(new Set(
+  (items || [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+)).sort((a, b) => a.localeCompare(b, 'zh-CN'))
+
+const activeHero = computed(() => {
+  if (activeConsoleTab.value === 'logs') {
+    return {
+      kicker: '日志审计',
+      description: '集中查看登录访问、接口报错和低置信度问答，保留问题、思考过程、SQL 与答案。'
+    }
+  }
+  if (activeConsoleTab.value === 'data') {
+    return {
+      kicker: '数据权限',
+      description: '按员工角色、部门、岗位和指定人员控制可见数据集，并为组织/分公司行级范围预留规则。'
+    }
+  }
+  return {
+    kicker: '权限矩阵',
+    description: '按身份勾选左侧导航和页面按钮权限。勾选即代表该身份可见，取消即隐藏。'
+  }
 })
 
 const featureList = computed(() =>
@@ -346,6 +508,15 @@ const buttonItems = computed(() => featureList.value.filter((item) => item.kind 
 const navigationEnabledCount = computed(() => navigationItems.value.filter((item) => item.enabled).length)
 const enabledButtonCount = computed(() => buttonItems.value.filter((item) => item.enabled).length)
 const highRiskCount = computed(() => buttonItems.value.filter((item) => item.risk === 'high').length)
+const restrictedDatasetCount = computed(() => dataPermissionRows.value.filter((item) => item.rule?.mode === 'restricted').length)
+const enabledDataPermissionEmployees = computed(() => dataPermissionEmployees.value.filter((item) => item.enabled !== false))
+const departmentOptions = computed(() => uniqueOptionList(dataPermissionEmployees.value.flatMap((item) => [
+  item.department,
+  ...(Array.isArray(item.departments) ? item.departments : []),
+  ...(Array.isArray(item.department_ids) ? item.department_ids : []),
+])))
+const positionOptions = computed(() => uniqueOptionList(dataPermissionEmployees.value.map((item) => item.position)))
+const departmentOptionCount = computed(() => departmentOptions.value.length)
 
 const moduleInfoMap = computed(() => {
   const map = new Map()
@@ -488,6 +659,110 @@ const showRequestError = (error, fallback) => {
   ElMessage.error(message)
 }
 
+const normalizeRule = (dataset, rule = {}) => ({
+  dataset_id: Number(dataset.id || rule.dataset_id || 0),
+  mode: rule.mode === 'restricted' ? 'restricted' : 'public',
+  allowed_roles: Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [],
+  allowed_departments: Array.isArray(rule.allowed_departments) ? rule.allowed_departments : [],
+  allowed_positions: Array.isArray(rule.allowed_positions) ? rule.allowed_positions : [],
+  allowed_employee_ids: Array.isArray(rule.allowed_employee_ids) ? rule.allowed_employee_ids : [],
+  allowed_union_ids: Array.isArray(rule.allowed_union_ids) ? rule.allowed_union_ids : [],
+  scope: {
+    organization_field: rule.scope?.organization_field || '',
+    organization_values: Array.isArray(rule.scope?.organization_values) ? rule.scope.organization_values : [],
+    company_field: rule.scope?.company_field || '',
+    company_values: Array.isArray(rule.scope?.company_values) ? rule.scope.company_values : [],
+    row_filter_note: rule.scope?.row_filter_note || '',
+  },
+  note: rule.note || '',
+})
+
+const loadDataPermissions = async () => {
+  dataPermissionLoading.value = true
+  try {
+    const res = await getDataPermissions()
+    const datasets = Array.isArray(res?.datasets) ? res.datasets : []
+    const rules = res?.rules || {}
+    dataPermissionEmployees.value = Array.isArray(res?.employees) ? res.employees : []
+    dataPermissionRows.value = datasets.map((dataset) => ({
+      ...dataset,
+      rule: normalizeRule(dataset, rules[String(dataset.id)] || {}),
+    }))
+  } catch (error) {
+    showRequestError(error, '数据权限加载失败')
+  } finally {
+    dataPermissionLoading.value = false
+  }
+}
+
+const ensureDataPermissionsLoaded = () => {
+  if (!dataPermissionRows.value.length) loadDataPermissions()
+}
+
+const saveDataPermissionRules = async () => {
+  dataPermissionSaving.value = true
+  try {
+    const rules = {}
+    dataPermissionRows.value.forEach((row) => {
+      rules[String(row.id)] = normalizeRule(row, row.rule)
+    })
+    const res = await saveDataPermissions(rules)
+    const savedRules = res?.rules || rules
+    dataPermissionRows.value = dataPermissionRows.value.map((row) => ({
+      ...row,
+      rule: normalizeRule(row, savedRules[String(row.id)] || row.rule),
+    }))
+    ElMessage.success('数据权限已保存')
+  } catch (error) {
+    showRequestError(error, '数据权限保存失败')
+  } finally {
+    dataPermissionSaving.value = false
+  }
+}
+
+const employeeOptionLabel = (item) => {
+  const parts = [item.name || item.account || item.id]
+  if (item.department) parts.push(item.department)
+  if (item.position) parts.push(item.position)
+  return parts.join(' / ')
+}
+
+const syncAdminFloatState = () => {
+  adminFloatEnabled.value = sessionStorage.getItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY) === '0'
+}
+
+const toggleAdminFloat = () => {
+  const nextVisible = !adminFloatEnabled.value
+  adminFloatEnabled.value = nextVisible
+  sessionStorage.setItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY, nextVisible ? '0' : '1')
+  window.dispatchEvent(new CustomEvent(ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT, { detail: { visible: nextVisible } }))
+  ElMessage.success(nextVisible ? '已开启悬浮控制台入口' : '已关闭悬浮控制台入口')
+}
+
+const normalizeLogDate = (value) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const filterLogsByDateRange = (items) => {
+  const range = Array.isArray(logFilters.value.date_range) ? logFilters.value.date_range : []
+  if (range.length !== 2 || !range[0] || !range[1]) return items
+  const start = normalizeLogDate(`${range[0]}T00:00:00`)
+  const end = normalizeLogDate(`${range[1]}T23:59:59`)
+  if (!start || !end) return items
+  return items.filter((item) => {
+    const current = normalizeLogDate(item?.created_at)
+    return current && current >= start && current <= end
+  })
+}
+
+const refreshLogTable = () => {
+  const filtered = filterLogsByDateRange(allFetchedLogs.value)
+  totalLogs.value = filtered.length
+  const start = (logPage.value - 1) * logPageSize.value
+  logs.value = filtered.slice(start, start + logPageSize.value)
+}
+
 const loadLogStats = async () => {
   try {
     const res = await getSystemLogStats()
@@ -499,20 +774,58 @@ const loadLogStats = async () => {
 
 const loadLogs = async () => {
   logLoading.value = true
+  logPage.value = 1
   try {
     const res = await getSystemLogs({
       category: logFilters.value.category || undefined,
       level: logFilters.value.level || undefined,
       keyword: logFilters.value.keyword || undefined,
-      limit: logPageSize.value,
-      offset: (logPage.value - 1) * logPageSize.value,
+      limit: 5000,
+      offset: 0,
     })
-    logs.value = res?.logs || []
-    totalLogs.value = Number(res?.total || 0)
+    allFetchedLogs.value = Array.isArray(res?.logs) ? res.logs : []
+    refreshLogTable()
   } catch (error) {
     showRequestError(error, '系统日志加载失败')
   } finally {
     logLoading.value = false
+  }
+}
+
+const exportFilteredLogs = async () => {
+  logExporting.value = true
+  try {
+    const filtered = filterLogsByDateRange(allFetchedLogs.value)
+    if (!filtered.length) {
+      ElMessage.warning('当前筛选结果为空，暂无可导出的日志')
+      return
+    }
+    const header = ['时间', '类型', '级别', '事件名称', '用户', '发生了什么', '建议', '请求路径', '问题', 'SQL', '答案', '错误']
+    const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`
+    const rows = filtered.map((row) => ([
+      formatTime(row.created_at),
+      categoryLabel(row.category),
+      row.level || '',
+      eventName(row),
+      row.user_name || row.username || '',
+      whatHappened(row),
+      actionSuggestion(row),
+      row.request_path || '',
+      row.question || '',
+      row.sql_text || '',
+      row.answer_text || '',
+      row.error_message || '',
+    ].map(escapeCell).join(',')))
+    const csv = ['\ufeff' + header.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `system-logs-${Date.now()}.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    ElMessage.success(`已导出 ${filtered.length} 条日志`)
+  } finally {
+    logExporting.value = false
   }
 }
 
@@ -531,13 +844,13 @@ const ensureLogsLoaded = () => {
 
 const onLogPageChange = (page) => {
   logPage.value = page
-  loadLogs()
+  refreshLogTable()
 }
 
 const onLogPageSizeChange = (size) => {
   logPageSize.value = size
   logPage.value = 1
-  loadLogs()
+  refreshLogTable()
 }
 
 const openLogDetail = async (row) => {
@@ -552,14 +865,24 @@ const openLogDetail = async (row) => {
 }
 
 const handleClearLogs = async () => {
-  await ElMessageBox.confirm('将清理 30 天前的系统日志，当前筛选的日志类型会作为清理范围。确认继续吗？', '清理旧日志', {
+  const range = Array.isArray(logFilters.value.date_range) ? logFilters.value.date_range : []
+  const beforeDate = range[1] || ''
+  if (!beforeDate) {
+    ElMessage.warning('请先选择查询日期范围')
+    return
+  }
+  const categoryText = logFilters.value.category ? `，日志类型为「${categoryLabel(logFilters.value.category)}」` : ''
+  await ElMessageBox.confirm(`将清理 ${beforeDate} 及之前${categoryText}的系统日志。确认继续吗？`, '清理系统日志', {
     type: 'warning',
     confirmButtonText: '清理',
     cancelButtonText: '取消',
   })
   logClearing.value = true
   try {
-    const res = await clearSystemLogs({ category: logFilters.value.category, days: 30 })
+    const res = await clearSystemLogs({
+      category: logFilters.value.category,
+      before_date: beforeDate,
+    })
     ElMessage.success(`已清理 ${res?.deleted || 0} 条日志`)
     await loadLogData()
   } catch (error) {
@@ -665,7 +988,10 @@ const prettyJson = (value) => {
   try { return JSON.stringify(value || {}, null, 2) } catch { return String(value || '') }
 }
 
-onMounted(loadFlags)
+onMounted(() => {
+  syncAdminFloatState()
+  loadFlags()
+})
 </script>
 
 <style scoped>
@@ -736,6 +1062,7 @@ onMounted(loadFlags)
 .hero-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
@@ -771,7 +1098,7 @@ onMounted(loadFlags)
 
 .console-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
   padding: 8px;
@@ -1081,6 +1408,56 @@ onMounted(loadFlags)
   color: #7c3aed;
 }
 
+.data-summary-strip strong {
+  color: #0f766e;
+}
+
+.data-permission-card {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.data-permission-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 14px;
+}
+
+.data-permission-toolbar h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.data-permission-toolbar p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.data-permission-table small,
+.data-permission-table strong {
+  display: block;
+}
+
+.data-permission-table small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.scope-fields {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(130px, 1.2fr);
+  gap: 8px;
+}
+
 .log-card {
   margin-top: 16px;
   padding: 14px;
@@ -1092,7 +1469,7 @@ onMounted(loadFlags)
 
 .log-toolbar {
   display: grid;
-  grid-template-columns: auto auto minmax(260px, 1fr) auto;
+  grid-template-columns: auto auto auto minmax(240px, 1fr) auto auto;
   gap: 10px;
   margin-bottom: 12px;
 }

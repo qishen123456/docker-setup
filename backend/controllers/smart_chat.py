@@ -17,10 +17,37 @@ from datasource_router import router as legacy_router
 from four_agent_ask import four_agent_ask_service
 import dataset_report_config as drc
 from auth_store import get_current_user
+from data_permission_store import allowed_dataset_ids_for_user
 from system_log_store import log_event, request_snapshot
 
 
 smart_chat_bp = Blueprint("smart_chat", __name__)
+
+
+def _active_dataset_ids() -> list[int]:
+    try:
+        return [int(item.get("id")) for item in four_agent_ask_service.repository.get_agent1_catalog() if item.get("id") is not None]
+    except Exception:
+        return []
+
+
+def _allowed_dataset_ids(user: dict) -> list[int]:
+    return allowed_dataset_ids_for_user(user or {}, _active_dataset_ids())
+
+
+def _filter_requested_dataset_ids(user: dict, selected_dataset_ids):
+    if selected_dataset_ids is None:
+        return None
+    allowed = set(_allowed_dataset_ids(user))
+    filtered = []
+    for item in selected_dataset_ids:
+        try:
+            dataset_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if dataset_id in allowed and dataset_id not in filtered:
+            filtered.append(dataset_id)
+    return filtered
 
 
 def _append_controller_debug(event: str, **payload):
@@ -213,15 +240,21 @@ def smart_chat():
         if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
             _append_controller_debug("smart_chat.request.reject", reason="selected_dataset_ids_not_list")
             return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+        allowed_dataset_ids = _allowed_dataset_ids(user)
+        selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
+        if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+            return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
 
         _append_controller_debug(
             "smart_chat.service.ask.start",
             question=question,
             selected_dataset_ids=selected_dataset_ids,
+            allowed_dataset_ids=allowed_dataset_ids,
         )
         result = four_agent_ask_service.ask(
             question,
             preferred_dataset_ids=selected_dataset_ids,
+            allowed_dataset_ids=allowed_dataset_ids,
             session_id=session_id,
             conversation_history=conversation_history if isinstance(conversation_history, list) else None,
         )
@@ -279,6 +312,10 @@ def smart_chat_stream():
         return jsonify({"error": "Question cannot be empty."}), 400
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+    allowed_dataset_ids = _allowed_dataset_ids(user)
+    selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
+    if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+        return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
 
     # Normalize model_id
     if model_id is not None:
@@ -302,6 +339,7 @@ def smart_chat_stream():
                 result = four_agent_ask_service.ask(
                     question,
                     preferred_dataset_ids=selected_dataset_ids,
+                    allowed_dataset_ids=allowed_dataset_ids,
                     live_callback=emit,
                     model_id=model_id,
                     session_id=session_id,
@@ -395,11 +433,16 @@ def confirm_by_boss():
 
         if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
             return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+        allowed_dataset_ids = _allowed_dataset_ids(user)
+        selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
+        if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+            return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
 
         result = four_agent_ask_service.confirm_by_boss(
             session_id=session_id,
             selected_option=selected_option,
             selected_dataset_ids=selected_dataset_ids,
+            allowed_dataset_ids=allowed_dataset_ids,
             option_id=option_id,
         )
         result["total_duration"] = round(time.time() - started, 2)
@@ -447,6 +490,10 @@ def confirm_by_boss_stream():
         return jsonify({"error": "session_id is required."}), 400
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
+    allowed_dataset_ids = _allowed_dataset_ids(user)
+    selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
+    if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+        return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
 
     def event_stream():
         event_queue: "queue.Queue[dict]" = queue.Queue()
@@ -464,6 +511,7 @@ def confirm_by_boss_stream():
                     session_id=session_id,
                     selected_option=selected_option,
                     selected_dataset_ids=selected_dataset_ids,
+                    allowed_dataset_ids=allowed_dataset_ids,
                     option_id=option_id,
                     live_callback=emit,
                 )

@@ -37,6 +37,7 @@ CAPTURED_FILES = [
     "sql_prompts.json",
     "app_config.json",
     "employee_permissions.json",
+    "data_permissions.json",
     "feature_flags.json",
 ]
 

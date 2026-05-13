@@ -1929,8 +1929,12 @@ class FourAgentAskService:
         question: str,
         trace: Optional[Dict[str, Any]] = None,
         conversation_context: Optional[List[Dict[str, Any]]] = None,
+        allowed_dataset_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         catalog = self.repository.get_agent1_catalog()
+        if allowed_dataset_ids is not None:
+            allowed = {int(item) for item in allowed_dataset_ids}
+            catalog = [item for item in catalog if int(item.get("id") or 0) in allowed]
         if not catalog:
             return {
                 "dataset_ids": [],
@@ -3230,10 +3234,46 @@ Agent3 复核结果：
             "total_duration": round(time.time() - started, 2),
         }
 
+    @staticmethod
+    def _filter_route_by_allowed_datasets(route: Dict[str, Any], allowed_set: set[int]) -> Dict[str, Any]:
+        route = dict(route or {})
+
+        def allowed_ids(values: Any) -> List[int]:
+            result: List[int] = []
+            for item in values or []:
+                try:
+                    dataset_id = int(item)
+                except (TypeError, ValueError):
+                    continue
+                if dataset_id in allowed_set and dataset_id not in result:
+                    result.append(dataset_id)
+            return result
+
+        route["dataset_ids"] = allowed_ids(route.get("dataset_ids"))
+        route["candidate_dataset_ids"] = allowed_ids(route.get("candidate_dataset_ids"))
+        route["split_queries"] = [
+            item for item in (route.get("split_queries") or [])
+            if isinstance(item, dict) and allowed_ids([item.get("dataset_id")])
+        ]
+        filtered_options = []
+        for option in route.get("confirmation_options") or []:
+            if not isinstance(option, dict):
+                continue
+            next_option = dict(option)
+            next_option["dataset_ids"] = allowed_ids(next_option.get("dataset_ids"))
+            if next_option["dataset_ids"]:
+                filtered_options.append(next_option)
+        route["confirmation_options"] = filtered_options
+        if route.get("requires_confirmation") and not filtered_options:
+            route["requires_confirmation"] = False
+            route["decision"] = "generate_sql"
+        return route
+
     def ask(
         self,
         question: str,
         preferred_dataset_ids: Optional[List[int]] = None,
+        allowed_dataset_ids: Optional[List[int]] = None,
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         model_id: Optional[int] = None,
         session_id: str = "",
@@ -3256,6 +3296,7 @@ Agent3 复核结果：
             session_id=conversation_session_id,
             memory_rounds=len(memory_history),
             preferred_dataset_ids=preferred_dataset_ids or [],
+            allowed_dataset_ids=allowed_dataset_ids or [],
             llm_model=self._llm_model or "",
             llm_base_url=str(getattr(self._llm_client, "base_url", "") or ""),
         )
@@ -3284,8 +3325,16 @@ Agent3 复核结果：
 
         try:
             step_started = time.time()
+            allowed_set = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
             if preferred_dataset_ids:
                 selected_dataset_ids = [int(item) for item in preferred_dataset_ids]
+                if allowed_set is not None:
+                    selected_dataset_ids = [item for item in selected_dataset_ids if item in allowed_set]
+                if not selected_dataset_ids:
+                    result = {"error": "当前账号没有访问所选数据集的权限。请联系超级管理员调整数据权限。"}
+                    self._append_trace(trace, "data_permission.denied", "warning", preferred_dataset_ids=preferred_dataset_ids)
+                    self._flush_trace(trace, result)
+                    return result
                 route = {
                     "dataset_ids": selected_dataset_ids,
                     "intent": "detail",
@@ -3308,7 +3357,12 @@ Agent3 复核结果：
                 }
                 self._append_trace(trace, "agent1.preferred_dataset_bypass", "info", route=route)
             else:
-                route = self.route_with_agent1(effective_question, trace=trace, conversation_context=memory_history)
+                route = self.route_with_agent1(
+                    effective_question,
+                    trace=trace,
+                    conversation_context=memory_history,
+                    allowed_dataset_ids=allowed_dataset_ids,
+                )
                 self._append_trace(trace, "agent1.route_result", "info", route=route)
             steps.append(
                 {
@@ -3317,6 +3371,14 @@ Agent3 复核结果：
                     "status": "success",
                 }
             )
+
+            if allowed_set is not None:
+                route = self._filter_route_by_allowed_datasets(route, allowed_set)
+                if not route.get("dataset_ids"):
+                    result = {"error": "当前账号没有可访问的数据集。请联系超级管理员调整数据权限。"}
+                    self._append_trace(trace, "data_permission.no_allowed_dataset", "warning", allowed_dataset_ids=allowed_dataset_ids or [])
+                    self._flush_trace(trace, result)
+                    return result
 
             if route.get("requires_confirmation"):
                 confirmation_session_id = self._create_confirmation_session(
@@ -3380,6 +3442,7 @@ Agent3 复核结果：
         session_id: str,
         selected_option: str,
         selected_dataset_ids: Optional[List[int]] = None,
+        allowed_dataset_ids: Optional[List[int]] = None,
         option_id: str = "",
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
@@ -3394,6 +3457,7 @@ Agent3 复核结果：
             selected_option=selected_option,
             option_id=option_id,
             selected_dataset_ids=selected_dataset_ids or [],
+            allowed_dataset_ids=allowed_dataset_ids or [],
         )
         self._cleanup_expired_sessions()
 
@@ -3411,6 +3475,14 @@ Agent3 复核结果：
 
         question = pending["question"]
         route = dict(pending["route"])
+        allowed_set = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
+        if allowed_set is not None:
+            route = self._filter_route_by_allowed_datasets(route, allowed_set)
+            if not route.get("dataset_ids") and not route.get("confirmation_options"):
+                result = {"error": "当前账号没有访问该确认口径数据集的权限。请联系超级管理员调整数据权限。"}
+                self._append_trace(trace, "data_permission.confirm_denied", "warning", allowed_dataset_ids=allowed_dataset_ids or [])
+                self._flush_trace(trace, result)
+                return result
         conversation_session_id = str(pending.get("conversation_session_id") or "").strip()
         confirmation_options = self._normalize_confirmation_options(
             route.get("confirmation_options"),
@@ -3422,6 +3494,13 @@ Agent3 复核结果：
 
         if selected_dataset_ids:
             route["dataset_ids"] = [int(item) for item in selected_dataset_ids]
+            if allowed_set is not None:
+                route["dataset_ids"] = [item for item in route["dataset_ids"] if item in allowed_set]
+                if not route["dataset_ids"]:
+                    result = {"error": "当前账号没有访问所选数据集的权限。请联系超级管理员调整数据权限。"}
+                    self._append_trace(trace, "data_permission.confirm_selected_denied", "warning", selected_dataset_ids=selected_dataset_ids)
+                    self._flush_trace(trace, result)
+                    return result
         else:
             option_text = (selected_option_item or {}).get("label") or (selected_option or "").strip()
             if selected_option_item and selected_option_item.get("dataset_ids"):

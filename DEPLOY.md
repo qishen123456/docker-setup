@@ -111,6 +111,25 @@ cd smartask
 - 飞书 `UnionID` 用于飞书免登身份匹配；登录账号用于账号密码登录。
 - 员工权限保存在 `config/employee_permissions.json`，属于用户机本地运行态配置，不提交 Git。
 
+### 飞书网页登录
+
+宝塔或 Nginx 只对外暴露前端站点时，推荐让飞书回调也走同一个公网域名下的 `/api` 反代。在 `.env` 中填写：
+
+```bash
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=xxx
+BACKEND_URL=https://你的域名
+FRONTEND_URL=https://你的域名
+```
+
+然后在飞书开放平台把网页应用重定向 URL 配成：
+
+```text
+https://你的域名/api/auth/feishu/callback
+```
+
+如果你单独暴露后端端口，也可以把 `BACKEND_URL` 填成后端公网地址，但要保证飞书服务器能访问。
+
 ---
 
 ## 🧰 运维脚本

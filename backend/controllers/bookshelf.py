@@ -21,6 +21,7 @@ import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
 from dataset_copilot import CopilotError, DatasetCopilot
 from auth_store import get_current_user
+from data_permission_store import filter_dataset_rows_for_user, is_dataset_allowed
 from system_log_store import log_event, request_snapshot
 
 
@@ -485,7 +486,8 @@ def list_bookshelf_datasets():
                 ORDER BY d.id DESC;
                 """
             )
-            return jsonify({"datasets": [dict(row) for row in cur.fetchall()]})
+            rows = [dict(row) for row in cur.fetchall()]
+            return jsonify({"datasets": filter_dataset_rows_for_user(rows, get_current_user())})
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -742,6 +744,8 @@ def get_bookshelf_dataset_full(dataset_id: int):
             dataset = cur.fetchone()
             if not dataset:
                 return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
+            if not is_dataset_allowed(get_current_user(), dataset_id):
+                return jsonify({"error": "当前账号没有访问该数据集的权限"}), 403
 
             cur.execute(
                 """
@@ -1262,6 +1266,9 @@ def list_common_questions():
     try:
         repo.ensure_schema()
         dataset_id = request.args.get("dataset_id", type=int)
+        user = get_current_user()
+        if dataset_id and not is_dataset_allowed(user, dataset_id):
+            return jsonify({"common_questions": []})
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             _ensure_optional_tables(cur)
             if dataset_id:
@@ -1285,7 +1292,10 @@ def list_common_questions():
                     LIMIT 80;
                     """
                 )
-            return jsonify({"common_questions": [dict(row) for row in cur.fetchall()]})
+            rows = [dict(row) for row in cur.fetchall()]
+            if not dataset_id:
+                rows = filter_dataset_rows_for_user(rows, user)
+            return jsonify({"common_questions": rows})
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:

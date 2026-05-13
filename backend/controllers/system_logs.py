@@ -65,11 +65,14 @@ def clear_system_logs():
         return error
     payload = request.get_json(silent=True) or {}
     category = str(payload.get("category") or "").strip()
+    before_date = str(payload.get("before_date") or "").strip()
     days = int(payload.get("days") or 0)
-    if not category and days <= 0:
+    if not category and days <= 0 and not before_date:
         return jsonify({"success": False, "error": "请至少指定日志类型或保留天数，避免误清空全部日志"}), 400
     try:
-        deleted = clear_logs(category=category, days=days)
+        deleted = clear_logs(category=category, days=days, before_date=before_date)
         return jsonify({"success": True, "deleted": deleted})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"success": False, "error": f"清理系统日志失败: {exc}"}), 500

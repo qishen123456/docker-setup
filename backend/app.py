@@ -42,6 +42,7 @@ from controllers.auth import auth_bp
 from controllers.bookshelf import bookshelf_bp
 from controllers.dashboard import dashboard_bp
 from controllers.datasources import datasources_bp
+from controllers.data_permissions import data_permissions_bp
 from controllers.feishu_sync import feishu_bp
 from controllers.feature_flags import feature_flags_bp
 from controllers.smart_chat import smart_chat_bp
@@ -84,6 +85,7 @@ CORS(
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(datasources_bp)
+app.register_blueprint(data_permissions_bp)
 app.register_blueprint(ai_models_bp)
 app.register_blueprint(feishu_bp)
 app.register_blueprint(smart_chat_bp)

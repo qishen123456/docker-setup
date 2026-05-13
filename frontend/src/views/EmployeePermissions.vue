@@ -44,6 +44,8 @@
           <span>员工名称</span>
           <span>登录账号</span>
           <span>飞书 UnionID</span>
+          <span>部门</span>
+          <span>岗位</span>
           <span>角色</span>
           <span>状态</span>
           <span>密码操作</span>
@@ -57,7 +59,9 @@
         <div v-for="(item, index) in employees" :key="item.id" class="permission-row">
           <input v-model.trim="item.name" placeholder="例如：张三" />
           <input v-model.trim="item.account" placeholder="例如：zhangsan" />
-          <input v-model.trim="item.identifier" placeholder="可选，用于飞书免登" />
+          <input v-model.trim="item.union_id" placeholder="飞书 union_id" @input="item.identifier = item.union_id" />
+          <input v-model.trim="item.department" placeholder="例如：东部分公司" />
+          <input v-model.trim="item.position" placeholder="例如：总经理" />
           <select v-model="item.role">
             <option value="admin">管理员</option>
             <option value="user">普通用户</option>
@@ -113,6 +117,9 @@ const addEmployee = () => {
     name: '',
     account: '',
     identifier: '',
+    union_id: '',
+    department: '',
+    position: '',
     role: 'user',
     enabled: true,
     note: '',
@@ -132,7 +139,11 @@ const removeEmployee = (index) => {
 const saveAll = async () => {
   saving.value = true
   try {
-    const data = await saveEmployeePermissions(employees.value)
+    const payload = employees.value.map((item) => ({
+      ...item,
+      identifier: item.union_id || item.identifier || '',
+    }))
+    const data = await saveEmployeePermissions(payload)
     employees.value = Array.isArray(data?.employees) ? data.employees : employees.value
     ElMessage.success('员工权限配置已保存')
   } finally {
@@ -268,10 +279,10 @@ onMounted(() => {
 
 .permission-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.25fr) 120px 88px 220px 68px;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, 1fr) minmax(190px, 1.25fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 110px 86px 200px 68px;
   gap: 12px;
   align-items: center;
-  min-width: 1120px;
+  min-width: 1420px;
   padding: 10px 0;
   border-bottom: 1px solid #f5f6f8;
 }

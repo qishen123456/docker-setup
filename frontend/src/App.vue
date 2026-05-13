@@ -263,6 +263,31 @@
       </template>
     </el-dialog>
 
+    <div
+      v-if="showAdminConsoleFloat"
+      class="admin-console-float"
+      :style="adminConsoleFloatStyle"
+      @pointerdown="startAdminConsoleFloatDrag"
+    >
+      <button
+        class="admin-console-float-main"
+        :class="{ dragging: adminConsoleFloatDragging }"
+        type="button"
+        @click.stop="handleAdminConsoleFloatOpen"
+      >
+        <el-icon><Setting /></el-icon>
+        <span>控制台</span>
+      </button>
+      <button
+        class="admin-console-float-close"
+        type="button"
+        aria-label="关闭控制台悬浮入口"
+        @pointerdown.stop
+        @click.stop="dismissAdminConsoleFloat"
+      >
+        x
+      </button>
+    </div>
   </el-container>
 </template>
 
@@ -479,6 +504,112 @@ const openAdminConsole = () => {
   router.push('/admin-console')
 }
 
+const ADMIN_CONSOLE_FLOAT_POSITION_KEY = 'smartask_admin_console_float_position'
+const ADMIN_CONSOLE_FLOAT_HIDDEN_KEY = 'smartask_admin_console_float_hidden'
+const ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT = 'smartask-admin-console-float-toggle'
+const adminConsoleFloatVisible = ref(false)
+const adminConsoleFloatDragging = ref(false)
+const adminConsoleFloatPosition = ref({ x: 0, y: 0 })
+let adminConsoleFloatMoved = false
+let adminConsoleFloatOffset = { x: 0, y: 0 }
+
+const getDefaultAdminConsoleFloatPosition = () => ({
+  x: Math.max(16, window.innerWidth - 164),
+  y: Math.max(88, window.innerHeight - 118),
+})
+
+const clampAdminConsoleFloatPosition = (position) => {
+  const width = 154
+  const height = 56
+  return {
+    x: Math.min(Math.max(12, Number(position?.x) || 0), Math.max(12, window.innerWidth - width)),
+    y: Math.min(Math.max(76, Number(position?.y) || 0), Math.max(76, window.innerHeight - height)),
+  }
+}
+
+const persistAdminConsoleFloatState = () => {
+  sessionStorage.setItem(ADMIN_CONSOLE_FLOAT_POSITION_KEY, JSON.stringify(adminConsoleFloatPosition.value))
+  sessionStorage.setItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY, adminConsoleFloatVisible.value ? '0' : '1')
+}
+
+const restoreAdminConsoleFloatState = () => {
+  const hidden = sessionStorage.getItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY) !== '0'
+  adminConsoleFloatVisible.value = !hidden
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(ADMIN_CONSOLE_FLOAT_POSITION_KEY) || 'null')
+    adminConsoleFloatPosition.value = clampAdminConsoleFloatPosition(saved || getDefaultAdminConsoleFloatPosition())
+  } catch {
+    adminConsoleFloatPosition.value = getDefaultAdminConsoleFloatPosition()
+  }
+}
+
+const adminConsoleFloatStyle = computed(() => ({
+  left: `${adminConsoleFloatPosition.value.x}px`,
+  top: `${adminConsoleFloatPosition.value.y}px`,
+}))
+
+const showAdminConsoleFloat = computed(() => (
+  authRole.value === 'super_admin'
+  && isFeatureEnabled('admin_console')
+  && adminConsoleFloatVisible.value
+))
+
+const stopAdminConsoleFloatDrag = () => {
+  if (!adminConsoleFloatDragging.value) return
+  adminConsoleFloatDragging.value = false
+  persistAdminConsoleFloatState()
+  window.removeEventListener('pointermove', handleAdminConsoleFloatDrag)
+  window.removeEventListener('pointerup', stopAdminConsoleFloatDrag)
+}
+
+const handleAdminConsoleFloatDrag = (event) => {
+  if (!adminConsoleFloatDragging.value) return
+  adminConsoleFloatPosition.value = clampAdminConsoleFloatPosition({
+    x: event.clientX - adminConsoleFloatOffset.x,
+    y: event.clientY - adminConsoleFloatOffset.y,
+  })
+  adminConsoleFloatMoved = true
+}
+
+const startAdminConsoleFloatDrag = (event) => {
+  if (event.button !== 0) return
+  adminConsoleFloatDragging.value = true
+  adminConsoleFloatMoved = false
+  adminConsoleFloatOffset = {
+    x: event.clientX - adminConsoleFloatPosition.value.x,
+    y: event.clientY - adminConsoleFloatPosition.value.y,
+  }
+  window.addEventListener('pointermove', handleAdminConsoleFloatDrag)
+  window.addEventListener('pointerup', stopAdminConsoleFloatDrag)
+}
+
+const handleAdminConsoleFloatOpen = () => {
+  if (adminConsoleFloatMoved) {
+    adminConsoleFloatMoved = false
+    return
+  }
+  openAdminConsole()
+}
+
+const dismissAdminConsoleFloat = () => {
+  adminConsoleFloatVisible.value = false
+  persistAdminConsoleFloatState()
+}
+
+const handleAdminConsoleFloatResize = () => {
+  adminConsoleFloatPosition.value = clampAdminConsoleFloatPosition(adminConsoleFloatPosition.value)
+  persistAdminConsoleFloatState()
+}
+
+const handleAdminConsoleFloatToggle = (event) => {
+  const visible = Boolean(event?.detail?.visible)
+  adminConsoleFloatVisible.value = visible
+  if (visible && (!adminConsoleFloatPosition.value.x || !adminConsoleFloatPosition.value.y)) {
+    adminConsoleFloatPosition.value = getDefaultAdminConsoleFloatPosition()
+  }
+  persistAdminConsoleFloatState()
+}
+
 const handleLogout = async () => {
   try {
     await logout()
@@ -644,6 +775,17 @@ watch(() => route.path, (path) => {
 watch(authUser, () => {
   syncHistoryScope()
   enforceRouteAccess()
+})
+onMounted(() => {
+  restoreAdminConsoleFloatState()
+  window.addEventListener('resize', handleAdminConsoleFloatResize)
+  window.addEventListener(ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT, handleAdminConsoleFloatToggle)
+})
+
+onUnmounted(() => {
+  stopAdminConsoleFloatDrag()
+  window.removeEventListener('resize', handleAdminConsoleFloatResize)
+  window.removeEventListener(ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT, handleAdminConsoleFloatToggle)
 })
 </script>
 
@@ -1896,6 +2038,67 @@ body,
 .auth-user-menu {
   position: relative;
   display: inline-flex;
+}
+
+.admin-console-float {
+  position: fixed;
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  touch-action: none;
+}
+
+.admin-console-float-main,
+.admin-console-float-close {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+}
+
+.admin-console-float-main {
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: grab;
+}
+
+.admin-console-float-main.dragging {
+  cursor: grabbing;
+}
+
+.admin-console-float-main .el-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e 0%, #0f9f94 100%);
+}
+
+.admin-console-float-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-console-float-main:hover,
+.admin-console-float-close:hover {
+  transform: translateY(-1px);
 }
 
 .auth-user-avatar {

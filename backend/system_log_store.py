@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
@@ -323,7 +323,7 @@ def get_stats() -> Dict[str, Any]:
     }
 
 
-def clear_logs(category: str = "", days: int = 0) -> int:
+def clear_logs(category: str = "", days: int = 0, before_date: str = "") -> int:
     _ensure_schema()
     where = []
     params: List[Any] = []
@@ -333,7 +333,14 @@ def clear_logs(category: str = "", days: int = 0) -> int:
         else:
             where.append("category = %s")
             params.append(category)
-    if days > 0:
+    if before_date:
+        try:
+            cutoff = datetime.fromisoformat(str(before_date)[:10]) + timedelta(days=1)
+            where.append("created_at < %s")
+            params.append(cutoff)
+        except ValueError:
+            raise ValueError("before_date must be YYYY-MM-DD")
+    elif days > 0:
         where.append("created_at < NOW() - (%s || ' days')::interval")
         params.append(int(days))
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
