@@ -2,17 +2,29 @@
   <div class="console-page">
     <section class="console-hero">
       <div class="hero-copy">
-        <span class="hero-kicker">权限矩阵</span>
+        <span class="hero-kicker">{{ activeConsoleTab === 'logs' ? '日志审计' : '权限矩阵' }}</span>
         <h1>系统控制台</h1>
-        <p>按身份勾选左侧导航和页面按钮权限。勾选即代表该身份可见，取消即隐藏。</p>
+        <p>{{ activeConsoleTab === 'logs' ? '集中查看登录访问、接口报错和低置信度问答，保留问题、思考过程、SQL 与答案。' : '按身份勾选左侧导航和页面按钮权限。勾选即代表该身份可见，取消即隐藏。' }}</p>
       </div>
       <div class="hero-actions">
-        <el-button plain :loading="loading" @click="loadFlags">刷新</el-button>
-        <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
+        <template v-if="activeConsoleTab === 'permissions'">
+          <el-button plain :loading="loading" @click="loadFlags">刷新</el-button>
+          <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
+          <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
+        </template>
+        <template v-else>
+          <el-button plain :loading="logLoading" @click="loadLogData">刷新日志</el-button>
+          <el-button plain type="danger" :loading="logClearing" @click="handleClearLogs">清理旧日志</el-button>
+        </template>
       </div>
     </section>
 
+    <section class="console-tabs">
+      <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="activeConsoleTab = 'permissions'">权限配置</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="activeConsoleTab = 'logs'; ensureLogsLoaded()">日志管理</button>
+    </section>
+
+    <template v-if="activeConsoleTab === 'permissions'">
     <section class="summary-strip">
       <div><strong>{{ navigationItems.length }}</strong><span>导航项</span></div>
       <div><strong>{{ buttonItems.length }}</strong><span>按钮项</span></div>
@@ -127,13 +139,160 @@
         </section>
       </section>
     </template>
+    </template>
+
+    <template v-else>
+      <section class="summary-strip log-summary-strip">
+        <div><strong>{{ logStats.last_24h || 0 }}</strong><span>24小时记录</span></div>
+        <div><strong>{{ logStats.errors_7d || 0 }}</strong><span>7天报错</span></div>
+        <div><strong>{{ logStats.low_confidence_7d || 0 }}</strong><span>7天低置信</span></div>
+        <div><strong>{{ totalLogs }}</strong><span>当前筛选</span></div>
+      </section>
+
+      <section class="log-card">
+        <div class="log-toolbar">
+          <el-select v-model="logFilters.category" placeholder="日志类型" clearable style="width:180px" @change="loadLogs">
+            <el-option label="全部" value="" />
+            <el-option label="登录访问" value="auth" />
+            <el-option label="接口访问" value="access" />
+            <el-option label="报错" value="error" />
+            <el-option label="低置信问答" value="low_confidence" />
+            <el-option label="问答记录" value="qa_all" />
+            <el-option label="数据集生成" value="dataset_generation" />
+          </el-select>
+          <el-select v-model="logFilters.level" placeholder="级别" clearable style="width:130px" @change="loadLogs">
+            <el-option label="info" value="info" />
+            <el-option label="warning" value="warning" />
+            <el-option label="error" value="error" />
+          </el-select>
+          <el-input v-model="logFilters.keyword" clearable placeholder="搜索用户、路径、问题、SQL、答案..." @keyup.enter="loadLogs" />
+          <el-button type="primary" :loading="logLoading" @click="loadLogs">查询</el-button>
+        </div>
+
+        <el-table :data="logs" border stripe v-loading="logLoading" class="log-table">
+          <el-table-column prop="created_at" label="时间" width="178">
+            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          </el-table-column>
+          <el-table-column label="类型" width="112">
+            <template #default="{ row }"><el-tag :type="categoryTagType(row.category)" effect="plain">{{ categoryLabel(row.category) }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="级别" width="92">
+            <template #default="{ row }"><el-tag :type="levelTagType(row.level)" effect="plain">{{ row.level }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="事件名称" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">{{ eventName(row) }}</template>
+          </el-table-column>
+          <el-table-column label="用户" width="150" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.user_name || row.username || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="发生了什么" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">{{ whatHappened(row) }}</template>
+          </el-table-column>
+          <el-table-column label="建议" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">{{ actionSuggestion(row) }}</template>
+          </el-table-column>
+          <el-table-column label="置信度" width="110">
+            <template #default="{ row }">{{ confidenceLabel(row.confidence) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openLogDetail(row)">详情</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="log-pager">
+          <span>共 {{ totalLogs }} 条</span>
+          <el-pagination
+            layout="prev, pager, next, sizes"
+            :total="totalLogs"
+            :current-page="logPage"
+            :page-size="logPageSize"
+            :page-sizes="[50, 100, 200]"
+            @current-change="onLogPageChange"
+            @size-change="onLogPageSizeChange"
+          />
+        </div>
+      </section>
+
+      <el-drawer v-model="logDetailVisible" size="64%" title="日志详情" destroy-on-close>
+        <div v-if="selectedLog" class="log-detail">
+          <div class="detail-grid">
+            <div><span>类型</span><strong>{{ categoryLabel(selectedLog.category) }}</strong></div>
+            <div><span>级别</span><strong>{{ selectedLog.level }}</strong></div>
+            <div><span>用户</span><strong>{{ selectedLog.user_name || selectedLog.username || '-' }}</strong></div>
+            <div><span>耗时</span><strong>{{ selectedLog.duration_ms ? `${selectedLog.duration_ms}ms` : '-' }}</strong></div>
+          </div>
+          <section class="detail-section detail-highlight">
+            <h3>事件名称</h3>
+            <p>{{ eventName(selectedLog) }}</p>
+          </section>
+          <section class="detail-section">
+            <h3>发生了什么</h3>
+            <p>{{ whatHappened(selectedLog) }}</p>
+          </section>
+          <section class="detail-section">
+            <h3>建议怎么处理</h3>
+            <p>{{ actionSuggestion(selectedLog) }}</p>
+          </section>
+          <section class="detail-section">
+            <h3>建议检查的代码位置</h3>
+            <pre>{{ codeHint(selectedLog) }}</pre>
+          </section>
+          <section v-if="selectedLog.request_path" class="detail-section">
+            <h3>请求路径</h3>
+            <pre>{{ selectedLog.request_method || '' }} {{ selectedLog.request_path }}</pre>
+          </section>
+          <section v-if="selectedLog.question" class="detail-section">
+            <h3>问题</h3>
+            <p>{{ selectedLog.question }}</p>
+          </section>
+          <section v-if="selectedLog.error_message" class="detail-section">
+            <h3>错误</h3>
+            <pre>{{ selectedLog.error_message }}</pre>
+          </section>
+          <section v-if="selectedLog.sql_text" class="detail-section">
+            <h3>SQL</h3>
+            <pre>{{ selectedLog.sql_text }}</pre>
+          </section>
+          <section v-if="selectedLog.answer_text" class="detail-section">
+            <h3>答案</h3>
+            <pre>{{ selectedLog.answer_text }}</pre>
+          </section>
+          <section class="detail-section">
+            <h3>思考过程</h3>
+            <el-timeline v-if="thinkingRows(selectedLog).length">
+              <el-timeline-item v-for="(item, index) in thinkingRows(selectedLog)" :key="index" :timestamp="item.time || ''" :type="timelineType(item.status)">
+                <strong>{{ item.stage || item.agent || '执行节点' }}</strong>
+                <p v-if="item.detail">{{ item.detail }}</p>
+                <p v-if="item.reasoning">{{ item.reasoning }}</p>
+                <p v-if="item.stream">{{ item.stream }}</p>
+              </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else description="暂无思考过程记录" :image-size="60" />
+          </section>
+          <section class="detail-section">
+            <h3>原始详情</h3>
+            <pre>{{ prettyJson({ confidence: selectedLog.confidence, details: selectedLog.details }) }}</pre>
+          </section>
+        </div>
+      </el-drawer>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAdminFeatureFlags, resetAdminFeatureFlags, saveAdminFeatureFlags } from '../api/index.js'
+import {
+  clearSystemLogs,
+  getAdminFeatureFlags,
+  getSystemLogDetail,
+  getSystemLogs,
+  getSystemLogStats,
+  resetAdminFeatureFlags,
+  saveAdminFeatureFlags,
+} from '../api/index.js'
 
 const roles = [
   { value: 'super_admin', label: '超管' },
@@ -148,6 +307,21 @@ const saving = ref(false)
 const resetting = ref(false)
 const features = ref({})
 const openModules = ref(['runtime_migration', 'employee_permissions'])
+const activeConsoleTab = ref('permissions')
+const logs = ref([])
+const logStats = ref({})
+const totalLogs = ref(0)
+const logLoading = ref(false)
+const logClearing = ref(false)
+const logPage = ref(1)
+const logPageSize = ref(100)
+const logDetailVisible = ref(false)
+const selectedLog = ref(null)
+const logFilters = ref({
+  category: '',
+  level: '',
+  keyword: '',
+})
 
 const featureList = computed(() =>
   Object.entries(features.value || {})
@@ -314,6 +488,183 @@ const showRequestError = (error, fallback) => {
   ElMessage.error(message)
 }
 
+const loadLogStats = async () => {
+  try {
+    const res = await getSystemLogStats()
+    logStats.value = res?.stats || {}
+  } catch (error) {
+    showRequestError(error, '日志统计加载失败')
+  }
+}
+
+const loadLogs = async () => {
+  logLoading.value = true
+  try {
+    const res = await getSystemLogs({
+      category: logFilters.value.category || undefined,
+      level: logFilters.value.level || undefined,
+      keyword: logFilters.value.keyword || undefined,
+      limit: logPageSize.value,
+      offset: (logPage.value - 1) * logPageSize.value,
+    })
+    logs.value = res?.logs || []
+    totalLogs.value = Number(res?.total || 0)
+  } catch (error) {
+    showRequestError(error, '系统日志加载失败')
+  } finally {
+    logLoading.value = false
+  }
+}
+
+const loadLogData = async () => {
+  logLoading.value = true
+  try {
+    await Promise.all([loadLogStats(), loadLogs()])
+  } finally {
+    logLoading.value = false
+  }
+}
+
+const ensureLogsLoaded = () => {
+  if (!logs.value.length) loadLogData()
+}
+
+const onLogPageChange = (page) => {
+  logPage.value = page
+  loadLogs()
+}
+
+const onLogPageSizeChange = (size) => {
+  logPageSize.value = size
+  logPage.value = 1
+  loadLogs()
+}
+
+const openLogDetail = async (row) => {
+  selectedLog.value = row
+  logDetailVisible.value = true
+  try {
+    const res = await getSystemLogDetail(row.id)
+    selectedLog.value = res?.log || row
+  } catch (error) {
+    showRequestError(error, '日志详情加载失败')
+  }
+}
+
+const handleClearLogs = async () => {
+  await ElMessageBox.confirm('将清理 30 天前的系统日志，当前筛选的日志类型会作为清理范围。确认继续吗？', '清理旧日志', {
+    type: 'warning',
+    confirmButtonText: '清理',
+    cancelButtonText: '取消',
+  })
+  logClearing.value = true
+  try {
+    const res = await clearSystemLogs({ category: logFilters.value.category, days: 30 })
+    ElMessage.success(`已清理 ${res?.deleted || 0} 条日志`)
+    await loadLogData()
+  } catch (error) {
+    showRequestError(error, '清理系统日志失败')
+  } finally {
+    logClearing.value = false
+  }
+}
+
+const categoryLabel = (category) => ({
+  auth: '登录访问',
+  access: '接口访问',
+  error: '报错',
+  low_confidence: '低置信',
+  qa: '问答',
+  dataset_generation: '数据集生成',
+}[category] || category || '-')
+
+const categoryTagType = (category) => ({
+  auth: 'success',
+  access: 'info',
+  error: 'danger',
+  low_confidence: 'warning',
+  qa: 'primary',
+  dataset_generation: 'warning',
+}[category] || 'info')
+
+const levelTagType = (level) => ({
+  info: 'info',
+  warning: 'warning',
+  error: 'danger',
+}[level] || 'info')
+
+const eventTypeLabel = (eventType) => ({
+  api_access: '接口访问',
+  http_error: '接口报错',
+  password_login_success: '密码登录成功',
+  password_login_failed: '密码登录失败',
+  admin_login_success: '管理员登录成功',
+  admin_login_failed: '管理员登录失败',
+  feishu_login_success: '飞书登录成功',
+  feishu_login_failed: '飞书登录失败',
+  logout: '退出登录',
+  smart_chat_completed: '问答完成',
+  smart_chat_low_confidence: '低置信问答',
+  smart_chat_failed: '问答报错',
+  dataset_generate_from_prompt_started: '开始提示词生成数据集',
+  dataset_generate_from_prompt_completed: '提示词生成数据集完成',
+  dataset_generate_from_prompt_failed: 'AI 生成数据集失败',
+  dataset_generate_from_prompt_error: '提示词生成接口异常',
+}[eventType] || eventType || '-')
+
+const eventDetails = (row) => (row && typeof row.details === 'object' && row.details ? row.details : {})
+
+const eventName = (row) => eventDetails(row).event_name || row?.title || eventTypeLabel(row?.event_type)
+
+const whatHappened = (row) => (
+  eventDetails(row).what_happened
+  || row?.question
+  || row?.error_message
+  || row?.request_path
+  || row?.title
+  || '-'
+)
+
+const actionSuggestion = (row) => {
+  const details = eventDetails(row)
+  if (details.suggested_action) return details.suggested_action
+  if (row?.category === 'low_confidence') return '建议把这条问题补进回归题集或 Golden SQL，并检查字段字典、同义词和 Agent2 SQL 生成提示词。'
+  if (row?.category === 'error') return '建议先看详细错误和请求路径，再到对应 controller 搜索接口路径定位代码。'
+  if (row?.category === 'auth') return '建议核对登录账号、角色和权限矩阵配置。'
+  return '无需处理；这是正常访问记录。'
+}
+
+const codeHint = (row) => {
+  const details = eventDetails(row)
+  if (details.code_hint) return details.code_hint
+  if (row?.request_path?.includes('/smart-chat')) return 'backend/controllers/smart_chat.py；backend/four_agent_ask.py；frontend/src/views/SmartAsk.vue。'
+  if (row?.request_path?.includes('/bookshelves')) return 'backend/controllers/bookshelf.py；frontend/src/views/DatasetManagement.vue。'
+  if (row?.request_path?.includes('/admin/system-logs')) return 'backend/controllers/system_logs.py；backend/system_log_store.py；frontend/src/views/AdminConsole.vue。'
+  return 'backend/controllers/*.py 中搜索请求路径；frontend/src/api/index.js 中搜索对应 API 方法。'
+}
+
+const confidenceLabel = (confidence) => {
+  const route = confidence?.route
+  const result = confidence?.result
+  const parts = []
+  if (route?.score !== undefined) parts.push(`路由${route.score}`)
+  if (result?.score !== undefined) parts.push(`结果${result.score}`)
+  return parts.join(' / ') || '-'
+}
+
+const formatTime = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+const thinkingRows = (item) => Array.isArray(item?.thinking_process) ? item.thinking_process : []
+const timelineType = (status) => status === 'error' ? 'danger' : status === 'warning' ? 'warning' : status === 'success' ? 'success' : 'primary'
+const prettyJson = (value) => {
+  try { return JSON.stringify(value || {}, null, 2) } catch { return String(value || '') }
+}
+
 onMounted(loadFlags)
 </script>
 
@@ -416,6 +767,37 @@ onMounted(loadFlags)
 .summary-strip span {
   color: #64748b;
   font-size: 12px;
+}
+
+.console-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+  padding: 8px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.console-tabs button {
+  min-width: 0;
+  height: 42px;
+  border: 0;
+  border-radius: 10px;
+  color: #475569;
+  background: transparent;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.console-tabs button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.22);
 }
 
 .permission-card {
@@ -695,6 +1077,111 @@ onMounted(loadFlags)
   padding-top: 6px;
 }
 
+.log-summary-strip strong {
+  color: #7c3aed;
+}
+
+.log-card {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.log-toolbar {
+  display: grid;
+  grid-template-columns: auto auto minmax(260px, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.log-table {
+  width: 100%;
+}
+
+.log-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.log-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-grid div {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.detail-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.detail-grid strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.detail-section {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.detail-highlight {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.detail-section h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.detail-section p {
+  margin: 0 0 6px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.detail-section pre {
+  max-height: 360px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  color: #1e293b;
+  background: #f8fafc;
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .console-page {
   background: #f5f7fb;
 }
@@ -716,8 +1203,7 @@ onMounted(loadFlags)
 }
 
 .summary-strip {
-  grid-template-columns: repeat(4, 150px);
-  justify-content: start;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .summary-strip div {
@@ -826,6 +1312,14 @@ onMounted(loadFlags)
   }
 
   .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .log-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

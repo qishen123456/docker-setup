@@ -107,8 +107,10 @@ class DatasetCopilot:
             )
             doc_text = doc_text[:doc_max_chars]
         user_prompt = build_user_prompt(doc_text, dataset_meta, sample_rows_text)
+        base_prompt = user_prompt
         last_err: Optional[Exception] = None
         for attempt in range(retries + 1):
+            raw = ""
             try:
                 raw = self._invoke_llm(user_prompt)
                 payload = self._parse_json(raw)
@@ -117,10 +119,10 @@ class DatasetCopilot:
             except Exception as exc:
                 last_err = exc
                 print(f"[copilot] attempt {attempt + 1} failed: {exc}", flush=True)
-                user_prompt = (
-                    user_prompt
-                    + f"\n\n## 上一轮错误\n{exc}\n请严格修复后只输出 JSON 对象。"
-                )
+                if raw and "json parse failed" in str(exc):
+                    user_prompt = self._build_json_repair_prompt(raw, exc)
+                else:
+                    user_prompt = self._build_retry_prompt(base_prompt, exc)
         raise CopilotError(f"copilot generate failed after {retries + 1} attempts: {last_err}")
 
     def save_local(self, payload: Dict[str, Any], dataset_id: int) -> str:
@@ -134,6 +136,40 @@ class DatasetCopilot:
         return path
 
     # ------------------------------------------------------------------ internal
+    @staticmethod
+    def _build_retry_prompt(previous_prompt: str, exc: Exception) -> str:
+        return (
+            previous_prompt
+            + "\n\n## Previous output failed validation\n"
+            + f"Error: {exc}\n"
+            + "Return ONE complete, valid JSON object only. No markdown, no comments.\n"
+            + "Make the JSON smaller so it cannot be truncated: exactly 3 golden_sql_samples, "
+            + "4 agent_prompts, 6 common_questions, 4 regression_cases, and concise text fields.\n"
+            + "Every string must be properly escaped. Do not omit commas between fields or array items.\n"
+            + "If a SQL sample is long, keep the SQL correct but reduce explanatory text.\n"
+        )
+
+    @staticmethod
+    def _build_json_repair_prompt(raw_json: str, exc: Exception) -> str:
+        raw = raw_json.strip()
+        if len(raw) > 50000:
+            raw = raw[:50000]
+        return (
+            "The following JSON-like payload is invalid. Repair it into ONE complete, valid JSON object.\n"
+            f"Parser error: {exc}\n"
+            "Rules:\n"
+            "1. Output only JSON. No markdown and no explanation.\n"
+            "2. Preserve the same top-level keys: synonyms, lld_documents, schema_definition, "
+            "data_dictionary, table_relations, golden_sql_samples, agent_prompts, common_questions, "
+            "regression_cases, external_configs, report_config.\n"
+            "3. If the payload is too long, keep exactly 3 golden_sql_samples, 4 agent_prompts, "
+            "6 common_questions and 4 regression_cases.\n"
+            "4. Fix missing commas, broken quotes, unescaped newlines, and trailing fragments.\n"
+            "5. Make sure the JSON can be parsed by Python json.loads.\n\n"
+            "Invalid payload:\n"
+            f"{raw}"
+        )
+
     def _invoke_llm(self, user_prompt: str) -> str:
         kwargs = dict(
             model=self._model,
@@ -152,11 +188,27 @@ class DatasetCopilot:
             f"json_mode={self._use_json_mode} stream=True",
             flush=True,
         )
+        try:
+            return self._stream_completion(kwargs)
+        except Exception as exc:
+            message = str(exc)
+            if self._use_json_mode and ("response_format" in message or "json_object" in message):
+                print("[copilot] json_mode unsupported by provider, retrying without json_mode", flush=True)
+                kwargs.pop("response_format", None)
+                return self._stream_completion(kwargs)
+            raise
+
+    def _stream_completion(self, kwargs: Dict[str, Any]) -> str:
         chunks: List[str] = []
         bytes_seen = 0
         last_print = time.time()
+        finish_reason = None
         stream = self._client.chat.completions.create(**kwargs)
         for event in stream:
+            try:
+                finish_reason = event.choices[0].finish_reason or finish_reason
+            except Exception:
+                pass
             try:
                 delta = event.choices[0].delta.content or ""
             except Exception:
@@ -172,6 +224,11 @@ class DatasetCopilot:
         content = "".join(chunks).strip()
         if not content:
             raise CopilotError("LLM returned empty content")
+        if finish_reason == "length":
+            raise CopilotError(
+                "model output was truncated by max_tokens before completing JSON; "
+                "increase max_tokens or reduce prompt/output size"
+            )
         print(f"[copilot] received {len(content)} chars total", flush=True)
         return content
 
@@ -190,7 +247,10 @@ class DatasetCopilot:
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
-            raise CopilotError(f"json parse failed: {exc}") from exc
+            start = max(0, exc.pos - 160)
+            end = min(len(text), exc.pos + 160)
+            near = text[start:end].replace("\n", "\\n")
+            raise CopilotError(f"json parse failed: {exc}; near={near}") from exc
 
     @staticmethod
     def _validate(payload: Dict[str, Any]) -> None:

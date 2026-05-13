@@ -4,8 +4,9 @@ Application entry for the smart analytics backend.
 
 import os
 import sys
+import time
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -46,7 +47,10 @@ from controllers.feature_flags import feature_flags_bp
 from controllers.smart_chat import smart_chat_bp
 from controllers.report_config import report_config_bp
 from controllers.runtime_migration import runtime_migration_bp
+from controllers.system_logs import system_logs_bp
 from feature_flags import ensure_feature_flags
+from auth_store import get_current_user
+from system_log_store import log_event, request_snapshot
 
 
 init_default_configs()
@@ -88,6 +92,112 @@ app.register_blueprint(agents_bp)
 app.register_blueprint(report_config_bp)
 app.register_blueprint(runtime_migration_bp)
 app.register_blueprint(feature_flags_bp)
+app.register_blueprint(system_logs_bp)
+
+
+def _skip_access_log(path: str) -> bool:
+    return (
+        not path.startswith("/api/")
+        or path == "/api/health"
+        or path.startswith("/api/admin/system-logs")
+    )
+
+
+def _http_error_guidance(path: str, status_code: int, error_message: str) -> dict:
+    if path.startswith("/api/bookshelves/datasets/generate-from-prompt"):
+        return {
+            "event_name": "提示词生成数据集接口失败",
+            "what_happened": "前端请求后端根据大段提示词生成新数据集，但接口返回失败。",
+            "suggested_action": "检查默认 AI 模型/API Key、模型服务是否可用、提示词是否过长；如果是 404，重启后端让新路由生效。",
+            "code_hint": "backend/controllers/bookshelf.py::generate_bookshelf_dataset_from_prompt；backend/dataset_copilot/payload_generator.py。",
+        }
+    if "/full" in path and path.startswith("/api/bookshelves/datasets/"):
+        return {
+            "event_name": "数据集书架保存失败",
+            "what_happened": "数据集基础信息可能已创建，但 LLD、DDL、字段字典、Golden SQL 或 Agent Prompt 保存失败。",
+            "suggested_action": "查看返回 details，重点检查 schema_definition.source_id、agent_prompts 是否包含 Agent1-4、Golden SQL 是否至少 3 条。",
+            "code_hint": "backend/controllers/bookshelf.py::save_bookshelf_dataset_full 和 _validate_full_payload。",
+        }
+    if path.startswith("/api/admin/system-logs"):
+        return {
+            "event_name": "日志管理接口失败",
+            "what_happened": "控制台日志列表、统计或详情接口返回失败。",
+            "suggested_action": "确认当前账号是超管；如果是 500，检查 system_event_logs 表或数据库连接。",
+            "code_hint": "backend/controllers/system_logs.py；backend/system_log_store.py。",
+        }
+    if status_code == 404:
+        return {
+            "event_name": "接口不存在",
+            "what_happened": "前端访问了后端没有注册的 API。",
+            "suggested_action": "确认后端已重启并加载最新代码；核对 frontend/src/api/index.js 中的路径和 backend/app.py 蓝图注册。",
+            "code_hint": "backend/app.py 的 register_blueprint；对应 controllers/*.py 路由。",
+        }
+    if status_code == 403:
+        return {
+            "event_name": "权限不足",
+            "what_happened": "当前登录身份没有访问这个接口的权限。",
+            "suggested_action": "切换超管账号，或到系统控制台检查对应功能权限。",
+            "code_hint": "backend/auth_store.py；backend/controllers/feature_flags.py；前端路由权限配置。",
+        }
+    return {
+        "event_name": "接口报错",
+        "what_happened": f"接口返回 HTTP {status_code}。{error_message or ''}".strip(),
+        "suggested_action": "先看详细报错和请求路径，再到对应 controller 搜索该路径定位代码。",
+        "code_hint": "backend/controllers 下对应路由文件；frontend/src/api/index.js 对应调用。",
+    }
+
+
+@app.before_request
+def _mark_request_start():
+    request._smartask_started_at = time.time()
+
+
+@app.after_request
+def _record_access_log(response):
+    path = request.path or ""
+    if _skip_access_log(path):
+        return response
+    try:
+        duration_ms = int((time.time() - getattr(request, "_smartask_started_at", time.time())) * 1000)
+        status_code = int(response.status_code or 0)
+        if status_code >= 400:
+            category = "error"
+            level = "error" if status_code >= 500 else "warning"
+            event_type = "http_error"
+            error_message = (response.get_json(silent=True) or {}).get("error", "") if response.is_json else ""
+            guidance = _http_error_guidance(path, status_code, error_message)
+            title = guidance["event_name"]
+        else:
+            category = "access"
+            level = "info"
+            event_type = "api_access"
+            title = f"{request.method} {path}"
+            error_message = ""
+            guidance = {
+                "event_name": "接口访问",
+                "what_happened": "接口请求成功。",
+                "suggested_action": "",
+                "code_hint": "",
+            }
+        log_event(
+            category=category,
+            event_type=event_type,
+            level=level,
+            title=title,
+            user=get_current_user(),
+            request_info=request_snapshot(request),
+            status_code=status_code,
+            duration_ms=duration_ms,
+            error_message=error_message,
+            details={
+                **guidance,
+                "endpoint": request.endpoint or "",
+                "request_args": request.args.to_dict(flat=True),
+            },
+        )
+    except Exception:
+        pass
+    return response
 
 
 @app.route("/api/health", methods=["GET"])

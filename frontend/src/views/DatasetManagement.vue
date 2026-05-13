@@ -448,7 +448,15 @@
     </el-dialog>
 
     <!-- 大段提示词生成数据集 -->
-    <el-dialog v-model="promptDatasetVisible" title="根据提示词生成新数据集" width="820px" destroy-on-close top="5vh">
+    <el-dialog
+      v-model="promptDatasetVisible"
+      title="根据提示词生成新数据集"
+      width="1120px"
+      class="prompt-dataset-dialog"
+      destroy-on-close
+      top="3vh"
+      :close-on-click-modal="!promptDatasetLoading"
+    >
       <div class="prompt-generate-shell">
         <el-alert
           type="info"
@@ -456,6 +464,30 @@
           show-icon
           title="把 DDL、fields 字段字典、LLD、Agent2/Agent4 提示词、示例 SQL 粘贴进来，系统会生成一套新的数据集书架内容。"
         />
+        <div v-if="promptDatasetLoading || promptDatasetStatus" class="prompt-progress-panel">
+          <div class="prompt-progress-head">
+            <div>
+              <strong>{{ promptDatasetStageTitle }}</strong>
+              <span>{{ promptDatasetStatus }}</span>
+            </div>
+            <em>{{ promptDatasetElapsedText }}</em>
+          </div>
+          <el-progress :percentage="promptDatasetProgress" :status="promptDatasetProgress === 100 ? 'success' : undefined" />
+          <div class="prompt-stage-strip">
+            <div
+              v-for="(step, index) in PROMPT_DATASET_STEPS"
+              :key="step"
+              class="prompt-stage"
+              :class="{ active: index === promptDatasetStepIndex, done: index < promptDatasetStepIndex }"
+            >
+              <span>{{ index + 1 }}</span>
+              <strong>{{ step }}</strong>
+            </div>
+          </div>
+          <div class="prompt-progress-note">
+            AI 正在阅读大段文档并生成 DDL、字段字典、Golden SQL 和 Agent Prompt，复杂提示词通常需要 1-5 分钟。页面有耗时和阶段反馈，失败后会给出具体原因和建议。
+          </div>
+        </div>
         <el-form label-width="112px" class="prompt-generate-form">
           <el-row :gutter="12">
             <el-col :span="12">
@@ -482,7 +514,7 @@
             <el-input
               v-model="promptDatasetForm.doc_text"
               type="textarea"
-              :rows="18"
+              :rows="16"
               resize="vertical"
               class="mono-textarea"
               placeholder="粘贴 DDL、字段字典、业务口径、报告要求、Agent 提示词、示例 SQL 等内容..."
@@ -491,7 +523,8 @@
         </el-form>
       </div>
       <template #footer>
-        <el-button @click="promptDatasetVisible = false">取消</el-button>
+        <el-button v-if="!promptDatasetLoading" @click="promptDatasetVisible = false">取消</el-button>
+        <el-button v-else plain type="warning" @click="cancelPromptDatasetGeneration">停止生成</el-button>
         <el-button type="primary" :loading="promptDatasetLoading" @click="generateDatasetFromPrompt">
           生成并保存新数据集
         </el-button>
@@ -557,7 +590,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
@@ -589,7 +622,25 @@ const sqlPreviewRows = ref([])
 const sqlPreviewMeta = ref(null)
 const promptDatasetVisible = ref(false)
 const promptDatasetLoading = ref(false)
+const promptDatasetStatus = ref('')
+const promptDatasetStepIndex = ref(-1)
+const promptDatasetProgress = ref(0)
+const promptDatasetElapsed = ref(0)
+let promptDatasetTimer = null
+let promptDatasetAbortController = null
 const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
+
+const PROMPT_DATASET_STEPS = ['准备输入', 'AI 生成', '校验质量', '创建数据集', '保存书架']
+const promptDatasetStageTitle = computed(() => {
+  if (promptDatasetStepIndex.value < 0) return '等待开始'
+  return PROMPT_DATASET_STEPS[promptDatasetStepIndex.value] || '处理中'
+})
+const promptDatasetElapsedText = computed(() => {
+  if (!promptDatasetElapsed.value) return '尚未开始'
+  const minutes = Math.floor(promptDatasetElapsed.value / 60)
+  const seconds = promptDatasetElapsed.value % 60
+  return `已用时 ${minutes}:${String(seconds).padStart(2, '0')}`
+})
 
 const datasetForm = reactive({ dataset_code: '', dataset_name: '', business_domain: '', source_id: null, description: '', is_active: true })
 const promptDatasetForm = reactive({
@@ -1427,11 +1478,94 @@ const resetPromptDatasetForm = () => {
   promptDatasetForm.dataset_code = ''
   promptDatasetForm.business_domain = ''
   promptDatasetForm.doc_text = ''
+  resetPromptDatasetProgress()
 }
 
 const openPromptDatasetDialog = () => {
   resetPromptDatasetForm()
   promptDatasetVisible.value = true
+}
+
+const resetPromptDatasetProgress = () => {
+  if (promptDatasetTimer) window.clearInterval(promptDatasetTimer)
+  promptDatasetTimer = null
+  promptDatasetStatus.value = ''
+  promptDatasetStepIndex.value = -1
+  promptDatasetProgress.value = 0
+  promptDatasetElapsed.value = 0
+}
+
+const startPromptDatasetTimer = () => {
+  if (promptDatasetTimer) window.clearInterval(promptDatasetTimer)
+  const startedAt = Date.now()
+  promptDatasetElapsed.value = 1
+  promptDatasetTimer = window.setInterval(() => {
+    promptDatasetElapsed.value = Math.max(1, Math.floor((Date.now() - startedAt) / 1000))
+    if (promptDatasetLoading.value && promptDatasetProgress.value < 88) {
+      promptDatasetProgress.value = Math.min(88, promptDatasetProgress.value + (promptDatasetElapsed.value > 90 ? 1 : 2))
+    }
+  }, 1000)
+}
+
+const setPromptDatasetStage = (index, status, progress = null) => {
+  promptDatasetStepIndex.value = index
+  promptDatasetStatus.value = status
+  if (progress !== null) promptDatasetProgress.value = Math.max(promptDatasetProgress.value, progress)
+}
+
+const cancelPromptDatasetGeneration = () => {
+  if (promptDatasetAbortController) {
+    promptDatasetAbortController.abort()
+    setPromptDatasetStage(promptDatasetStepIndex.value, '已停止本次生成请求，可以修改提示词后重新生成。', promptDatasetProgress.value)
+  }
+}
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const promptDatasetFailureLines = (err, createdDatasetId) => {
+  const status = err?.response?.status
+  const data = err?.response?.data || {}
+  const url = err?.config?.url || '/api/bookshelves/datasets/generate-from-prompt'
+  const message = data.error || err?.message || '未知错误'
+  if (err?.code === 'ERR_CANCELED' || message === 'canceled') {
+    return [
+      '失败位置：前端主动取消请求',
+      '详细报错：本次生成已停止，后端请求不再等待前端响应。',
+      '建议：缩短提示词、补充关键 DDL/字段字典后重新生成；如果后端仍在跑旧请求，稍等一会儿再试。',
+      '建议改代码位置：frontend/src/views/DatasetManagement.vue 的 cancelPromptDatasetGeneration；后端入口 backend/controllers/bookshelf.py。',
+    ]
+  }
+  const lines = [
+    `失败位置：${url}${status ? `（HTTP ${status}）` : ''}`,
+    `详细报错：${message}`,
+  ]
+  if (Array.isArray(data.details) && data.details.length) {
+    lines.push(`校验未通过：${data.details.join('；')}`)
+  }
+  if (createdDatasetId) {
+    lines.push(`当前状态：数据集基础信息已创建，ID=${createdDatasetId}，书架内容保存失败；页面会切到这个数据集，方便你继续补齐。`)
+  }
+  if (status === 404 && url.includes('generate-from-prompt')) {
+    lines.push('建议：后端没有加载“提示词生成数据集”接口，重启 backend/app.py 后再试。')
+    lines.push('代码位置：backend/controllers/bookshelf.py 的 generate-from-prompt 路由、backend/app.py 蓝图注册。')
+  } else if (status === 404 && url.includes('/bookshelves/datasets')) {
+    lines.push('建议：这是“创建数据集”接口 404。请强刷页面，确认浏览器请求的是 /api/bookshelves/datasets；前端已自动用显式 /api 路径重试一次。')
+    lines.push('代码位置：frontend/src/api/index.js 的 createBookshelfDataset；backend/controllers/bookshelf.py 的 POST /api/bookshelves/datasets。')
+  } else if (status === 400) {
+    lines.push('建议：补充更完整的 DDL、字段字典、LLD、示例 SQL，或先选择一个绑定数据源。')
+    lines.push('代码位置：backend/controllers/bookshelf.py 的参数校验和 _validate_full_payload。')
+  } else if (status >= 500) {
+    lines.push('建议：优先检查默认 AI 模型/API Key、模型超时、返回 JSON 是否完整，以及 /full 保存时的字段格式。')
+    lines.push('代码位置：backend/dataset_copilot/payload_generator.py、backend/controllers/bookshelf.py。')
+  } else {
+    lines.push('建议：打开“系统控制台 -> 日志管理”，筛选“报错”或搜索 generate-from-prompt 查看后端记录。')
+  }
+  return lines
 }
 
 const uniqueDatasetCode = (code) => {
@@ -1444,9 +1578,12 @@ const uniqueDatasetCode = (code) => {
   return exists ? `${base}_${Date.now().toString().slice(-6)}` : base
 }
 
-const buildGeneratedFullPayload = (generatedPayload) => {
+const buildGeneratedFullPayload = (generatedPayload, sourceId = null) => {
   const payload = {}
   FULL_COLLECTION_KEYS.forEach(key => { payload[key] = Array.isArray(generatedPayload?.[key]) ? generatedPayload[key] : [] })
+  if (sourceId) {
+    payload.schema_definition = payload.schema_definition.map(item => ({ ...item, source_id: sourceId }))
+  }
   if (generatedPayload?.report_config && typeof generatedPayload.report_config === 'object') {
     payload.report_config = generatedPayload.report_config
   }
@@ -1466,8 +1603,12 @@ const generateDatasetFromPrompt = async () => {
   }
 
   promptDatasetLoading.value = true
+  startPromptDatasetTimer()
+  setPromptDatasetStage(0, '正在检查输入、数据源和参考样式...', 8)
   let createdDatasetId = null
   try {
+    promptDatasetAbortController = new AbortController()
+    setPromptDatasetStage(1, '正在请求后端 AI 生成接口。大段提示词会比较慢，请稍等...', 18)
     const generated = await generateBookshelfDatasetFromPrompt({
       doc_text: docText,
       source_id: sourceId,
@@ -1475,9 +1616,13 @@ const generateDatasetFromPrompt = async () => {
       dataset_name: promptDatasetForm.dataset_name || undefined,
       dataset_code: promptDatasetForm.dataset_code || undefined,
       business_domain: promptDatasetForm.business_domain || undefined,
+    }, {
+      signal: promptDatasetAbortController.signal,
     })
+    setPromptDatasetStage(2, 'AI 已返回，正在检查 LLD、DDL、字段字典、Golden SQL 和 Agent Prompt 是否完整...', 76)
     const validationErrors = generated.validation_errors || []
     if (validationErrors.length) {
+      setPromptDatasetStage(2, '生成结果未达到保存标准，请按弹窗提示补充底稿后重试。', 76)
       await ElMessageBox.alert(validationErrors.join('<br/>'), '生成结果还不完整', {
         confirmButtonText: '知道了',
         dangerouslyUseHTMLString: true,
@@ -1494,11 +1639,14 @@ const generateDatasetFromPrompt = async () => {
       source_id: sourceId,
       description: meta.description || `由大段提示词自动生成：${meta.dataset_name || promptDatasetForm.dataset_name || 'AI生成数据集'}`,
     }
+    setPromptDatasetStage(3, `正在创建数据集：${createPayload.dataset_name}`, 84)
     const created = await createBookshelfDataset(createPayload)
     createdDatasetId = created.dataset?.id
     if (!createdDatasetId) throw new Error('数据集创建成功但未返回 ID')
 
-    await saveBookshelfDatasetFull(createdDatasetId, buildGeneratedFullPayload(generated.payload || {}))
+    setPromptDatasetStage(4, '正在保存书架内容：LLD、DDL、字段字典、Golden SQL、Agent Prompt...', 92)
+    await saveBookshelfDatasetFull(createdDatasetId, buildGeneratedFullPayload(generated.payload || {}, sourceId))
+    setPromptDatasetStage(4, '保存完成，正在刷新数据集列表...', 100)
     promptDatasetVisible.value = false
     ElMessage.success(`已生成并保存「${createPayload.dataset_name}」`)
     await loadDatasets()
@@ -1507,15 +1655,27 @@ const generateDatasetFromPrompt = async () => {
   } catch (err) {
     const details = err?.response?.data?.details
     if (Array.isArray(details) && details.length) {
-      await ElMessageBox.alert(details.join('<br/>'), '保存前校验未通过', {
+      const isGenerateError = String(err?.config?.url || '').includes('generate-from-prompt')
+      setPromptDatasetStage(Math.max(promptDatasetStepIndex.value, 0), isGenerateError ? 'AI 生成失败，已整理原因和建议。' : '保存前校验未通过，已整理原因和建议。', promptDatasetProgress.value)
+      await ElMessageBox.alert(details.map(line => `<p>${escapeHtml(line)}</p>`).join(''), isGenerateError ? 'AI 生成失败' : '保存前校验未通过', {
         confirmButtonText: '知道了',
         dangerouslyUseHTMLString: true,
-        type: 'warning',
+        type: isGenerateError ? 'error' : 'warning',
       })
     } else if (err?.response?.status === 404 && err?.response?.data?.error === 'API not found') {
-      ElMessage.error('后端还没有加载“提示词生成数据集”接口，请重建/重启后端服务。')
+      setPromptDatasetStage(Math.max(promptDatasetStepIndex.value, 0), '接口 404，已整理原因和建议。', promptDatasetProgress.value)
+      await ElMessageBox.alert(
+        promptDatasetFailureLines(err, createdDatasetId).map(line => `<p>${escapeHtml(line)}</p>`).join(''),
+        '接口未找到',
+        { confirmButtonText: '知道了', dangerouslyUseHTMLString: true, type: 'error' },
+      )
     } else {
-      ElMessage.error(err?.response?.data?.error || err?.message || '生成数据集失败')
+      setPromptDatasetStage(Math.max(promptDatasetStepIndex.value, 0), '处理失败，已整理原因和建议。', promptDatasetProgress.value)
+      await ElMessageBox.alert(
+        promptDatasetFailureLines(err, createdDatasetId).map(line => `<p>${escapeHtml(line)}</p>`).join(''),
+        '生成数据集失败',
+        { confirmButtonText: '知道了', dangerouslyUseHTMLString: true, type: 'error' },
+      )
     }
     if (createdDatasetId) {
       await loadDatasets()
@@ -1524,6 +1684,9 @@ const generateDatasetFromPrompt = async () => {
     }
   } finally {
     promptDatasetLoading.value = false
+    promptDatasetAbortController = null
+    if (promptDatasetTimer) window.clearInterval(promptDatasetTimer)
+    promptDatasetTimer = null
   }
 }
 
@@ -1631,6 +1794,11 @@ onMounted(async () => {
   if (datasets.value.length > 0) await selectDataset(datasets.value[0])
   else resetFull()
 })
+
+onUnmounted(() => {
+  if (promptDatasetAbortController) promptDatasetAbortController.abort()
+  if (promptDatasetTimer) window.clearInterval(promptDatasetTimer)
+})
 </script>
 
 <style scoped>
@@ -1670,7 +1838,110 @@ onMounted(async () => {
 .schema-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .schema-editor-subtitle { margin-top: 6px; color: var(--text-muted, #86909c); font-size: 13px; }
 .schema-editor-form { flex: 1; }
+:global(.prompt-dataset-dialog) {
+  max-width: calc(100vw - 48px);
+}
+:global(.prompt-dataset-dialog .el-dialog__body) {
+  max-height: calc(100vh - 170px);
+  overflow: auto;
+  padding-top: 18px;
+}
 .prompt-generate-shell { display: flex; flex-direction: column; gap: 14px; }
-.prompt-generate-form { margin-top: 2px; }
+.prompt-generate-form {
+  margin-top: 2px;
+  padding: 16px 16px 2px;
+  border: 1px solid #e5edf7;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+.prompt-progress-panel {
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef7ff 100%);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+.prompt-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.prompt-progress-head strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+}
+.prompt-progress-head span {
+  display: block;
+  margin-top: 4px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.prompt-progress-head em {
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-style: normal;
+  font-weight: 600;
+}
+.prompt-stage-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.prompt-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid #dbe6f3;
+  border-radius: 8px;
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.72);
+}
+.prompt-stage span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #64748b;
+  background: #edf2f7;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.prompt-stage strong {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.prompt-stage.done,
+.prompt-stage.active {
+  border-color: #99d5c9;
+  color: #0f766e;
+  background: #ecfdf7;
+}
+.prompt-stage.done span,
+.prompt-stage.active span {
+  color: #fff;
+  background: #0f766e;
+}
+.prompt-stage.active {
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.12);
+}
+.prompt-progress-note {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .mono-textarea :deep(textarea) { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 13px; line-height: 1.6; }
+@media (max-width: 900px) {
+  .prompt-stage-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

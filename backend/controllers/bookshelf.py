@@ -20,6 +20,8 @@ from config_manager import get_default_datasource, get_datasource_by_id, read_js
 import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
 from dataset_copilot import CopilotError, DatasetCopilot
+from auth_store import get_current_user
+from system_log_store import log_event, request_snapshot
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
@@ -61,6 +63,13 @@ def _parse_json_like(value: Any, default: Any):
     if isinstance(value, (dict, list)):
         return value
     return default
+
+
+def _optional_int(value: Any):
+    text = str(value if value is not None else "").strip()
+    if not text:
+        return None
+    return int(text)
 
 
 def _slugify_dataset_code(value: str) -> str:
@@ -328,6 +337,56 @@ def _build_quality_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _log_dataset_prompt_event(
+    event_type: str,
+    level: str,
+    title: str,
+    *,
+    doc_text: str = "",
+    source_id: Any = None,
+    style_dataset_id: Any = None,
+    dataset_meta: Dict[str, Any] | None = None,
+    quality_summary: Dict[str, Any] | None = None,
+    validation_errors: List[str] | None = None,
+    error_message: str = "",
+    duration_ms: int | None = None,
+) -> None:
+    try:
+        details = {
+            "event_name": title,
+            "what_happened": title,
+            "source_id": source_id,
+            "style_dataset_id": style_dataset_id,
+            "doc_chars": len(doc_text or ""),
+            "dataset_meta": dataset_meta or {},
+            "quality_summary": quality_summary or {},
+            "validation_errors": validation_errors or [],
+            "suggested_action": (
+                "如果生成一直等待，先检查默认 AI 模型/API Key、模型服务可用性和大段提示词长度；"
+                "如果保存失败，检查生成 payload 的 schema_definition、data_dictionary、golden_sql_samples、agent_prompts。"
+            ),
+            "code_hint": (
+                "后端入口：backend/controllers/bookshelf.py::generate_bookshelf_dataset_from_prompt；"
+                "AI 生成：backend/dataset_copilot/payload_generator.py；"
+                "保存入口：backend/controllers/bookshelf.py::save_bookshelf_dataset_full。"
+            ),
+        }
+        log_event(
+            category="dataset_generation",
+            event_type=event_type,
+            level=level,
+            title=title,
+            user=get_current_user(),
+            request_info=request_snapshot(request),
+            status_code=None,
+            duration_ms=duration_ms,
+            error_message=error_message,
+            details=details,
+        )
+    except Exception:
+        pass
+
+
 def _ensure_optional_tables(cur):
     cur.execute(
         """
@@ -475,6 +534,7 @@ def create_bookshelf_dataset():
 
 @bookshelf_bp.route("/api/bookshelves/datasets/generate-from-prompt", methods=["POST"])
 def generate_bookshelf_dataset_from_prompt():
+    started_at = time.time()
     try:
         payload = request.get_json() or {}
         doc_text = str(payload.get("doc_text") or "").strip()
@@ -482,7 +542,16 @@ def generate_bookshelf_dataset_from_prompt():
             return jsonify({"error": "请粘贴更完整的提示词、DDL、字段字典或业务口径，至少 80 字。"}), 400
 
         source_id = payload.get("source_id")
-        style_reference = _build_style_reference(payload.get("style_dataset_id"))
+        style_dataset_id = payload.get("style_dataset_id")
+        _log_dataset_prompt_event(
+            "dataset_generate_from_prompt_started",
+            "info",
+            "开始根据提示词生成数据集",
+            doc_text=doc_text,
+            source_id=source_id,
+            style_dataset_id=style_dataset_id,
+        )
+        style_reference = _build_style_reference(style_dataset_id)
         enriched_doc = doc_text
         if style_reference:
             enriched_doc = f"{doc_text}\n\n{style_reference}"
@@ -497,30 +566,64 @@ def generate_bookshelf_dataset_from_prompt():
             "description": meta["description"],
         }
         try:
+            use_json_mode = payload.get("use_json_mode")
+            if use_json_mode is None:
+                use_json_mode = True
             copilot = DatasetCopilot(
                 model=payload.get("model") or None,
                 base_url=payload.get("base_url") or None,
                 api_key=payload.get("api_key") or None,
-                max_tokens=int(payload.get("max_tokens") or 8192),
-                use_json_mode=bool(payload.get("use_json_mode") or False),
+                max_tokens=int(payload.get("max_tokens") or 24576),
+                use_json_mode=bool(use_json_mode),
             )
             generated = copilot.generate(
                 dataset_meta=dataset_meta,
                 doc_text=enriched_doc,
                 sample_rows_text=str(payload.get("sample_rows_text") or ""),
-                retries=int(payload.get("retries") or 1),
+                retries=int(payload.get("retries") or 2),
                 doc_max_chars=int(payload.get("doc_max_chars") or 30000),
             )
         except CopilotError as exc:
-            return jsonify({"error": f"数据集生成失败: {exc}"}), 500
+            _log_dataset_prompt_event(
+                "dataset_generate_from_prompt_failed",
+                "error",
+                "AI 生成数据集失败",
+                doc_text=doc_text,
+                source_id=source_id,
+                style_dataset_id=style_dataset_id,
+                dataset_meta=meta,
+                error_message=str(exc),
+                duration_ms=int((time.time() - started_at) * 1000),
+            )
+            return jsonify({
+                "error": f"数据集生成失败: {exc}",
+                "details": [
+                    f"详细报错：{exc}",
+                    "建议检查：默认 AI 模型/API Key、模型服务地址、提示词长度、模型返回是否是完整 JSON。",
+                    "建议改代码位置：backend/dataset_copilot/payload_generator.py；接口入口在 backend/controllers/bookshelf.py::generate_bookshelf_dataset_from_prompt。",
+                ],
+            }), 500
 
-        if source_id is not None:
+        normalized_source_id = _optional_int(source_id)
+        if normalized_source_id is not None:
             for item in generated.get("schema_definition") or []:
-                if isinstance(item, dict) and item.get("source_id") is None:
-                    item["source_id"] = int(source_id)
+                if isinstance(item, dict):
+                    item["source_id"] = normalized_source_id
 
         validation_errors = _validate_full_payload(generated)
         summary = _build_quality_summary(generated)
+        _log_dataset_prompt_event(
+            "dataset_generate_from_prompt_completed",
+            "warning" if validation_errors else "info",
+            "提示词生成数据集已返回结果",
+            doc_text=doc_text,
+            source_id=source_id,
+            style_dataset_id=style_dataset_id,
+            dataset_meta=meta,
+            quality_summary=summary,
+            validation_errors=validation_errors,
+            duration_ms=int((time.time() - started_at) * 1000),
+        )
         return jsonify({
             "dataset_meta": meta,
             "payload": generated,
@@ -529,7 +632,24 @@ def generate_bookshelf_dataset_from_prompt():
             "style_applied": bool(style_reference),
         })
     except Exception as exc:
-        return jsonify({"error": f"generate dataset from prompt failed: {exc}"}), 500
+        _log_dataset_prompt_event(
+            "dataset_generate_from_prompt_error",
+            "error",
+            "提示词生成数据集接口异常",
+            doc_text=locals().get("doc_text", ""),
+            source_id=locals().get("source_id", None),
+            style_dataset_id=locals().get("style_dataset_id", None),
+            error_message=str(exc),
+            duration_ms=int((time.time() - started_at) * 1000),
+        )
+        return jsonify({
+            "error": f"generate dataset from prompt failed: {exc}",
+            "details": [
+                f"详细报错：{exc}",
+                "建议检查：后端接口参数、参考样式数据集、source_id、AI 生成 payload 格式。",
+                "建议改代码位置：backend/controllers/bookshelf.py::generate_bookshelf_dataset_from_prompt。",
+            ],
+        }), 500
 
 
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>", methods=["PUT"])
@@ -961,7 +1081,7 @@ def save_bookshelf_dataset_full(dataset_id: int):
                         ddl_sql,
                         (item.get("description") or "").strip(),
                         bool(item.get("is_active", True)),
-                        int(source_id) if source_id is not None else None,
+                        _optional_int(source_id),
                     ),
                 )
 
@@ -1127,7 +1247,12 @@ def save_bookshelf_dataset_full(dataset_id: int):
                 "error": (
                     "save dataset full failed. "
                     f"If agent_no=1 failed, run migration backend/migrations/20260330_bookshelf_agent1_prompt_upgrade.sql. detail={exc}"
-                )
+                ),
+                "details": [
+                    f"详细报错：{exc}",
+                    "建议检查：schema_definition.source_id 是否为空字符串或非数字；agent_prompts 是否包含 Agent1-4；golden_sql_samples 是否至少 3 条。",
+                    "建议改代码位置：backend/controllers/bookshelf.py::save_bookshelf_dataset_full；保存前校验在 _validate_full_payload。",
+                ],
             }
         ), 500
 

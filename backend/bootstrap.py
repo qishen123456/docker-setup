@@ -43,6 +43,7 @@ MIGRATIONS = [
     "20260330_bookshelf_agent1_prompt_upgrade.sql",
     "20260430_report_config.sql",
     "20260509_report_thresholds.sql",
+    "20260512_system_event_logs.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")

@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, redirect, request, session
 
 from config_manager import read_json, write_json
 from auth_store import create_session_token, get_current_user, revoke_token
+from system_log_store import log_event, request_snapshot
 
 
 auth_bp = Blueprint("auth", __name__)
@@ -23,6 +24,19 @@ ROLE_LABELS = {
     "admin": "管理员",
     "user": "普通用户",
 }
+
+
+def _log_auth_event(event_type: str, level: str, title: str, user: dict | None = None, **details) -> None:
+    log_event(
+        category="auth",
+        event_type=event_type,
+        level=level,
+        title=title,
+        user=user or {},
+        request_info=request_snapshot(request),
+        status_code=details.pop("status_code", None),
+        details=details,
+    )
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -274,8 +288,10 @@ def auth_me():
 @auth_bp.route("/api/auth/logout", methods=["POST"])
 def auth_logout():
     token = request.headers.get("X-Auth-Token") or session.get("auth_token") or ""
+    user = get_current_user()
     revoked = revoke_token(token)
     session.clear()
+    _log_auth_event("logout", "info", "用户退出登录", user=user, revoked=revoked, status_code=200)
     return jsonify({"success": True, "revoked": revoked})
 
 
@@ -336,8 +352,10 @@ def password_login():
     password = str(payload.get("password") or "")
     user_info = _login_by_password(username, password)
     if not user_info:
+        _log_auth_event("password_login_failed", "warning", "账号密码登录失败", username=username, status_code=401)
         return jsonify({"success": False, "error": "账号或密码不正确"}), 401
     session_token = create_session_token(user_info)
+    _log_auth_event("password_login_success", "info", "账号密码登录成功", user=user_info, username=username, status_code=200)
     return jsonify({"success": True, "token": session_token, "user": user_info})
 
 
@@ -381,8 +399,10 @@ def admin_login():
     password = str(payload.get("password") or "")
     user_info = _login_by_password(username, password)
     if not user_info or user_info.get("role") != "super_admin":
+        _log_auth_event("admin_login_failed", "warning", "超管登录失败", username=username, status_code=401)
         return jsonify({"success": False, "error": "超管账号或密码不正确"}), 401
     session_token = create_session_token(user_info)
+    _log_auth_event("admin_login_success", "info", "超管登录成功", user=user_info, username=username, status_code=200)
     return jsonify({"success": True, "token": session_token, "user": user_info})
 
 
@@ -420,8 +440,10 @@ def feishu_callback():
         user_info = _apply_employee_permission(_normalize_user(user_data))
         session_token = create_session_token(user_info)
         frontend_url = cfg["frontend_url"] or "/"
+        _log_auth_event("feishu_login_success", "info", "飞书网页登录成功", user=user_info, status_code=302)
         return redirect(f"{frontend_url}/auth/callback?token={session_token}")
     except Exception as exc:
+        _log_auth_event("feishu_login_failed", "error", "飞书网页登录失败", error=str(exc), status_code=500)
         return jsonify({"success": False, "error": f"飞书登录失败: {exc}"}), 500
 
 
@@ -438,6 +460,8 @@ def feishu_in_app_auth():
         user_data = _exchange_oidc_code(cfg, auth_code)
         user_info = _apply_employee_permission(_normalize_user(user_data))
         session_token = create_session_token(user_info)
+        _log_auth_event("feishu_in_app_login_success", "info", "飞书免登录成功", user=user_info, status_code=200)
         return jsonify({"success": True, "token": session_token, "user": user_info})
     except Exception as exc:
+        _log_auth_event("feishu_in_app_login_failed", "error", "飞书免登录失败", error=str(exc), status_code=500)
         return jsonify({"success": False, "error": f"飞书免登失败: {exc}"}), 500

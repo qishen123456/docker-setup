@@ -9,6 +9,11 @@ const api = axios.create({
   }
 })
 
+const authHeaders = () => {
+  const token = getAuthToken()
+  return token ? { 'X-Auth-Token': token } : {}
+}
+
 export const AUTH_TOKEN_KEY = 'auth_token'
 
 export const getAuthToken = () => localStorage.getItem(AUTH_TOKEN_KEY) || ''
@@ -52,6 +57,10 @@ export const getFeatureFlags = () => api.get('/feature-flags')
 export const getAdminFeatureFlags = () => api.get('/admin/feature-flags')
 export const saveAdminFeatureFlags = (features) => api.put('/admin/feature-flags', { features })
 export const resetAdminFeatureFlags = () => api.post('/admin/feature-flags/reset')
+export const getSystemLogs = (params = {}) => api.get('/admin/system-logs', { params })
+export const getSystemLogStats = () => api.get('/admin/system-logs/stats')
+export const getSystemLogDetail = (id) => api.get(`/admin/system-logs/${id}`)
+export const clearSystemLogs = (data) => api.post('/admin/system-logs/clear', data)
 
 export const getRuntimeMigrationSummary = () => api.get('/runtime-migration/summary')
 export const exportRuntimeMigrationBundle = () => api.get('/runtime-migration/export', { responseType: 'blob' })
@@ -100,8 +109,21 @@ export const clearAllFeishuSyncLogs = () => api.post('/feishu-sync/logs/clear')
 
 export const getBookshelfHealth = () => api.get('/bookshelves/health')
 export const getBookshelfDatasets = () => api.get('/bookshelves/datasets')
-export const createBookshelfDataset = (data) => api.post('/bookshelves/datasets', data)
-export const generateBookshelfDatasetFromPrompt = (data) => api.post('/bookshelves/datasets/generate-from-prompt', data)
+export const createBookshelfDataset = async (data) => {
+  try {
+    return await api.post('/bookshelves/datasets', data)
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      const response = await axios.post('/api/bookshelves/datasets', data, {
+        timeout: 600000,
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      })
+      return response.data
+    }
+    throw error
+  }
+}
+export const generateBookshelfDatasetFromPrompt = (data, config = {}) => api.post('/bookshelves/datasets/generate-from-prompt', data, config)
 export const updateBookshelfDataset = (id, data) => api.put(`/bookshelves/datasets/${id}`, data)
 export const deleteBookshelfDataset = (id) => api.delete(`/bookshelves/datasets/${id}`)
 export const getBookshelfDatasetFull = (id) => api.get(`/bookshelves/datasets/${id}/full`)
