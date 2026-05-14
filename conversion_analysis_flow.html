@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>经营转化拆解图</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #cbd5e1;
+      --line-strong: #475569;
+      --blue: #246bfe;
+      --blue-soft: #eef5ff;
+      --teal: #0f766e;
+      --teal-soft: #ecfdf5;
+      --orange: #f97316;
+      --orange-soft: #fff7ed;
+      --slate-soft: #f8fafc;
+      --shadow: 0 18px 50px rgba(15, 23, 42, .08);
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background:
+        linear-gradient(rgba(36, 107, 254, .035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(36, 107, 254, .035) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .kicker {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .12em;
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+
+    .hero p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blue);
+    }
+
+    .dot.teal {
+      background: var(--teal);
+    }
+
+    .dot.orange {
+      background: var(--orange);
+    }
+
+    .board {
+      position: relative;
+      overflow: auto;
+      min-height: 900px;
+      border: 1px solid rgba(71, 85, 105, .14);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: var(--shadow);
+    }
+
+    .canvas {
+      position: relative;
+      width: 1360px;
+      height: 900px;
+      margin: 0 auto;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(36, 107, 254, .07), transparent 24%),
+        radial-gradient(circle at 82% 26%, rgba(15, 118, 110, .07), transparent 24%);
+    }
+
+    .links {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .links path,
+    .links line {
+      fill: none;
+      stroke: var(--line-strong);
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .links .soft {
+      stroke: var(--line);
+      stroke-width: 1.2;
+    }
+
+    .links .dash {
+      stroke-dasharray: 6 7;
+    }
+
+    .links .blue {
+      stroke: var(--blue);
+    }
+
+    .links .teal {
+      stroke: var(--teal);
+    }
+
+    .links .orange {
+      stroke: var(--orange);
+    }
+
+    .node,
+    .panel,
+    .formula {
+      position: absolute;
+      z-index: 2;
+    }
+
+    .node {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 92px;
+      min-height: 38px;
+      padding: 8px 13px;
+      border: 1.5px solid #243044;
+      border-radius: 9px;
+      background: #fff;
+      color: #172033;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.25;
+      box-shadow: 0 7px 18px rgba(15, 23, 42, .06);
+      white-space: nowrap;
+    }
+
+    .node.small {
+      min-width: 74px;
+      min-height: 32px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .node.core {
+      border-color: var(--blue);
+      background: var(--blue-soft);
+      color: #1746a2;
+      box-shadow: 0 12px 26px rgba(36, 107, 254, .13);
+    }
+
+    .node.teal {
+      border-color: var(--teal);
+      background: var(--teal-soft);
+      color: #115e59;
+    }
+
+    .node.orange {
+      border-color: var(--orange);
+      background: var(--orange-soft);
+      color: #9a3412;
+    }
+
+    .formula {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1.4px solid #94a3b8;
+      background: #fff;
+      color: #334155;
+      font-size: 18px;
+      font-weight: 900;
+      box-shadow: 0 7px 18px rgba(15, 23, 42, .05);
+    }
+
+    .panel {
+      border: 1px solid rgba(148, 163, 184, .28);
+      border-radius: 16px;
+      background: rgba(248, 250, 252, .82);
+      backdrop-filter: blur(3px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+    }
+
+    .panel-title {
+      position: absolute;
+      left: 18px;
+      top: 14px;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .03em;
+    }
+
+    .metric-stack {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 3;
+    }
+
+    .metric {
+      min-width: 130px;
+      padding: 8px 10px;
+      border: 1px solid #1f2937;
+      border-radius: 999px;
+      background: #fff;
+      text-align: center;
+      color: #172033;
+      font-size: 13px;
+      font-weight: 760;
+      box-shadow: 0 5px 13px rgba(15, 23, 42, .045);
+      white-space: nowrap;
+    }
+
+    .metric.teal {
+      border-color: rgba(15, 118, 110, .65);
+      background: #f0fdfa;
+      color: #115e59;
+    }
+
+    .metric.orange {
+      border-color: rgba(249, 115, 22, .7);
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .section-label {
+      position: absolute;
+      z-index: 2;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      transform: rotate(-90deg);
+      transform-origin: left top;
+    }
+
+    .main-caption {
+      position: absolute;
+      left: 520px;
+      top: 24px;
+      z-index: 2;
+      padding: 6px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .72);
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #eef5ff;
+      color: #33509a;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        padding: 18px;
+      }
+
+      .hero {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .legend {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div>
+        <div class="kicker">CONVERSION ANALYSIS MAP</div>
+        <h1>经营转化拆解图</h1>
+        <p>把图片中的白板逻辑整理成可读的经营分析地图：先看线索、转化率、产品力、均单值四个核心因子，再向下展开渠道、PA执行、闭单原因和产品齐备度。</p>
+      </div>
+      <div class="legend">
+        <span><i class="dot"></i>核心因子</span>
+        <span><i class="dot teal"></i>过程诊断</span>
+        <span><i class="dot orange"></i>原因归因</span>
+      </div>
+    </header>
+
+    <section class="board">
+      <div class="canvas">
+        <div class="main-caption">经营结果拆解主链路</div>
+
+        <svg class="links" viewBox="0 0 1360 900" aria-hidden="true">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"></path>
+            </marker>
+            <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#246bfe"></path>
+            </marker>
+            <marker id="arrowTeal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f766e"></path>
+            </marker>
+            <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#f97316"></path>
+            </marker>
+          </defs>
+
+          <!-- top formula -->
+          <path class="blue" marker-end="url(#arrowBlue)" d="M205 119 C250 119, 272 116, 306 111"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M390 111 C430 111, 460 111, 490 111"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M520 111 C560 111, 595 111, 636 111"></path>
+          <path class="blue" marker-end="url(#arrowBlue)" d="M730 111 C775 111, 815 111, 860 111"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M956 111 C990 111, 1014 111, 1044 111"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M1074 111 C1115 111, 1138 111, 1174 111"></path>
+
+          <!-- inputs to lead -->
+          <path marker-end="url(#arrow)" d="M101 70 C145 72, 172 84, 205 103"></path>
+          <path marker-end="url(#arrow)" d="M101 115 C138 115, 165 115, 196 115"></path>
+          <path marker-end="url(#arrow)" d="M101 160 C145 156, 172 143, 205 127"></path>
+
+          <!-- lead to channel/product type -->
+          <path class="teal" marker-end="url(#arrowTeal)" d="M306 130 C294 177, 280 205, 255 242"></path>
+          <path marker-end="url(#arrow)" d="M350 132 C371 179, 381 213, 386 252"></path>
+
+          <!-- channels into panel -->
+          <path class="soft" marker-end="url(#arrow)" d="M255 281 C306 281, 330 281, 360 281"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M255 364 C306 364, 330 364, 360 364"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M255 442 C306 442, 330 442, 360 442"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M255 502 C306 502, 330 502, 360 502"></path>
+
+          <!-- product type to product power -->
+          <path marker-end="url(#arrow)" d="M430 272 C632 252, 782 205, 905 145"></path>
+
+          <!-- conversion rate down to PA execution -->
+          <path class="blue" marker-end="url(#arrowBlue)" d="M682 132 C682 210, 682 285, 682 382"></path>
+
+          <!-- PA execution internals -->
+          <path marker-end="url(#arrow)" d="M676 433 C624 458, 592 490, 560 525"></path>
+          <path marker-end="url(#arrow)" d="M718 433 C765 456, 798 492, 825 525"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M560 559 C620 559, 650 559, 680 559"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M560 603 C620 603, 650 603, 680 603"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M560 647 C620 647, 650 647, 680 647"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M560 691 C620 691, 650 691, 680 691"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M825 559 C885 559, 916 559, 948 559"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M825 603 C885 603, 916 603, 948 603"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M825 647 C885 647, 916 647, 948 647"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M825 691 C885 691, 916 691, 948 691"></path>
+
+          <!-- close reason -->
+          <path class="orange" marker-end="url(#arrowOrange)" d="M770 692 C804 724, 827 747, 850 775"></path>
+          <path class="orange" marker-end="url(#arrowOrange)" d="M930 793 C982 760, 1008 720, 1030 670"></path>
+          <path class="orange dash" marker-end="url(#arrowOrange)" d="M1030 670 C1002 522, 1005 330, 973 152"></path>
+
+          <!-- service visit -->
+          <path marker-end="url(#arrow)" d="M610 812 C690 812, 760 804, 850 793"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M610 772 C677 772, 730 779, 850 793"></path>
+          <path class="soft" marker-end="url(#arrow)" d="M610 852 C683 852, 740 834, 850 793"></path>
+
+          <!-- product power -->
+          <path class="teal" marker-end="url(#arrowTeal)" d="M1174 132 C1127 165, 1084 196, 1036 230"></path>
+          <path class="teal" marker-end="url(#arrowTeal)" d="M1264 132 C1264 170, 1264 196, 1264 230"></path>
+          <path marker-end="url(#arrow)" d="M1264 268 C1264 307, 1264 329, 1264 360"></path>
+          <path marker-end="url(#arrow)" d="M1264 398 C1220 435, 1192 472, 1165 512"></path>
+          <path marker-end="url(#arrow)" d="M1264 398 C1304 435, 1325 471, 1338 512"></path>
+
+          <!-- product structure / delivery -->
+          <path marker-end="url(#arrow)" d="M1208 111 C1240 111, 1264 111, 1264 88"></path>
+          <path marker-end="url(#arrow)" d="M1264 88 C1264 63, 1264 47, 1264 34"></path>
+        </svg>
+
+        <!-- top formula nodes -->
+        <div class="metric-stack" style="left:40px; top:48px;">
+          <div class="metric">责任盘占比</div>
+          <div class="metric">有效线索率</div>
+          <div class="metric">线索覆盖率</div>
+        </div>
+        <div class="node core" style="left:222px; top:92px;">线索</div>
+        <div class="formula" style="left:494px; top:96px;">×</div>
+        <div class="node small" style="left:540px; top:93px;">转化周期</div>
+        <div class="node core" style="left:648px; top:92px;">转化率</div>
+        <div class="formula" style="left:1048px; top:96px;">×</div>
+        <div class="node core" style="left:880px; top:92px;">产品力</div>
+        <div class="node core" style="left:1188px; top:92px;">均单值</div>
+        <div class="node small" style="left:1220px; top:44px;">产品结构</div>
+        <div class="node small" style="left:1220px; top:4px;">交付配置</div>
+
+        <!-- channel panel -->
+        <div class="panel" style="left:40px; top:228px; width:410px; height:390px;"></div>
+        <div class="panel-title" style="left:62px; top:244px;">进线渠道拆解</div>
+        <div class="section-label" style="left:26px; top:585px;">CHANNEL</div>
+        <div class="node teal" style="left:148px; top:254px;">进线渠道</div>
+        <div class="node" style="left:70px; top:304px;">物业<br>联动</div>
+        <div class="metric-stack" style="left:196px; top:278px;">
+          <div class="metric">网格激活率</div>
+          <div class="metric">阵地激活率</div>
+          <div class="metric">沉睡网格占比</div>
+          <div class="metric">装修备案报单率</div>
+          <div class="metric">物业联动动作</div>
+        </div>
+        <div class="node" style="left:70px; top:386px;">朴邻<br>联动</div>
+        <div class="metric-stack" style="left:196px; top:452px;">
+          <div class="metric">朴邻成交报单率</div>
+          <div class="metric">朴邻联动动作</div>
+        </div>
+        <div class="node" style="left:70px; top:468px;">PA<br>自拓</div>
+        <div class="metric-stack" style="left:196px; top:532px;">
+          <div class="metric">PA数量</div>
+          <div class="metric">PA人均自拓线索</div>
+        </div>
+        <div class="node small" style="left:70px; top:545px;">NPS</div>
+        <div class="metric" style="position:absolute; left:196px; top:592px; z-index:3;">摆展、入户动作</div>
+        <div class="node small" style="left:70px; top:594px;">维修工<br>自拓</div>
+        <div class="node small" style="left:70px; top:640px;">外部合作<br>渠道</div>
+        <div class="node small" style="left:70px; top:690px;">自媒体</div>
+        <div class="node small" style="left:70px; top:735px;">线下投放</div>
+
+        <div class="node small" style="left:364px; top:252px;">产品类型</div>
+
+        <!-- PA panel -->
+        <div class="panel" style="left:460px; top:406px; width:560px; height:450px;"></div>
+        <div class="panel-title" style="left:482px; top:422px;">PA执行力与转化过程</div>
+        <div class="node teal" style="left:642px; top:382px;">PA执行力</div>
+        <div class="node" style="left:500px; top:526px;">PA能力</div>
+        <div class="metric-stack" style="left:680px; top:542px;">
+          <div class="metric">建联率</div>
+          <div class="metric">量房率</div>
+          <div class="metric">量房转化率</div>
+          <div class="metric">线索闭单率</div>
+        </div>
+        <div class="node" style="left:780px; top:526px;">响应及时性</div>
+        <div class="metric-stack" style="left:948px; top:542px;">
+          <div class="metric">二级PA分配及时率</div>
+          <div class="metric">一级PA接单及时率</div>
+          <div class="metric">线索跟进及时率</div>
+          <div class="metric orange">滞留线索占比</div>
+        </div>
+        <div class="node orange" style="left:850px; top:774px;">线索闭单原因</div>
+        <div class="metric-stack" style="left:1030px; top:634px;">
+          <div class="metric orange">产品原因</div>
+          <div class="metric orange">价格原因</div>
+          <div class="metric orange">异常线索</div>
+        </div>
+        <div class="node" style="left:474px; top:792px;">客服闭单回访</div>
+        <div class="metric-stack" style="left:350px; top:752px;">
+          <div class="metric">闭单电话拨打率</div>
+          <div class="metric">回访接通率</div>
+          <div class="metric">闭单客户建联率</div>
+        </div>
+
+        <!-- product panel -->
+        <div class="panel" style="left:1048px; top:208px; width:270px; height:390px;"></div>
+        <div class="panel-title" style="left:1070px; top:224px;">产品力拆解</div>
+        <div class="node" style="left:1006px; top:230px;">产品卖点</div>
+        <div class="node" style="left:1218px; top:230px;">产品齐备</div>
+        <div class="node" style="left:1212px; top:360px;">核心产品</div>
+        <div class="node small" style="left:1120px; top:512px;">集采</div>
+        <div class="node" style="left:1268px; top:360px;">城市分公司<br>材料齐备率</div>
+        <div class="node small" style="left:1300px; top:512px;">地采</div>
+      </div>
+    </section>
+
+    <div class="note">
+      这个 HTML 是纯静态可视化版本，不依赖项目环境，也不依赖外部 CDN。Mermaid 源文件仍保留在同目录的 <strong>conversion_analysis_flow.mmd</strong>，便于继续编辑逻辑。
+    </div>
+  </main>
+</body>
+</html>

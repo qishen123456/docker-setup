@@ -1,0 +1,95 @@
+flowchart LR
+  %% Conversion analysis logic reconstructed from the provided image.
+
+  subgraph L0["经营结果拆解主链路"]
+    A1["责任盘占比"] --> Lead["线索"]
+    A2["有效线索率"] --> Lead
+    A3["线索覆盖率"] --> Lead
+    Lead --> Inbound["进线渠道"]
+    Lead --> ProductType["产品类型"]
+    Lead --> Multiply1(("×"))
+    Cycle["转化周期"] --> ConvRate["转化率"]
+    Multiply1 --> ConvRate
+    ConvRate --> ProductPower["产品力"]
+    ProductPower --> Multiply2(("×"))
+    AvgValue["均单值"] --> ProductStructure["产品结构"]
+    ProductStructure --> Delivery["交付配置"]
+    Delivery --> ProductPower
+  end
+
+  subgraph C1["进线渠道拆解"]
+    Property["物业联动"] --> GridActive["网格激活率"]
+    Property --> CommunityActive["阵地激活率"]
+    Property --> GridShare["沉睡网格占比"]
+    Property --> DecorReport["装修备案报单率"]
+    Property --> PropertyAction["物业联动动作"]
+
+    Pulin["朴邻联动"] --> PulinReport["朴邻成交报单率"]
+    Pulin --> PulinAction["朴邻联动动作"]
+
+    PAOwn["PA自拓"] --> PANum["PA数量"]
+    PAOwn --> PAAvgLead["PA人均自拓线索"]
+
+    NPS["NPS"] --> MoveInAction["摆展、入户动作"]
+    Repair["维修工自拓"]
+    Partner["外部合作渠道"]
+    Media["自媒体"]
+    Offline["线下投放"]
+
+    Inbound --> Property
+    Inbound --> Pulin
+    Inbound --> PAOwn
+    Inbound --> NPS
+    Inbound --> Repair
+    Inbound --> Partner
+    Inbound --> Media
+    Inbound --> Offline
+  end
+
+  subgraph C2["PA执行力与转化过程"]
+    PAExec["PA执行力"] --> PAAbility["PA能力"]
+    PAExec --> Response["响应及时性"]
+
+    PAAbility --> BuildRate["建联率"]
+    PAAbility --> RoomRate["量房率"]
+    PAAbility --> RoomConvert["量房转化率"]
+    PAAbility --> LeadClose["线索闭单率"]
+
+    Response --> Level2Follow["二级PA分配及时率"]
+    Response --> Level1Accept["一级PA接单及时率"]
+    Response --> FollowRate["线索跟进及时率"]
+    Response --> SleepLead["滞留线索占比"]
+
+    ConvRate --> PAExec
+    LeadClose --> CloseReason["线索闭单原因"]
+    CloseReason --> ProductReason["产品原因"]
+    CloseReason --> PriceReason["价格原因"]
+    CloseReason --> AbnormalLead["异常线索"]
+
+    ServiceVisit["客服闭单回访"] --> CallRate["闭单电话拨打率"]
+    ServiceVisit --> VisitReach["回访接通率"]
+    ServiceVisit --> CustomerBuild["闭单客户建联率"]
+    ServiceVisit --> CloseReason
+  end
+
+  subgraph C3["产品力拆解"]
+    ProductPower --> ProductSelling["产品卖点"]
+    ProductPower --> ProductReady["产品齐备"]
+    ProductReady --> CoreProduct["核心产品"]
+    ProductReady --> MaterialReady["城市分公司材料齐备率"]
+    CoreProduct --> Jicai["集采"]
+    MaterialReady --> DiCai["地采"]
+  end
+
+  ProductType --> ProductPower
+  ProductReason -.-> ProductPower
+
+  classDef metric fill:#ffffff,stroke:#1f2937,stroke-width:1.4px,color:#111827;
+  classDef core fill:#eef5ff,stroke:#165dff,stroke-width:2px,color:#0f3c9e;
+  classDef process fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a;
+  classDef risk fill:#fff7ed,stroke:#f97316,stroke-width:1.5px,color:#9a3412;
+
+  class Lead,ConvRate,ProductPower,AvgValue core;
+  class Inbound,PAExec,ProductType,ProductStructure,Delivery process;
+  class CloseReason,ProductReason,PriceReason,AbnormalLead,SleepLead risk;
+  class A1,A2,A3,Cycle,GridActive,CommunityActive,GridShare,DecorReport,PropertyAction,PulinReport,PulinAction,PANum,PAAvgLead,MoveInAction,PAAbility,Response,BuildRate,RoomRate,RoomConvert,LeadClose,Level2Follow,Level1Accept,FollowRate,ServiceVisit,CallRate,VisitReach,CustomerBuild,ProductSelling,ProductReady,CoreProduct,MaterialReady,Jicai,DiCai metric;

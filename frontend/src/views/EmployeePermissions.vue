@@ -2,7 +2,7 @@
   <div class="rbac-page">
     <header class="rbac-head">
       <div>
-        <div class="rbac-kicker">RBAC ACCESS GOVERNANCE</div>
+        <div class="rbac-kicker">权限治理</div>
         <h2>角色权限与用户分组</h2>
         <p>统一维护角色、功能权限、数据集资源权限、用户分组和停用控制。</p>
       </div>
@@ -36,6 +36,7 @@
           <button
             v-for="role in filteredRoles"
             :key="role.id"
+            type="button"
             class="rbac-list-item"
             :class="{ active: activeType === 'role' && activeId === role.id }"
             @click="selectItem('role', role.id)"
@@ -56,6 +57,7 @@
           <button
             v-for="user in filteredUsers"
             :key="user.id"
+            type="button"
             class="rbac-list-item"
             :class="{ active: activeType === 'user' && activeId === user.id, disabled: !user.enabled }"
             @click="selectItem('user', user.id)"
@@ -76,6 +78,7 @@
           <button
             v-for="group in filteredGroups"
             :key="group.id"
+            type="button"
             class="rbac-list-item"
             :class="{ active: activeType === 'group' && activeId === group.id }"
             @click="selectItem('group', group.id)"
@@ -93,6 +96,7 @@
           <button
             v-for="dataset in filteredDatasets"
             :key="dataset.id"
+            type="button"
             class="rbac-list-item"
             :class="{ active: activeType === 'resource' && Number(activeId) === Number(dataset.id) }"
             @click="selectItem('resource', dataset.id)"
@@ -128,7 +132,10 @@
             </section>
 
             <section class="detail-card wide">
-              <h4>权限配置 · 功能操作权限</h4>
+              <div class="detail-card-title">
+                <h4>权限配置 · 功能操作权限</h4>
+                <span v-if="activeRole.id === 'super_admin'" class="readonly-tip">超管角色受保护，默认拥有全部权限，不可编辑</span>
+              </div>
               <div class="feature-groups">
                 <div v-for="group in featureGroups" :key="group.name" class="feature-group">
                   <div class="feature-group-title">{{ group.name }}</div>
@@ -146,7 +153,10 @@
             </section>
 
             <section class="detail-card wide">
-              <h4>权限配置 · 数据集资源权限</h4>
+              <div class="detail-card-title">
+                <h4>权限配置 · 数据集资源权限</h4>
+                <span v-if="activeRole.id === 'super_admin'" class="readonly-tip">超管默认拥有所有数据集管理权限</span>
+              </div>
               <div class="resource-table">
                 <div class="resource-row head"><span>数据集</span><span>权限</span></div>
                 <div v-for="dataset in datasets" :key="dataset.id" class="resource-row">
@@ -415,9 +425,14 @@ const loadAll = async () => {
 const selectItem = async (type, id) => {
   activeType.value = type
   activeId.value = String(id)
+  activeResourceAccess.value = null
   if (type === 'resource') {
-    const res = await getRbacDatasetAccess(id)
-    activeResourceAccess.value = res.data
+    try {
+      const res = await getRbacDatasetAccess(id)
+      activeResourceAccess.value = res.data
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.error || error.message || '资源权限视图加载失败')
+    }
   }
 }
 
@@ -550,7 +565,7 @@ onMounted(loadAll)
 .rbac-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   color: #1d2129;
 }
 
@@ -560,28 +575,32 @@ onMounted(loadAll)
 .rbac-detail,
 .detail-card {
   background: #fff;
-  border: 1px solid rgba(18, 48, 79, 0.08);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e5e6eb;
+  box-shadow: none;
 }
 
 .rbac-head {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 24px;
-  border-radius: 18px;
+  padding: 18px 20px;
+  border-radius: 10px;
 }
 
 .rbac-kicker {
-  color: #165dff;
+  color: #4e5969;
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
 }
 
 .rbac-head h2,
 .detail-head h3 {
-  margin: 6px 0;
+  margin: 5px 0;
+}
+
+.rbac-head h2 {
+  font-size: 24px;
 }
 
 .rbac-head p,
@@ -608,9 +627,10 @@ button {
 .rbac-primary,
 .rbac-ghost,
 .rbac-danger {
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 10px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .rbac-primary {
@@ -619,17 +639,19 @@ button {
 }
 
 .rbac-primary.muted {
-  background: #0f766e;
+  background: #344054;
 }
 
 .rbac-ghost {
-  background: #f4f7fb;
+  background: #f7f8fa;
   color: #4e5969;
+  border: 1px solid #e5e6eb;
 }
 
 .rbac-danger {
-  background: #fff1f0;
+  background: #fff;
   color: #d93026;
+  border: 1px solid #f1b8b2;
 }
 
 .rbac-primary:disabled,
@@ -642,12 +664,13 @@ button {
 .rbac-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .rbac-metrics > div {
-  padding: 14px 16px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  min-height: 70px;
 }
 
 .rbac-metrics span,
@@ -661,32 +684,33 @@ button {
 .rbac-metrics strong {
   display: block;
   margin-top: 6px;
-  font-size: 26px;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .rbac-layout {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 12px;
   min-height: 680px;
 }
 
 .rbac-left,
 .rbac-detail {
-  border-radius: 18px;
+  border-radius: 10px;
 }
 
 .rbac-left {
-  padding: 14px;
+  padding: 12px;
   overflow: auto;
-  max-height: calc(100vh - 230px);
+  max-height: calc(100vh - 214px);
 }
 
 .rbac-search {
   display: grid;
-  grid-template-columns: 1fr 104px;
+  grid-template-columns: 1fr 96px;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 input,
@@ -695,21 +719,22 @@ textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #e5e6eb;
-  border-radius: 10px;
-  padding: 9px 10px;
+  border-radius: 6px;
+  padding: 8px 10px;
   background: #fff;
   color: #1d2129;
   outline: none;
+  font-size: 13px;
 }
 
 .rbac-list-section {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .rbac-section-title {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .rbac-section-title button {
@@ -719,22 +744,34 @@ textarea {
 
 .rbac-list-item {
   width: 100%;
-  min-height: 54px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  min-height: 48px;
+  margin-bottom: 6px;
+  padding: 9px 10px;
   display: flex;
   align-items: center;
   gap: 10px;
   justify-content: space-between;
   text-align: left;
-  border-radius: 12px;
-  background: #f7f8fa;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #fafbfc;
   color: #1d2129;
 }
 
 .rbac-list-item.active {
-  background: #eef5ff;
-  outline: 1px solid rgba(22, 93, 255, .24);
+  background: #f0f6ff;
+  border-color: #b8d4ff;
+  outline: none;
+}
+
+.rbac-list-item:hover {
+  background: #f4f7fb;
+  border-color: #d8dee8;
+}
+
+.rbac-list-item.active:hover {
+  background: #eaf3ff;
+  border-color: #96c0ff;
 }
 
 .rbac-list-item.disabled {
@@ -767,9 +804,9 @@ textarea {
 }
 
 .rbac-detail {
-  padding: 18px;
+  padding: 16px;
   overflow: auto;
-  max-height: calc(100vh - 230px);
+  max-height: calc(100vh - 214px);
 }
 
 .detail-head {
@@ -777,15 +814,15 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 16px;
+  padding-bottom: 14px;
   border-bottom: 1px solid #f0f1f3;
 }
 
 .detail-badge {
   display: inline-flex;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #eef5ff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f0f6ff;
   color: #165dff;
 }
 
@@ -797,13 +834,13 @@ textarea {
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .detail-card {
-  padding: 16px;
-  border-radius: 14px;
+  padding: 14px;
+  border-radius: 8px;
 }
 
 .detail-card.wide {
@@ -812,12 +849,38 @@ textarea {
 
 .detail-card h4,
 .detail-card h5 {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
+}
+
+.detail-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.detail-card-title h4 {
+  margin: 0;
+}
+
+.readonly-tip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f7f8fa;
+  border: 1px solid #e5e6eb;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .detail-card label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: #4e5969;
   font-size: 12px;
   font-weight: 800;
@@ -831,44 +894,98 @@ textarea {
 
 .feature-groups {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
 }
 
 .feature-group {
-  padding: 12px;
-  border-radius: 12px;
-  background: #f7f8fa;
+  padding: 10px;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #fbfcfe;
 }
 
 .feature-group-title {
   margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #edf0f5;
   font-size: 12px;
   font-weight: 900;
+  color: #1d2129;
 }
 
 .permission-pill {
   display: inline-flex !important;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   width: auto !important;
-  margin: 0 8px 8px 0 !important;
-  padding: 7px 9px;
-  border-radius: 999px;
+  margin: 0 6px 6px 0 !important;
+  padding: 6px 8px;
+  border-radius: 6px;
   background: #fff;
   border: 1px solid #e5e6eb;
   color: #4e5969 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.35;
+}
+
+.feature-group .permission-pill {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 30px;
+  margin: 0 !important;
+  padding: 5px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4e5969 !important;
+}
+
+.feature-group .permission-pill + .permission-pill {
+  margin-top: 4px !important;
+}
+
+.feature-group .permission-pill:hover {
+  background: #f2f6fb;
+}
+
+.feature-group .permission-pill:has(input:checked) {
+  color: #165dff !important;
+  background: #eef5ff;
+}
+
+.feature-group .permission-pill:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+.permission-pill input,
+.rbac-check input {
+  width: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #165dff;
+}
+
+.permission-pill span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .permission-pill.block {
   display: flex !important;
   width: 100% !important;
-  border-radius: 10px;
+  min-height: 34px;
+  border-radius: 6px;
+  justify-content: flex-start;
 }
 
 .resource-table {
   border: 1px solid #edf0f5;
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -877,8 +994,9 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 160px;
   gap: 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-top: 1px solid #f1f3f7;
+  font-size: 13px;
 }
 
 .resource-row.head {
@@ -896,14 +1014,15 @@ textarea {
 }
 
 .auth-object-grid > div {
-  padding: 14px;
-  border-radius: 12px;
-  background: #f7f8fa;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fafbfc;
+  border: 1px solid #edf0f5;
 }
 
 .auth-object-grid b {
   display: block;
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .mini-tags,
@@ -918,21 +1037,22 @@ textarea {
 .mini-chip {
   display: inline-flex;
   align-self: flex-start;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: #eef5ff;
-  color: #165dff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f0f6ff;
+  color: #2f5fb3;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .source-list > div {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #f7f8fa;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #fafbfc;
+  border: 1px solid #edf0f5;
 }
 
 .source-list span {
@@ -941,8 +1061,16 @@ textarea {
 
 .user-pick-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+}
+
+.user-pick-grid .permission-pill {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 34px;
+  margin: 0 !important;
+  justify-content: flex-start;
 }
 
 .rbac-empty {
