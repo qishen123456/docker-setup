@@ -49,6 +49,7 @@ from controllers.smart_chat import smart_chat_bp
 from controllers.report_config import report_config_bp
 from controllers.runtime_migration import runtime_migration_bp
 from controllers.system_logs import system_logs_bp
+from controllers.rbac import rbac_bp
 from feature_flags import ensure_feature_flags
 from auth_store import get_current_user
 from system_log_store import log_event, request_snapshot
@@ -95,6 +96,7 @@ app.register_blueprint(report_config_bp)
 app.register_blueprint(runtime_migration_bp)
 app.register_blueprint(feature_flags_bp)
 app.register_blueprint(system_logs_bp)
+app.register_blueprint(rbac_bp)
 
 
 def _skip_access_log(path: str) -> bool:

@@ -67,7 +67,7 @@ const routes = [
     path: '/employee-permissions',
     name: 'EmployeePermissions',
     component: () => import('../views/EmployeePermissions.vue'),
-    meta: { title: '员工权限配置', roles: ['super_admin'] }
+    meta: { title: '角色权限管理', roles: ['super_admin'] }
   },
   {
     path: '/runtime-migration',

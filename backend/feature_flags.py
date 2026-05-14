@@ -208,8 +208,8 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "experimental": False,
         },
         "employee_permissions": {
-            "label": "员工权限配置",
-            "description": "维护账号、角色、默认密码和飞书 UnionID 映射。",
+            "label": "角色权限管理",
+            "description": "维护 RBAC 角色、用户分组、账号状态和飞书 UnionID 映射。",
             "category": "导航入口",
             "module": "navigation",
             "module_label": "左侧导航栏",
@@ -884,9 +884,15 @@ def save_feature_flags(payload: dict[str, Any], operator: str = "") -> dict[str,
 def view_for_user(flags: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
     role = (user or {}).get("role") or "user"
     result = deepcopy(flags)
-    for feature in result.get("features", {}).values():
+    for key, feature in result.get("features", {}).items():
         roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
-        feature["available"] = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+        legacy_allowed = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+        try:
+            from rbac_store import user_has_function
+
+            feature["available"] = bool(feature.get("enabled", False)) and user_has_function(user or {}, str(key), legacy_allowed)
+        except Exception:
+            feature["available"] = legacy_allowed
     return result
 
 
@@ -897,4 +903,10 @@ def feature_available(key: str, user: dict[str, Any] | None) -> bool:
         return True
     roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
     role = (user or {}).get("role") or "user"
-    return bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+    legacy_allowed = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+    try:
+        from rbac_store import user_has_function
+
+        return bool(feature.get("enabled", False)) and user_has_function(user or {}, key, legacy_allowed)
+    except Exception:
+        return legacy_allowed

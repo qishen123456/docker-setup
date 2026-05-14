@@ -2198,11 +2198,18 @@ class FourAgentAskService:
         dataset_code = str(dataset.get("dataset_code") or "")
         dataset_name = str(dataset.get("dataset_name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
+        is_consumer_dataset = (
+            dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
+            or "消费者" in dataset_name
+        )
         is_syyb_dataset = dataset_code in {"angel_business_2026", "angel_business_2026_phase1"} or dataset_name in {
             "商用事业部",
             "商用事业部（阶段一升级版）",
         }
         is_phase1_dataset = dataset_code == "angel_business_2026_phase1" or dataset_name == "商用事业部（阶段一升级版）"
+
+        if is_consumer_dataset:
+            return self._build_consumer_business_sql(normalized_question, context)
 
         if not is_syyb_dataset:
             return ""
@@ -2399,6 +2406,119 @@ LIMIT 100
 """.strip()
 
         return ""
+
+    def _build_consumer_business_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
+        entity_names = self._resolved_entity_names(context)
+        if not entity_names:
+            for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:分公司|城市公司|城市分公司|事业部)", normalized_question):
+                cleaned = match.strip("，,、 和与及的业绩情况表现整体")
+                if cleaned and cleaned not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
+                    entity_names.append(cleaned)
+
+        scope_filter = ""
+        if entity_names:
+            quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+            scope_filter = f"""
+WHERE 节点名称 = '消费者事业部'
+   OR 节点名称 IN ({quoted_entities})
+   OR 上级名称 IN ({quoted_entities})
+   OR 上级名称 IN (
+       SELECT 节点名称
+       FROM 汇总结果
+       WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
+   )
+"""
+
+        return f"""
+WITH 字段提取 AS (
+    SELECT
+        id,
+        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') AS 事业部,
+        COALESCE(NULLIF(TRIM(fields->>'分公司'), ''), '') AS 分公司,
+        COALESCE(
+            NULLIF(TRIM(fields->>'城市公司'), ''),
+            NULLIF(TRIM(fields->>'城市分公司'), ''),
+            ''
+        ) AS 城市公司,
+        COALESCE(NULLIF(TRIM(fields->>'层级级别'), ''), '') AS 源层级,
+        COALESCE(NULLIF(TRIM(fields->>'当前年'), ''), '2026') AS 当前年,
+        NULLIF(regexp_replace(COALESCE(fields->>'总任务（金额）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 总任务原值,
+        NULLIF(regexp_replace(COALESCE(fields->>'年度开单金额', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 年度开单原值,
+        NULLIF(regexp_replace(COALESCE(fields->>'线下（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 线下任务万,
+        NULLIF(regexp_replace(COALESCE(fields->>'新零售（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 新零售任务万,
+        NULLIF(regexp_replace(COALESCE(fields->>'燃气定制（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 燃气定制任务万,
+        NULLIF(regexp_replace(COALESCE(fields->>'地产（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 地产任务万,
+        NULLIF(regexp_replace(COALESCE(fields->>'线下-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 线下实际万,
+        NULLIF(regexp_replace(COALESCE(fields->>'新零售-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 新零售实际万,
+        NULLIF(regexp_replace(COALESCE(fields->>'燃气定制-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 燃气定制实际万,
+        NULLIF(regexp_replace(COALESCE(fields->>'地产-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 地产实际万
+    FROM public.feishu_tbl_xioafeizhe
+    WHERE fields IS NOT NULL
+),
+标准行 AS (
+    SELECT
+        id,
+        CASE
+            WHEN 城市公司 <> '' THEN '城市公司'
+            WHEN 分公司 <> '' THEN '分公司'
+            ELSE '消费者事业部总体'
+        END AS 层级,
+        CASE
+            WHEN 城市公司 <> '' THEN 城市公司
+            WHEN 分公司 <> '' THEN 分公司
+            ELSE 事业部
+        END AS 节点名称,
+        CASE
+            WHEN 城市公司 <> '' THEN 分公司
+            WHEN 分公司 <> '' THEN 事业部
+            ELSE NULL
+        END AS 上级名称,
+        COALESCE(总任务原值, (COALESCE(线下任务万, 0) + COALESCE(新零售任务万, 0) + COALESCE(燃气定制任务万, 0) + COALESCE(地产任务万, 0)) * 10000, 0) AS 总任务金额,
+        COALESCE(年度开单原值, (COALESCE(线下实际万, 0) + COALESCE(新零售实际万, 0) + COALESCE(燃气定制实际万, 0) + COALESCE(地产实际万, 0)) * 10000, 0) AS 年度开单金额,
+        COALESCE(线下任务万, 0) AS 线下任务_万元,
+        COALESCE(新零售任务万, 0) AS 新零售任务_万元,
+        COALESCE(燃气定制任务万, 0) AS 燃气定制任务_万元,
+        COALESCE(地产任务万, 0) AS 地产任务_万元,
+        COALESCE(线下实际万, 0) AS 线下实际_万元,
+        COALESCE(新零售实际万, 0) AS 新零售实际_万元,
+        COALESCE(燃气定制实际万, 0) AS 燃气定制实际_万元,
+        COALESCE(地产实际万, 0) AS 地产实际_万元
+    FROM 字段提取
+    WHERE 当前年 = '2026'
+      AND (事业部 = '消费者事业部' OR 分公司 <> '' OR 城市公司 <> '')
+),
+汇总结果 AS (
+    SELECT
+        '消费者经营链路' AS 条线,
+        层级,
+        节点名称,
+        上级名称,
+        ROUND(总任务金额, 2) AS 总任务金额,
+        ROUND(年度开单金额, 2) AS 年度开单金额,
+        CASE WHEN 总任务金额 > 0 THEN ROUND(年度开单金额 / 总任务金额 * 100, 2) ELSE 0 END AS 达成率,
+        ROUND(GREATEST(总任务金额 - 年度开单金额, 0), 2) AS 剩余任务金额,
+        ROUND(线下任务_万元, 2) AS 线下任务_万元,
+        ROUND(新零售任务_万元, 2) AS 新零售任务_万元,
+        ROUND(燃气定制任务_万元, 2) AS 燃气定制任务_万元,
+        ROUND(地产任务_万元, 2) AS 地产任务_万元,
+        ROUND(线下实际_万元, 2) AS 线下实际_万元,
+        ROUND(新零售实际_万元, 2) AS 新零售实际_万元,
+        ROUND(燃气定制实际_万元, 2) AS 燃气定制实际_万元,
+        ROUND(地产实际_万元, 2) AS 地产实际_万元
+    FROM 标准行
+    WHERE 节点名称 <> ''
+      AND (总任务金额 > 0 OR 年度开单金额 > 0)
+)
+SELECT *
+FROM 汇总结果
+{scope_filter}
+ORDER BY
+    CASE 层级 WHEN '消费者事业部总体' THEN 0 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    上级名称 NULLS FIRST,
+    达成率 DESC,
+    节点名称
+LIMIT 10000
+""".strip()
 
     def _agent2_generate_sql(
         self,

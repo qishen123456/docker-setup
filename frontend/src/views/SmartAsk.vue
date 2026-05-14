@@ -21,7 +21,9 @@
             <WelcomeScreen
               v-if="messages.length === 0"
               :common-questions="commonQuestions"
+              :common-questions-loading="commonQuestionsLoading"
               @quick-ask="quickAsk"
+              @refresh-questions="refreshCommonQuestions"
             />
 
             <!-- 消息列表 -->
@@ -1117,6 +1119,7 @@ const modelId = ref(null)
 const datasets = ref([])
 const aiModels = ref([])
 const commonQuestions = ref([])
+const commonQuestionsLoading = ref(false)
 const messages = reactive([])
 const confirmationDrafts = reactive({})
 const confirmationSubmitting = reactive({})
@@ -2329,12 +2332,81 @@ const buildComparisonMetricTable = (offices = []) => {
   return `${table}${note}`
 }
 
+const buildRankMetricTable = (items = [], title = '对象') => {
+  if (!items.length) return ''
+  return [
+    `| ${title} | 任务 | 完成 | 达成率 | 缺口 |`,
+    '| --- | ---: | ---: | ---: | ---: |',
+    ...items.map(item => (
+      `| ${item.name} | ${getOfficeMetricText(item, 'task')} | ${getOfficeMetricText(item, 'actual')} | ${getOfficeMetricText(item, 'rate')} | ${getOfficeMetricText(item, 'remain')} |`
+    )),
+  ].join('\n')
+}
+
+const getRateDistribution = (items = []) => {
+  const source = items.filter(item => item?.rate !== null && item?.rate !== undefined)
+  const total = source.length || 0
+  const buckets = [
+    { label: '20%以下', count: 0, matcher: rate => rate < 20 },
+    { label: '20%-40%', count: 0, matcher: rate => rate >= 20 && rate < 40 },
+    { label: '40%以上', count: 0, matcher: rate => rate >= 40 },
+  ]
+  source.forEach((item) => {
+    const bucket = buckets.find(part => part.matcher(Number(item.rate)))
+    if (bucket) bucket.count += 1
+  })
+  return buckets.map(item => ({
+    ...item,
+    pct: total ? `${Math.round(item.count / total * 100)}%` : '0%',
+  }))
+}
+
+const buildRateDistributionText = (items = []) => (
+  getRateDistribution(items).map(item => `${item.label}：${item.count}个（${item.pct}）`).join('；')
+)
+
+const getTrendProgressText = (report) => {
+  const kpis = Array.isArray(report?.kpis) ? report.kpis : []
+  const trendItems = kpis
+    .filter(item => /同比|环比|较上期|较同期|增长|变化/i.test(`${item?.label || ''}${item?.key || ''}`))
+    .map(item => `${item.label || item.key}：${item.value ?? item.displayValue ?? '-'}`)
+  if (trendItems.length) return trendItems.join('；')
+  return '本次 SQL 结果未返回同比/环比字段，当前以达成率、缺口和分布判断进度；建议后续在数据集中补充同期/上期指标列。'
+}
+
+const getPressureDiagnosis = (item, detailLabel = '下级节点') => {
+  if (!item) return ''
+  const task = toNumber(getOfficeMetricText(item, 'task'))
+  const actual = toNumber(getOfficeMetricText(item, 'actual'))
+  const remain = toNumber(getOfficeMetricText(item, 'remain'))
+  const rate = toNumber(getOfficeMetricText(item, 'rate'))
+  const detailCount = Number(item.childCount || item.detailRows?.length || 0)
+  const signals = []
+  if (task !== null && remain !== null && task > 0 && remain / task >= 0.5) {
+    signals.push('任务体量或缺口压力偏大')
+  }
+  if (rate !== null && rate < 20) {
+    signals.push('整体转化进度偏慢')
+  }
+  if (actual !== null && task !== null && task > 0 && actual / task < 0.25) {
+    signals.push('客户转化或项目落单不足')
+  }
+  if (detailCount > 0) {
+    signals.push(`需继续下钻${detailCount}个${detailLabel}确认项目阶段`)
+  }
+  return signals.length
+    ? `${item.name}可能由${signals.join('、')}共同造成，优先用下级明细验证。`
+    : `${item.name}需要补充项目阶段、客户转化和资源投入字段后再做归因。`
+}
+
 const buildBusinessNarrativeSections = (report) => {
   const offices = report?.offices || []
   if (!report || !offices.length) return []
   const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
   const best = ranked[0] || offices[0]
   const worst = ranked[ranked.length - 1] || offices[offices.length - 1]
+  const top3 = ranked.slice(0, 3)
+  const bottom3 = [...ranked].reverse().slice(0, 3)
   const diff = best?.rate !== null && worst?.rate !== null
     ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
     : ''
@@ -2345,6 +2417,16 @@ const buildBusinessNarrativeSections = (report) => {
   const riskText = riskOffices.length
     ? `${riskOffices.slice(0, 3).map(item => item.name).join('、')}处于低达成风险${riskOffices.length > 3 ? `等 ${riskOffices.length} 个对象` : ''}`
     : '当前同层级对象暂无低达成风险'
+  const distributionText = buildRateDistributionText(offices)
+  const trendText = getTrendProgressText(report)
+  const topBottomTable = [
+    'Top3：',
+    buildRankMetricTable(top3, report.compareLevelLabel || '对象'),
+    '',
+    '末3：',
+    buildRankMetricTable(bottom3, report.compareLevelLabel || '对象'),
+  ].filter(Boolean).join('\n\n')
+
   if (report.isSingleFocus) {
     const focusName = report.focusName || '当前组织'
     const counts = getSingleOrgCounts(report)
@@ -2372,31 +2454,42 @@ const buildBusinessNarrativeSections = (report) => {
     ].join('\n')
     return [
       {
-        title: `一、${focusName}业绩核心结论`,
+        title: `一、${focusName}核心结论`,
         body: [
-          getSingleOrgConclusion(report),
+          `1. 当前进度：${getSingleOrgConclusion(report)}`,
           rankContext.diff
-            ? `内部达成分化明显：${rankContext.best.name}达成率${rankContext.best.rateLabel}领跑，${rankContext.worst.name}达成率${rankContext.worst.rateLabel}承压，首尾差距${rankContext.diff}个百分点。`
+            ? `2. 头尾差异：${rankContext.best.name}达成率${rankContext.best.rateLabel}领跑，${rankContext.worst.name}达成率${rankContext.worst.rateLabel}承压，首尾差距${rankContext.diff}个百分点。`
             : report.summary,
+          `3. 风险信号：${riskText}；${distributionText}。`,
+        ].filter(Boolean).slice(0, 3).join('\n'),
+      },
+      {
+        title: `二、${focusName}关键指标与二级拆解`,
+        body: [
+          `事业部/主体大盘：总任务金额 ${getReportKpiText(report, 'task')}，年度开单金额 ${getReportKpiText(report, 'actual')}，整体达成率 ${overallRate}，剩余任务金额 ${getReportKpiText(report, 'remain')}。`,
+          `同比/环比进度：${trendText}`,
+          `达成率分布：${distributionText}`,
+          comparisonTable,
         ].filter(Boolean).join('\n\n'),
       },
       {
-        title: `二、${focusName}大盘关键指标`,
+        title: `三、${counts.directLabel}Top3/末3对比`,
+        body: topBottomTable,
+      },
+      {
+        title: '四、结构看板与问题溯源',
         body: [
-          `覆盖范围：${counts.directCount}个${counts.directLabel}${counts.detailCount ? `，${counts.detailCount}个${counts.detailLabel}` : ''}。`,
-          `总任务金额：${getReportKpiText(report, 'task')}；年度开单金额：${getReportKpiText(report, 'actual')}；整体达成率：${overallRate}；剩余任务金额：${getReportKpiText(report, 'remain')}。`,
+          `标杆分析：${rankContext.best ? `${rankContext.best.name}是当前标杆，任务 ${getOfficeMetricText(rankContext.best, 'task')}，完成 ${getOfficeMetricText(rankContext.best, 'actual')}，达成率 ${rankContext.best.rateLabel}；建议复盘其目标拆解、客户推进和项目转化节奏。` : '当前未识别稳定标杆。'}`,
+          `压力节点：${rankContext.worst ? getPressureDiagnosis(rankContext.worst, counts.detailLabel) : '当前未识别明显压力节点。'}`,
+          `分层归因：事业部层面关注头部贡献与尾部拖累是否过度分化；${counts.directLabel}层面重点比较标杆和末位在任务体量、项目阶段、客户转化和资源投入上的差异。`,
         ].join('\n\n'),
       },
       {
-        title: `三、${counts.directLabel}达成对标分析`,
-        body: comparisonTable,
-      },
-      {
-        title: '四、风险提示与落地建议',
+        title: '五、动作落地',
         body: [
-          rankContext.best ? `标杆复制：优先复盘${rankContext.best.name}的高达成推进路径，沉淀目标拆解、客户跟进和项目转化动作。` : '',
-          riskOffices.length ? `风险干预：${riskOffices.slice(0, 3).map(item => item.name).join('、')}低于风险线，建议一周内下钻到${report.detailLevelLabel}，锁定未转化项目清单。` : `风险干预：当前暂无明显低达成${counts.directLabel}，继续保持周度跟踪。`,
-          `过程管控：建立${focusName}周度达成率跟踪，对低于10%的${counts.directLabel}启动专项帮扶。`,
+          rankContext.best ? `标杆经验推广：由${rankContext.best.name}输出可复制动作清单，两周内同步给达成率低于20%的${counts.directLabel}。` : '',
+          rankContext.worst ? `压力节点帮扶：围绕${rankContext.worst.name}建立下钻清单，责任方为业务负责人+经营分析；输出项目阶段、客户转化、缺口金额三张明细表。` : '',
+          `整体优化：按${counts.directLabel}建立红黄绿看板，低于20%周度复盘，20%-40%专项推进，高于40%沉淀打法并横向复制。`,
         ].filter(Boolean).join('\n'),
       },
     ]
@@ -2404,25 +2497,41 @@ const buildBusinessNarrativeSections = (report) => {
   return [
     {
       title: '一、核心结论',
-      body: diff
-        ? `${best.name}整体达成率${best.rateLabel}，比${worst.name}高${diff}个百分点；本次比较对象为${visibleNames}，建议先看同层级差异，再下钻直接下级定位原因。`
-        : report.summary,
-    },
-    {
-      title: '二、关键指标对标',
-      body: buildComparisonMetricTable(offices),
-    },
-    {
-      title: '三、层级差异核心看点',
       body: [
-        `1. 最高达成对象：${best.name}，达成率${best.rateLabel}。`,
-        `2. 当前压力对象：${worst.name}，达成率${worst.rateLabel}。`,
-        `3. 风险提示：${riskText}。`,
+        diff
+          ? `1. 当前对比覆盖${visibleNames}，${best.name}达成率${best.rateLabel}领先，${worst.name}达成率${worst.rateLabel}承压，首尾差${diff}个百分点。`
+          : `1. ${report.summary}`,
+        `2. 头部/尾部差异：Top3为${top3.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}；末3为${bottom3.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}。`,
+        `3. 核心风险信号：${riskText}；${distributionText}。`,
       ].join('\n'),
     },
     {
-      title: '四、落地建议',
-      body: `先围绕${worst.name}下钻${report.detailLevelLabel}，对比${best.name}的高达成节点做目标拆解、客户推进节奏和项目转化复盘；完整对象排序以“各${report.compareLevelLabel}对比分析”表为准。`,
+      title: '二、关键指标与分层拆解',
+      body: [
+        buildComparisonMetricTable(offices),
+        `同比/环比进度：${trendText}`,
+        `分布看板：${distributionText}`,
+      ].join('\n\n'),
+    },
+    {
+      title: `三、${report.compareLevelLabel}Top3/末3对比`,
+      body: topBottomTable,
+    },
+    {
+      title: '四、结构看板与问题溯源',
+      body: [
+        `标杆分析：${best.name}任务 ${getOfficeMetricText(best, 'task')}，完成 ${getOfficeMetricText(best, 'actual')}，达成率 ${best.rateLabel}；优先复盘其目标拆解、客户推进和项目转化动作。`,
+        `压力节点：${getPressureDiagnosis(worst, report.detailLevelLabel)}`,
+        `分层归因：事业部层面看头部贡献、尾部拖累和任务分配合理性；${report.compareLevelLabel}层面看任务体量、项目阶段、客户转化和资源投入差异。`,
+      ].join('\n\n'),
+    },
+    {
+      title: '五、动作落地',
+      body: [
+        `标杆经验推广：由${best.name}沉淀关键动作，覆盖${bottom3.map(item => item.name).join('、') || '低达成节点'}，两周内完成打法复盘和任务拆解。`,
+        `压力节点帮扶：围绕${worst.name}下钻${report.detailLevelLabel}，责任方为业务负责人+经营分析；输出项目阶段、客户转化、缺口金额三类问题清单。`,
+        `整体优化：按达成率分布配置资源，低于20%节点进入周度专项，20%-40%节点做过程纠偏，高于40%节点提炼可复制打法。`,
+      ].join('\n'),
     },
   ]
 }
@@ -2451,6 +2560,27 @@ const reportSummaryBullets = computed(() => {
     }
     if (names.length) bullets.push(`命中数据集：${names.join('、')}`)
     return bullets.filter(Boolean)
+  }
+  if (drillReport?.offices?.length) {
+    const ranked = [...drillReport.offices]
+      .filter(item => item.rate !== null && item.rate !== undefined)
+      .sort((a, b) => (b.rate || 0) - (a.rate || 0))
+    const best = ranked[0] || drillReport.offices[0]
+    const worst = ranked[ranked.length - 1] || drillReport.offices[drillReport.offices.length - 1]
+    const gap = best?.rate !== null && worst?.rate !== null && best?.name !== worst?.name
+      ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
+      : ''
+    const riskCount = drillReport.offices.filter(item => item.tone === 'danger').length
+    bullets.push(`当前覆盖 ${drillReport.offices.length} 个${drillReport.compareLevelLabel}，先横向比较再下钻${drillReport.detailLevelLabel}。`)
+    if (best && worst) {
+      bullets.push(gap
+        ? `${best.name}达成率${best.rateLabel}领先，${worst.name}达成率${worst.rateLabel}承压，首尾差${gap}个百分点。`
+        : `${best.name}表现靠前，${worst.name}需要优先下钻复核。`)
+    }
+    bullets.push(riskCount
+      ? `风险信号：${riskCount}个${drillReport.compareLevelLabel}处于低达成风险，需按缺口和项目阶段拆解责任。`
+      : `风险信号：暂无明显低达成${drillReport.compareLevelLabel}，继续保持周度过程跟踪。`)
+    return bullets.filter(Boolean).slice(0, 3)
   }
   if (session.state.question) bullets.push(`原始问题：${session.state.question}`)
   bullets.push(`报告模板：${reportSceneTemplateLabel.value}`)
@@ -2748,6 +2878,23 @@ const latestAiMessage = computed(() => (
 
 const isLatestAiMessage = (msg) => latestAiMessage.value?.id === msg?.id
 
+const syncPendingConfirmationMessage = () => {
+  const result = session.state.result
+  if (session.state.status !== 'waiting_confirmation' || !result?.requires_confirmation) return
+
+  const msg = latestAiMessage.value
+  if (!msg || msg.role !== 'ai') return
+  if (msg.data?.requires_confirmation) return
+  if (!msg.loading && msg.data && !msg.data.aborted) return
+
+  msg.loading = false
+  msg.data = result
+  thinkingOpen[msg.id] = false
+  if (!(msg.id in confirmationDrafts)) confirmationDrafts[msg.id] = ''
+  stopTimer()
+  scheduleChatScroll(36, 'smooth')
+}
+
 const shouldShowLiveFeed = (msg) => {
   if (msg?.loading) return true
   if (!session.state.logs.length) return false
@@ -2910,11 +3057,24 @@ const rerunQuestion = async (msg) => {
 
   try {
     const res = await session.startAsk(text, datasetId.value, modelId.value)
-    aiMsg.loading = false
-    aiMsg.data = res || { aborted: true }
+    if (res) {
+      aiMsg.loading = false
+      aiMsg.data = res
+    } else if (!aiMsg.data) {
+      aiMsg.loading = false
+      aiMsg.data = { aborted: true }
+    } else {
+      aiMsg.loading = false
+    }
     thinkingOpen[aid] = false
     scheduleChatScroll(48, 'smooth')
   } catch (err) {
+    if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
+      aiMsg.loading = false
+      thinkingOpen[aid] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     aiMsg.loading = false
     aiMsg.data = { error: err.response?.data?.error || err.message || '系统繁忙' }
     query.value = text
@@ -2942,12 +3102,25 @@ const handleSend = async () => {
 
   try {
     const res = await session.startAsk(text, datasetId.value, modelId.value)
-    aiMsg.loading = false
-    aiMsg.data = res || { aborted: true }
+    if (res) {
+      aiMsg.loading = false
+      aiMsg.data = res
+    } else if (!aiMsg.data) {
+      aiMsg.loading = false
+      aiMsg.data = { aborted: true }
+    } else {
+      aiMsg.loading = false
+    }
     query.value = ''
     thinkingOpen[aid] = false
     scheduleChatScroll(48, 'smooth')
   } catch (err) {
+    if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
+      aiMsg.loading = false
+      thinkingOpen[aid] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     aiMsg.loading = false
     aiMsg.data = { error: err.response?.data?.error || err.message || '系统繁忙' }
     query.value = text
@@ -3182,7 +3355,13 @@ const restoreHistory = (item) => {
   return true
 }
 
-const quickAsk = (text) => {
+const quickAsk = (item) => {
+  const text = typeof item === 'string' ? item : String(item?.question_text || '').trim()
+  if (!text) return
+  const nextDatasetId = typeof item === 'string' ? null : Number(item?.dataset_id || 0)
+  if (nextDatasetId) {
+    datasetId.value = nextDatasetId
+  }
   query.value = text
   nextTick(() => {
     const textarea = document.querySelector('.sa-textarea')
@@ -3191,7 +3370,14 @@ const quickAsk = (text) => {
       textarea.setSelectionRange(textarea.value.length, textarea.value.length)
     }
   })
-  ElMessage({ message: '已填入，按 Enter 发送', type: 'success', duration: 1800, showClose: false, customClass: 'sa-toast-modern' })
+  const datasetName = typeof item === 'string' ? '' : String(item?.dataset_name || item?.dataset_tag || '').trim()
+  ElMessage({
+    message: datasetName ? `已切换到「${datasetName}」并填入问题` : '已填入，按 Enter 发送',
+    type: 'success',
+    duration: 1800,
+    showClose: false,
+    customClass: 'sa-toast-modern'
+  })
 }
 
 const handleExternalFreshChat = () => {
@@ -3348,10 +3534,20 @@ const handleConfirmationDraftEnter = (event, msg) => {
 const stopTimer = () => clearInterval(timerInst)
 
 const loadQuestions = async () => {
+  commonQuestionsLoading.value = true
   try {
-    const res = await getCommonQuestions(datasetId.value)
+    const res = await getCommonQuestions(null, { random: 1, limit: 4, t: Date.now() })
     commonQuestions.value = (res.questions || res.common_questions || []).slice(0, 4)
-  } catch { commonQuestions.value = [] }
+  } catch {
+    commonQuestions.value = []
+  } finally {
+    commonQuestionsLoading.value = false
+  }
+}
+
+const refreshCommonQuestions = async () => {
+  if (commonQuestionsLoading.value) return
+  await loadQuestions()
 }
 
 const getStatusColor = (rate) => {
@@ -3674,6 +3870,7 @@ watch(() => session.state.logs.map(log => log.pulseText || '').join('|'), (signa
 }, { flush: 'post' })
 
 watch(() => session.state.status, (s) => {
+  syncPendingConfirmationMessage()
   if (s === 'completed') {
     nextTick(() => {
       forceScrollChatToBottom('auto')
@@ -3685,6 +3882,10 @@ watch(() => session.state.status, (s) => {
     schedulePanelScroll(60, 'auto', true)
   }
 })
+
+watch(() => session.state.result, () => {
+  syncPendingConfirmationMessage()
+}, { flush: 'post' })
 
 watch(() => hasSideReport.value, (ready) => {
   if (ready && session.state.status === 'completed') {

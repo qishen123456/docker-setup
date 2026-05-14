@@ -36,10 +36,10 @@ http://localhost:5173/admin-console
 
 
 git push gitee docker-setup --force
-
+推送下方四行代码，第三行改个名字即可
 git status
 git add .
-git commit -m "chore: update smartask LIN ONE"
+git commit -m "chore: update smartask LIn c"
 git push -u gitee docker-setup
 
 

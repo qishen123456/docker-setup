@@ -354,7 +354,7 @@ const menuItems = [
   { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin', featureKey: 'report_config' },
   { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin', featureKey: 'feishu_sync' },
   { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin', featureKey: 'runtime_migration' },
-  { path: '/employee-permissions', label: '员工权限配置', icon: Lock, minRole: 'super_admin', featureKey: 'employee_permissions' },
+  { path: '/employee-permissions', label: '角色权限管理', icon: Lock, minRole: 'super_admin', featureKey: 'employee_permissions' },
   { path: '/admin-console', label: '系统控制台', icon: Setting, minRole: 'super_admin', featureKey: 'admin_console', hidden: true }
 ]
 

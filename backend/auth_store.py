@@ -93,7 +93,78 @@ def resolve_token(token: str) -> Dict[str, Any] | None:
         _save(data)
         return None
     user = item.get("user")
-    return user if isinstance(user, dict) else None
+    if not isinstance(user, dict):
+        return None
+    refreshed_user = _refresh_user_from_employee(user)
+    if _is_user_disabled(refreshed_user):
+        data.get("tokens", {}).pop(token, None)
+        _save(data)
+        return None
+    return refreshed_user
+
+
+def _refresh_user_from_employee(user: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(user, dict) or user.get("role") == "super_admin":
+        return user
+    try:
+        permissions = read_json("employee_permissions.json")
+    except Exception:
+        return user
+    employees = permissions.get("employees") if isinstance(permissions, dict) else []
+    identities = {
+        str(user.get(key) or "").strip().lower()
+        for key in ("employee_id", "username", "account", "union_id", "open_id", "user_id", "identifier")
+        if str(user.get(key) or "").strip()
+    }
+    for item in employees if isinstance(employees, list) else []:
+        if not isinstance(item, dict):
+            continue
+        candidates = {
+            str(item.get(key) or "").strip().lower()
+            for key in ("id", "account", "username", "union_id", "open_id", "user_id", "identifier")
+            if str(item.get(key) or "").strip()
+        }
+        if not identities.intersection(candidates):
+            continue
+        refreshed = dict(user)
+        refreshed["employee_id"] = str(item.get("id") or refreshed.get("employee_id") or "")
+        refreshed["username"] = str(item.get("account") or refreshed.get("username") or "")
+        refreshed["name"] = str(item.get("name") or refreshed.get("name") or "")
+        refreshed["permission_name"] = str(item.get("name") or refreshed.get("permission_name") or "")
+        refreshed["role"] = str(item.get("role") or refreshed.get("role") or "user")
+        refreshed["role_ids"] = item.get("role_ids") if isinstance(item.get("role_ids"), list) else []
+        refreshed["enabled"] = bool(item.get("enabled", True))
+        for key in ("department", "department_ids", "position", "organization", "company"):
+            if item.get(key):
+                refreshed[key] = item[key]
+        return refreshed
+    return user
+
+
+def _is_user_disabled(user: Dict[str, Any]) -> bool:
+    if not isinstance(user, dict) or user.get("role") == "super_admin":
+        return False
+    try:
+        permissions = read_json("employee_permissions.json")
+    except Exception:
+        return False
+    employees = permissions.get("employees") if isinstance(permissions, dict) else []
+    identities = {
+        str(user.get(key) or "").strip().lower()
+        for key in ("employee_id", "username", "account", "union_id", "open_id", "user_id", "identifier")
+        if str(user.get(key) or "").strip()
+    }
+    for item in employees if isinstance(employees, list) else []:
+        if not isinstance(item, dict):
+            continue
+        candidates = {
+            str(item.get(key) or "").strip().lower()
+            for key in ("id", "account", "username", "union_id", "open_id", "user_id", "identifier")
+            if str(item.get(key) or "").strip()
+        }
+        if identities.intersection(candidates):
+            return not bool(item.get("enabled", True))
+    return False
 
 
 def revoke_token(token: str) -> bool:
@@ -114,4 +185,3 @@ def get_current_user() -> Dict[str, Any]:
         return user
     session_user = session.get("user")
     return session_user if isinstance(session_user, dict) else {}
-

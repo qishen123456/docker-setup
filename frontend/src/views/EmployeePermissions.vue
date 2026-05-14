@@ -1,389 +1,968 @@
 <template>
-  <div class="permission-page admin-workspace">
-    <div class="admin-page-head permission-head">
+  <div class="rbac-page">
+    <header class="rbac-head">
       <div>
-        <div class="admin-kicker">ACCESS GOVERNANCE</div>
-        <h2>员工权限配置</h2>
-        <p>维护账号、角色与飞书免登映射。新员工默认密码为 12345678。</p>
+        <div class="rbac-kicker">RBAC ACCESS GOVERNANCE</div>
+        <h2>角色权限与用户分组</h2>
+        <p>统一维护角色、功能权限、数据集资源权限、用户分组和停用控制。</p>
       </div>
-      <button v-if="isFeatureEnabled('employee_permission_edit')" class="save-button" type="button" :disabled="loading || saving" @click="saveAll">
-        {{ saving ? '保存中...' : '保存配置' }}
-      </button>
-    </div>
+      <div class="rbac-head-actions">
+        <button type="button" class="rbac-ghost" :disabled="loading" @click="loadAll">刷新</button>
+        <button type="button" class="rbac-primary" @click="createRole">新建角色</button>
+        <button type="button" class="rbac-primary muted" @click="createGroup">新建分组</button>
+      </div>
+    </header>
 
-    <section class="permission-metrics">
-      <div>
-        <span>员工账号</span>
-        <strong>{{ employees.length }}</strong>
-      </div>
-      <div>
-        <span>管理员</span>
-        <strong>{{ adminCount }}</strong>
-      </div>
-      <div>
-        <span>普通用户</span>
-        <strong>{{ userCount }}</strong>
-      </div>
-      <div>
-        <span>待重置密码</span>
-        <strong>{{ resetCount }}</strong>
-      </div>
+    <section class="rbac-metrics">
+      <div><span>角色</span><strong>{{ roles.length }}</strong></div>
+      <div><span>用户</span><strong>{{ users.length }}</strong></div>
+      <div><span>分组</span><strong>{{ groups.length }}</strong></div>
+      <div><span>停用用户</span><strong>{{ disabledCount }}</strong></div>
     </section>
 
-    <section class="permission-card">
-      <div class="permission-toolbar">
-        <div>
-          <h3>账号与角色</h3>
-          <p>登录账号用于密码登录；飞书 UnionID 用于免登匹配。</p>
-        </div>
-        <button v-if="isFeatureEnabled('employee_permission_edit')" class="add-button" type="button" @click="addEmployee">新增员工</button>
-      </div>
-
-      <div class="permission-table">
-        <div class="permission-row permission-row-head">
-          <span>员工名称</span>
-          <span>登录账号</span>
-          <span>飞书 UnionID</span>
-          <span>部门</span>
-          <span>岗位</span>
-          <span>角色</span>
-          <span>状态</span>
-          <span>密码操作</span>
-          <span>操作</span>
-        </div>
-
-        <div v-if="!employees.length" class="permission-empty">
-          暂无员工权限配置。新增员工后，默认密码为 12345678。
-        </div>
-
-        <div v-for="(item, index) in employees" :key="item.id" class="permission-row">
-          <input v-model.trim="item.name" placeholder="例如：张三" />
-          <input v-model.trim="item.account" placeholder="例如：zhangsan" />
-          <input v-model.trim="item.union_id" placeholder="飞书 union_id" @input="item.identifier = item.union_id" />
-          <input v-model.trim="item.department" placeholder="例如：东部分公司" />
-          <input v-model.trim="item.position" placeholder="例如：总经理" />
-          <select v-model="item.role">
-            <option value="admin">管理员</option>
-            <option value="user">普通用户</option>
+    <main class="rbac-layout" v-loading="loading">
+      <aside class="rbac-left">
+        <div class="rbac-search">
+          <input v-model.trim="keyword" placeholder="搜索角色、用户、分组、数据集" />
+          <select v-model="userStatusFilter">
+            <option value="all">全部状态</option>
+            <option value="enabled">正常</option>
+            <option value="disabled">停用</option>
           </select>
-          <select v-model="item.enabled">
-            <option :value="true">启用</option>
-            <option :value="false">停用</option>
-          </select>
-          <div class="password-cell">
-            <span class="password-status" :class="{ 'is-reset': item.reset_password }">
-              {{ item.reset_password ? '保存后重置' : '已设置' }}
+        </div>
+
+        <div class="rbac-list-section">
+          <div class="rbac-section-title">角色列表</div>
+          <button
+            v-for="role in filteredRoles"
+            :key="role.id"
+            class="rbac-list-item"
+            :class="{ active: activeType === 'role' && activeId === role.id }"
+            @click="selectItem('role', role.id)"
+          >
+            <span>
+              <b>{{ role.name }}</b>
+              <small>{{ role.builtin ? '内置角色' : role.code }}</small>
             </span>
-            <button v-if="isFeatureEnabled('employee_password_reset')" class="reset-button" type="button" @click="resetPassword(item)">重置密码</button>
+            <em>{{ role.function_permissions?.length || 0 }} 功能</em>
+          </button>
+        </div>
+
+        <div class="rbac-list-section">
+          <div class="rbac-section-title with-action">
+            <span>用户列表</span>
+            <button type="button" @click="bulkDialogVisible = true">批量</button>
           </div>
-          <div class="row-actions">
-            <button v-if="isFeatureEnabled('employee_delete')" class="delete-button" type="button" @click="removeEmployee(index)">删除</button>
+          <button
+            v-for="user in filteredUsers"
+            :key="user.id"
+            class="rbac-list-item"
+            :class="{ active: activeType === 'user' && activeId === user.id, disabled: !user.enabled }"
+            @click="selectItem('user', user.id)"
+          >
+            <label class="rbac-check" @click.stop>
+              <input type="checkbox" :checked="selectedUserIds.includes(user.id)" @change="toggleSelectedUser(user.id, $event.target.checked)" />
+            </label>
+            <span>
+              <b>{{ user.name || user.account }}</b>
+              <small>{{ user.account || '-' }} · {{ user.enabled ? '正常' : '停用' }}</small>
+            </span>
+            <em>{{ user.role === 'admin' ? '管理员' : '普通用户' }}</em>
+          </button>
+        </div>
+
+        <div class="rbac-list-section">
+          <div class="rbac-section-title">分组列表</div>
+          <button
+            v-for="group in filteredGroups"
+            :key="group.id"
+            class="rbac-list-item"
+            :class="{ active: activeType === 'group' && activeId === group.id }"
+            @click="selectItem('group', group.id)"
+          >
+            <span>
+              <b>{{ group.name }}</b>
+              <small>{{ groupPath(group) }}</small>
+            </span>
+            <em>{{ group.user_ids?.length || 0 }} 人</em>
+          </button>
+        </div>
+
+        <div class="rbac-list-section">
+          <div class="rbac-section-title">资源视角</div>
+          <button
+            v-for="dataset in filteredDatasets"
+            :key="dataset.id"
+            class="rbac-list-item"
+            :class="{ active: activeType === 'resource' && Number(activeId) === Number(dataset.id) }"
+            @click="selectItem('resource', dataset.id)"
+          >
+            <span>
+              <b>{{ dataset.dataset_name }}</b>
+              <small>{{ dataset.business_domain || dataset.dataset_code }}</small>
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="rbac-detail">
+        <template v-if="activeType === 'role' && activeRole">
+          <div class="detail-head">
+            <div>
+              <span class="detail-badge">{{ activeRole.builtin ? '内置角色' : '自定义角色' }}</span>
+              <h3>{{ activeRole.name }}</h3>
+              <p>{{ activeRole.description || '角色是功能权限和资源权限的集合容器。' }}</p>
+            </div>
+            <div class="detail-actions">
+              <button v-if="!activeRole.locked" class="rbac-danger" @click="removeRole(activeRole)">删除角色</button>
+              <button class="rbac-primary" :disabled="activeRole.id === 'super_admin'" @click="saveRole(activeRole)">保存角色</button>
+            </div>
           </div>
+
+          <div class="detail-grid">
+            <section class="detail-card">
+              <h4>基础信息</h4>
+              <label>角色名称<input v-model.trim="activeRole.name" :disabled="activeRole.builtin" /></label>
+              <label>角色编码<input v-model.trim="activeRole.code" :disabled="activeRole.builtin" /></label>
+              <label>说明<textarea v-model.trim="activeRole.description" rows="3" /></label>
+            </section>
+
+            <section class="detail-card wide">
+              <h4>权限配置 · 功能操作权限</h4>
+              <div class="feature-groups">
+                <div v-for="group in featureGroups" :key="group.name" class="feature-group">
+                  <div class="feature-group-title">{{ group.name }}</div>
+                  <label v-for="feature in group.items" :key="feature.key" class="permission-pill">
+                    <input
+                      type="checkbox"
+                      :disabled="activeRole.id === 'super_admin'"
+                      :checked="activeRole.function_permissions?.includes(feature.key)"
+                      @change="toggleRoleFunction(activeRole, feature.key, $event.target.checked)"
+                    />
+                    <span>{{ feature.label }}</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-card wide">
+              <h4>权限配置 · 数据集资源权限</h4>
+              <div class="resource-table">
+                <div class="resource-row head"><span>数据集</span><span>权限</span></div>
+                <div v-for="dataset in datasets" :key="dataset.id" class="resource-row">
+                  <span>{{ dataset.dataset_name }}</span>
+                  <select
+                    :disabled="activeRole.id === 'super_admin'"
+                    :value="getRoleResourceLevel(activeRole, dataset.id)"
+                    @change="setRoleResourceLevel(activeRole, dataset.id, $event.target.value)"
+                  >
+                    <option v-for="level in resourceLevels" :key="level.value" :value="level.value">{{ level.label }}</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="detail-card wide">
+              <h4>授权对象</h4>
+              <div class="auth-object-grid">
+                <div><b>{{ roleDirectUsers(activeRole.id).length }}</b><span>直接用户</span></div>
+                <div><b>{{ roleGroups(activeRole.id).length }}</b><span>继承分组</span></div>
+              </div>
+              <div class="mini-tags">
+                <span v-for="item in roleDirectUsers(activeRole.id)" :key="item.id">{{ item.name || item.account }}</span>
+                <span v-for="item in roleGroups(activeRole.id)" :key="item.id">分组：{{ item.name }}</span>
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <template v-else-if="activeType === 'group' && activeGroup">
+          <div class="detail-head">
+            <div>
+              <span class="detail-badge">用户分组</span>
+              <h3>{{ activeGroup.name }}</h3>
+              <p>分组角色会被组内用户自动继承；子分组用户同时继承上级分组角色。</p>
+            </div>
+            <div class="detail-actions">
+              <button class="rbac-danger" @click="removeGroup(activeGroup)">删除分组</button>
+              <button class="rbac-primary" @click="saveGroup(activeGroup)">保存分组</button>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <section class="detail-card">
+              <h4>基础信息</h4>
+              <label>分组名称<input v-model.trim="activeGroup.name" /></label>
+              <label>上级分组
+                <select v-model="activeGroup.parent_id">
+                  <option value="">无上级</option>
+                  <option v-for="group in groups.filter(item => item.id !== activeGroup.id)" :key="group.id" :value="group.id">{{ group.name }}</option>
+                </select>
+              </label>
+              <label>说明<textarea v-model.trim="activeGroup.description" rows="3" /></label>
+            </section>
+            <section class="detail-card">
+              <h4>分配角色</h4>
+              <label v-for="role in assignableRoles" :key="role.id" class="permission-pill block">
+                <input type="checkbox" :checked="activeGroup.role_ids?.includes(role.id)" @change="toggleGroupRole(activeGroup, role.id, $event.target.checked)" />
+                <span>{{ role.name }}</span>
+              </label>
+            </section>
+            <section class="detail-card wide">
+              <h4>批量添加/移除用户</h4>
+              <div class="user-pick-grid">
+                <label v-for="user in users" :key="user.id" class="permission-pill">
+                  <input type="checkbox" :checked="activeGroup.user_ids?.includes(user.id)" @change="toggleGroupUser(activeGroup, user.id, $event.target.checked)" />
+                  <span>{{ user.name || user.account }}</span>
+                </label>
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <template v-else-if="activeType === 'user' && activeUser">
+          <div class="detail-head">
+            <div>
+              <span class="detail-badge" :class="{ danger: !activeUser.enabled }">{{ activeUser.enabled ? '正常用户' : '停用用户' }}</span>
+              <h3>{{ activeUser.name || activeUser.account }}</h3>
+              <p>最终权限 = 直接角色权限 + 所属分组继承角色权限；资源冲突按最高权限优先。</p>
+            </div>
+            <div class="detail-actions">
+              <button class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="toggleUserEnabled(activeUser)">
+                {{ activeUser.enabled ? '停用用户' : '启用用户' }}
+              </button>
+              <button class="rbac-primary" :disabled="activeUser.role === 'super_admin'" @click="saveUser(activeUser)">保存用户</button>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <section class="detail-card">
+              <h4>基础信息</h4>
+              <label>姓名<input v-model.trim="activeUser.name" /></label>
+              <label>账号<input v-model.trim="activeUser.account" /></label>
+              <label>固定角色
+                <select v-model="activeUser.role">
+                  <option value="admin">管理员</option>
+                  <option value="user">普通用户</option>
+                </select>
+              </label>
+            </section>
+            <section class="detail-card">
+              <h4>直接分配角色</h4>
+              <label v-for="role in assignableRoles" :key="role.id" class="permission-pill block">
+                <input type="checkbox" :checked="activeUser.role_ids?.includes(role.id)" @change="toggleUserRole(activeUser, role.id, $event.target.checked)" />
+                <span>{{ role.name }}</span>
+              </label>
+            </section>
+            <section class="detail-card wide">
+              <h4>用户视角 · 权限来源</h4>
+              <div class="source-list">
+                <div v-for="source in selectedUserPermission?.role_sources || []" :key="`${source.role_id}-${source.source_type}-${source.source_id}`">
+                  <b>{{ source.role_name }}</b>
+                  <span>{{ source.source_type === 'direct' ? '直接分配' : source.source_type === 'group' ? `分组继承：${source.source_name}` : source.source_name }}</span>
+                </div>
+              </div>
+              <div class="permission-columns">
+                <div>
+                  <h5>可访问功能</h5>
+                  <span v-for="item in selectedUserPermission?.function_permissions || []" :key="item.key" class="mini-chip">{{ item.label }}</span>
+                </div>
+                <div>
+                  <h5>可访问数据集</h5>
+                  <span v-for="item in selectedUserPermission?.resource_permissions || []" :key="item.dataset_id" class="mini-chip">
+                    {{ item.dataset_name }} · {{ item.level_label }}
+                  </span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <template v-else-if="activeType === 'resource' && activeDataset">
+          <div class="detail-head">
+            <div>
+              <span class="detail-badge">数据集/资源视角</span>
+              <h3>{{ activeDataset.dataset_name }}</h3>
+              <p>查看该数据集下哪些用户、分组、角色拥有访问权限。</p>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <section class="detail-card wide">
+              <h4>拥有权限的角色</h4>
+              <div class="source-list">
+                <div v-for="item in activeResourceAccess?.roles || []" :key="item.role.id"><b>{{ item.role.name }}</b><span>{{ item.level_label }}</span></div>
+              </div>
+            </section>
+            <section class="detail-card wide">
+              <h4>拥有权限的分组</h4>
+              <div class="source-list">
+                <div v-for="item in activeResourceAccess?.groups || []" :key="item.group.id"><b>{{ item.group.name }}</b><span>{{ item.level_label }} · {{ item.roles.map(r => r.name).join(' / ') }}</span></div>
+              </div>
+            </section>
+            <section class="detail-card wide">
+              <h4>拥有权限的用户</h4>
+              <div class="source-list">
+                <div v-for="item in activeResourceAccess?.users || []" :key="item.user.id"><b>{{ item.user.name || item.user.account }}</b><span>{{ item.level_label }}</span></div>
+              </div>
+            </section>
+          </div>
+        </template>
+
+        <div v-else class="rbac-empty">请选择左侧角色、用户、分组或数据集查看详情。</div>
+      </section>
+    </main>
+
+    <el-dialog v-model="bulkDialogVisible" title="批量授权" width="520px">
+      <div class="bulk-panel">
+        <p>已选择 {{ selectedUserIds.length }} 个用户。</p>
+        <label>选择角色
+          <select v-model="bulkRoleId">
+            <option value="">请选择</option>
+            <option v-for="role in assignableRoles" :key="role.id" :value="role.id">{{ role.name }}</option>
+          </select>
+        </label>
+        <div class="bulk-actions">
+          <button class="rbac-primary" @click="bulkAssign('add_roles')">批量分配</button>
+          <button class="rbac-ghost" @click="bulkAssign('remove_roles')">批量取消</button>
+          <button class="rbac-ghost" @click="bulkSetEnabled(true)">批量启用</button>
+          <button class="rbac-danger" @click="bulkSetEnabled(false)">批量停用</button>
         </div>
       </div>
-    </section>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getEmployeePermissions, saveEmployeePermissions } from '../api/index.js'
-import { useFeatureFlags } from '../state/featureFlags.js'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  bulkUpdateRbacUsers,
+  createRbacGroup,
+  createRbacRole,
+  deleteRbacGroup,
+  deleteRbacRole,
+  getRbacDatasetAccess,
+  getRbacOverview,
+  updateRbacGroup,
+  updateRbacRole,
+  updateRbacUser,
+} from '../api/index.js'
 
-const employees = ref([])
 const loading = ref(false)
-const saving = ref(false)
-const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
-const adminCount = computed(() => employees.value.filter((item) => item.role === 'admin').length)
-const userCount = computed(() => employees.value.filter((item) => item.role === 'user').length)
-const resetCount = computed(() => employees.value.filter((item) => item.reset_password).length)
+const roles = ref([])
+const users = ref([])
+const groups = ref([])
+const features = ref([])
+const datasets = ref([])
+const resourceLevels = ref([])
+const userPermissions = ref([])
+const keyword = ref('')
+const userStatusFilter = ref('all')
+const activeType = ref('role')
+const activeId = ref('')
+const selectedUserIds = ref([])
+const bulkDialogVisible = ref(false)
+const bulkRoleId = ref('')
+const activeResourceAccess = ref(null)
 
-const uid = () => `emp_${Date.now()}_${Math.random().toString(16).slice(2)}`
+const clone = (value) => JSON.parse(JSON.stringify(value || null))
+const norm = (value) => String(value || '').toLowerCase()
+const match = (value) => !keyword.value || norm(value).includes(norm(keyword.value))
 
-const load = async () => {
+const disabledCount = computed(() => users.value.filter(item => !item.enabled).length)
+const assignableRoles = computed(() => roles.value.filter(item => item.id !== 'super_admin'))
+const activeRole = computed(() => roles.value.find(item => item.id === activeId.value))
+const activeUser = computed(() => users.value.find(item => item.id === activeId.value))
+const activeGroup = computed(() => groups.value.find(item => item.id === activeId.value))
+const activeDataset = computed(() => datasets.value.find(item => Number(item.id) === Number(activeId.value)))
+const selectedUserPermission = computed(() => userPermissions.value.find(item => item.user?.id === activeId.value))
+
+const filteredRoles = computed(() => roles.value.filter(item => match(`${item.name} ${item.code} ${item.description}`)))
+const filteredGroups = computed(() => groups.value.filter(item => match(`${item.name} ${item.description}`)))
+const filteredDatasets = computed(() => datasets.value.filter(item => match(`${item.dataset_name} ${item.business_domain} ${item.dataset_code}`)))
+const filteredUsers = computed(() => users.value
+  .filter(item => userStatusFilter.value === 'all' || (userStatusFilter.value === 'enabled' ? item.enabled : !item.enabled))
+  .filter(item => match(`${item.name} ${item.account} ${item.department} ${item.position}`)))
+
+const featureGroups = computed(() => {
+  const map = new Map()
+  features.value.forEach((item) => {
+    const key = item.module_label || item.category || '其他'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(item)
+  })
+  return Array.from(map.entries()).map(([name, items]) => ({ name, items }))
+})
+
+const loadAll = async () => {
   loading.value = true
   try {
-    const data = await getEmployeePermissions()
-    employees.value = Array.isArray(data?.employees) ? data.employees : []
+    const data = await getRbacOverview()
+    roles.value = clone(data.roles) || []
+    users.value = clone(data.users) || []
+    groups.value = clone(data.groups) || []
+    features.value = clone(data.features) || []
+    datasets.value = clone(data.datasets) || []
+    resourceLevels.value = clone(data.resource_levels) || []
+    userPermissions.value = clone(data.user_permissions) || []
+    if (!activeId.value && roles.value.length) {
+      activeType.value = 'role'
+      activeId.value = roles.value[0].id
+    }
   } finally {
     loading.value = false
   }
 }
 
-const addEmployee = () => {
-  employees.value.unshift({
-    id: uid(),
-    name: '',
-    account: '',
-    identifier: '',
-    union_id: '',
-    department: '',
-    position: '',
-    role: 'user',
-    enabled: true,
-    note: '',
-    reset_password: true
-  })
-}
-
-const resetPassword = (item) => {
-  item.reset_password = true
-  ElMessage.info('点击“保存配置”后，该员工密码将重置为 12345678')
-}
-
-const removeEmployee = (index) => {
-  employees.value.splice(index, 1)
-}
-
-const saveAll = async () => {
-  saving.value = true
-  try {
-    const payload = employees.value.map((item) => ({
-      ...item,
-      identifier: item.union_id || item.identifier || '',
-    }))
-    const data = await saveEmployeePermissions(payload)
-    employees.value = Array.isArray(data?.employees) ? data.employees : employees.value
-    ElMessage.success('员工权限配置已保存')
-  } finally {
-    saving.value = false
+const selectItem = async (type, id) => {
+  activeType.value = type
+  activeId.value = String(id)
+  if (type === 'resource') {
+    const res = await getRbacDatasetAccess(id)
+    activeResourceAccess.value = res.data
   }
 }
 
-onMounted(() => {
-  loadFeatureFlags()
-  load()
+const createRole = async () => {
+  const role = { name: '新角色', code: `custom_${Date.now()}`, function_permissions: [], resource_permissions: {} }
+  const res = await createRbacRole(role)
+  roles.value = clone(res.roles) || roles.value
+  activeType.value = 'role'
+  activeId.value = res.role.id
+  ElMessage.success('角色已创建')
+}
+
+const saveRole = async (role) => {
+  const res = await updateRbacRole(role.id, role)
+  roles.value = clone(res.roles) || roles.value
+  ElMessage.success('角色已保存')
+  await loadAll()
+}
+
+const removeRole = async (role) => {
+  await ElMessageBox.confirm(`确认删除角色「${role.name}」？`, '删除角色', { type: 'warning' })
+  const res = await deleteRbacRole(role.id)
+  roles.value = clone(res.roles) || []
+  activeId.value = roles.value[0]?.id || ''
+  ElMessage.success('角色已删除')
+}
+
+const createGroup = async () => {
+  const res = await createRbacGroup({ name: '新用户分组', role_ids: [], user_ids: [] })
+  groups.value = clone(res.groups) || groups.value
+  activeType.value = 'group'
+  activeId.value = res.group.id
+  ElMessage.success('分组已创建')
+}
+
+const saveGroup = async (group) => {
+  const res = await updateRbacGroup(group.id, group)
+  groups.value = clone(res.groups) || groups.value
+  ElMessage.success('分组已保存')
+  await loadAll()
+}
+
+const removeGroup = async (group) => {
+  await ElMessageBox.confirm(`确认删除分组「${group.name}」？`, '删除分组', { type: 'warning' })
+  const res = await deleteRbacGroup(group.id)
+  groups.value = clone(res.groups) || []
+  activeId.value = groups.value[0]?.id || ''
+  ElMessage.success('分组已删除')
+}
+
+const saveUser = async (user) => {
+  const res = await updateRbacUser(user.id, user)
+  users.value = clone(res.users) || users.value
+  ElMessage.success('用户授权已保存')
+  await loadAll()
+}
+
+const toggleUserEnabled = async (user) => {
+  await updateRbacUser(user.id, { enabled: !user.enabled })
+  ElMessage.success(user.enabled ? '用户已停用' : '用户已启用')
+  await loadAll()
+}
+
+const toggleSet = (target, key, checked) => {
+  const next = new Set(target || [])
+  if (checked) next.add(key)
+  else next.delete(key)
+  return Array.from(next)
+}
+
+const toggleRoleFunction = (role, key, checked) => {
+  role.function_permissions = toggleSet(role.function_permissions, key, checked)
+}
+
+const getRoleResourceLevel = (role, datasetId) => role.resource_permissions?.[String(datasetId)] || 'none'
+const setRoleResourceLevel = (role, datasetId, level) => {
+  role.resource_permissions = role.resource_permissions || {}
+  if (level === 'none') delete role.resource_permissions[String(datasetId)]
+  else role.resource_permissions[String(datasetId)] = level
+}
+
+const toggleGroupRole = (group, roleId, checked) => {
+  group.role_ids = toggleSet(group.role_ids, roleId, checked)
+}
+const toggleGroupUser = (group, userId, checked) => {
+  group.user_ids = toggleSet(group.user_ids, userId, checked)
+}
+const toggleUserRole = (user, roleId, checked) => {
+  user.role_ids = toggleSet(user.role_ids, roleId, checked)
+}
+const toggleSelectedUser = (userId, checked) => {
+  selectedUserIds.value = toggleSet(selectedUserIds.value, userId, checked)
+}
+
+const roleDirectUsers = (roleId) => users.value.filter(item => item.role === roleId || (item.role_ids || []).includes(roleId))
+const roleGroups = (roleId) => groups.value.filter(item => (item.role_ids || []).includes(roleId))
+
+const groupPath = (group) => {
+  const parent = groups.value.find(item => item.id === group.parent_id)
+  return parent ? `${parent.name} / ${group.name}` : '一级分组'
+}
+
+const bulkAssign = async (action) => {
+  if (!selectedUserIds.value.length || !bulkRoleId.value) return ElMessage.warning('请选择用户和角色')
+  await bulkUpdateRbacUsers({ user_ids: selectedUserIds.value, action, role_ids: [bulkRoleId.value] })
+  bulkDialogVisible.value = false
+  ElMessage.success(action === 'remove_roles' ? '已批量取消授权' : '已批量分配角色')
+  await loadAll()
+}
+
+const bulkSetEnabled = async (enabled) => {
+  if (!selectedUserIds.value.length) return ElMessage.warning('请选择用户')
+  await bulkUpdateRbacUsers({ user_ids: selectedUserIds.value, action: 'set_enabled', enabled })
+  bulkDialogVisible.value = false
+  ElMessage.success(enabled ? '已批量启用' : '已批量停用')
+  await loadAll()
+}
+
+watch(activeId, async () => {
+  if (activeType.value === 'resource' && activeId.value) {
+    const res = await getRbacDatasetAccess(activeId.value)
+    activeResourceAccess.value = res.data
+  }
 })
+
+onMounted(loadAll)
 </script>
 
 <style scoped>
-.permission-page {
+.rbac-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  color: #1d2129;
 }
 
-.permission-head {
+.rbac-head,
+.rbac-metrics > div,
+.rbac-left,
+.rbac-detail,
+.detail-card {
+  background: #fff;
+  border: 1px solid rgba(18, 48, 79, 0.08);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+}
+
+.rbac-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 16px;
-  min-height: auto;
   padding: 22px 24px;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(22, 93, 255, 0.08), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+  border-radius: 18px;
 }
 
-.save-button,
-.add-button,
-.reset-button,
-.delete-button {
+.rbac-kicker {
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.rbac-head h2,
+.detail-head h3 {
+  margin: 6px 0;
+}
+
+.rbac-head p,
+.detail-head p {
+  margin: 0;
+  color: #86909c;
+  font-size: 13px;
+}
+
+.rbac-head-actions,
+.detail-actions,
+.bulk-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+button {
   border: 0;
-  border-radius: 999px;
-  font-weight: 800;
   cursor: pointer;
+  font-weight: 800;
 }
 
-.save-button {
-  height: 38px;
-  padding: 0 18px;
-  background: linear-gradient(135deg, #165dff, #0f766e);
+.rbac-primary,
+.rbac-ghost,
+.rbac-danger {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+}
+
+.rbac-primary {
+  background: #165dff;
   color: #fff;
-  box-shadow: 0 12px 24px rgba(22, 93, 255, 0.18);
 }
 
-.save-button:disabled {
+.rbac-primary.muted {
+  background: #0f766e;
+}
+
+.rbac-ghost {
+  background: #f4f7fb;
+  color: #4e5969;
+}
+
+.rbac-danger {
+  background: #fff1f0;
+  color: #d93026;
+}
+
+.rbac-primary:disabled,
+.rbac-ghost:disabled,
+.rbac-danger:disabled {
+  opacity: .55;
   cursor: not-allowed;
-  opacity: 0.7;
 }
 
-.permission-metrics {
+.rbac-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
-.permission-metrics > div {
-  min-height: 82px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid rgba(18, 48, 79, 0.07);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035);
+.rbac-metrics > div {
+  padding: 14px 16px;
+  border-radius: 14px;
 }
 
-.permission-metrics span {
-  color: #86909c;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.permission-metrics strong {
-  display: block;
-  margin-top: 8px;
-  color: #1d2129;
-  font-size: 26px;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.permission-card {
-  border: 1px solid rgba(18, 48, 79, 0.08);
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
-}
-
-.permission-toolbar p {
-  margin: 6px 0 0;
-  color: #86909c;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.permission-card {
-  overflow: hidden;
-}
-
-.permission-toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  padding: 18px 20px;
-  border-bottom: 1px solid #f0f1f3;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-}
-
-.permission-toolbar h3 {
-  margin: 0;
-  color: #1d2129;
-  font-size: 18px;
-}
-
-.add-button {
-  height: 36px;
-  padding: 0 16px;
-  background: #e8f6f4;
-  color: #0b625d;
-}
-
-.permission-table {
-  padding: 8px 20px 18px;
-  overflow-x: auto;
-}
-
-.permission-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(130px, 1fr) minmax(190px, 1.25fr) minmax(130px, 1fr) minmax(120px, 0.9fr) 110px 86px 200px 68px;
-  gap: 12px;
-  align-items: center;
-  min-width: 1420px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f5f6f8;
-}
-
-.permission-row-head {
+.rbac-metrics span,
+.rbac-section-title,
+.detail-badge {
   color: #86909c;
   font-size: 12px;
   font-weight: 900;
-  padding-top: 12px;
-  padding-bottom: 8px;
 }
 
-.permission-row input,
-.permission-row select {
-  height: 36px;
-  padding: 0 12px;
+.rbac-metrics strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 26px;
+}
+
+.rbac-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 680px;
+}
+
+.rbac-left,
+.rbac-detail {
+  border-radius: 18px;
+}
+
+.rbac-left {
+  padding: 14px;
+  overflow: auto;
+  max-height: calc(100vh - 230px);
+}
+
+.rbac-search {
+  display: grid;
+  grid-template-columns: 1fr 104px;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid #e5e6eb;
-  border-radius: 12px;
+  border-radius: 10px;
+  padding: 9px 10px;
   background: #fff;
   color: #1d2129;
   outline: none;
-  font-size: 14px;
 }
 
-.permission-row input:focus,
-.permission-row select:focus {
-  border-color: #3370ff;
-  box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.1);
+.rbac-list-section {
+  margin-bottom: 16px;
 }
 
-.password-cell {
+.rbac-section-title {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rbac-section-title button {
+  color: #165dff;
+  background: transparent;
+}
+
+.rbac-list-item {
+  width: 100%;
+  min-height: 54px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  justify-content: space-between;
+  text-align: left;
+  border-radius: 12px;
+  background: #f7f8fa;
+  color: #1d2129;
 }
 
-.password-status {
-  height: 28px;
-  min-width: 72px;
-  padding: 0 10px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #f2f3f5;
+.rbac-list-item.active {
+  background: #eef5ff;
+  outline: 1px solid rgba(22, 93, 255, .24);
+}
+
+.rbac-list-item.disabled {
+  opacity: .62;
+}
+
+.rbac-list-item span {
+  min-width: 0;
+  flex: 1;
+}
+
+.rbac-list-item b,
+.rbac-list-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rbac-list-item small,
+.rbac-list-item em {
   color: #86909c;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.rbac-check {
+  width: 16px;
+  flex: 0 0 16px;
+}
+
+.rbac-detail {
+  padding: 18px;
+  overflow: auto;
+  max-height: calc(100vh - 230px);
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.detail-badge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #165dff;
+}
+
+.detail-badge.danger {
+  background: #fff1f0;
+  color: #d93026;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.detail-card {
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.detail-card.wide {
+  grid-column: 1 / -1;
+}
+
+.detail-card h4,
+.detail-card h5 {
+  margin: 0 0 12px;
+}
+
+.detail-card label {
+  display: block;
+  margin-bottom: 12px;
+  color: #4e5969;
   font-size: 12px;
   font-weight: 800;
 }
 
-.password-status.is-reset {
-  background: #fff7e8;
-  color: #b76e00;
+.detail-card label input,
+.detail-card label select,
+.detail-card label textarea {
+  margin-top: 6px;
 }
 
-.row-actions {
-  display: flex;
+.feature-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.feature-group {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f7f8fa;
+}
+
+.feature-group-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.permission-pill {
+  display: inline-flex !important;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  width: auto !important;
+  margin: 0 8px 8px 0 !important;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  color: #4e5969 !important;
 }
 
-.reset-button,
-.delete-button {
-  height: 30px;
-  padding: 0 12px;
+.permission-pill.block {
+  display: flex !important;
+  width: 100% !important;
+  border-radius: 10px;
 }
 
-.reset-button {
-  background: #eef4ff;
+.resource-table {
+  border: 1px solid #edf0f5;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.resource-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid #f1f3f7;
+}
+
+.resource-row.head {
+  border-top: 0;
+  background: #f7f8fa;
+  color: #86909c;
+  font-weight: 900;
+}
+
+.auth-object-grid,
+.permission-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.auth-object-grid > div {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f7f8fa;
+}
+
+.auth-object-grid b {
+  display: block;
+  font-size: 24px;
+}
+
+.mini-tags,
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mini-tags span,
+.mini-chip {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #eef5ff;
   color: #165dff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.delete-button {
-  background: #fff1f2;
-  color: #c52b35;
+.source-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f7f8fa;
 }
 
-.permission-empty {
-  padding: 34px 0;
+.source-list span {
+  color: #86909c;
+}
+
+.user-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rbac-empty {
+  padding: 80px 20px;
   text-align: center;
   color: #86909c;
-  font-size: 13px;
+}
+
+.bulk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 @media (max-width: 1100px) {
-  .permission-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .permission-summary {
+  .rbac-layout,
+  .detail-grid,
+  .feature-groups,
+  .user-pick-grid {
     grid-template-columns: 1fr;
-  }
-
-  .permission-row {
-    grid-template-columns: 1fr;
-    min-width: 0;
-    padding: 14px 0;
-  }
-
-  .permission-row-head {
-    display: none;
   }
 }
 </style>

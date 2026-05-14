@@ -376,6 +376,72 @@ const sortedByRateAsc = computed(() => (
 
 const sortedByRateDesc = computed(() => [...sortedByRateAsc.value].reverse())
 
+const managementLayerRows = computed(() => {
+  if (specDigestRows.value.length >= 2) return specDigestRows.value
+  const focus = resolveFocusRow(normalizedRows.value)
+  const focusName = cleanText(reportSpec.value?.scope?.focusNode || focus?.name || '')
+  if (focusName) {
+    const direct = normalizedRows.value.filter(item => item.parent === focusName && item.rate !== null)
+    if (direct.length >= 2) return direct
+  }
+  const levelOrder = ['分公司', '业务部', '代表处', '城市公司']
+  for (const level of levelOrder) {
+    const byLevel = normalizedRows.value.filter(item => item.level === level && item.rate !== null)
+    if (byLevel.length >= 2) return byLevel
+  }
+  const parentNames = new Set(normalizedRows.value.map(item => item.parent).filter(Boolean))
+  const withChildren = normalizedRows.value.filter(item => parentNames.has(item.name) && item.rate !== null)
+  return withChildren.length >= 2 ? withChildren : normalizedRows.value.filter(item => item.rate !== null)
+})
+
+const topManagementRows = computed(() => (
+  [...managementLayerRows.value]
+    .sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+    .slice(0, 3)
+))
+
+const bottomManagementRows = computed(() => (
+  [...managementLayerRows.value]
+    .sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity))
+    .slice(0, 3)
+))
+
+const rateDistribution = computed(() => {
+  const source = managementLayerRows.value.filter(item => item.rate !== null)
+  const total = source.length || 0
+  const buckets = [
+    { label: '20%以下', min: -Infinity, max: 20, count: 0 },
+    { label: '20%-40%', min: 20, max: 40, count: 0 },
+    { label: '40%以上', min: 40, max: Infinity, count: 0 },
+  ]
+  source.forEach((item) => {
+    const bucket = buckets.find(part => item.rate < part.max && item.rate >= part.min)
+    if (bucket) bucket.count += 1
+  })
+  return buckets.map(item => ({
+    ...item,
+    pct: total ? `${Math.round(item.count / total * 100)}%` : '0%',
+  }))
+})
+
+const formatRankRows = (items = []) => (
+  items
+    .filter(Boolean)
+    .map(item => `${item.name}${item.rateText ? ` ${item.rateText}` : ''}${item.remainText ? `，缺口${item.remainText}` : ''}`)
+    .join('；')
+)
+
+const rateGapText = computed(() => {
+  const best = topManagementRows.value[0]
+  const worst = bottomManagementRows.value[0]
+  if (!best || !worst || best.rate === null || worst.rate === null || best.name === worst.name) return ''
+  return `${Math.abs(best.rate - worst.rate).toFixed(2).replace(/\.?0+$/, '')}pct`
+})
+
+const progressDistributionText = computed(() => (
+  rateDistribution.value.map(item => `${item.label}${item.count}个(${item.pct})`).join('、')
+))
+
 const levelSummary = computed(() => {
   const counts = new Map()
   normalizedRows.value.forEach((item) => {
@@ -744,6 +810,21 @@ const directAnswer = computed(() => {
     return `已按上级组织拆开看，不能把所有${lowerNodeLabel.value}直接混在一起比。`
   }
   if (singleOrgConclusion.value) return singleOrgConclusion.value
+  if (managementLayerRows.value.length >= 2) {
+    const best = topManagementRows.value[0]
+    const worst = bottomManagementRows.value[0]
+    const focus = resolveFocusRow(normalizedRows.value)
+    const focusMetrics = focus
+      ? [
+          focus.taskText ? `任务${focus.taskText}` : '',
+          focus.actualText ? `完成${focus.actualText}` : '',
+          focus.rateText ? `达成率${focus.rateText}` : '',
+          focus.remainText ? `缺口${focus.remainText}` : '',
+        ].filter(Boolean).join('，')
+      : ''
+    const gap = rateGapText.value ? `，头尾差${rateGapText.value}` : ''
+    return `${focus?.name || '当前口径'}${focusMetrics ? `：${focusMetrics}` : '已形成经营判断'}。下级${managementLayerRows.value[0]?.level || '节点'}中，${best?.name || '标杆节点'}领先，${worst?.name || '压力节点'}承压${gap}；风险信号集中在低达成和剩余缺口节点。`
+  }
   const worst = sortedByRateAsc.value[0]
   if (worst && asksLowest.value) return `最低的是 ${worst.name}${worst.rateText ? `，达成率 ${worst.rateText}` : ''}。`
   const best = sortedByRateDesc.value[0]
@@ -786,6 +867,15 @@ const supportLines = computed(() => {
         : `风险提醒：暂无低于${riskThreshold.value}%风险线的明显节点。`,
     ].filter(Boolean)
   }
+  if (managementLayerRows.value.length >= 2) {
+    const topText = formatRankRows(topManagementRows.value)
+    const bottomText = formatRankRows(bottomManagementRows.value)
+    return [
+      topText ? `分公司/关键节点Top3：${topText}。` : '',
+      bottomText ? `末位/压力节点：${bottomText}。` : '',
+      progressDistributionText.value ? `达成率分布：${progressDistributionText.value}，用于识别预警节点。` : '',
+    ].filter(Boolean)
+  }
   if (normalizedRows.value.length) {
     return [
       levelSummary.value ? `覆盖层级：${levelSummary.value}` : '',
@@ -810,10 +900,13 @@ const actionItems = computed(() => {
     actions.push(`优先跟进${names}等低达成节点，形成周度缺口推进清单。`)
   }
   if (bestRow.value) {
-    actions.push(`复盘${bestRow.value.name}的有效动作，把标杆经验同步给同层级低达成节点。`)
+    actions.push(`复盘${bestRow.value.name}的有效动作，形成目标拆解、项目推进和客户转化清单，并在两周内同步给同层级低达成节点。`)
   }
   if (worstRow.value && worstRow.value !== bestRow.value) {
-    actions.push(`对${worstRow.value.name}做下一层下钻，确认是任务体量、项目阶段还是客户转化问题。`)
+    actions.push(`对${worstRow.value.name}做下一层下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
+  }
+  if (managementLayerRows.value.length >= 2) {
+    actions.push(`按${managementLayerRows.value[0]?.level || '下级节点'}建立红黄绿看板，低于20%的节点周度复盘，20%-40%的节点专项推进。`)
   }
   if (!actions.length && usefulReportLines.value.length > 1) {
     actions.push(usefulReportLines.value[1])

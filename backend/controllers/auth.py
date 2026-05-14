@@ -86,6 +86,18 @@ def _clean_role(role: str) -> str:
     return role if role in {"admin", "user"} else "user"
 
 
+def _clean_role_ids(value) -> list[str]:
+    raw = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for item in raw:
+        text = str(item or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+    return result
+
+
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
     salt = salt or secrets.token_hex(16)
     digest = hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
@@ -124,6 +136,7 @@ def _clean_employee(item: dict, index: int, existing: dict | None = None) -> dic
         "organization": str(item.get("organization") or "").strip(),
         "company": str(item.get("company") or "").strip(),
         "role": role,
+        "role_ids": _clean_role_ids(item.get("role_ids")),
         "role_label": ROLE_LABELS.get(role, "普通用户"),
         "enabled": bool(item.get("enabled", True)),
         "note": str(item.get("note") or "").strip(),
@@ -166,8 +179,6 @@ def _apply_employee_permission(user: dict) -> dict:
     matched = None
     for item in _load_permissions().get("employees", []):
         employee = _clean_employee(item, 0)
-        if not employee["enabled"]:
-            continue
         candidates = {
             employee.get("identifier", "").strip().lower(),
             employee.get("union_id", "").strip().lower(),
@@ -176,6 +187,8 @@ def _apply_employee_permission(user: dict) -> dict:
             employee.get("account", "").strip().lower(),
         }
         if candidates.intersection(identities):
+            if not employee["enabled"]:
+                return {}
             matched = employee
             break
     role = matched["role"] if matched else "user"
@@ -184,6 +197,7 @@ def _apply_employee_permission(user: dict) -> dict:
     if matched:
         user["employee_id"] = matched["id"]
         user["permission_name"] = matched["name"]
+        user["role_ids"] = matched.get("role_ids", [])
         for key in ("department", "department_ids", "position", "organization", "company"):
             if matched.get(key) and not user.get(key):
                 user[key] = matched[key]
@@ -206,6 +220,7 @@ def _employee_user_info(employee: dict) -> dict:
         "source": "password",
         "employee_id": employee["id"],
         "role": employee["role"],
+        "role_ids": employee.get("role_ids", []),
         "role_label": ROLE_LABELS.get(employee["role"], "普通用户"),
         "username": employee["account"],
         "name": employee["name"],
@@ -530,6 +545,9 @@ def feishu_callback():
     try:
         user_data = _enrich_feishu_user(cfg, _exchange_web_code(cfg, code))
         user_info = _apply_employee_permission(_normalize_user(user_data))
+        if not user_info:
+            _log_auth_event("feishu_login_disabled", "warning", "飞书用户已停用", status_code=403)
+            return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403
         session_token = create_session_token(user_info)
         frontend_base_url = (cfg["frontend_url"] or "").rstrip("/")
         frontend_url = cfg["frontend_callback_url"] or (f"{frontend_base_url}/auth/callback" if frontend_base_url else "/auth/callback")
@@ -553,6 +571,9 @@ def feishu_in_app_auth():
     try:
         user_data = _enrich_feishu_user(cfg, _exchange_oidc_code(cfg, auth_code))
         user_info = _apply_employee_permission(_normalize_user(user_data))
+        if not user_info:
+            _log_auth_event("feishu_in_app_login_disabled", "warning", "飞书用户已停用", status_code=403)
+            return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403
         session_token = create_session_token(user_info)
         _log_auth_event("feishu_in_app_login_success", "info", "飞书免登录成功", user=user_info, status_code=200)
         return jsonify({"success": True, "token": session_token, "user": user_info})

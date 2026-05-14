@@ -139,6 +139,13 @@ def is_dataset_allowed(user: Dict[str, Any], dataset_id: int, permissions: Optio
     user = user if isinstance(user, dict) else {}
     if user.get("role") == "super_admin":
         return True
+    try:
+        from rbac_store import level_rank, user_dataset_level
+
+        if level_rank(user_dataset_level(user, dataset_id)) >= level_rank("view"):
+            return True
+    except Exception:
+        pass
     data = permissions or load_data_permissions()
     rule = (data.get("rules") or {}).get(str(int(dataset_id)))
     if not rule or rule.get("mode") != "restricted":

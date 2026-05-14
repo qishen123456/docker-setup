@@ -4,6 +4,7 @@ Bookshelf management controller (dataset-isolated knowledge + prompts + golden S
 
 from flask import Blueprint, jsonify, request
 import os
+import random
 import re
 import sys
 import sqlite3
@@ -71,6 +72,93 @@ def _optional_int(value: Any):
     if not text:
         return None
     return int(text)
+
+
+def _dataset_question_tag(dataset_name: str, dataset_code: str = "") -> str:
+    text = str(dataset_name or dataset_code or "数据集").strip()
+    text = re.sub(r"[（(].*?[）)]", "", text)
+    text = re.sub(r"(数据集|任务达成分析|年度|标准版|测试)", "", text).strip(" -_")
+    return (text or str(dataset_name or dataset_code or "数据集").strip() or "数据集")[:6]
+
+
+def _shape_common_question(row: Dict[str, Any]) -> Dict[str, Any]:
+    dataset_name = str(row.get("dataset_name") or "")
+    dataset_code = str(row.get("dataset_code") or "")
+    return {
+        "id": row.get("id"),
+        "question_text": row.get("question_text"),
+        "sort_order": row.get("sort_order"),
+        "dataset_id": row.get("dataset_id"),
+        "dataset_name": dataset_name,
+        "dataset_code": dataset_code,
+        "dataset_tag": _dataset_question_tag(dataset_name, dataset_code),
+        "business_domain": row.get("business_domain") or "",
+    }
+
+
+def _pick_random_common_questions(rows: List[Dict[str, Any]], size: int = 4) -> List[Dict[str, Any]]:
+    grouped: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        question = str(row.get("question_text") or "").strip()
+        dataset_id = row.get("dataset_id")
+        if not question or dataset_id is None:
+            continue
+        grouped.setdefault(int(dataset_id), []).append(row)
+
+    dataset_ids = [dataset_id for dataset_id, items in grouped.items() if items]
+    if not dataset_ids:
+        return []
+
+    random.shuffle(dataset_ids)
+    max_dataset_count = min(3, len(dataset_ids), size)
+    min_dataset_count = 2 if len(dataset_ids) >= 2 and size >= 2 else 1
+    target_dataset_count = random.randint(min_dataset_count, max_dataset_count)
+    selected_dataset_ids = dataset_ids[:target_dataset_count]
+
+    picked: List[Dict[str, Any]] = []
+    picked_texts = set()
+    per_dataset_counts: Dict[int, int] = {dataset_id: 0 for dataset_id in selected_dataset_ids}
+
+    def try_pick(dataset_id: int) -> bool:
+        candidates = grouped.get(dataset_id) or []
+        random.shuffle(candidates)
+        for item in candidates:
+            text = str(item.get("question_text") or "").strip()
+            if not text or text in picked_texts:
+                continue
+            if per_dataset_counts.get(dataset_id, 0) >= 2:
+                return False
+            picked.append(item)
+            picked_texts.add(text)
+            per_dataset_counts[dataset_id] = per_dataset_counts.get(dataset_id, 0) + 1
+            return True
+        return False
+
+    for dataset_id in selected_dataset_ids:
+        if len(picked) >= size:
+            break
+        try_pick(dataset_id)
+
+    while len(picked) < size:
+        changed = False
+        for dataset_id in selected_dataset_ids:
+            if len(picked) >= size:
+                break
+            if per_dataset_counts.get(dataset_id, 0) >= 2:
+                continue
+            changed = try_pick(dataset_id) or changed
+        if not changed:
+            break
+
+    if len(picked) < size and len(selected_dataset_ids) < 3:
+        for dataset_id in dataset_ids[target_dataset_count:]:
+            if len(picked) >= size or len(selected_dataset_ids) >= 3:
+                break
+            selected_dataset_ids.append(dataset_id)
+            per_dataset_counts[dataset_id] = 0
+            try_pick(dataset_id)
+
+    return picked[:size]
 
 
 def _slugify_dataset_code(value: str) -> str:
@@ -1266,6 +1354,8 @@ def list_common_questions():
     try:
         repo.ensure_schema()
         dataset_id = request.args.get("dataset_id", type=int)
+        random_batch = str(request.args.get("random") or "").lower() in {"1", "true", "yes"}
+        batch_size = max(1, min(request.args.get("limit", default=4, type=int) or 4, 12))
         user = get_current_user()
         if dataset_id and not is_dataset_allowed(user, dataset_id):
             return jsonify({"common_questions": []})
@@ -1274,10 +1364,20 @@ def list_common_questions():
             if dataset_id:
                 cur.execute(
                     """
-                    SELECT question_text, sort_order, dataset_id
-                    FROM bs_common_questions
-                    WHERE dataset_id = %s AND is_active = TRUE
-                    ORDER BY sort_order ASC, id ASC
+                    SELECT
+                        q.id,
+                        q.question_text,
+                        q.sort_order,
+                        q.dataset_id,
+                        d.dataset_name,
+                        d.dataset_code,
+                        d.business_domain
+                    FROM bs_common_questions q
+                    JOIN bs_datasets d ON d.id = q.dataset_id
+                    WHERE q.dataset_id = %s
+                      AND q.is_active = TRUE
+                      AND d.is_active = TRUE
+                    ORDER BY q.sort_order ASC, q.id ASC
                     LIMIT 50;
                     """,
                     (dataset_id,),
@@ -1285,17 +1385,35 @@ def list_common_questions():
             else:
                 cur.execute(
                     """
-                    SELECT question_text, sort_order, dataset_id
-                    FROM bs_common_questions
-                    WHERE is_active = TRUE
-                    ORDER BY updated_at DESC, sort_order ASC
+                    SELECT
+                        q.id,
+                        q.question_text,
+                        q.sort_order,
+                        q.dataset_id,
+                        d.dataset_name,
+                        d.dataset_code,
+                        d.business_domain
+                    FROM bs_common_questions q
+                    JOIN bs_datasets d ON d.id = q.dataset_id
+                    WHERE q.is_active = TRUE
+                      AND d.is_active = TRUE
+                    ORDER BY q.updated_at DESC, q.sort_order ASC, q.id ASC
                     LIMIT 80;
                     """
                 )
             rows = [dict(row) for row in cur.fetchall()]
             if not dataset_id:
                 rows = filter_dataset_rows_for_user(rows, user)
-            return jsonify({"common_questions": rows})
+            shaped_rows = [_shape_common_question(row) for row in rows]
+            if random_batch and not dataset_id:
+                shaped_rows = [_shape_common_question(row) for row in _pick_random_common_questions(rows, batch_size)]
+            else:
+                shaped_rows = shaped_rows[:batch_size] if random_batch else shaped_rows
+            return jsonify({
+                "common_questions": shaped_rows,
+                "questions": shaped_rows,
+                "mode": "random_batch" if random_batch and not dataset_id else "dataset" if dataset_id else "list",
+            })
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:

@@ -59,6 +59,17 @@ export const saveAdminFeatureFlags = (features) => api.put('/admin/feature-flags
 export const resetAdminFeatureFlags = () => api.post('/admin/feature-flags/reset')
 export const getDataPermissions = () => api.get('/admin/data-permissions')
 export const saveDataPermissions = (rules) => api.put('/admin/data-permissions', { rules })
+export const getRbacOverview = () => api.get('/admin/rbac/overview')
+export const createRbacRole = (data) => api.post('/admin/rbac/roles', data)
+export const updateRbacRole = (id, data) => api.put(`/admin/rbac/roles/${id}`, data)
+export const deleteRbacRole = (id) => api.delete(`/admin/rbac/roles/${id}`)
+export const createRbacGroup = (data) => api.post('/admin/rbac/groups', data)
+export const updateRbacGroup = (id, data) => api.put(`/admin/rbac/groups/${id}`, data)
+export const deleteRbacGroup = (id) => api.delete(`/admin/rbac/groups/${id}`)
+export const updateRbacUser = (id, data) => api.put(`/admin/rbac/users/${id}`, data)
+export const bulkUpdateRbacUsers = (data) => api.post('/admin/rbac/users/bulk', data)
+export const getRbacUserPermissions = (id) => api.get(`/admin/rbac/users/${id}/permissions`)
+export const getRbacDatasetAccess = (id) => api.get(`/admin/rbac/datasets/${id}/access`)
 export const getSystemLogs = (params = {}) => api.get('/admin/system-logs', { params })
 export const getSystemLogStats = () => api.get('/admin/system-logs/stats')
 export const getSystemLogDetail = (id) => api.get(`/admin/system-logs/${id}`)
@@ -132,8 +143,13 @@ export const getBookshelfDatasetFull = (id) => api.get(`/bookshelves/datasets/${
 export const saveBookshelfDatasetFull = (id, data) => api.put(`/bookshelves/datasets/${id}/full`, data)
 export const previewBookshelfDatasetSql = (id, data) => api.post(`/bookshelves/datasets/${id}/sql-preview`, data)
 export const getSourceTables = (sourceId) => api.get(`/bookshelves/source-tables?source_id=${sourceId}`)
-export const getCommonQuestions = (datasetId) =>
-  datasetId ? api.get(`/bookshelves/common-questions?dataset_id=${datasetId}`) : api.get('/bookshelves/common-questions')
+export const getCommonQuestions = (datasetId, params = {}) =>
+  api.get('/bookshelves/common-questions', {
+    params: {
+      ...(datasetId ? { dataset_id: datasetId } : {}),
+      ...params,
+    },
+  })
 
 export const getAgents = () => api.get('/agents')
 export const getAgent = (agentNo) => api.get(`/agents/${agentNo}`)
