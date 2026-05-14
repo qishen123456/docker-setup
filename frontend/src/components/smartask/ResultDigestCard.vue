@@ -796,7 +796,7 @@ const focusDrillRows = computed(() => {
   return rows.filter(item => item.name !== singleFocusRow.value?.name)
 })
 
-const secondaryDrillRows = computed(() => {
+const secondaryDrillAllRows = computed(() => {
   const source = focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value
   const unique = []
   const seen = new Set()
@@ -810,16 +810,23 @@ const secondaryDrillRows = computed(() => {
     .sort((left, right) => (right.rate ?? -Infinity) - (left.rate ?? -Infinity))
   const fallback = unique.filter(item => item.rate === null)
   const rows = [...ranked, ...fallback]
-  if (rows.length <= 6) return rows
-  const leaders = ranked.slice(0, 3)
-  const laggards = [...ranked].reverse().slice(0, 3)
+  return rows
+})
+
+const secondaryDrillRows = computed(() => {
+  const rows = secondaryDrillAllRows.value
+  if (rows.length <= 20) return rows
+  const ranked = rows.filter(item => item.rate !== null)
+  const leaders = ranked.slice(0, 10)
+  const laggards = [...ranked].reverse().slice(0, 10)
+  const fallback = rows.filter(item => item.rate === null)
   const picked = [...leaders, ...laggards, ...fallback]
   const pickedSeen = new Set()
   return picked.filter((item) => {
     if (pickedSeen.has(item.name)) return false
     pickedSeen.add(item.name)
     return true
-  }).slice(0, 6)
+  }).slice(0, 20)
 })
 
 const secondaryLevelLabel = computed(() => (
@@ -827,13 +834,14 @@ const secondaryLevelLabel = computed(() => (
 ))
 
 const secondaryDrillSummary = computed(() => {
-  const rows = secondaryDrillRows.value
+  const rows = secondaryDrillAllRows.value
   if (!rows.length) return ''
   const ranked = rows.filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
   const best = ranked[0]
   const worst = ranked[ranked.length - 1]
   const riskCount = rows.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
-  const parts = [`覆盖${rows.length}个${secondaryLevelLabel.value}`]
+  const displayText = secondaryDrillRows.value.length < rows.length ? `，当前展示${secondaryDrillRows.value.length}个` : ''
+  const parts = [`覆盖${rows.length}个${secondaryLevelLabel.value}${displayText}`]
   if (best) parts.push(`最高${best.name} ${best.rateText}`)
   if (worst && worst.name !== best?.name) parts.push(`最低${worst.name} ${worst.rateText}`)
   if (riskCount) parts.push(`${riskCount}个低于${riskThreshold.value}%预警线`)

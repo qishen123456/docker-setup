@@ -8,6 +8,7 @@
       </div>
       <div class="rbac-head-actions">
         <button type="button" class="rbac-ghost" :disabled="loading" @click="loadAll">刷新</button>
+        <button type="button" class="rbac-primary" @click="openCreateUser">新建用户</button>
         <button type="button" class="rbac-primary" @click="createRole">新建角色</button>
         <button type="button" class="rbac-primary muted" @click="createGroup">新建分组</button>
       </div>
@@ -52,7 +53,10 @@
         <div class="rbac-list-section">
           <div class="rbac-section-title with-action">
             <span>用户列表</span>
-            <button type="button" @click="bulkDialogVisible = true">批量</button>
+            <div>
+              <button type="button" @click="openCreateUser">新增</button>
+              <button type="button" @click="bulkDialogVisible = true">批量</button>
+            </div>
           </div>
           <button
             v-for="user in filteredUsers"
@@ -136,18 +140,28 @@
                 <h4>权限配置 · 功能操作权限</h4>
                 <span v-if="activeRole.id === 'super_admin'" class="readonly-tip">超管角色受保护，默认拥有全部权限，不可编辑</span>
               </div>
+              <div class="permission-toolbar">
+                <input v-model.trim="permissionKeyword" placeholder="搜索权限项 / 模块" />
+                <button type="button" class="rbac-ghost" @click="toggleAllFeatureGroups(true)">全部展开</button>
+                <button type="button" class="rbac-ghost" @click="toggleAllFeatureGroups(false)">全部收起</button>
+              </div>
               <div class="feature-groups">
-                <div v-for="group in featureGroups" :key="group.name" class="feature-group">
-                  <div class="feature-group-title">{{ group.name }}</div>
-                  <label v-for="feature in group.items" :key="feature.key" class="permission-pill">
-                    <input
-                      type="checkbox"
-                      :disabled="activeRole.id === 'super_admin'"
-                      :checked="activeRole.function_permissions?.includes(feature.key)"
-                      @change="toggleRoleFunction(activeRole, feature.key, $event.target.checked)"
-                    />
-                    <span>{{ feature.label }}</span>
-                  </label>
+                <div v-for="group in featureGroups" :key="group.name" class="feature-group" :class="{ open: isFeatureGroupOpen(group.name) }">
+                  <button type="button" class="feature-group-title" @click="toggleFeatureGroup(group.name)">
+                    <span>{{ group.name }}</span>
+                    <em>{{ group.items.length }} 项</em>
+                  </button>
+                  <div v-show="isFeatureGroupOpen(group.name)" class="feature-group-body">
+                    <label v-for="feature in group.items" :key="feature.key" class="permission-pill">
+                      <input
+                        type="checkbox"
+                        :disabled="activeRole.id === 'super_admin'"
+                        :checked="activeRole.function_permissions?.includes(feature.key)"
+                        @change="toggleRoleFunction(activeRole, feature.key, $event.target.checked)"
+                      />
+                      <span>{{ feature.label }}</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </section>
@@ -237,6 +251,7 @@
               <p>最终权限 = 直接角色权限 + 所属分组继承角色权限；资源冲突按最高权限优先。</p>
             </div>
             <div class="detail-actions">
+              <button class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="resetUserPassword(activeUser)">重置密码</button>
               <button class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="toggleUserEnabled(activeUser)">
                 {{ activeUser.enabled ? '停用用户' : '启用用户' }}
               </button>
@@ -334,9 +349,47 @@
           <button class="rbac-ghost" @click="bulkAssign('remove_roles')">批量取消</button>
           <button class="rbac-ghost" @click="bulkSetEnabled(true)">批量启用</button>
           <button class="rbac-danger" @click="bulkSetEnabled(false)">批量停用</button>
+          <button class="rbac-danger" @click="bulkResetPasswords">批量重置密码</button>
+        </div>
+        <div class="bulk-create-box">
+          <h4>批量新增用户</h4>
+          <textarea v-model.trim="bulkCreateText" rows="5" placeholder="每行一个用户：姓名,账号,角色(user/admin)&#10;示例：张三,13800000000,user" />
+          <button class="rbac-primary" @click="bulkCreateUsers">批量新增</button>
         </div>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="userDialogVisible" title="新建用户" width="560px">
+      <div class="user-form">
+        <label>姓名<input v-model.trim="userForm.name" placeholder="请输入姓名" /></label>
+        <label>账号<input v-model.trim="userForm.account" placeholder="手机号 / 工号 / 登录账号" /></label>
+        <label>固定角色
+          <select v-model="userForm.role">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </label>
+        <label>部门<input v-model.trim="userForm.department" placeholder="可选" /></label>
+        <label>岗位<input v-model.trim="userForm.position" placeholder="可选" /></label>
+        <label>初始密码<input v-model.trim="userForm.password" placeholder="默认 12345678，至少 8 位" /></label>
+        <section>
+          <h4>直接分配角色</h4>
+          <label v-for="role in assignableRoles" :key="role.id" class="permission-pill">
+            <input type="checkbox" :checked="userForm.role_ids.includes(role.id)" @change="toggleNewUserRole(role.id, $event.target.checked)" />
+            <span>{{ role.name }}</span>
+          </label>
+        </section>
+      </div>
+      <template #footer>
+        <button class="rbac-ghost" @click="userDialogVisible = false">取消</button>
+        <button class="rbac-primary" @click="submitCreateUser">创建用户</button>
+      </template>
+    </el-dialog>
+
+    <div v-if="activeType === 'role' && activeRole" class="floating-save">
+      <span>{{ activeRole.name }}</span>
+      <button class="rbac-primary" :disabled="activeRole.id === 'super_admin'" @click="saveRole(activeRole)">保存角色</button>
+    </div>
   </div>
 </template>
 
@@ -347,10 +400,12 @@ import {
   bulkUpdateRbacUsers,
   createRbacGroup,
   createRbacRole,
+  createRbacUser,
   deleteRbacGroup,
   deleteRbacRole,
   getRbacDatasetAccess,
   getRbacOverview,
+  resetRbacUserPassword,
   updateRbacGroup,
   updateRbacRole,
   updateRbacUser,
@@ -371,7 +426,20 @@ const activeId = ref('')
 const selectedUserIds = ref([])
 const bulkDialogVisible = ref(false)
 const bulkRoleId = ref('')
+const bulkCreateText = ref('')
 const activeResourceAccess = ref(null)
+const permissionKeyword = ref('')
+const openFeatureGroups = ref([])
+const userDialogVisible = ref(false)
+const userForm = ref({
+  name: '',
+  account: '',
+  role: 'user',
+  department: '',
+  position: '',
+  password: '12345678',
+  role_ids: [],
+})
 
 const clone = (value) => JSON.parse(JSON.stringify(value || null))
 const norm = (value) => String(value || '').toLowerCase()
@@ -394,13 +462,23 @@ const filteredUsers = computed(() => users.value
 
 const featureGroups = computed(() => {
   const map = new Map()
+  const keywordText = norm(permissionKeyword.value)
   features.value.forEach((item) => {
     const key = item.module_label || item.category || '其他'
+    if (keywordText && !norm(`${key} ${item.label} ${item.key}`).includes(keywordText)) return
     if (!map.has(key)) map.set(key, [])
     map.get(key).push(item)
   })
   return Array.from(map.entries()).map(([name, items]) => ({ name, items }))
 })
+
+const isFeatureGroupOpen = (name) => permissionKeyword.value || openFeatureGroups.value.includes(name)
+const toggleFeatureGroup = (name) => {
+  openFeatureGroups.value = toggleSet(openFeatureGroups.value, name, !openFeatureGroups.value.includes(name))
+}
+const toggleAllFeatureGroups = (open) => {
+  openFeatureGroups.value = open ? featureGroups.value.map(item => item.name) : []
+}
 
 const loadAll = async () => {
   loading.value = true
@@ -443,6 +521,35 @@ const createRole = async () => {
   activeType.value = 'role'
   activeId.value = res.role.id
   ElMessage.success('角色已创建')
+}
+
+const openCreateUser = () => {
+  userForm.value = {
+    name: '',
+    account: '',
+    role: 'user',
+    department: '',
+    position: '',
+    password: '12345678',
+    role_ids: [],
+  }
+  userDialogVisible.value = true
+}
+
+const toggleNewUserRole = (roleId, checked) => {
+  userForm.value.role_ids = toggleSet(userForm.value.role_ids, roleId, checked)
+}
+
+const submitCreateUser = async () => {
+  if (!userForm.value.account) return ElMessage.warning('请输入账号')
+  if ((userForm.value.password || '').length < 8) return ElMessage.warning('初始密码至少 8 位')
+  const res = await createRbacUser(userForm.value)
+  users.value = clone(res.users) || users.value
+  userDialogVisible.value = false
+  activeType.value = 'user'
+  activeId.value = res.user?.id || ''
+  ElMessage.success(`用户已创建，初始密码：${res.default_password || userForm.value.password || '12345678'}`)
+  await loadAll()
 }
 
 const saveRole = async (role) => {
@@ -493,6 +600,14 @@ const saveUser = async (user) => {
 const toggleUserEnabled = async (user) => {
   await updateRbacUser(user.id, { enabled: !user.enabled })
   ElMessage.success(user.enabled ? '用户已停用' : '用户已启用')
+  await loadAll()
+}
+
+const resetUserPassword = async (user) => {
+  await ElMessageBox.confirm(`确认将「${user.name || user.account}」密码重置为默认密码 12345678？`, '重置密码', { type: 'warning' })
+  const res = await resetRbacUserPassword(user.id)
+  users.value = clone(res.users) || users.value
+  ElMessage.success(`密码已重置：${res.default_password || '12345678'}`)
   await loadAll()
 }
 
@@ -548,6 +663,39 @@ const bulkSetEnabled = async (enabled) => {
   await bulkUpdateRbacUsers({ user_ids: selectedUserIds.value, action: 'set_enabled', enabled })
   bulkDialogVisible.value = false
   ElMessage.success(enabled ? '已批量启用' : '已批量停用')
+  await loadAll()
+}
+
+const bulkResetPasswords = async () => {
+  if (!selectedUserIds.value.length) return ElMessage.warning('请选择用户')
+  await ElMessageBox.confirm(`确认重置 ${selectedUserIds.value.length} 个用户的密码为默认密码 12345678？`, '批量重置密码', { type: 'warning' })
+  const res = await bulkUpdateRbacUsers({ user_ids: selectedUserIds.value, action: 'reset_password' })
+  users.value = clone(res.users) || users.value
+  bulkDialogVisible.value = false
+  ElMessage.success(`已批量重置密码：${res.default_password || '12345678'}`)
+  await loadAll()
+}
+
+const bulkCreateUsers = async () => {
+  const lines = bulkCreateText.value.split(/\r?\n/).map(item => item.trim()).filter(Boolean)
+  if (!lines.length) return ElMessage.warning('请按行填写用户')
+  let created = 0
+  for (const line of lines) {
+    const [name, account, role = 'user'] = line.split(/[,，\t]/).map(item => String(item || '').trim())
+    if (!account) continue
+    await createRbacUser({
+      name: name || account,
+      account,
+      role: role === 'admin' ? 'admin' : 'user',
+      password: '12345678',
+      role_ids: [],
+    })
+    created += 1
+  }
+  if (!created) return ElMessage.warning('没有识别到有效账号')
+  bulkCreateText.value = ''
+  bulkDialogVisible.value = false
+  ElMessage.success(`已新增 ${created} 个用户，默认密码：12345678`)
   await loadAll()
 }
 
@@ -734,7 +882,13 @@ textarea {
 .rbac-section-title {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 6px;
+}
+
+.rbac-section-title > div {
+  display: inline-flex;
+  gap: 8px;
 }
 
 .rbac-section-title button {
@@ -864,6 +1018,13 @@ textarea {
   margin: 0;
 }
 
+.permission-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .readonly-tip {
   display: inline-flex;
   align-items: center;
@@ -899,19 +1060,60 @@ textarea {
 }
 
 .feature-group {
-  padding: 10px;
   border: 1px solid #edf0f5;
   border-radius: 8px;
   background: #fbfcfe;
+  overflow: hidden;
+}
+
+.feature-group.open {
+  border-color: #cfe0ff;
+  background: #f8fbff;
 }
 
 .feature-group-title {
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #edf0f5;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #f7f9fc;
   font-size: 12px;
   font-weight: 900;
   color: #1d2129;
+  text-align: left;
+}
+
+.feature-group-title::before {
+  content: '▸';
+  color: #86909c;
+  transition: transform .16s ease;
+}
+
+.feature-group.open .feature-group-title::before {
+  transform: rotate(90deg);
+}
+
+.feature-group-title span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feature-group-title em {
+  color: #86909c;
+  font-style: normal;
+}
+
+.feature-group-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  padding: 10px;
 }
 
 .permission-pill {
@@ -935,15 +1137,14 @@ textarea {
   width: 100% !important;
   min-height: 30px;
   margin: 0 !important;
-  padding: 5px 2px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: #fff;
   color: #4e5969 !important;
 }
 
 .feature-group .permission-pill + .permission-pill {
-  margin-top: 4px !important;
+  margin-top: 0 !important;
 }
 
 .feature-group .permission-pill:hover {
@@ -1085,11 +1286,84 @@ textarea {
   gap: 14px;
 }
 
+.bulk-actions {
+  flex-wrap: wrap;
+}
+
+.bulk-create-box {
+  padding-top: 12px;
+  border-top: 1px solid #edf0f5;
+}
+
+.bulk-create-box h4 {
+  margin: 0 0 8px;
+}
+
+.bulk-create-box textarea {
+  margin-bottom: 10px;
+}
+
+.user-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.user-form label,
+.user-form section {
+  display: block;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-form label input,
+.user-form label select {
+  margin-top: 6px;
+}
+
+.user-form section {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+}
+
+.user-form section h4 {
+  margin: 0 0 8px;
+  color: #1d2129;
+}
+
+.floating-save {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d8e6ff;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, .12);
+}
+
+.floating-save span {
+  max-width: 180px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .rbac-layout,
   .detail-grid,
   .feature-groups,
-  .user-pick-grid {
+  .user-pick-grid,
+  .permission-toolbar,
+  .user-form {
     grid-template-columns: 1fr;
   }
 }
