@@ -33,6 +33,7 @@ RUNTIME_CONFIG_FILES = [
     "app_config.json",
     "employee_permissions.json",
     "data_permissions.json",
+    "rbac_permissions.json",
     "feature_flags.json",
 ]
 

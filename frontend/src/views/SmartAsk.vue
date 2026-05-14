@@ -2963,7 +2963,9 @@ const shouldShowResultChain = (msg) => Boolean(
 )
 
 const getDatasets = (msg) => (
-  Array.isArray(msg?.data?.dataset_results) ? msg.data.dataset_results : []
+  Array.isArray(msg?.data?.dataset_results)
+    ? msg.data.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+    : []
 )
 const getReport = (msg) => mergeDatasetReports(getDatasets(msg))
 const getPrimaryDataset = (msg) => buildAggregateDataset(getDatasets(msg))
@@ -3359,16 +3361,25 @@ const restoreHistory = (item) => {
   setActiveHistory(item.id)
   messages.splice(0, messages.length, ...JSON.parse(JSON.stringify(item.messages || [])))
   session.state.question = item.sessionState?.question || ''
-  session.state.selectedDatasetId = item.sessionState?.selectedDatasetId || null
+  const restoredSelectedDatasetId = item.sessionState?.selectedDatasetId || null
+  session.state.selectedDatasetId = restoredSelectedDatasetId && isDatasetVisible(restoredSelectedDatasetId)
+    ? restoredSelectedDatasetId
+    : null
   session.state.status = item.sessionState?.status || 'idle'
-  session.state.result = item.sessionState?.result || null
+  session.state.result = item.sessionState?.result ? JSON.parse(JSON.stringify(item.sessionState.result)) : null
+  if (Array.isArray(session.state.result?.dataset_results)) {
+    session.state.result.dataset_results = session.state.result.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+  }
   session.state.error = item.sessionState?.error || ''
   session.state.logs = item.sessionState?.logs || []
   session.state.startedAt = item.sessionState?.startedAt || ''
   session.state.updatedAt = item.sessionState?.updatedAt || ''
   session.state.currentSessionId = item.sessionState?.currentSessionId || ''
 
-  datasetId.value = item.datasetId
+  datasetId.value = item.datasetId && isDatasetVisible(item.datasetId) ? item.datasetId : null
+  if ((item.datasetId || restoredSelectedDatasetId) && !datasetId.value && !session.state.selectedDatasetId) {
+    ElMessage.warning('该历史会话包含当前账号无权访问的数据集，已隐藏相关结果。')
+  }
   showPanel.value = !!item.showPanel
 
   Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
