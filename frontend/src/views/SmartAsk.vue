@@ -713,7 +713,7 @@
 
     <el-dialog
       v-model="reportViewerVisible"
-      title="完整报告"
+      title=""
       :fullscreen="reportDialogFullscreen"
       :width="reportDialogFullscreen ? undefined : 'min(1280px, 94vw)'"
       top="4vh"
@@ -722,12 +722,16 @@
     >
       <div class="sa-report-dialog-body">
         <div class="sa-report-dialog-head">
-          <div>
+          <div class="sa-report-dialog-title-block">
             <h3 class="sa-report-dialog-title">业绩分析报告</h3>
+            <p v-if="reportViewerTitle" class="sa-report-dialog-subtitle">{{ reportViewerTitle }}</p>
           </div>
           <div class="sa-report-dialog-actions">
             <button class="sa-secondary-btn" @click="reportDialogFullscreen = !reportDialogFullscreen">
               <span class="sa-btn-label">{{ reportDialogFullscreen ? '退出全屏' : '全屏查看' }}</span>
+            </button>
+            <button class="sa-secondary-btn" @click="reportViewerVisible = false">
+              <span class="sa-btn-label">关闭</span>
             </button>
           </div>
         </div>
@@ -6222,6 +6226,10 @@ button.sa-compare-row:hover {
   gap: 16px;
 }
 
+:deep(.sa-report-dialog .el-dialog__header) {
+  display: none;
+}
+
 .sa-report-dialog-head {
   display: flex;
   align-items: flex-start;
@@ -6231,12 +6239,31 @@ button.sa-compare-row:hover {
   border-bottom: 1px solid rgba(29, 33, 41, 0.08);
 }
 
+.sa-report-dialog-title-block {
+  min-width: 0;
+  flex: 1;
+}
+
 .sa-report-dialog-title {
   margin: 6px 0 0;
   font-size: 24px;
   line-height: 1.22;
   font-weight: 700;
   color: #1d2129;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sa-report-dialog-subtitle {
+  margin: 7px 0 0;
+  max-width: min(980px, 72vw);
+  color: #4e5969;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sa-report-dialog-content {

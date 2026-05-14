@@ -61,15 +61,50 @@
       </div>
     </div>
 
+    <div v-if="secondaryDrillRows.length" class="sa-report-mini-section sa-drill-section">
+      <div class="sa-section-title-line">
+        <div class="sa-section-label">四、二级拆解</div>
+        <span>{{ secondaryDrillSummary }}</span>
+      </div>
+      <div class="sa-drill-table" role="table" aria-label="二级经营拆解">
+        <div class="sa-drill-row is-head" role="row">
+          <span>节点</span>
+          <span>任务 / 完成</span>
+          <span>缺口</span>
+          <span>达成率</span>
+        </div>
+        <div v-for="row in secondaryDrillRows" :key="`drill-${row.name}`" class="sa-drill-row" role="row">
+          <div class="sa-drill-node">
+            <strong>{{ row.name }}</strong>
+            <span>{{ row.level || secondaryLevelLabel }}</span>
+          </div>
+          <div class="sa-drill-number">
+            <strong>{{ row.taskText || '-' }}</strong>
+            <span>完成 {{ row.actualText || '-' }}</span>
+          </div>
+          <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
+          <div class="sa-drill-rate" :class="secondaryRateTone(row)">
+            <div class="sa-drill-rate-head">
+              <strong>{{ row.rateText || '-' }}</strong>
+              <span>{{ secondaryRateHint(row) }}</span>
+            </div>
+            <div class="sa-drill-bar" aria-hidden="true">
+              <i :style="{ width: secondaryBarWidth(row) }"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="supportLines.length || actionItems.length" class="sa-report-mini-section sa-advice-section">
       <div v-if="supportLines.length" class="sa-advice-block">
-        <div class="sa-section-label">四、重点发现</div>
+        <div class="sa-section-label">{{ secondaryDrillRows.length ? '五、重点发现' : '四、重点发现' }}</div>
         <ol class="sa-advice-list">
           <li v-for="(line, index) in supportLines.slice(0, 3)" :key="`support-${index}`">{{ line }}</li>
         </ol>
       </div>
       <div v-if="actionItems.length" class="sa-advice-block">
-        <div class="sa-section-label">五、建议动作</div>
+        <div class="sa-section-label">{{ secondaryDrillRows.length ? '六、建议动作' : '五、建议动作' }}</div>
         <ol class="sa-advice-list">
           <li v-for="(line, index) in actionItems" :key="`action-${index}`">{{ line }}</li>
         </ol>
@@ -761,6 +796,72 @@ const focusDrillRows = computed(() => {
   return rows.filter(item => item.name !== singleFocusRow.value?.name)
 })
 
+const secondaryDrillRows = computed(() => {
+  const source = focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value
+  const unique = []
+  const seen = new Set()
+  source.forEach((item) => {
+    if (!item?.name || item.name === singleFocusName.value || seen.has(item.name)) return
+    seen.add(item.name)
+    unique.push(item)
+  })
+  const ranked = unique
+    .filter(item => item.rate !== null)
+    .sort((left, right) => (right.rate ?? -Infinity) - (left.rate ?? -Infinity))
+  const fallback = unique.filter(item => item.rate === null)
+  const rows = [...ranked, ...fallback]
+  if (rows.length <= 6) return rows
+  const leaders = ranked.slice(0, 3)
+  const laggards = [...ranked].reverse().slice(0, 3)
+  const picked = [...leaders, ...laggards, ...fallback]
+  const pickedSeen = new Set()
+  return picked.filter((item) => {
+    if (pickedSeen.has(item.name)) return false
+    pickedSeen.add(item.name)
+    return true
+  }).slice(0, 6)
+})
+
+const secondaryLevelLabel = computed(() => (
+  secondaryDrillRows.value.find(item => item.level)?.level || '下级节点'
+))
+
+const secondaryDrillSummary = computed(() => {
+  const rows = secondaryDrillRows.value
+  if (!rows.length) return ''
+  const ranked = rows.filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
+  const best = ranked[0]
+  const worst = ranked[ranked.length - 1]
+  const riskCount = rows.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
+  const parts = [`覆盖${rows.length}个${secondaryLevelLabel.value}`]
+  if (best) parts.push(`最高${best.name} ${best.rateText}`)
+  if (worst && worst.name !== best?.name) parts.push(`最低${worst.name} ${worst.rateText}`)
+  if (riskCount) parts.push(`${riskCount}个低于${riskThreshold.value}%预警线`)
+  return parts.join('，')
+})
+
+const secondaryBarWidth = (row) => {
+  const value = row?.rate
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '0%'
+  return `${Math.max(0, Math.min(100, Number(value)))}%`
+}
+
+const secondaryRateTone = (row) => {
+  const value = row?.rate
+  if (value === null || value === undefined) return 'is-neutral'
+  if (value < riskThreshold.value) return 'is-danger'
+  if (value < 40) return 'is-warn'
+  return 'is-success'
+}
+
+const secondaryRateHint = (row) => {
+  const value = row?.rate
+  if (value === null || value === undefined) return '缺少口径'
+  if (value < riskThreshold.value) return '预警'
+  if (value < 40) return '需推进'
+  return '相对健康'
+}
+
 const focusDrillRank = computed(() => {
   const ranked = [...focusDrillRows.value].sort((a, b) => b.rate - a.rate)
   return {
@@ -1096,6 +1197,151 @@ const actionItems = computed(() => {
   border-color: rgba(22, 93, 255, 0.12);
 }
 
+.sa-section-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.sa-section-title-line > span {
+  min-width: 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-drill-section {
+  padding: 11px 12px 12px;
+  border: 1px solid rgba(22, 93, 255, 0.12);
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.sa-drill-table {
+  overflow: hidden;
+  border: 1px solid rgba(29, 33, 41, 0.07);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.sa-drill-row {
+  display: grid;
+  grid-template-columns: minmax(116px, 1.15fr) minmax(112px, 1fr) minmax(74px, 0.72fr) minmax(150px, 1.28fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(29, 33, 41, 0.06);
+}
+
+.sa-drill-row:first-child {
+  border-top: 0;
+}
+
+.sa-drill-row.is-head {
+  padding: 8px 12px;
+  background: #f7f9fc;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sa-drill-node,
+.sa-drill-number,
+.sa-drill-rate {
+  min-width: 0;
+}
+
+.sa-drill-node {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sa-drill-node strong,
+.sa-drill-number strong,
+.sa-drill-rate-head strong {
+  min-width: 0;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-drill-node span,
+.sa-drill-number span,
+.sa-drill-rate-head span {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sa-drill-number {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sa-drill-gap {
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-drill-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sa-drill-rate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sa-drill-bar {
+  position: relative;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(29, 33, 41, 0.08);
+}
+
+.sa-drill-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #165dff;
+}
+
+.sa-drill-rate.is-success .sa-drill-bar i {
+  background: #00b42a;
+}
+
+.sa-drill-rate.is-warn .sa-drill-bar i {
+  background: #ff7d00;
+}
+
+.sa-drill-rate.is-danger .sa-drill-bar i {
+  background: #f53f3f;
+}
+
+.sa-drill-rate.is-neutral .sa-drill-bar i {
+  background: #86909c;
+}
+
 .sa-advice-section {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1318,6 +1564,27 @@ const actionItems = computed(() => {
   .sa-comparison-card-grid.is-count-3,
   .sa-comparison-card-grid.is-count-4 {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-section-title-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .sa-section-title-line > span {
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .sa-drill-row,
+  .sa-drill-row.is-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-drill-row.is-head {
+    display: none;
   }
 }
 
