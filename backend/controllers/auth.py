@@ -111,9 +111,32 @@ def _verify_password(password: str, salt: str, password_hash: str) -> bool:
     return secrets.compare_digest(digest, password_hash)
 
 
+def _first_text(*values) -> str:
+    for value in values:
+        if isinstance(value, list):
+            text = _first_text(*value)
+            if text:
+                return text
+            continue
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _pick_text(data: dict | None, *keys: str) -> str:
+    if not isinstance(data, dict):
+        return ""
+    for key in keys:
+        text = _first_text(data.get(key))
+        if text:
+            return text
+    return ""
+
+
 def _clean_employee(item: dict, index: int, existing: dict | None = None) -> dict:
     account = str(item.get("account") or item.get("username") or "").strip()
-    union_id = str(item.get("union_id") or item.get("identifier") or "").strip()
+    union_id = str(item.get("union_id") or item.get("unionId") or item.get("identifier") or "").strip()
     identifier = str(item.get("identifier") or union_id).strip()
     name = str(item.get("name") or "").strip() or account or identifier or f"员工{index + 1}"
     role = _clean_role(item.get("role"))
@@ -128,8 +151,8 @@ def _clean_employee(item: dict, index: int, existing: dict | None = None) -> dic
         "account": account,
         "identifier": identifier,
         "union_id": union_id,
-        "open_id": str(item.get("open_id") or "").strip(),
-        "user_id": str(item.get("user_id") or "").strip(),
+        "open_id": str(item.get("open_id") or item.get("openId") or "").strip(),
+        "user_id": str(item.get("user_id") or item.get("userId") or "").strip(),
         "department": str(item.get("department") or item.get("department_name") or "").strip(),
         "department_ids": item.get("department_ids") if isinstance(item.get("department_ids"), list) else [],
         "position": str(item.get("position") or item.get("job_title") or "").strip(),
@@ -155,7 +178,7 @@ def _employee_public(employee: dict) -> dict:
 
 def _identity_values(user: dict) -> set[str]:
     values = set()
-    for key in ("union_id", "open_id", "user_id", "email", "mobile", "username", "name"):
+    for key in ("union_id", "unionId", "open_id", "openId", "user_id", "userId", "identifier", "account", "email", "mobile", "username", "name"):
         raw = user.get(key)
         if isinstance(raw, list):
             for item in raw:
@@ -198,9 +221,90 @@ def _apply_employee_permission(user: dict) -> dict:
         user["employee_id"] = matched["id"]
         user["permission_name"] = matched["name"]
         user["role_ids"] = matched.get("role_ids", [])
+        for key in ("identifier", "union_id", "open_id", "user_id", "account"):
+            if matched.get(key) and not user.get(key):
+                user[key] = matched[key]
+        user["permission_identifier"] = (
+            matched.get("identifier")
+            or matched.get("union_id")
+            or matched.get("open_id")
+            or matched.get("user_id")
+            or matched.get("account")
+            or ""
+        )
         for key in ("department", "department_ids", "position", "organization", "company"):
             if matched.get(key) and not user.get(key):
                 user[key] = matched[key]
+    return user
+
+
+def _find_employee_match(user: dict) -> dict | None:
+    identities = _identity_values(user)
+    if not identities:
+        return None
+    for index, item in enumerate(_load_permissions().get("employees", [])):
+        employee = _clean_employee(item, index)
+        candidates = {
+            employee.get("identifier", "").strip().lower(),
+            employee.get("union_id", "").strip().lower(),
+            employee.get("open_id", "").strip().lower(),
+            employee.get("user_id", "").strip().lower(),
+            employee.get("account", "").strip().lower(),
+        }
+        if candidates.intersection(identities):
+            return employee
+    return None
+
+
+def _ensure_feishu_employee_user(user: dict) -> dict:
+    if not isinstance(user, dict) or user.get("source") != "feishu":
+        return user
+    if _find_employee_match(user):
+        return user
+    identity = (
+        user.get("union_id")
+        or user.get("open_id")
+        or user.get("user_id")
+        or user.get("mobile")
+        or user.get("email")
+    )
+    account = user.get("mobile") or user.get("email") or user.get("user_id") or user.get("union_id") or user.get("open_id")
+    if not identity or not account:
+        return user
+    permissions = _load_permissions()
+    employees = permissions.get("employees", [])
+    employee = _clean_employee({
+        "id": f"emp_feishu_{secrets.token_hex(8)}",
+        "name": user.get("name") or account,
+        "account": account,
+        "identifier": identity,
+        "union_id": user.get("union_id") or "",
+        "open_id": user.get("open_id") or "",
+        "user_id": user.get("user_id") or "",
+        "department": user.get("department") or "",
+        "department_ids": user.get("department_ids") or [],
+        "position": user.get("position") or "",
+        "organization": user.get("organization") or "",
+        "company": user.get("company") or "",
+        "role": "user",
+        "role_ids": [],
+        "enabled": True,
+        "note": "飞书首次登录自动创建",
+        "reset_password": True,
+    }, len(employees))
+    employees.append(employee)
+    _save_permissions({"employees": employees})
+    _log_auth_event(
+        "feishu_user_auto_created",
+        "info",
+        "飞书首次登录自动创建普通用户",
+        user=employee,
+        account=account,
+        union_id=user.get("union_id") or "",
+        open_id=user.get("open_id") or "",
+        user_id=user.get("user_id") or "",
+        status_code=200,
+    )
     return user
 
 
@@ -226,6 +330,11 @@ def _employee_user_info(employee: dict) -> dict:
         "name": employee["name"],
         "permission_name": employee["name"],
         "union_id": employee.get("union_id", ""),
+        "open_id": employee.get("open_id", ""),
+        "user_id": employee.get("user_id", ""),
+        "identifier": employee.get("identifier", ""),
+        "account": employee.get("account", ""),
+        "permission_identifier": employee.get("identifier") or employee.get("union_id") or employee.get("account") or "",
         "department": employee.get("department", ""),
         "department_ids": employee.get("department_ids", []),
         "position": employee.get("position", ""),
@@ -270,26 +379,27 @@ def _require_feishu_config() -> tuple[dict, tuple | None]:
 
 
 def _normalize_user(data: dict) -> dict:
-    departments = data.get("departments") or data.get("department_names") or []
+    data = data or {}
+    departments = data.get("departments") or data.get("department_names") or data.get("departmentNames") or []
     if isinstance(departments, str):
         departments = [departments]
     department_ids = data.get("department_ids") or data.get("departmentIds") or []
     if isinstance(department_ids, str):
         department_ids = [department_ids]
     return {
-        "union_id": data.get("union_id") or data.get("unionId") or "",
-        "open_id": data.get("open_id") or data.get("openId") or "",
-        "user_id": data.get("user_id") or data.get("userId") or "",
-        "name": data.get("name") or data.get("en_name") or data.get("nickname") or "飞书用户",
-        "avatar_url": data.get("avatar_url") or data.get("avatar_thumb") or data.get("avatar_big") or "",
-        "email": data.get("email") or "",
-        "mobile": data.get("mobile") or "",
-        "department": data.get("department") or data.get("department_name") or (departments[0] if departments else ""),
+        "union_id": _pick_text(data, "union_id", "unionId", "unionid"),
+        "open_id": _pick_text(data, "open_id", "openId", "openid"),
+        "user_id": _pick_text(data, "user_id", "userId", "userid"),
+        "name": _pick_text(data, "name", "en_name", "nickname") or "飞书用户",
+        "avatar_url": _pick_text(data, "avatar_url", "avatarUrl", "avatar_thumb", "avatarThumb", "avatar_big", "avatarBig"),
+        "email": _pick_text(data, "email"),
+        "mobile": _pick_text(data, "mobile", "phone", "mobile_phone"),
+        "department": _pick_text(data, "department", "department_name", "departmentName") or (departments[0] if departments else ""),
         "departments": departments,
         "department_ids": department_ids,
-        "position": data.get("position") or data.get("job_title") or data.get("jobTitle") or "",
-        "organization": data.get("organization") or "",
-        "company": data.get("company") or "",
+        "position": _pick_text(data, "position", "job_title", "jobTitle"),
+        "organization": _pick_text(data, "organization"),
+        "company": _pick_text(data, "company"),
         "source": "feishu",
     }
 
@@ -355,7 +465,7 @@ def _exchange_oidc_code(cfg: dict, code: str) -> dict:
 
 
 def _enrich_feishu_user(cfg: dict, data: dict) -> dict:
-    user_id = str((data or {}).get("user_id") or (data or {}).get("userId") or "").strip()
+    user_id = _pick_text(data, "user_id", "userId", "userid")
     if not user_id:
         return data or {}
     try:
@@ -370,15 +480,15 @@ def _enrich_feishu_user(cfg: dict, data: dict) -> dict:
             return data or {}
         merged = dict(data or {})
         merged.update({
-            "name": profile.get("name") or merged.get("name"),
-            "union_id": profile.get("union_id") or merged.get("union_id"),
-            "open_id": profile.get("open_id") or merged.get("open_id"),
-            "user_id": profile.get("user_id") or merged.get("user_id"),
-            "email": profile.get("email") or merged.get("email"),
-            "mobile": profile.get("mobile") or merged.get("mobile"),
-            "department_ids": profile.get("department_ids") or merged.get("department_ids") or [],
-            "position": profile.get("job_title") or profile.get("position") or merged.get("position") or "",
-            "job_title": profile.get("job_title") or merged.get("job_title") or "",
+            "name": _pick_text(profile, "name", "en_name", "nickname") or _pick_text(merged, "name", "en_name", "nickname"),
+            "union_id": _pick_text(profile, "union_id", "unionId", "unionid") or _pick_text(merged, "union_id", "unionId", "unionid"),
+            "open_id": _pick_text(profile, "open_id", "openId", "openid") or _pick_text(merged, "open_id", "openId", "openid"),
+            "user_id": _pick_text(profile, "user_id", "userId", "userid") or _pick_text(merged, "user_id", "userId", "userid"),
+            "email": _pick_text(profile, "email") or _pick_text(merged, "email"),
+            "mobile": _pick_text(profile, "mobile", "phone", "mobile_phone") or _pick_text(merged, "mobile", "phone", "mobile_phone"),
+            "department_ids": profile.get("department_ids") or profile.get("departmentIds") or merged.get("department_ids") or [],
+            "position": _pick_text(profile, "job_title", "jobTitle", "position") or _pick_text(merged, "position", "job_title", "jobTitle"),
+            "job_title": _pick_text(profile, "job_title", "jobTitle") or _pick_text(merged, "job_title", "jobTitle"),
         })
         return merged
     except Exception as exc:
@@ -544,7 +654,8 @@ def feishu_callback():
         return jsonify({"success": False, "error": "飞书 OAuth state 校验失败"}), 400
     try:
         user_data = _enrich_feishu_user(cfg, _exchange_web_code(cfg, code))
-        user_info = _apply_employee_permission(_normalize_user(user_data))
+        normalized_user = _ensure_feishu_employee_user(_normalize_user(user_data))
+        user_info = _apply_employee_permission(normalized_user)
         if not user_info:
             _log_auth_event("feishu_login_disabled", "warning", "飞书用户已停用", status_code=403)
             return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403
@@ -570,7 +681,8 @@ def feishu_in_app_auth():
         return jsonify({"success": False, "error": "缺少 auth_code"}), 400
     try:
         user_data = _enrich_feishu_user(cfg, _exchange_oidc_code(cfg, auth_code))
-        user_info = _apply_employee_permission(_normalize_user(user_data))
+        normalized_user = _ensure_feishu_employee_user(_normalize_user(user_data))
+        user_info = _apply_employee_permission(normalized_user)
         if not user_info:
             _log_auth_event("feishu_in_app_login_disabled", "warning", "飞书用户已停用", status_code=403)
             return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403

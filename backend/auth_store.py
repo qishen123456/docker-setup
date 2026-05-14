@@ -121,7 +121,7 @@ def _refresh_user_from_employee(user: Dict[str, Any]) -> Dict[str, Any]:
             continue
         candidates = {
             str(item.get(key) or "").strip().lower()
-            for key in ("id", "account", "username", "union_id", "open_id", "user_id", "identifier")
+            for key in ("id", "account", "username", "union_id", "unionId", "open_id", "openId", "user_id", "userId", "identifier")
             if str(item.get(key) or "").strip()
         }
         if not identities.intersection(candidates):
@@ -134,6 +134,25 @@ def _refresh_user_from_employee(user: Dict[str, Any]) -> Dict[str, Any]:
         refreshed["role"] = str(item.get("role") or refreshed.get("role") or "user")
         refreshed["role_ids"] = item.get("role_ids") if isinstance(item.get("role_ids"), list) else []
         refreshed["enabled"] = bool(item.get("enabled", True))
+        identity_keys = {
+            "account": ("account",),
+            "identifier": ("identifier",),
+            "union_id": ("union_id", "unionId"),
+            "open_id": ("open_id", "openId"),
+            "user_id": ("user_id", "userId"),
+        }
+        for key, aliases in identity_keys.items():
+            value = next((str(item.get(alias) or "").strip() for alias in aliases if str(item.get(alias) or "").strip()), "")
+            if value:
+                refreshed[key] = value
+        refreshed["permission_identifier"] = (
+            refreshed.get("identifier")
+            or refreshed.get("union_id")
+            or refreshed.get("open_id")
+            or refreshed.get("user_id")
+            or refreshed.get("account")
+            or ""
+        )
         for key in ("department", "department_ids", "position", "organization", "company"):
             if item.get(key):
                 refreshed[key] = item[key]
@@ -159,7 +178,7 @@ def _is_user_disabled(user: Dict[str, Any]) -> bool:
             continue
         candidates = {
             str(item.get(key) or "").strip().lower()
-            for key in ("id", "account", "username", "union_id", "open_id", "user_id", "identifier")
+            for key in ("id", "account", "username", "union_id", "unionId", "open_id", "openId", "user_id", "userId", "identifier")
             if str(item.get(key) or "").strip()
         }
         if identities.intersection(candidates):

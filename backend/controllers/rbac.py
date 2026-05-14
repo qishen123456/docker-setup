@@ -428,7 +428,7 @@ def update_user_assignment(user_id: str):
             employee["role"] = _as_text(payload.get("role"))
         if "role_ids" in payload:
             employee["role_ids"] = _as_list(payload.get("role_ids"))
-        for key in ("name", "account", "union_id", "department", "position", "organization", "company", "note"):
+        for key in ("name", "account", "identifier", "union_id", "open_id", "user_id", "department", "position", "organization", "company", "note"):
             if key in payload:
                 employee[key] = _as_text(payload.get(key))
         changed = True

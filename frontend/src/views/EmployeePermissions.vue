@@ -271,6 +271,13 @@
               </label>
             </section>
             <section class="detail-card">
+              <h4>飞书身份</h4>
+              <label>Union ID<input v-model.trim="activeUser.union_id" :disabled="!canEditEmployeePermissions" placeholder="扫码登录后自动回填，也可手工维护" /></label>
+              <label>身份标识<input v-model.trim="activeUser.identifier" :disabled="!canEditEmployeePermissions" placeholder="优先填 Union ID，可兼容手机号 / 工号" /></label>
+              <label>Open ID<input v-model.trim="activeUser.open_id" :disabled="!canEditEmployeePermissions" placeholder="飞书 Open ID，可选" /></label>
+              <label>User ID<input v-model.trim="activeUser.user_id" :disabled="!canEditEmployeePermissions" placeholder="飞书 User ID，可选" /></label>
+            </section>
+            <section class="detail-card">
               <h4>直接分配角色</h4>
               <label v-for="role in assignableRoles" :key="role.id" class="permission-pill block">
                 <input type="checkbox" :disabled="!canEditEmployeePermissions" :checked="activeUser.role_ids?.includes(role.id)" @change="toggleUserRole(activeUser, role.id, $event.target.checked)" />
@@ -363,6 +370,10 @@
       <div class="user-form">
         <label>姓名<input v-model.trim="userForm.name" placeholder="请输入姓名" /></label>
         <label>账号<input v-model.trim="userForm.account" placeholder="手机号 / 工号 / 登录账号" /></label>
+        <label>Union ID<input v-model.trim="userForm.union_id" placeholder="飞书 Union ID，可选" /></label>
+        <label>身份标识<input v-model.trim="userForm.identifier" placeholder="默认可与 Union ID 一致，可选" /></label>
+        <label>Open ID<input v-model.trim="userForm.open_id" placeholder="飞书 Open ID，可选" /></label>
+        <label>User ID<input v-model.trim="userForm.user_id" placeholder="飞书 User ID，可选" /></label>
         <label>固定角色
           <select v-model="userForm.role">
             <option value="user">普通用户</option>
@@ -435,6 +446,10 @@ const userDialogVisible = ref(false)
 const userForm = ref({
   name: '',
   account: '',
+  union_id: '',
+  identifier: '',
+  open_id: '',
+  user_id: '',
   role: 'user',
   department: '',
   position: '',
@@ -531,6 +546,10 @@ const openCreateUser = () => {
   userForm.value = {
     name: '',
     account: '',
+    union_id: '',
+    identifier: '',
+    open_id: '',
+    user_id: '',
     role: 'user',
     department: '',
     position: '',
