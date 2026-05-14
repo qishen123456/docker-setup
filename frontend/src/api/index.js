@@ -123,7 +123,7 @@ export const clearFeishuSyncLogs = (configId) => api.post(`/feishu-sync/logs/${c
 export const clearAllFeishuSyncLogs = () => api.post('/feishu-sync/logs/clear')
 
 export const getBookshelfHealth = () => api.get('/bookshelves/health')
-export const getBookshelfDatasets = () => api.get('/bookshelves/datasets')
+export const getBookshelfDatasets = (params = {}) => api.get('/bookshelves/datasets', { params })
 export const createBookshelfDataset = async (data) => {
   try {
     return await api.post('/bookshelves/datasets', data)

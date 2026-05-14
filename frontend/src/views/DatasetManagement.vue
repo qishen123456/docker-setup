@@ -15,6 +15,11 @@
 
           <div class="toolbar-col">
             <el-input v-model="searchKeyword" clearable placeholder="搜索数据集名称/编码..." size="small" />
+            <el-radio-group v-model="listStatusFilter" size="small" class="dataset-status-filter">
+              <el-radio-button label="all">全部 {{ datasetStatusCounts.all }}</el-radio-button>
+              <el-radio-button label="active">启用 {{ datasetStatusCounts.active }}</el-radio-button>
+              <el-radio-button label="inactive">停用 {{ datasetStatusCounts.inactive }}</el-radio-button>
+            </el-radio-group>
             <el-select v-model="listFilterSourceId" clearable placeholder="按来源筛选" size="small">
               <el-option label="全部来源" value="" />
               <el-option v-for="source in dataSources" :key="source.id" :label="source.name" :value="source.id" />
@@ -26,10 +31,15 @@
               v-for="item in filteredDatasets"
               :key="item.id"
               class="dataset-tile"
-              :class="{ active: selectedDatasetId === item.id }"
+              :class="{ active: selectedDatasetId === item.id, inactive: item.is_active === false }"
               @click="onSelectDataset(item)"
             >
-              <div class="dataset-tile-title">{{ item.dataset_name || '未命名数据集' }}</div>
+              <div class="dataset-tile-head">
+                <div class="dataset-tile-title">{{ item.dataset_name || '未命名数据集' }}</div>
+                <el-tag size="small" effect="plain" :type="item.is_active === false ? 'info' : 'success'">
+                  {{ item.is_active === false ? '停用' : '启用' }}
+                </el-tag>
+              </div>
               <div class="dataset-tile-meta">{{ item.dataset_code }}</div>
               <div class="dataset-tile-sub">
                 SQL {{ item.golden_sql_count || 0 }} · {{ sourceNameById(item.source_id) }}
@@ -608,6 +618,7 @@ import {
 const datasets = ref([])
 const dataSources = ref([])
 const listFilterSourceId = ref('')
+const listStatusFilter = ref('all')
 const searchKeyword = ref('')
 const selectedDatasetId = ref(null)
 const activeTab = ref('common_questions')
@@ -1274,8 +1285,16 @@ const autofillSelectedDataset = async () => {
 }
 
 // ========== 左侧:搜索+筛选 ==========
+const datasetStatusCounts = computed(() => {
+  const active = datasets.value.filter(item => item.is_active !== false).length
+  const inactive = datasets.value.filter(item => item.is_active === false).length
+  return { all: datasets.value.length, active, inactive }
+})
+
 const filteredDatasets = computed(() => {
   let list = datasets.value
+  if (listStatusFilter.value === 'active') list = list.filter(i => i.is_active !== false)
+  if (listStatusFilter.value === 'inactive') list = list.filter(i => i.is_active === false)
   if (listFilterSourceId.value) list = list.filter(i => Number(i.source_id) === Number(listFilterSourceId.value))
   if (searchKeyword.value.trim()) {
     const kw = searchKeyword.value.trim().toLowerCase()
@@ -1405,7 +1424,7 @@ const applyDataset = (d) => {
 }
 const resetFull = () => { FULL_COLLECTION_KEYS.forEach(key => { full[key] = [] }); qualitySummary.value = null }
 
-const loadDatasets = async () => { datasets.value = (await getBookshelfDatasets()).datasets || [] }
+const loadDatasets = async () => { datasets.value = (await getBookshelfDatasets({ include_inactive: 1 })).datasets || [] }
 const loadDataSources = async () => {
   dataSources.value = (await getDataSources()).databases || []
   if (!newDatasetSourceId.value && dataSources.value.length > 0) newDatasetSourceId.value = dataSources.value[0].id
@@ -1453,7 +1472,13 @@ const saveFull = async () => {
     ElMessage.success('书架内容已保存'); isDirty.value = false
     await loadDatasets()
     const currentDataset = datasets.value.find(item => Number(item.id) === Number(selectedDatasetId.value))
-    if (currentDataset) await selectDataset(currentDataset)
+    if (currentDataset) {
+      if ((listStatusFilter.value === 'active' && currentDataset.is_active === false)
+        || (listStatusFilter.value === 'inactive' && currentDataset.is_active !== false)) {
+        listStatusFilter.value = 'all'
+      }
+      await selectDataset(currentDataset)
+    }
     return true
   } catch (err) {
     const details = err?.response?.data?.details
@@ -1810,10 +1835,16 @@ onUnmounted(() => {
 .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .compact-actions { gap: 6px; }
 .toolbar-col { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.dataset-status-filter { width: 100%; }
+.dataset-status-filter :deep(.el-radio-button) { flex: 1; }
+.dataset-status-filter :deep(.el-radio-button__inner) { width: 100%; padding-left: 8px; padding-right: 8px; }
 .dataset-tile { padding: 12px 14px; border-radius: var(--radius-card, 12px); margin-bottom: 8px; border: 1px solid var(--border, #e5e6eb); background: var(--bg-card, #fff); cursor: pointer; transition: all var(--duration-normal, 220ms) var(--ease-out); }
 .dataset-tile:hover { border-color: var(--border-hover, #c9cdd4); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .dataset-tile.active { border-color: var(--color-primary, #3370ff); background: var(--color-primary-light, #f0f5ff); box-shadow: var(--shadow-md); }
+.dataset-tile.inactive { background: #f9fafb; }
+.dataset-tile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .dataset-tile-title { font-weight: 700; font-size: 14px; color: var(--text-title, #1d2129); }
+.dataset-tile.inactive .dataset-tile-title { color: var(--text-body, #4e5969); }
 .dataset-tile-meta { margin-top: 3px; font-size: 11px; color: var(--text-muted, #86909c); }
 .dataset-tile-sub { margin-top: 4px; font-size: 11px; color: var(--text-muted, #86909c); }
 .base-form { margin-bottom: 10px; }

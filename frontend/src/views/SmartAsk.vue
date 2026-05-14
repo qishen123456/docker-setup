@@ -252,7 +252,7 @@
             :allow-stop="isFeatureEnabled('smart_stop_run')"
             @send="handleSend"
             @stop="handleStop"
-            @dataset-change="loadQuestions"
+            @dataset-change="handleDatasetChange"
           />
         </div>
 
@@ -1152,6 +1152,7 @@ let elapsed = ref(0)
 let timerInst = null
 let chatScrollTimer = null
 let panelScrollTimer = null
+const pendingQuickDataset = ref(null)
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
@@ -1205,9 +1206,29 @@ const latestDataset = computed(() => buildAggregateDataset(latestDatasets.value)
 
 const latestReport = computed(() => mergeDatasetReports(latestDatasets.value))
 
+const isDatasetVisible = (id) => {
+  const value = Number(id)
+  if (!Number.isFinite(value)) return false
+  return datasets.value.some(item => Number(item?.id) === value)
+}
+
+const sanitizeDatasetSelection = () => {
+  if (datasetId.value && !isDatasetVisible(datasetId.value)) {
+    datasetId.value = null
+  }
+  if (session.state.selectedDatasetId && !isDatasetVisible(session.state.selectedDatasetId)) {
+    session.state.selectedDatasetId = null
+  }
+  if (pendingQuickDataset.value?.datasetId && !isDatasetVisible(pendingQuickDataset.value.datasetId)) {
+    pendingQuickDataset.value = null
+  }
+}
+
 const currentDatasetLabel = computed(() => {
-  const bySelected = datasets.value.find(item => item.id === datasetId.value)?.dataset_name
-  const byResult = latestDataset.value?.dataset_name
+  const bySelected = datasets.value.find(item => Number(item.id) === Number(datasetId.value))?.dataset_name
+  const resultDatasetId = latestDataset.value?.dataset_id
+  const canShowResultDataset = resultDatasetId === 'multi' || isDatasetVisible(resultDatasetId)
+  const byResult = canShowResultDataset ? latestDataset.value?.dataset_name : ''
   return bySelected || byResult || '自动路由数据集'
 })
 
@@ -2972,13 +2993,13 @@ const getMessageElapsedLabel = (msg) => {
 
 const getVisualPreviews = (msg) => (
   hasBusinessDrillDataset(getDatasets(msg)) ? [] : getDatasets(msg)
-    .slice(0, 3)
+    .slice(0, 2)
     .map((dataset, index) => ({
       key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
       dataset,
-      chartSpec: inferChartSpec(dataset),
+      chartSpec: getReportSpecCharts(dataset)[0] || inferChartSpec(dataset),
     }))
-    .filter(item => item.chartSpec)
+    .filter(item => item.chartSpec && (item.chartSpec.chartType === 'metric' || hasChartRows(item.chartSpec)))
 )
 
 const focusComposer = (selectAll = false) => nextTick(() => {
@@ -3060,7 +3081,9 @@ const rerunQuestion = async (msg) => {
   startTimer()
 
   try {
-    const res = await session.startAsk(text, datasetId.value, modelId.value)
+    const datasetInput = getDatasetInputForQuestion(text)
+    const res = await session.startAsk(text, datasetInput, modelId.value)
+    clearPendingQuickDataset()
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
@@ -3105,7 +3128,9 @@ const handleSend = async () => {
   startTimer()
 
   try {
-    const res = await session.startAsk(text, datasetId.value, modelId.value)
+    const datasetInput = getDatasetInputForQuestion(text)
+    const res = await session.startAsk(text, datasetInput, modelId.value)
+    clearPendingQuickDataset()
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
@@ -3363,9 +3388,8 @@ const quickAsk = (item) => {
   const text = typeof item === 'string' ? item : String(item?.question_text || '').trim()
   if (!text) return
   const nextDatasetId = typeof item === 'string' ? null : Number(item?.dataset_id || 0)
-  if (nextDatasetId) {
-    datasetId.value = nextDatasetId
-  }
+  datasetId.value = null
+  pendingQuickDataset.value = nextDatasetId ? { datasetId: nextDatasetId, question: text } : null
   query.value = text
   nextTick(() => {
     const textarea = document.querySelector('.sa-textarea')
@@ -3376,7 +3400,7 @@ const quickAsk = (item) => {
   })
   const datasetName = typeof item === 'string' ? '' : String(item?.dataset_name || item?.dataset_tag || '').trim()
   ElMessage({
-    message: datasetName ? `已切换到「${datasetName}」并填入问题` : '已填入，按 Enter 发送',
+    message: datasetName ? `已填入问题，本轮优先按「${datasetName}」执行` : '已填入，按 Enter 发送',
     type: 'success',
     duration: 1800,
     showClose: false,
@@ -3525,6 +3549,19 @@ const startTimer = () => {
   timerInst = setInterval(() => elapsed.value++, 1000)
 }
 
+const getDatasetInputForQuestion = (text) => {
+  if (datasetId.value) return datasetId.value
+  const pending = pendingQuickDataset.value
+  if (pending?.datasetId && String(pending.question || '').trim() === String(text || '').trim()) {
+    return pending.datasetId
+  }
+  return null
+}
+
+const clearPendingQuickDataset = () => {
+  pendingQuickDataset.value = null
+}
+
 const submitConfirmationDraft = (msg) => {
   const text = String(confirmationDrafts[msg?.id] || '').trim()
   if (!text || isRunning.value) return
@@ -3547,6 +3584,11 @@ const loadQuestions = async () => {
   } finally {
     commonQuestionsLoading.value = false
   }
+}
+
+const handleDatasetChange = async () => {
+  clearPendingQuickDataset()
+  await loadQuestions()
 }
 
 const refreshCommonQuestions = async () => {
@@ -3837,6 +3879,8 @@ const initPreviewChart = (el, data, key) => {
   nextTick(() => {
     const chart = echarts.getInstanceByDom(el) || echarts.init(el)
     renderChartSpec(chart, data)
+    requestAnimationFrame(() => chart.resize())
+    window.setTimeout(() => chart.resize(), 120)
   })
 }
 
@@ -3845,6 +3889,8 @@ const initLogChart = (el, data, key) => {
   nextTick(() => {
     const chart = echarts.getInstanceByDom(el) || echarts.init(el)
     renderChartSpec(chart, data)
+    requestAnimationFrame(() => chart.resize())
+    window.setTimeout(() => chart.resize(), 120)
   })
 }
 
@@ -3966,6 +4012,7 @@ onMounted(async () => {
   try {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
+    sanitizeDatasetSelection()
     await loadQuestions()
   } catch {}
 
@@ -3974,7 +4021,11 @@ onMounted(async () => {
     aiModels.value = modelRes.models || []
   } catch {}
 
-  if (session.state.selectedDatasetId) datasetId.value = session.state.selectedDatasetId
+  if (session.state.selectedDatasetId && isDatasetVisible(session.state.selectedDatasetId)) {
+    datasetId.value = session.state.selectedDatasetId
+  } else if (session.state.selectedDatasetId) {
+    session.state.selectedDatasetId = null
+  }
 
   // 页面重新打开时不自动回灌旧结果；历史恢复仍通过显式操作触发。
   if (session.state.result || session.state.question || session.state.logs?.length) {
@@ -3987,6 +4038,7 @@ onActivated(async () => {
   try {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
+    sanitizeDatasetSelection()
   } catch {}
   try {
     const modelRes = await getActiveAIModels()
@@ -4190,6 +4242,7 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
   width: 100%;
+  max-width: 980px;
   padding: 14px;
   border-radius: 14px;
   border: 1px solid rgba(22, 93, 255, 0.1);
@@ -4198,7 +4251,7 @@ onUnmounted(() => {
 }
 
 .sa-inline-visuals.is-single {
-  width: 100%;
+  width: min(100%, 760px);
 }
 
 .sa-inline-visuals-head {
@@ -4236,7 +4289,7 @@ onUnmounted(() => {
 }
 
 .sa-inline-visuals-grid.is-single {
-  grid-template-columns: minmax(0, 420px);
+  grid-template-columns: minmax(0, 1fr);
   justify-content: start;
 }
 
@@ -4271,11 +4324,15 @@ onUnmounted(() => {
 }
 
 .sa-inline-visual-chart {
-  height: 200px;
+  height: 280px;
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
   border: 1px solid rgba(29, 33, 41, 0.06);
+}
+
+.sa-inline-visuals-grid.is-single .sa-inline-visual-chart {
+  height: 320px;
 }
 
 /* 加载动画 */

@@ -33,6 +33,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import hljs from 'highlight.js/lib/core'
 import sql from 'highlight.js/lib/languages/sql'
+import { ElMessage } from 'element-plus'
 
 hljs.registerLanguage('sql', sql)
 
@@ -134,12 +135,49 @@ const highlightCode = async () => {
   }
 }
 
-const handleCopy = () => {
-  navigator.clipboard.writeText(displaySql.value || props.sql)
-  copied.value = true
-  setTimeout(() => {
-    copied.value = false
-  }, 1500)
+const fallbackCopyText = (text) => {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!ok) throw new Error('execCommand copy failed')
+}
+
+const handleCopy = async () => {
+  const text = displaySql.value || props.sql || ''
+  if (!text.trim()) {
+    ElMessage.warning('没有可复制的 SQL')
+    return
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      fallbackCopyText(text)
+    }
+    copied.value = true
+    ElMessage.success('SQL 已复制')
+    setTimeout(() => {
+      copied.value = false
+    }, 1500)
+  } catch (error) {
+    try {
+      fallbackCopyText(text)
+      copied.value = true
+      ElMessage.success('SQL 已复制')
+      setTimeout(() => {
+        copied.value = false
+      }, 1500)
+    } catch {
+      ElMessage.warning('复制失败，请手动选择 SQL 复制')
+    }
+  }
 }
 
 onMounted(() => {

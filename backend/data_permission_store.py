@@ -137,8 +137,10 @@ def _user_values(user: Dict[str, Any], keys: Iterable[str]) -> Set[str]:
 
 def is_dataset_allowed(user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> bool:
     user = user if isinstance(user, dict) else {}
-    if user.get("role") == "super_admin":
+    if user.get("role") in {"super_admin", "admin"}:
         return True
+    if not user:
+        return False
     try:
         from rbac_store import level_rank, user_dataset_level
 
@@ -148,7 +150,9 @@ def is_dataset_allowed(user: Dict[str, Any], dataset_id: int, permissions: Optio
         pass
     data = permissions or load_data_permissions()
     rule = (data.get("rules") or {}).get(str(int(dataset_id)))
-    if not rule or rule.get("mode") != "restricted":
+    if not rule:
+        return False
+    if rule.get("mode") != "restricted":
         return True
 
     role = _as_text(user.get("role"))

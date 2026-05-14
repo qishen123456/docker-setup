@@ -624,18 +624,6 @@ class FourAgentAskService:
         rate_col = str(rate_metric.get("column") or "")
         remain_col = str(remain_metric.get("column") or "")
         levels = [item for item in (config.get("levels") or []) if isinstance(item, dict)]
-        risk_threshold = (
-            self._to_float(config.get("personRiskThreshold"))
-            or self._to_float(config.get("officeRiskThreshold"))
-            or self._to_float(config.get("riskThreshold"))
-        )
-        if risk_threshold is None:
-            risk_threshold = 10
-        if risk_threshold > 50:
-            risk_threshold = 10
-        office_benchmark = self._to_float(config.get("officeBenchmarkThreshold")) or 15
-        person_benchmark = self._to_float(config.get("personBenchmarkThreshold")) or 20
-
         required_columns = {name_col, level_col, rate_col}
         if parent_col:
             required_columns.add(parent_col)
@@ -689,10 +677,46 @@ class FourAgentAskService:
                 reverse=reverse,
             )[:limit]
 
+        def dynamic_limit(count: int) -> int:
+            if count <= 1:
+                return 0
+            return max(1, min(3, count // 3))
+
+        def dynamic_performance_rows(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+            seen = set()
+            valid = []
+            for row in items:
+                name = row_name(row)
+                rate = row_rate(row)
+                key = (name, normalized_text(row, parent_col) if parent_col else "", normalized_text(row, level_col))
+                if not name or rate is None or key in seen:
+                    continue
+                seen.add(key)
+                valid.append(row)
+            if len(valid) <= 1:
+                return {"good": [], "weak": [], "ranked": valid, "can_compare": False}
+            ranked = sorted(valid, key=lambda row: row_rate(row) or 0, reverse=True)
+            if row_rate(ranked[0]) == row_rate(ranked[-1]):
+                return {"good": [], "weak": [], "ranked": ranked, "can_compare": False}
+            limit = min(dynamic_limit(len(ranked)), len(ranked) // 2)
+            good = ranked[:limit]
+            good_keys = {
+                (row_name(row), normalized_text(row, parent_col) if parent_col else "", normalized_text(row, level_col))
+                for row in good
+            }
+            weak = [
+                row for row in reversed(ranked[-limit:])
+                if (row_name(row), normalized_text(row, parent_col) if parent_col else "", normalized_text(row, level_col)) not in good_keys
+            ]
+            return {"good": good, "weak": weak, "ranked": ranked, "can_compare": True}
+
         def format_rank(items: List[Dict[str, Any]]) -> str:
             if not items:
                 return "暂无"
             return "、".join(f"{row_name(row)} {self._format_metric(row_rate(row), '%')}" for row in items)
+
+        def format_dynamic(groups: Dict[str, Any], key: str, empty_text: str) -> str:
+            return format_rank(groups.get(key) or []) if groups.get("can_compare") else empty_text
 
         def level_match(row: Dict[str, Any], level_cfg: Dict[str, Any]) -> bool:
             level_value = normalized_text(row, level_col)
@@ -774,8 +798,7 @@ class FourAgentAskService:
                 child_rows = [row for row in valid_rows if normalized_text(row, parent_col) in {first_name, second_name}]
                 child_level_names = list(dict.fromkeys(normalized_text(row, level_col) for row in child_rows if normalized_text(row, level_col)))
                 child_level_label = " / ".join(child_level_names[:2]) or "下级节点"
-                child_top = rank_items(child_rows, True, 3)
-                child_risk = rank_items([row for row in child_rows if (row_rate(row) or 0) < risk_threshold], False, 5)
+                child_groups = dynamic_performance_rows(child_rows)
                 leader = first_name if rate_gap >= 0 else second_name
                 learner = second_name if rate_gap >= 0 else first_name
                 lines = [
@@ -798,8 +821,8 @@ class FourAgentAskService:
                     f"| 剩余缺口金额 | {self._format_metric(first_remain)} | {self._format_metric(second_remain)} | {self._format_metric((first_remain or 0) - (second_remain or 0))} |",
                     "",
                     "## 三、层级差异核心看点",
-                    f"1. **{child_level_label}标杆节点**：{format_rank(child_top)}，优先复盘其客户跟进节奏和目标拆解方式。",
-                    f"2. **{child_level_label}风险节点**：{format_rank(child_risk)}，低于{self._format_metric(risk_threshold, '%')}的节点要优先跟进缺口。",
+                    f"1. **{child_level_label}表现较好节点**：{format_dynamic(child_groups, 'good', '样本不足或差异不明显')}，优先复盘其客户跟进节奏和目标拆解方式。",
+                    f"2. **{child_level_label}相对承压节点**：{format_dynamic(child_groups, 'weak', '样本不足或差异不明显')}，优先跟进缺口和过程动作。",
                     "",
                     "## 四、落地建议",
                     f"✅ **{learner}向{leader}对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。",
@@ -836,8 +859,7 @@ class FourAgentAskService:
             tracks = []
             if track_col in columns:
                 tracks = list(dict.fromkeys(normalized_text(row, track_col) for row in section_rows if normalized_text(row, track_col)))
-            risk_rows = rank_items([row for row in section_rows if (row_rate(row) or 0) < risk_threshold], False, 6)
-            top_rows = rank_items(section_rows, True, 6)
+            section_groups = dynamic_performance_rows(section_rows)
             parent_groups: Dict[str, int] = {}
             if parent_col in columns:
                 for row in section_rows:
@@ -847,22 +869,23 @@ class FourAgentAskService:
             lines.extend(
                 [
                     f"#### {' / '.join(tracks) + '｜' if tracks else ''}{section['name']}",
-                    f"• **亮点：** 表现较好节点 -> {format_rank(top_rows)} -> 可沉淀可复制动作。",
-                    f"• **痛点：** 风险节点 -> {format_rank(risk_rows)} -> 需要短周期跟进缺口。",
+                    f"• **亮点：** 表现较好节点 -> {format_dynamic(section_groups, 'good', '样本不足或差异不明显')} -> 可沉淀可复制动作。",
+                    f"• **痛点：** 相对承压节点 -> {format_dynamic(section_groups, 'weak', '样本不足或差异不明显')} -> 需要短周期跟进缺口。",
                     f"• **结构：** 下级单元 -> {', '.join([row_name(row) for row in section_rows[:12]]) or '暂无'}（共 {len(section_rows)} 个） -> 上级分组：{group_text}。",
                     "",
                 ]
             )
 
-        risk_count = sum(1 for section in level_sections for row in section["rows"] if (row_rate(row) or 0) < risk_threshold)
-        top_examples = rank_items(valid_rows, True, 3)
-        risk_examples = rank_items([row for row in valid_rows if (row_rate(row) or 0) < risk_threshold], False, 3)
+        overall_groups = dynamic_performance_rows(valid_rows)
+        risk_count = len(overall_groups.get("weak") or [])
+        top_examples = overall_groups.get("good") or []
+        risk_examples = overall_groups.get("weak") or []
         lines.extend(
             [
                 "### 改进建议",
-                f"• {top_section['name']}：优先聚焦低于 {self._format_metric(risk_threshold, '%')} 的节点，复盘目标拆解、项目推进和资源投入是否匹配。",
+                f"• {top_section['name']}：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。",
                 f"• {bottom_section['name']}：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。",
-                f"• 当前共识别 {risk_count} 个风险节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
+                f"• 当前动态识别 {risk_count} 个相对承压节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
             ]
         )
         if review_summary:
@@ -1336,6 +1359,7 @@ class FourAgentAskService:
             "metrics": config.get("metrics") or [],
             "levels": config.get("levels") or [],
             "riskThreshold": config.get("riskThreshold"),
+            "dynamicPerformanceRule": "报告中的好/差节点必须基于本次结果动态分组；不要按固定阈值或固定 TopN 硬切。好/差两组不得重复；可比对象少于 2 个时不做横向对比。",
             "agentReportGuidance": config.get("agentReportGuidance", ""),
             "resolvedQuestionScope": context.get("resolved_entities") or {},
         }
@@ -2952,9 +2976,9 @@ LLD：
         )
         global_report_standard = """
 你现在是一个智能数据分析报告生成引擎。生成报告时必须遵循以下全局标准：
-1. 动态布局：先识别意图。对比查询使用“核心结论 -> 关键指标对标 -> 层级差异核心看点 -> 落地建议”的对称结构；单体查询使用“核心 KPI -> 层级分布 -> 细分明细”的纵向结构；列表或排名查询突出名次、差距和 Top/Bottom。
+1. 动态布局：先识别意图。对比查询使用“核心结论 -> 关键指标对标 -> 层级差异核心看点 -> 落地建议”的对称结构；单体查询使用“核心 KPI -> 层级分布 -> 细分明细”的纵向结构；列表或排名查询突出名次、差距和相对领先/相对承压节点。
 2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用“万”；100万-1亿取整“万”；1亿以上保留2位小数“亿”。不得随意生成金额格式。
-3. 视觉引导：代表处按达成率分层，<10% 为风险，10%-15% 为中等，>15% 为标杆；业务代表按 <10% 风险、10%-20% 中等、>20% 标杆解释；涉及多维度排序时默认按达成率降序。
+3. 视觉引导：不要套用固定阈值或固定 TopN。根据本次结果的样本数量和达成率分布动态识别“表现较好”和“相对承压”；两组对象不得重复。只有 1 个可比对象时不做横向好坏对比，只描述该对象自身情况。
 4. 分析文本：严禁重复主语和长篇段落。单体分析采用“核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议”的结构；多组织对比必须明确“谁领先、差多少、谁向谁学、改什么”。
 5. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
 """.strip()
