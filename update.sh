@@ -91,7 +91,7 @@ LOCAL_STASH_NOTE=""
 
 save_local_git_changes() {
   local status_text timestamp local_dir
-  status_text="$(git status --porcelain --untracked-files=no)"
+  status_text="$(git status --porcelain --untracked-files=all)"
   if [[ -z "$status_text" ]]; then
     return 0
   fi
@@ -99,15 +99,24 @@ save_local_git_changes() {
   timestamp="$(date +%Y%m%d_%H%M%S)"
   local_dir="$SCRIPT_DIR/backups/local_git_changes_${timestamp}"
   mkdir -p "$local_dir"
-  git status --short --untracked-files=no > "$local_dir/git_status.txt" || true
+  git status --short --untracked-files=all > "$local_dir/git_status.txt" || true
   git diff > "$local_dir/tracked_changes.patch" || true
   git diff --staged > "$local_dir/staged_changes.patch" || true
+  git ls-files --others --exclude-standard > "$local_dir/untracked_files.txt" || true
 
-  warn "检测到服务器 tracked 文件存在本地改动，已保存到: $local_dir"
-  warn "这些改动会先进入 git stash，避免 git pull 覆盖失败。"
-  git stash push -m "smartask-update-${timestamp}" >/dev/null
+  if [[ -s "$local_dir/untracked_files.txt" ]]; then
+    while IFS= read -r file; do
+      [[ -e "$file" ]] || continue
+      mkdir -p "$local_dir/untracked/$(dirname "$file")"
+      cp -a "$file" "$local_dir/untracked/$file" 2>/dev/null || true
+    done < "$local_dir/untracked_files.txt"
+  fi
+
+  warn "检测到服务器存在本地改动或未跟踪文件，已保存到: $local_dir"
+  warn "这些改动会先进入 git stash，避免 git pull 被本地文件阻断。"
+  git stash push --include-untracked -m "smartask-update-${timestamp}" >/dev/null
   LOCAL_STASH_CREATED=1
-  LOCAL_STASH_NOTE="本地 tracked 改动已暂存到 git stash: smartask-update-${timestamp}；补丁备份目录: $local_dir"
+  LOCAL_STASH_NOTE="本地 tracked/untracked 改动已暂存到 git stash: smartask-update-${timestamp}；备份目录: $local_dir"
 }
 
 render_progress_bar() {
@@ -299,7 +308,7 @@ echo "[OK] 更新完成。页面如仍旧，请浏览器 Ctrl+F5。"
 echo "用户访问地址: http://服务器IP:${FRONTEND_PORT}"
 if [[ "$LOCAL_STASH_CREATED" -eq 1 ]]; then
   warn "$LOCAL_STASH_NOTE"
-  warn "如需查看: git stash list；如需人工恢复某项改动，请先确认新版本配置后再 git stash show -p stash@{0}"
+  warn "如需查看: git stash list；如需恢复单个文件，请先确认新版本配置后再执行: git checkout 'stash@{0}' -- 文件路径"
 fi
 
 if [[ "$RUN_TESTS" -eq 1 ]]; then
