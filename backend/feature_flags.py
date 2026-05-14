@@ -831,7 +831,7 @@ def load_feature_flags() -> dict[str, Any]:
     current_features = data.get("features") if isinstance(data.get("features"), dict) else {}
     for key, default_feature in DEFAULT_FEATURE_FLAGS["features"].items():
         result["features"][key] = _merge_feature(default_feature, current_features.get(key))
-    legacy_keys = {"danger_delete_buttons", "runtime_import"}
+    legacy_keys = {"danger_delete_buttons", "runtime_import", "employee_delete"}
     for key, feature in current_features.items():
         if key in legacy_keys:
             continue

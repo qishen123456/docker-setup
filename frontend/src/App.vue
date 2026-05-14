@@ -181,6 +181,9 @@
             <div class="topbar-brand">Data Agent</div>
             <span class="topbar-divider"></span>
             <div class="topbar-workspace">{{ currentTitle }}</div>
+            <button v-if="showBackToConsole" class="topbar-back-console" type="button" @click="backToConsole">
+              返回控制台
+            </button>
           </div>
         </div>
         <div class="topbar-right">
@@ -373,6 +376,7 @@ const subtitleMap = {
 const activeMenu = computed(() => route.path)
 const isAuthCallbackRoute = computed(() => route.path === '/auth/callback')
 const isSmartAskRoute = computed(() => route.path === '/smart-ask')
+const showBackToConsole = computed(() => route.query?.from === 'admin-console' && route.path !== '/admin-console')
 const authRole = computed(() => authUser.value?.role || 'user')
 const authRoleLabel = computed(() => authUser.value?.role_label || ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
 const canAccessRole = (minRole) => (roleRank[authRole.value] || 0) >= (roleRank[minRole] || 0)
@@ -501,6 +505,10 @@ const openPasswordDialog = () => {
 
 const openAdminConsole = () => {
   closeUserMenu()
+  router.push('/admin-console')
+}
+
+const backToConsole = () => {
   router.push('/admin-console')
 }
 
@@ -1970,6 +1978,25 @@ body,
   color: #888;
   letter-spacing: 0.01em;
   white-space: nowrap;
+}
+
+.topbar-back-console {
+  height: 28px;
+  margin-left: 12px;
+  padding: 0 11px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 999px;
+  background: #f0fdfa;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topbar-back-console:hover {
+  background: #ccfbf1;
+  border-color: rgba(15, 118, 110, 0.28);
 }
 
 .topbar-right {

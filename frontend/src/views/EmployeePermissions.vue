@@ -8,9 +8,9 @@
       </div>
       <div class="rbac-head-actions">
         <button type="button" class="rbac-ghost" :disabled="loading" @click="loadAll">刷新</button>
-        <button type="button" class="rbac-primary" @click="openCreateUser">新建用户</button>
-        <button type="button" class="rbac-primary" @click="createRole">新建角色</button>
-        <button type="button" class="rbac-primary muted" @click="createGroup">新建分组</button>
+        <button v-if="canEditEmployeePermissions" type="button" class="rbac-primary" @click="openCreateUser">新建用户</button>
+        <button v-if="canEditEmployeePermissions" type="button" class="rbac-primary" @click="createRole">新建角色</button>
+        <button v-if="canEditEmployeePermissions" type="button" class="rbac-primary muted" @click="createGroup">新建分组</button>
       </div>
     </header>
 
@@ -53,8 +53,8 @@
         <div class="rbac-list-section">
           <div class="rbac-section-title with-action">
             <span>用户列表</span>
-            <div>
-              <button type="button" @click="openCreateUser">新增</button>
+            <div v-if="canEditEmployeePermissions || canResetEmployeePassword">
+              <button v-if="canEditEmployeePermissions" type="button" @click="openCreateUser">新增</button>
               <button type="button" @click="bulkDialogVisible = true">批量</button>
             </div>
           </div>
@@ -122,17 +122,17 @@
               <p>{{ activeRole.description || '角色是功能权限和资源权限的集合容器。' }}</p>
             </div>
             <div class="detail-actions">
-              <button v-if="!activeRole.locked" class="rbac-danger" @click="removeRole(activeRole)">删除角色</button>
-              <button class="rbac-primary" :disabled="activeRole.id === 'super_admin'" @click="saveRole(activeRole)">保存角色</button>
+              <button v-if="!activeRole.locked && canEditEmployeePermissions" class="rbac-danger" @click="removeRole(activeRole)">删除角色</button>
+              <button v-if="canEditEmployeePermissions" class="rbac-primary" :disabled="activeRole.id === 'super_admin'" @click="saveRole(activeRole)">保存角色</button>
             </div>
           </div>
 
           <div class="detail-grid">
             <section class="detail-card">
               <h4>基础信息</h4>
-              <label>角色名称<input v-model.trim="activeRole.name" :disabled="activeRole.builtin" /></label>
-              <label>角色编码<input v-model.trim="activeRole.code" :disabled="activeRole.builtin" /></label>
-              <label>说明<textarea v-model.trim="activeRole.description" rows="3" /></label>
+              <label>角色名称<input v-model.trim="activeRole.name" :disabled="activeRole.builtin || !canEditEmployeePermissions" /></label>
+              <label>角色编码<input v-model.trim="activeRole.code" :disabled="activeRole.builtin || !canEditEmployeePermissions" /></label>
+              <label>说明<textarea v-model.trim="activeRole.description" :disabled="!canEditEmployeePermissions" rows="3" /></label>
             </section>
 
             <section class="detail-card wide">
@@ -154,11 +154,11 @@
                   <div v-show="isFeatureGroupOpen(group.name)" class="feature-group-body">
                     <label v-for="feature in group.items" :key="feature.key" class="permission-pill">
                       <input
-                        type="checkbox"
-                        :disabled="activeRole.id === 'super_admin'"
-                        :checked="activeRole.function_permissions?.includes(feature.key)"
-                        @change="toggleRoleFunction(activeRole, feature.key, $event.target.checked)"
-                      />
+                      type="checkbox"
+                      :disabled="activeRole.id === 'super_admin' || !canEditEmployeePermissions"
+                      :checked="activeRole.function_permissions?.includes(feature.key)"
+                      @change="toggleRoleFunction(activeRole, feature.key, $event.target.checked)"
+                    />
                       <span>{{ feature.label }}</span>
                     </label>
                   </div>
@@ -176,7 +176,7 @@
                 <div v-for="dataset in datasets" :key="dataset.id" class="resource-row">
                   <span>{{ dataset.dataset_name }}</span>
                   <select
-                    :disabled="activeRole.id === 'super_admin'"
+                    :disabled="activeRole.id === 'super_admin' || !canEditEmployeePermissions"
                     :value="getRoleResourceLevel(activeRole, dataset.id)"
                     @change="setRoleResourceLevel(activeRole, dataset.id, $event.target.value)"
                   >
@@ -208,26 +208,26 @@
               <p>分组角色会被组内用户自动继承；子分组用户同时继承上级分组角色。</p>
             </div>
             <div class="detail-actions">
-              <button class="rbac-danger" @click="removeGroup(activeGroup)">删除分组</button>
-              <button class="rbac-primary" @click="saveGroup(activeGroup)">保存分组</button>
+              <button v-if="canEditEmployeePermissions" class="rbac-danger" @click="removeGroup(activeGroup)">删除分组</button>
+              <button v-if="canEditEmployeePermissions" class="rbac-primary" @click="saveGroup(activeGroup)">保存分组</button>
             </div>
           </div>
           <div class="detail-grid">
             <section class="detail-card">
               <h4>基础信息</h4>
-              <label>分组名称<input v-model.trim="activeGroup.name" /></label>
+              <label>分组名称<input v-model.trim="activeGroup.name" :disabled="!canEditEmployeePermissions" /></label>
               <label>上级分组
-                <select v-model="activeGroup.parent_id">
+                <select v-model="activeGroup.parent_id" :disabled="!canEditEmployeePermissions">
                   <option value="">无上级</option>
                   <option v-for="group in groups.filter(item => item.id !== activeGroup.id)" :key="group.id" :value="group.id">{{ group.name }}</option>
                 </select>
               </label>
-              <label>说明<textarea v-model.trim="activeGroup.description" rows="3" /></label>
+              <label>说明<textarea v-model.trim="activeGroup.description" :disabled="!canEditEmployeePermissions" rows="3" /></label>
             </section>
             <section class="detail-card">
               <h4>分配角色</h4>
               <label v-for="role in assignableRoles" :key="role.id" class="permission-pill block">
-                <input type="checkbox" :checked="activeGroup.role_ids?.includes(role.id)" @change="toggleGroupRole(activeGroup, role.id, $event.target.checked)" />
+                <input type="checkbox" :disabled="!canEditEmployeePermissions" :checked="activeGroup.role_ids?.includes(role.id)" @change="toggleGroupRole(activeGroup, role.id, $event.target.checked)" />
                 <span>{{ role.name }}</span>
               </label>
             </section>
@@ -235,7 +235,7 @@
               <h4>批量添加/移除用户</h4>
               <div class="user-pick-grid">
                 <label v-for="user in users" :key="user.id" class="permission-pill">
-                  <input type="checkbox" :checked="activeGroup.user_ids?.includes(user.id)" @change="toggleGroupUser(activeGroup, user.id, $event.target.checked)" />
+                  <input type="checkbox" :disabled="!canEditEmployeePermissions" :checked="activeGroup.user_ids?.includes(user.id)" @change="toggleGroupUser(activeGroup, user.id, $event.target.checked)" />
                   <span>{{ user.name || user.account }}</span>
                 </label>
               </div>
@@ -251,20 +251,20 @@
               <p>最终权限 = 直接角色权限 + 所属分组继承角色权限；资源冲突按最高权限优先。</p>
             </div>
             <div class="detail-actions">
-              <button class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="resetUserPassword(activeUser)">重置密码</button>
-              <button class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="toggleUserEnabled(activeUser)">
+              <button v-if="canResetEmployeePassword" class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="resetUserPassword(activeUser)">重置密码</button>
+              <button v-if="canEditEmployeePermissions" class="rbac-ghost" :disabled="activeUser.role === 'super_admin'" @click="toggleUserEnabled(activeUser)">
                 {{ activeUser.enabled ? '停用用户' : '启用用户' }}
               </button>
-              <button class="rbac-primary" :disabled="activeUser.role === 'super_admin'" @click="saveUser(activeUser)">保存用户</button>
+              <button v-if="canEditEmployeePermissions" class="rbac-primary" :disabled="activeUser.role === 'super_admin'" @click="saveUser(activeUser)">保存用户</button>
             </div>
           </div>
           <div class="detail-grid">
             <section class="detail-card">
               <h4>基础信息</h4>
-              <label>姓名<input v-model.trim="activeUser.name" /></label>
-              <label>账号<input v-model.trim="activeUser.account" /></label>
+              <label>姓名<input v-model.trim="activeUser.name" :disabled="!canEditEmployeePermissions" /></label>
+              <label>账号<input v-model.trim="activeUser.account" :disabled="!canEditEmployeePermissions" /></label>
               <label>固定角色
-                <select v-model="activeUser.role">
+                <select v-model="activeUser.role" :disabled="!canEditEmployeePermissions">
                   <option value="admin">管理员</option>
                   <option value="user">普通用户</option>
                 </select>
@@ -273,7 +273,7 @@
             <section class="detail-card">
               <h4>直接分配角色</h4>
               <label v-for="role in assignableRoles" :key="role.id" class="permission-pill block">
-                <input type="checkbox" :checked="activeUser.role_ids?.includes(role.id)" @change="toggleUserRole(activeUser, role.id, $event.target.checked)" />
+                <input type="checkbox" :disabled="!canEditEmployeePermissions" :checked="activeUser.role_ids?.includes(role.id)" @change="toggleUserRole(activeUser, role.id, $event.target.checked)" />
                 <span>{{ role.name }}</span>
               </label>
             </section>
@@ -345,13 +345,13 @@
           </select>
         </label>
         <div class="bulk-actions">
-          <button class="rbac-primary" @click="bulkAssign('add_roles')">批量分配</button>
-          <button class="rbac-ghost" @click="bulkAssign('remove_roles')">批量取消</button>
-          <button class="rbac-ghost" @click="bulkSetEnabled(true)">批量启用</button>
-          <button class="rbac-danger" @click="bulkSetEnabled(false)">批量停用</button>
-          <button class="rbac-danger" @click="bulkResetPasswords">批量重置密码</button>
+          <button v-if="canEditEmployeePermissions" class="rbac-primary" @click="bulkAssign('add_roles')">批量分配</button>
+          <button v-if="canEditEmployeePermissions" class="rbac-ghost" @click="bulkAssign('remove_roles')">批量取消</button>
+          <button v-if="canEditEmployeePermissions" class="rbac-ghost" @click="bulkSetEnabled(true)">批量启用</button>
+          <button v-if="canEditEmployeePermissions" class="rbac-danger" @click="bulkSetEnabled(false)">批量停用</button>
+          <button v-if="canResetEmployeePassword" class="rbac-danger" @click="bulkResetPasswords">批量重置密码</button>
         </div>
-        <div class="bulk-create-box">
+        <div v-if="canEditEmployeePermissions" class="bulk-create-box">
           <h4>批量新增用户</h4>
           <textarea v-model.trim="bulkCreateText" rows="5" placeholder="每行一个用户：姓名,账号,角色(user/admin)&#10;示例：张三,13800000000,user" />
           <button class="rbac-primary" @click="bulkCreateUsers">批量新增</button>
@@ -375,18 +375,18 @@
         <section>
           <h4>直接分配角色</h4>
           <label v-for="role in assignableRoles" :key="role.id" class="permission-pill">
-            <input type="checkbox" :checked="userForm.role_ids.includes(role.id)" @change="toggleNewUserRole(role.id, $event.target.checked)" />
+            <input type="checkbox" :disabled="!canEditEmployeePermissions" :checked="userForm.role_ids.includes(role.id)" @change="toggleNewUserRole(role.id, $event.target.checked)" />
             <span>{{ role.name }}</span>
           </label>
         </section>
       </div>
       <template #footer>
         <button class="rbac-ghost" @click="userDialogVisible = false">取消</button>
-        <button class="rbac-primary" @click="submitCreateUser">创建用户</button>
+        <button v-if="canEditEmployeePermissions" class="rbac-primary" @click="submitCreateUser">创建用户</button>
       </template>
     </el-dialog>
 
-    <div v-if="activeType === 'role' && activeRole" class="floating-save">
+    <div v-if="activeType === 'role' && activeRole && canEditEmployeePermissions" class="floating-save">
       <span>{{ activeRole.name }}</span>
       <button class="rbac-primary" :disabled="activeRole.id === 'super_admin'" @click="saveRole(activeRole)">保存角色</button>
     </div>
@@ -410,6 +410,7 @@ import {
   updateRbacRole,
   updateRbacUser,
 } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const loading = ref(false)
 const roles = ref([])
@@ -444,9 +445,12 @@ const userForm = ref({
 const clone = (value) => JSON.parse(JSON.stringify(value || null))
 const norm = (value) => String(value || '').toLowerCase()
 const match = (value) => !keyword.value || norm(value).includes(norm(keyword.value))
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const disabledCount = computed(() => users.value.filter(item => !item.enabled).length)
 const assignableRoles = computed(() => roles.value.filter(item => item.id !== 'super_admin'))
+const canEditEmployeePermissions = computed(() => isFeatureEnabled('employee_permission_edit'))
+const canResetEmployeePassword = computed(() => isFeatureEnabled('employee_password_reset'))
 const activeRole = computed(() => roles.value.find(item => item.id === activeId.value))
 const activeUser = computed(() => users.value.find(item => item.id === activeId.value))
 const activeGroup = computed(() => groups.value.find(item => item.id === activeId.value))
@@ -706,7 +710,10 @@ watch(activeId, async () => {
   }
 })
 
-onMounted(loadAll)
+onMounted(async () => {
+  await loadFeatureFlags()
+  await loadAll()
+})
 </script>
 
 <style scoped>

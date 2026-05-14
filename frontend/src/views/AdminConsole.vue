@@ -7,9 +7,9 @@
         <p>{{ activeHero.description }}</p>
       </div>
       <div class="hero-actions">
+        <el-button plain @click="toggleAdminFloat">{{ adminFloatEnabled ? '关闭悬浮入口' : '开启悬浮入口' }}</el-button>
         <template v-if="activeConsoleTab === 'permissions'">
           <el-button plain :loading="loading" @click="loadFlags">刷新</el-button>
-          <el-button plain @click="toggleAdminFloat">{{ adminFloatEnabled ? '关闭悬浮入口' : '开启悬浮入口' }}</el-button>
           <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
           <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
         </template>
@@ -30,6 +30,8 @@
       <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="activeConsoleTab = 'logs'; ensureLogsLoaded()">日志管理</button>
     </section>
 
+    <section class="console-command-layout">
+      <main class="console-command-main">
     <template v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'">
     <section v-if="activeConsoleTab === 'permissions'" class="summary-strip">
       <div><strong>{{ navigationItems.length }}</strong><span>导航项</span></div>
@@ -403,6 +405,66 @@
         </div>
       </el-drawer>
     </template>
+      </main>
+
+      <aside class="console-side-board">
+        <section class="side-card side-hero-card">
+          <span class="side-kicker">控制台工作区</span>
+          <h3>{{ activeHero.kicker }}</h3>
+          <p>{{ activeHero.description }}</p>
+        </section>
+
+        <section class="side-card">
+          <div class="side-card-head">
+            <h4>近期能力板块</h4>
+            <span>{{ consoleCapabilityCards.length }} 项</span>
+          </div>
+          <div class="capability-list">
+            <article v-for="item in consoleCapabilityCards" :key="item.title" class="capability-item" :class="item.tone">
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.desc }}</p>
+              </div>
+              <em>{{ item.status }}</em>
+            </article>
+          </div>
+        </section>
+
+        <section class="side-card">
+          <div class="side-card-head">
+            <h4>治理入口</h4>
+            <span>常用</span>
+          </div>
+          <div class="quick-link-list">
+            <RouterLink
+              v-for="item in consoleQuickLinks"
+              :key="item.to"
+              :to="{ path: item.to, query: { from: 'admin-console' } }"
+              class="quick-link"
+            >
+              <div>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.desc }}</small>
+              </div>
+              <i>›</i>
+            </RouterLink>
+          </div>
+        </section>
+
+        <section class="side-card">
+          <div class="side-card-head">
+            <h4>当前健康度</h4>
+            <span>{{ activeConsoleTab === 'logs' ? '审计' : '配置' }}</span>
+          </div>
+          <div class="side-stats">
+            <div v-for="item in consoleSideStats" :key="item.label">
+              <strong>{{ item.value }}</strong>
+              <span>{{ item.label }}</span>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </section>
   </div>
 </template>
 
@@ -510,6 +572,62 @@ const enabledButtonCount = computed(() => buttonItems.value.filter((item) => ite
 const highRiskCount = computed(() => buttonItems.value.filter((item) => item.risk === 'high').length)
 const restrictedDatasetCount = computed(() => dataPermissionRows.value.filter((item) => item.rule?.mode === 'restricted').length)
 const enabledDataPermissionEmployees = computed(() => dataPermissionEmployees.value.filter((item) => item.enabled !== false))
+const consoleCapabilityCards = computed(() => [
+  {
+    title: '账号生命周期',
+    desc: '新建用户、批量新增、停用启用和密码重置已经纳入权限闭环。',
+    status: '已接入',
+    tone: 'blue',
+  },
+  {
+    title: 'RBAC 角色分组',
+    desc: '角色、用户分组、资源权限和双向权限视图集中在角色权限管理。',
+    status: '核心',
+    tone: 'green',
+  },
+  {
+    title: '经营报告治理',
+    desc: '报告模板、数据集口径、二级下钻展示和右侧报告区持续迭代。',
+    status: '升级中',
+    tone: 'amber',
+  },
+  {
+    title: '审计追踪',
+    desc: '用户新建、重置密码、批量授权、问数链路统一进入系统日志。',
+    status: '可追溯',
+    tone: 'slate',
+  },
+])
+const consoleQuickLinks = computed(() => [
+  { title: '角色权限管理', desc: '用户、角色、分组、资源授权', to: '/employee-permissions' },
+  { title: '数据资产管理', desc: '数据集、字段、语义配置', to: '/datasets' },
+  { title: '报告模板配置', desc: '报告结构和展示契约', to: '/report-config' },
+  { title: '智能分析工作台', desc: '回到经营问数会话', to: '/smart-ask' },
+])
+const consoleSideStats = computed(() => {
+  if (activeConsoleTab.value === 'logs') {
+    return [
+      { label: '24小时记录', value: logStats.value.last_24h || 0 },
+      { label: '7天报错', value: logStats.value.errors_7d || 0 },
+      { label: '低置信问答', value: logStats.value.low_confidence_7d || 0 },
+      { label: '当前筛选', value: totalLogs.value || 0 },
+    ]
+  }
+  if (activeConsoleTab.value === 'data') {
+    return [
+      { label: '数据集', value: dataPermissionRows.value.length },
+      { label: '受限数据集', value: restrictedDatasetCount.value },
+      { label: '可指定员工', value: dataPermissionEmployees.value.length },
+      { label: '部门选项', value: departmentOptionCount.value },
+    ]
+  }
+  return [
+    { label: '导航项', value: navigationItems.value.length },
+    { label: '按钮项', value: buttonItems.value.length },
+    { label: '已开放按钮', value: enabledButtonCount.value },
+    { label: '高风险项', value: highRiskCount.value },
+  ]
+})
 const departmentOptions = computed(() => uniqueOptionList(dataPermissionEmployees.value.flatMap((item) => [
   item.department,
   ...(Array.isArray(item.departments) ? item.departments : []),
@@ -1005,7 +1123,7 @@ onMounted(() => {
 }
 
 .console-page > * {
-  max-width: 1080px;
+  max-width: 1440px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -1125,6 +1243,189 @@ onMounted(() => {
   color: #ffffff;
   background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
   box-shadow: 0 10px 20px rgba(15, 118, 110, 0.22);
+}
+
+.console-command-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.console-command-main {
+  min-width: 0;
+}
+
+.console-command-main > .summary-strip:first-child,
+.console-command-main > .log-summary-strip:first-child {
+  margin-top: 0;
+}
+
+.console-side-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.side-card {
+  padding: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+}
+
+.side-hero-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.side-kicker {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: #1677ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.side-card h3,
+.side-card h4 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.side-card h3 {
+  font-size: 19px;
+}
+
+.side-card p {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.side-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.side-card-head span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.capability-list,
+.quick-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capability-item,
+.quick-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 12px;
+  background: #fbfdff;
+  text-decoration: none;
+}
+
+.capability-item strong,
+.quick-link strong {
+  display: block;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.capability-item p,
+.quick-link small {
+  display: block;
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.capability-item em {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #1677ff;
+  background: #eef6ff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.capability-item.green em {
+  color: #0f766e;
+  background: #ecfdf5;
+}
+
+.capability-item.amber em {
+  color: #b45309;
+  background: #fff7ed;
+}
+
+.capability-item.slate em {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.quick-link {
+  color: inherit;
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.quick-link:hover {
+  border-color: #b8d4ff;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, .07);
+}
+
+.quick-link i {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 20px;
+}
+
+.side-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.side-stats div {
+  padding: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+
+.side-stats strong {
+  display: block;
+  color: #0f766e;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.side-stats span {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .permission-card {
@@ -1681,6 +1982,14 @@ onMounted(() => {
 @media (max-width: 900px) {
   .console-page {
     padding: 14px;
+  }
+
+  .console-command-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .console-side-board {
+    order: -1;
   }
 
   .console-hero {

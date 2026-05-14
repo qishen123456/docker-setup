@@ -4066,6 +4066,12 @@ onUnmounted(() => {
   backdrop-filter: blur(14px);
 }
 
+.sa-workspace.is-detail-hidden {
+  max-width: min(1560px, 100%);
+  width: 100%;
+  margin: 0 auto;
+}
+
 /* ===== 对话区 ===== */
 .sa-chat-panel {
   flex: 1;
@@ -4086,8 +4092,8 @@ onUnmounted(() => {
 }
 
 .sa-chat-panel.is-detail-hidden .sa-chat-body {
-  padding-left: 28px;
-  padding-right: 28px;
+  padding-left: clamp(18px, 2.6vw, 44px);
+  padding-right: clamp(18px, 2.6vw, 44px);
 }
 
 /* 消息 */
@@ -4103,12 +4109,12 @@ onUnmounted(() => {
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-list {
-  max-width: 1220px;
+  max-width: 1420px;
   margin: 0 auto;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-wrap {
-  max-width: 1160px;
+  max-width: 1360px;
 }
 @keyframes sa-fadein {
   from { opacity: 0; transform: translateY(16px); }
@@ -4153,7 +4159,7 @@ onUnmounted(() => {
 }
 
 .sa-chat-panel.is-detail-hidden .sa-ai-cards {
-  max-width: 980px;
+  max-width: 1240px;
 }
 
 .sa-result-chain {
@@ -4176,7 +4182,7 @@ onUnmounted(() => {
 .sa-chat-panel.is-detail-hidden .sa-inline-visuals,
 .sa-chat-panel.is-detail-hidden .sa-flow-handoff,
 .sa-chat-panel.is-detail-hidden .sa-confirm-card {
-  max-width: 980px;
+  max-width: 1240px;
 }
 
 .sa-inline-visuals {

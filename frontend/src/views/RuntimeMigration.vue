@@ -154,11 +154,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createRuntimeMigrationBackup,
   exportRuntimeMigrationBundle,
-  getFeatureFlags,
   getRuntimeMigrationSummary,
   importRuntimeMigrationBundle,
   previewRuntimeMigrationImport,
 } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -172,13 +172,14 @@ const selectedFileName = ref('')
 const previewResult = ref(null)
 const importMode = ref('merge')
 const overwriteConfigs = ref(false)
-const runtimeFileSelectEnabled = ref(true)
-const runtimePreviewEnabled = ref(true)
-const runtimeConfirmEnabled = ref(true)
-const runtimeExportEnabled = ref(true)
-const runtimeBackupEnabled = ref(true)
-const runtimeReplaceModeEnabled = ref(true)
-const runtimeOverwriteConfigEnabled = ref(true)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
+const runtimeFileSelectEnabled = computed(() => isFeatureEnabled('runtime_file_select'))
+const runtimePreviewEnabled = computed(() => isFeatureEnabled('runtime_import_preview'))
+const runtimeConfirmEnabled = computed(() => isFeatureEnabled('runtime_import_confirm'))
+const runtimeExportEnabled = computed(() => isFeatureEnabled('runtime_export'))
+const runtimeBackupEnabled = computed(() => isFeatureEnabled('runtime_backup'))
+const runtimeReplaceModeEnabled = computed(() => isFeatureEnabled('runtime_replace_mode'))
+const runtimeOverwriteConfigEnabled = computed(() => isFeatureEnabled('runtime_overwrite_config'))
 
 const summaryStats = computed(() => {
   const current = summary.value || {}
@@ -207,28 +208,6 @@ const loadSummary = async () => {
     backups.value = res.backups || []
   } finally {
     loading.value = false
-  }
-}
-
-const loadFeatureAccess = async () => {
-  try {
-    const res = await getFeatureFlags()
-    const items = res?.data?.features || {}
-    runtimeFileSelectEnabled.value = Boolean(items.runtime_file_select?.available ?? true)
-    runtimePreviewEnabled.value = Boolean(items.runtime_import_preview?.available ?? true)
-    runtimeConfirmEnabled.value = Boolean(items.runtime_import_confirm?.available ?? true)
-    runtimeExportEnabled.value = Boolean(items.runtime_export?.available ?? true)
-    runtimeBackupEnabled.value = Boolean(items.runtime_backup?.available ?? true)
-    runtimeReplaceModeEnabled.value = Boolean(items.runtime_replace_mode?.available ?? true)
-    runtimeOverwriteConfigEnabled.value = Boolean(items.runtime_overwrite_config?.available ?? true)
-  } catch {
-    runtimeFileSelectEnabled.value = true
-    runtimePreviewEnabled.value = true
-    runtimeConfirmEnabled.value = true
-    runtimeExportEnabled.value = true
-    runtimeBackupEnabled.value = true
-    runtimeReplaceModeEnabled.value = true
-    runtimeOverwriteConfigEnabled.value = true
   }
 }
 
@@ -330,7 +309,7 @@ const formatSize = (size) => {
 
 onMounted(() => {
   loadSummary()
-  loadFeatureAccess()
+  loadFeatureFlags()
 })
 </script>
 
