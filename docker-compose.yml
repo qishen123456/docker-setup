@@ -52,6 +52,7 @@ services:
       - "${SMARTASK_BACKEND_PORT:-5002}:5002"
     volumes:
       - smartask_chroma:/app/chroma_db
+      - ./logs:/app/logs
       - ./backend/logs:/app/backend/logs
       - ./config:/app/config
       - ./backend/imports:/app/backend/imports

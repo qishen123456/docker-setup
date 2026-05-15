@@ -36,7 +36,7 @@ RUN set -eux; \
 COPY backend /app/backend
 COPY scripts /app/scripts
 
-RUN mkdir -p /app/backend/logs /app/chroma_db /app/config
+RUN mkdir -p /app/logs /app/backend/logs /app/chroma_db /app/config
 
 WORKDIR /app/backend
 

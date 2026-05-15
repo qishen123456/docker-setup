@@ -902,7 +902,35 @@ def save_feature_flags(payload: dict[str, Any], operator: str = "") -> dict[str,
     current["updated_at"] = _now()
     current["updated_by"] = operator or ""
     write_json(FEATURE_FLAGS_FILE, current)
+    _sync_builtin_role_permissions(current, operator=operator)
     return current
+
+
+def _sync_builtin_role_permissions(flags: dict[str, Any], operator: str = "") -> None:
+    """Keep the role-permission file aligned with the console matrix.
+
+    The system console is the operational UI for feature permissions. Older
+    code also persisted function permissions in rbac_permissions.json, so a
+    stale RBAC file could hide a feature that the console had just granted.
+    """
+    try:
+        from rbac_store import BUILTIN_ROLE_IDS, load_rbac, save_rbac
+
+        rbac = load_rbac(flags)
+        features = flags.get("features") if isinstance(flags.get("features"), dict) else {}
+        role_functions = {role_id: [] for role_id in BUILTIN_ROLE_IDS}
+        for key, feature in features.items():
+            if not isinstance(feature, dict) or not feature.get("enabled", False):
+                continue
+            for role_id in feature.get("roles") or []:
+                if role_id in role_functions:
+                    role_functions[role_id].append(str(key))
+        for role in rbac.get("roles") or []:
+            if role.get("id") in role_functions:
+                role["function_permissions"] = sorted(set(role_functions[role["id"]]))
+        save_rbac(rbac, flags, operator=operator)
+    except Exception as exc:
+        print(f"同步功能权限到 RBAC 失败: {exc}")
 
 
 def view_for_user(flags: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
@@ -910,13 +938,7 @@ def view_for_user(flags: dict[str, Any], user: dict[str, Any] | None) -> dict[st
     result = deepcopy(flags)
     for key, feature in result.get("features", {}).items():
         roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
-        legacy_allowed = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
-        try:
-            from rbac_store import user_has_function
-
-            feature["available"] = bool(feature.get("enabled", False)) and user_has_function(user or {}, str(key), legacy_allowed)
-        except Exception:
-            feature["available"] = legacy_allowed
+        feature["available"] = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
     return result
 
 
@@ -927,10 +949,4 @@ def feature_available(key: str, user: dict[str, Any] | None) -> bool:
         return True
     roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
     role = (user or {}).get("role") or "user"
-    legacy_allowed = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
-    try:
-        from rbac_store import user_has_function
-
-        return bool(feature.get("enabled", False)) and user_has_function(user or {}, key, legacy_allowed)
-    except Exception:
-        return legacy_allowed
+    return bool(feature.get("enabled", False)) and _role_allowed(role, roles)

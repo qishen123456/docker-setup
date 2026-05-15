@@ -210,6 +210,18 @@ def _serialize_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return item
 
 
+def _parse_limit(value: Any, default: int = 100) -> Optional[int]:
+    raw = str(value if value is not None else default).strip().lower()
+    if raw in {"", "none"}:
+        return default
+    if raw in {"0", "-1", "all", "全部"}:
+        return None
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return default
+
+
 def list_logs(filters: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
     _ensure_schema()
     where = []
@@ -239,8 +251,10 @@ def list_logs(filters: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
         params.extend([like] * 9)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    limit = max(1, min(int(filters.get("limit") or 100), 500))
+    limit = _parse_limit(filters.get("limit"), 100)
     offset = max(0, int(filters.get("offset") or 0))
+    page_sql = "OFFSET %s" if limit is None else "LIMIT %s OFFSET %s"
+    page_params = [offset] if limit is None else [limit, offset]
 
     with _connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(f"SELECT COUNT(*) AS count FROM system_event_logs {where_sql};", params)
@@ -251,9 +265,9 @@ def list_logs(filters: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
             FROM system_event_logs
             {where_sql}
             ORDER BY created_at DESC, id DESC
-            LIMIT %s OFFSET %s;
+            {page_sql};
             """,
-            [*params, limit, offset],
+            [*params, *page_params],
         )
         rows = [_serialize_row(dict(row)) for row in cur.fetchall()]
         return rows, total

@@ -88,6 +88,61 @@ fail() { echo "  [ERR] $*" >&2; exit 1; }
 
 LOCAL_STASH_CREATED=0
 LOCAL_STASH_NOTE=""
+RUNTIME_CONFIG_BACKUP_DIR=""
+RUNTIME_CONFIG_FILES=(
+  "app_config.json"
+  "datasources.json"
+  "ai_settings.json"
+  "feishu_sync.json"
+  "sql_prompts.json"
+  "employee_permissions.json"
+  "data_permissions.json"
+  "rbac_permissions.json"
+  "organization_trees.json"
+  "feature_flags.json"
+  "auth_tokens.json"
+  "query_history.json"
+)
+
+preserve_runtime_config_files() {
+  local timestamp backup_dir copied=0 file
+  if [[ ! -d config ]]; then
+    return 0
+  fi
+
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  backup_dir="$SCRIPT_DIR/backups/runtime_config_before_pull_${timestamp}"
+  mkdir -p "$backup_dir"
+
+  for file in "${RUNTIME_CONFIG_FILES[@]}"; do
+    if [[ -f "config/$file" ]]; then
+      cp -a "config/$file" "$backup_dir/$file" || true
+      copied=1
+    fi
+  done
+
+  if [[ "$copied" -eq 1 ]]; then
+    RUNTIME_CONFIG_BACKUP_DIR="$backup_dir"
+    warn "已暂存运行态配置，避免 git pull 覆盖: $backup_dir"
+  else
+    rmdir "$backup_dir" 2>/dev/null || true
+  fi
+}
+
+restore_runtime_config_files() {
+  local file
+  if [[ -z "$RUNTIME_CONFIG_BACKUP_DIR" || ! -d "$RUNTIME_CONFIG_BACKUP_DIR" ]]; then
+    return 0
+  fi
+
+  mkdir -p config
+  for file in "${RUNTIME_CONFIG_FILES[@]}"; do
+    if [[ -f "$RUNTIME_CONFIG_BACKUP_DIR/$file" ]]; then
+      cp -a "$RUNTIME_CONFIG_BACKUP_DIR/$file" "config/$file" || true
+    fi
+  done
+  warn "已恢复服务器运行态配置: config/*.json"
+}
 
 save_local_git_changes() {
   local status_text timestamp local_dir
@@ -250,10 +305,18 @@ fi
 
 if [[ "$NO_PULL" -eq 0 ]]; then
   info "拉取最新代码"
+  preserve_runtime_config_files
   git fetch --all
   save_local_git_changes
-  git checkout "$BRANCH"
-  git pull --ff-only
+  if ! git checkout "$BRANCH"; then
+    restore_runtime_config_files
+    fail "切换分支失败，已尽量恢复运行态配置"
+  fi
+  if ! git pull --ff-only; then
+    restore_runtime_config_files
+    fail "拉取最新代码失败，已尽量恢复运行态配置"
+  fi
+  restore_runtime_config_files
 else
   warn "已跳过 Git 拉取"
 fi

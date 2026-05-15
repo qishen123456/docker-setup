@@ -22,12 +22,39 @@ import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
 from dataset_copilot import CopilotError, DatasetCopilot
 from auth_store import get_current_user
-from data_permission_store import filter_dataset_rows_for_user, is_dataset_allowed
+from data_permission_store import dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions
+from feature_flags import feature_available
 from system_log_store import log_event, request_snapshot
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
 repo = BookshelfRepository()
+
+
+def _dataset_permissions_for_row(row: Dict[str, Any], user: Dict[str, Any], permissions: Dict[str, Any]) -> Dict[str, Any]:
+    dataset_id = int(row.get("id") or row.get("dataset_id") or 0)
+    access = dataset_access_summary(user, dataset_id, permissions)
+    is_super = (user or {}).get("role") == "super_admin"
+    has_edit_feature = feature_available("dataset_save", user)
+    return {
+        **row,
+        **access,
+        "can_edit": bool(is_super or (access["dataset_scope_hit"] and has_edit_feature)),
+        "can_delete": bool(is_super or (access["dataset_scope_hit"] and feature_available("dataset_delete", user))),
+    }
+
+
+def _can_modify_dataset(dataset_id: int, feature_key: str = "dataset_save") -> bool:
+    user = get_current_user()
+    if user.get("role") == "super_admin":
+        return True
+    return bool(feature_available(feature_key, user) and dataset_scope_hit_for_user(user, dataset_id))
+
+
+def _require_dataset_modify(dataset_id: int, feature_key: str = "dataset_save"):
+    if _can_modify_dataset(dataset_id, feature_key):
+        return None
+    return jsonify({"error": "当前账号没有该数据集的编辑权限，或未命中员工组织范围。"}), 403
 
 
 def _is_read_only_sql(sql_text: str) -> bool:
@@ -542,7 +569,11 @@ def bookshelf_health():
 def list_bookshelf_datasets():
     try:
         repo.ensure_schema()
-        include_inactive = str(request.args.get("include_inactive", "")).lower() in ("1", "true", "yes")
+        user = get_current_user()
+        include_inactive = (
+            user.get("role") == "super_admin"
+            and str(request.args.get("include_inactive", "")).lower() in ("1", "true", "yes")
+        )
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             active_filter_sql = "" if include_inactive else "WHERE d.is_active = TRUE"
             cur.execute(
@@ -575,7 +606,13 @@ def list_bookshelf_datasets():
                 """
             )
             rows = [dict(row) for row in cur.fetchall()]
-            return jsonify({"datasets": filter_dataset_rows_for_user(rows, get_current_user())})
+            permissions = load_data_permissions()
+            visible_rows = []
+            for row in rows:
+                shaped = _dataset_permissions_for_row(row, user, permissions)
+                if shaped["can_view"]:
+                    visible_rows.append(shaped)
+            return jsonify({"datasets": visible_rows})
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -585,6 +622,9 @@ def list_bookshelf_datasets():
 @bookshelf_bp.route("/api/bookshelves/datasets", methods=["POST"])
 def create_bookshelf_dataset():
     try:
+        user = get_current_user()
+        if user.get("role") != "super_admin" and not feature_available("dataset_create", user):
+            return jsonify({"error": "当前账号没有新建数据集权限。"}), 403
         repo.ensure_schema()
         payload = request.get_json() or {}
         dataset_code = (payload.get("dataset_code") or "").strip()
@@ -615,7 +655,7 @@ def create_bookshelf_dataset():
                 (dataset_code, dataset_name, business_domain, int(source_id), description),
             )
             created = dict(cur.fetchone())
-            return jsonify({"dataset": created}), 201
+            return jsonify({"dataset": _dataset_permissions_for_row(created, user, load_data_permissions())}), 201
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
@@ -626,6 +666,9 @@ def create_bookshelf_dataset():
 def generate_bookshelf_dataset_from_prompt():
     started_at = time.time()
     try:
+        user = get_current_user()
+        if user.get("role") != "super_admin" and not feature_available("dataset_autofill", user):
+            return jsonify({"error": "当前账号没有提示词生成数据集权限。"}), 403
         payload = request.get_json() or {}
         doc_text = str(payload.get("doc_text") or "").strip()
         if len(doc_text) < 80:
@@ -745,6 +788,9 @@ def generate_bookshelf_dataset_from_prompt():
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>", methods=["PUT"])
 def update_bookshelf_dataset(dataset_id: int):
     try:
+        error = _require_dataset_modify(dataset_id, "dataset_save")
+        if error:
+            return error
         repo.ensure_schema()
         payload = request.get_json() or {}
         fields = {
@@ -794,6 +840,9 @@ def update_bookshelf_dataset(dataset_id: int):
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>", methods=["DELETE"])
 def delete_bookshelf_dataset(dataset_id: int):
     try:
+        error = _require_dataset_modify(dataset_id, "dataset_delete")
+        if error:
+            return error
         repo.ensure_schema()
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
@@ -832,7 +881,8 @@ def get_bookshelf_dataset_full(dataset_id: int):
             dataset = cur.fetchone()
             if not dataset:
                 return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
-            if not is_dataset_allowed(get_current_user(), dataset_id):
+            access = dataset_access_summary(get_current_user(), dataset_id)
+            if not access["can_view"]:
                 return jsonify({"error": "当前账号没有访问该数据集的权限"}), 403
 
             cur.execute(
@@ -959,7 +1009,7 @@ def get_bookshelf_dataset_full(dataset_id: int):
 
             return jsonify(
                 {
-                    "dataset": dict(dataset),
+                    "dataset": _dataset_permissions_for_row(dict(dataset), get_current_user(), load_data_permissions()),
                     "synonyms": synonyms,
                     "lld_documents": lld_documents,
                     "data_dictionary": data_dictionary,
@@ -1008,6 +1058,8 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
             dataset = cur.fetchone()
         if not dataset:
             return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
+        if not dataset_access_summary(get_current_user(), dataset_id)["can_view"]:
+            return jsonify({"error": "当前账号没有访问该数据集的权限"}), 403
         if dataset.get("source_id") is None:
             return jsonify({"error": "当前数据集未绑定数据源，无法测试 SQL。"}), 400
 
@@ -1039,6 +1091,9 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/full", methods=["PUT"])
 def save_bookshelf_dataset_full(dataset_id: int):
     try:
+        error = _require_dataset_modify(dataset_id, "dataset_save")
+        if error:
+            return error
         repo.ensure_schema()
         payload = request.get_json() or {}
         validation_errors = _validate_full_payload(payload)
@@ -1357,7 +1412,7 @@ def list_common_questions():
         random_batch = str(request.args.get("random") or "").lower() in {"1", "true", "yes"}
         batch_size = max(1, min(request.args.get("limit", default=4, type=int) or 4, 12))
         user = get_current_user()
-        if dataset_id and not is_dataset_allowed(user, dataset_id):
+        if dataset_id and not dataset_access_summary(user, dataset_id)["can_view"]:
             return jsonify({"common_questions": []})
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             _ensure_optional_tables(cur)

@@ -59,6 +59,12 @@ echo "==> 备份运行配置"
 if [[ -d config ]]; then
   tar -czf "$BACKUP_DIR/config.tar.gz" config || true
 fi
+if [[ -d logs ]]; then
+  tar -czf "$BACKUP_DIR/logs.tar.gz" logs || true
+fi
+if [[ -d backend/logs ]]; then
+  tar -czf "$BACKUP_DIR/backend_logs.tar.gz" backend/logs || true
+fi
 if [[ -f .env ]]; then
   cp .env "$BACKUP_DIR/.env"
 fi
@@ -91,6 +97,8 @@ Project: $SCRIPT_DIR
 
 Contents:
 - config.tar.gz
+- logs.tar.gz
+- backend_logs.tar.gz
 - .env
 - .env.example
 - postgres.sql unless --skip-db-dump was used

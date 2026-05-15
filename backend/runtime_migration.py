@@ -18,6 +18,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from bookshelf_repository import BookshelfRepository
 from config_manager import get_default_datasource
+from system_log_store import SYSTEM_LOG_SCHEMA_SQL
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,11 +37,11 @@ RUNTIME_CONFIG_FILES = [
     "rbac_permissions.json",
     "organization_trees.json",
     "feature_flags.json",
+    "query_history.json",
 ]
 
 EXCLUDED_CONFIG_FILES = {
     "auth_tokens.json",
-    "query_history.json",
     "datasources.local.json",
     "feishu_sync.local.json",
 }
@@ -60,7 +61,13 @@ BOOKSHELF_TABLES = [
     "bs_dataset_report_config",
 ]
 
-DELETE_ORDER = list(reversed(BOOKSHELF_TABLES))
+SYSTEM_TABLES = [
+    "system_event_logs",
+]
+
+RUNTIME_TABLES = [*BOOKSHELF_TABLES, *SYSTEM_TABLES]
+
+DELETE_ORDER = list(reversed(RUNTIME_TABLES))
 
 
 def _timestamp() -> str:
@@ -93,7 +100,101 @@ def _write_json_file(path: str, payload: Any) -> None:
         json.dump(payload, fh, ensure_ascii=False, indent=2, default=_json_default)
 
 
+def _log_file_sources() -> List[Dict[str, str]]:
+    return [
+        {
+            "root": BASE_DIR,
+            "directory": os.path.join(BASE_DIR, "logs"),
+            "relative_dir": "logs",
+            "prefix": "feishu_sync_",
+            "suffix": ".log",
+        },
+        {
+            "root": BASE_DIR,
+            "directory": os.path.join(CURRENT_DIR, "logs"),
+            "relative_dir": "backend/logs",
+            "prefix": "system_event_logs",
+            "suffix": ".jsonl",
+        },
+    ]
+
+
+def _collect_log_files() -> Dict[str, str]:
+    files: Dict[str, str] = {}
+    for source in _log_file_sources():
+        directory = source["directory"]
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if not name.startswith(source["prefix"]) or not name.endswith(source["suffix"]):
+                continue
+            path = os.path.join(directory, name)
+            if not os.path.isfile(path):
+                continue
+            rel_path = f"{source['relative_dir']}/{name}".replace("\\", "/")
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    files[rel_path] = fh.read()
+            except Exception as exc:
+                files[rel_path] = f"__error__:{exc}"
+    return files
+
+
+def _safe_log_file_path(relative_path: str) -> str | None:
+    normalized = str(relative_path or "").replace("\\", "/").strip().lstrip("/")
+    if normalized.startswith("../") or "/../" in normalized:
+        return None
+    allowed_prefixes = ("logs/feishu_sync_", "backend/logs/system_event_logs")
+    allowed_suffixes = (".log", ".jsonl")
+    if not normalized.startswith(allowed_prefixes) or not normalized.endswith(allowed_suffixes):
+        return None
+    target = os.path.abspath(os.path.join(BASE_DIR, *normalized.split("/")))
+    base = os.path.abspath(BASE_DIR)
+    if os.path.commonpath([base, target]) != base:
+        return None
+    return target
+
+
+def _line_count(text: Any) -> int:
+    if not isinstance(text, str) or not text:
+        return 0
+    return len([line for line in text.splitlines() if line.strip()])
+
+
+def _merge_log_text(existing: str, incoming: str) -> str:
+    existing_lines = existing.splitlines()
+    seen = set(existing_lines)
+    merged = list(existing_lines)
+    for line in incoming.splitlines():
+        if line in seen:
+            continue
+        merged.append(line)
+        seen.add(line)
+    return "\n".join(merged) + ("\n" if merged else "")
+
+
+def _write_log_files(log_files: Dict[str, Any], mode: str) -> List[str]:
+    written: List[str] = []
+    for rel_path, content in (log_files or {}).items():
+        if not isinstance(content, str) or content.startswith("__error__:"):
+            continue
+        target_path = _safe_log_file_path(rel_path)
+        if not target_path:
+            continue
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        if mode == "replace" or not os.path.exists(target_path):
+            output = content if content.endswith("\n") or not content else content + "\n"
+        else:
+            with open(target_path, "r", encoding="utf-8") as fh:
+                output = _merge_log_text(fh.read(), content)
+        with open(target_path, "w", encoding="utf-8") as fh:
+            fh.write(output)
+        written.append(str(rel_path))
+    return written
+
+
 def _ensure_optional_tables(cur) -> None:
+    cur.execute(SYSTEM_LOG_SCHEMA_SQL)
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS bs_common_questions (
@@ -232,9 +333,12 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
         "exported_at": datetime.now().isoformat(timespec="seconds"),
         "configs": {},
         "bookshelf": {"tables": {}},
+        "log_files": {},
         "manifest": {
             "config_files": list(RUNTIME_CONFIG_FILES),
             "bookshelf_tables": list(BOOKSHELF_TABLES),
+            "system_tables": list(SYSTEM_TABLES),
+            "runtime_tables": list(RUNTIME_TABLES),
             "excluded_files": sorted(EXCLUDED_CONFIG_FILES),
         },
     }
@@ -250,9 +354,12 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
 
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
-        for table in BOOKSHELF_TABLES:
+        for table in RUNTIME_TABLES:
             cur.execute(f"SELECT * FROM {table} ORDER BY id ASC;")
             bundle["bookshelf"]["tables"][table] = [dict(row) for row in cur.fetchall()]
+
+    bundle["log_files"] = _collect_log_files()
+    bundle["manifest"]["log_files"] = list(bundle["log_files"].keys())
 
     if output_path:
         _write_json_file(output_path, bundle)
@@ -263,6 +370,7 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
 def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
     configs = bundle.get("configs") or {}
     tables = (bundle.get("bookshelf") or {}).get("tables") or bundle.get("tables") or {}
+    log_files = bundle.get("log_files") or {}
     dataset_rows = tables.get("bs_datasets") or []
     active_dataset_count = sum(1 for row in dataset_rows if isinstance(row, dict) and row.get("is_active") is not False)
     inactive_dataset_count = sum(1 for row in dataset_rows if isinstance(row, dict) and row.get("is_active") is False)
@@ -278,6 +386,8 @@ def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
             "total": len(dataset_rows or []),
         },
         "config_files": list(configs.keys()),
+        "log_file_counts": {name: _line_count(content) for name, content in log_files.items()},
+        "log_file_total": sum(_line_count(content) for content in log_files.values()),
     }
 
 
@@ -316,6 +426,7 @@ def list_runtime_backups(limit: int = 20) -> List[Dict[str, Any]]:
 def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = False, mode: str = "merge") -> Dict[str, Any]:
     configs = bundle.get("configs") or {}
     tables = (bundle.get("bookshelf") or {}).get("tables") or bundle.get("tables") or {}
+    log_files = bundle.get("log_files") or {}
 
     config_plan = []
     for raw_name, payload in configs.items():
@@ -332,7 +443,7 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
     table_plan = {}
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
-        for table_name in BOOKSHELF_TABLES:
+        for table_name in RUNTIME_TABLES:
             incoming_rows = tables.get(table_name) or []
             cur.execute(f"SELECT COUNT(*) AS count FROM {table_name};")
             existing_count = int((cur.fetchone() or {}).get("count") or 0)
@@ -348,6 +459,27 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
                 "action": "replace" if mode == "replace" else "merge",
             }
 
+    log_file_plan = []
+    for rel_path, content in log_files.items():
+        target_path = _safe_log_file_path(rel_path)
+        if not target_path or not isinstance(content, str) or content.startswith("__error__:"):
+            continue
+        existing_text = ""
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, "r", encoding="utf-8") as fh:
+                    existing_text = fh.read()
+            except Exception:
+                existing_text = ""
+        log_file_plan.append(
+            {
+                "file": rel_path,
+                "incoming_lines": _line_count(content),
+                "existing_lines": _line_count(existing_text),
+                "action": "replace" if mode == "replace" else ("merge" if os.path.exists(target_path) else "create"),
+            }
+        )
+
     return {
         "ok": True,
         "dry_run": True,
@@ -356,6 +488,7 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
         "summary": summarize_bundle(bundle),
         "config_plan": config_plan,
         "table_plan": table_plan,
+        "log_file_plan": log_file_plan,
         "warnings": [
             "replace 模式会先清空书架运行态表，再写入导入包。"
         ] if mode == "replace" else [],
@@ -378,6 +511,7 @@ def import_runtime_bundle(
     backup = create_runtime_backup("before_runtime_import") if auto_backup else None
     configs = bundle.get("configs") or {}
     tables = (bundle.get("bookshelf") or {}).get("tables") or bundle.get("tables") or {}
+    log_files = bundle.get("log_files") or {}
 
     written_configs: List[str] = []
     skipped_configs: List[str] = []
@@ -405,13 +539,15 @@ def import_runtime_bundle(
             for table_name in DELETE_ORDER:
                 cur.execute(f"DELETE FROM {table_name};")
 
-        for table_name in BOOKSHELF_TABLES:
+        for table_name in RUNTIME_TABLES:
             rows = tables.get(table_name) or []
             imported_counts[table_name] = _upsert_rows(cur, table_name, rows, fallback_source_id)
 
-        for table_name in BOOKSHELF_TABLES:
+        for table_name in RUNTIME_TABLES:
             _reset_sequence(cur, table_name)
         conn.commit()
+
+    written_log_files = _write_log_files(log_files, mode)
 
     return {
         "ok": True,
@@ -422,6 +558,7 @@ def import_runtime_bundle(
         "written_configs": written_configs,
         "skipped_configs": skipped_configs,
         "imported_counts": imported_counts,
+        "written_log_files": written_log_files,
         "preview": preview,
     }
 

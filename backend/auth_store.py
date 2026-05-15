@@ -19,6 +19,11 @@ from config_manager import read_json, write_json
 
 TOKEN_FILE = "auth_tokens.json"
 TOKEN_TTL_DAYS = int(os.getenv("SMARTASK_AUTH_TOKEN_TTL_DAYS", "7") or 7)
+ROLE_LABELS = {
+    "super_admin": "超级管理员",
+    "admin": "管理员",
+    "user": "普通用户",
+}
 
 
 def _now() -> datetime:
@@ -132,6 +137,7 @@ def _refresh_user_from_employee(user: Dict[str, Any]) -> Dict[str, Any]:
         refreshed["name"] = str(item.get("name") or refreshed.get("name") or "")
         refreshed["permission_name"] = str(item.get("name") or refreshed.get("permission_name") or "")
         refreshed["role"] = str(item.get("role") or refreshed.get("role") or "user")
+        refreshed["role_label"] = ROLE_LABELS.get(refreshed["role"], "普通用户")
         refreshed["role_ids"] = item.get("role_ids") if isinstance(item.get("role_ids"), list) else []
         refreshed["enabled"] = bool(item.get("enabled", True))
         identity_keys = {

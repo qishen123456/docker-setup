@@ -71,6 +71,17 @@ def clean_rule(item: Dict[str, Any], dataset_id: int | None = None) -> Dict[str,
     legacy_tree_type_id = _as_text(item.get("tree_type_id"))
     if legacy_tree_type_id and legacy_tree_type_id not in tree_type_ids:
         tree_type_ids.insert(0, legacy_tree_type_id)
+    legacy_allowed_roles = [role for role in _as_list(item.get("allowed_roles")) if role in {"admin", "user"}]
+    legacy_allowed_departments = _as_list(item.get("allowed_departments"))
+    legacy_allowed_positions = _as_list(item.get("allowed_positions"))
+    legacy_allowed_employee_ids = _as_list(item.get("allowed_employee_ids"))
+    legacy_allowed_union_ids = _as_list(item.get("allowed_union_ids"))
+    if mode == "org_tree":
+        legacy_allowed_roles = []
+        legacy_allowed_departments = []
+        legacy_allowed_positions = []
+        legacy_allowed_employee_ids = []
+        legacy_allowed_union_ids = []
     return {
         "dataset_id": clean_dataset_id,
         "mode": mode,
@@ -78,11 +89,11 @@ def clean_rule(item: Dict[str, Any], dataset_id: int | None = None) -> Dict[str,
         "tree_type_ids": tree_type_ids,
         "organization_node_ids": _as_list(item.get("organization_node_ids")),
         "organization_codes": _as_list(item.get("organization_codes")),
-        "allowed_roles": [role for role in _as_list(item.get("allowed_roles")) if role in {"admin", "user"}],
-        "allowed_departments": _as_list(item.get("allowed_departments")),
-        "allowed_positions": _as_list(item.get("allowed_positions")),
-        "allowed_employee_ids": _as_list(item.get("allowed_employee_ids")),
-        "allowed_union_ids": _as_list(item.get("allowed_union_ids")),
+        "allowed_roles": legacy_allowed_roles,
+        "allowed_departments": legacy_allowed_departments,
+        "allowed_positions": legacy_allowed_positions,
+        "allowed_employee_ids": legacy_allowed_employee_ids,
+        "allowed_union_ids": legacy_allowed_union_ids,
         "scope": _clean_scope(item.get("scope")),
         "note": _as_text(item.get("note")),
     }
@@ -217,14 +228,13 @@ def user_org_codes_for_rule(user: Dict[str, Any], rule: Dict[str, Any]) -> List[
         return []
     scoped: List[str] = []
     seen = set()
-    is_allowed_employee = _is_allowed_employee(user, rule)
     for tree_type_id in tree_type_ids:
         rule_codes = _codes_for_node_ids(_as_list(rule.get("organization_node_ids")), tree_type_id)
         if not rule_codes:
             continue
         user_codes = _codes_for_node_ids(_as_list(user.get("organization_node_ids")), tree_type_id)
         if not user_codes:
-            matched = rule_codes if is_allowed_employee else []
+            matched = []
         else:
             user_set = {item.lower() for item in user_codes}
             matched = [item for item in rule_codes if item.lower() in user_set]
@@ -235,8 +245,6 @@ def user_org_codes_for_rule(user: Dict[str, Any], rule: Dict[str, Any]) -> List[
                 scoped.append(code)
     if scoped:
         return scoped
-    if is_allowed_employee:
-        return _rule_org_codes(rule)
     return []
 
 
@@ -257,7 +265,7 @@ def is_dataset_allowed(user: Dict[str, Any], dataset_id: int, permissions: Optio
     if rule.get("mode") == "org_tree":
         if user_org_codes_for_rule(user, rule):
             return True
-        return _is_allowed_employee(user, rule) and bool(_rule_org_codes(rule))
+        return False
 
     role = _as_text(user.get("role"))
     if role and role in set(rule.get("allowed_roles") or []):
@@ -280,6 +288,57 @@ def is_dataset_allowed(user: Dict[str, Any], dataset_id: int, permissions: Optio
         return True
 
     return False
+
+
+def dataset_scope_hit_for_user(user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> bool:
+    """Whether the user's organization scope intersects this dataset's scope."""
+    user = user if isinstance(user, dict) else {}
+    if user.get("role") == "super_admin":
+        return True
+    if not user:
+        return False
+    data = permissions or load_data_permissions()
+    rule = (data.get("rules") or {}).get(str(int(dataset_id)))
+    if not rule:
+        return False
+    if rule.get("mode") == "disabled":
+        return False
+    if rule.get("mode") == "public":
+        return True
+    if rule.get("mode") == "org_tree":
+        if user_org_codes_for_rule(user, rule):
+            return True
+        return False
+    return is_dataset_allowed(user, dataset_id, data)
+
+
+def dataset_visible_for_user(user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> bool:
+    user = user if isinstance(user, dict) else {}
+    if user.get("role") == "super_admin":
+        return True
+    if user.get("role") == "admin":
+        return True
+    return dataset_scope_hit_for_user(user, dataset_id, permissions)
+
+
+def dataset_access_summary(user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    user = user if isinstance(user, dict) else {}
+    scope_hit = dataset_scope_hit_for_user(user, dataset_id, permissions)
+    is_super = user.get("role") == "super_admin"
+    is_admin = user.get("role") == "admin"
+    can_view = is_super or is_admin or scope_hit
+    return {
+        "can_view": can_view,
+        "dataset_scope_hit": scope_hit,
+        "dataset_readonly": bool(can_view and is_admin and not scope_hit),
+        "dataset_access": "manage" if is_super else "view" if can_view else "none",
+        "dataset_access_reason": (
+            "super_admin" if is_super else
+            "scope_matched" if scope_hit else
+            "admin_readonly" if is_admin else
+            "no_scope"
+        ),
+    }
 
 
 def _quote_identifier(identifier: str) -> str:
@@ -312,10 +371,13 @@ def apply_row_level_filter(sql: str, user: Dict[str, Any], dataset_id: int, perm
 
 def filter_dataset_rows_for_user(rows: List[Dict[str, Any]], user: Dict[str, Any]) -> List[Dict[str, Any]]:
     permissions = load_data_permissions()
-    return [
-        row for row in rows
-        if is_dataset_allowed(user, int(row.get("id") or row.get("dataset_id") or 0), permissions)
-    ]
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        dataset_id = int(row.get("id") or row.get("dataset_id") or 0)
+        access = dataset_access_summary(user, dataset_id, permissions)
+        if access["can_view"]:
+            result.append({**row, **access})
+    return result
 
 
 def allowed_dataset_ids_for_user(user: Dict[str, Any], dataset_ids: Iterable[Any]) -> List[int]:

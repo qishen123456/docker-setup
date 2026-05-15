@@ -24,6 +24,16 @@ from feishu_sync_service import sync_service
 
 feishu_bp = Blueprint('feishu', __name__)
 
+
+def _parse_log_limit(default: int = 100):
+    raw = str(request.args.get('limit', default)).strip().lower()
+    if raw in {'0', '-1', 'all', '全部'}:
+        return 0
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return default
+
 @feishu_bp.route('/api/feishu-sync', methods=['GET'])
 def get_feishu_sync_configs():
     """获取飞书同步配置列表"""
@@ -297,7 +307,7 @@ def preview_feishu_schema():
 def get_sync_logs(config_id):
     """获取指定配置的同步日志"""
     try:
-        limit = request.args.get('limit', 100, type=int)
+        limit = _parse_log_limit(100)
         logs = get_logs(config_id, limit)
         return jsonify({
             "logs": logs,
@@ -314,7 +324,7 @@ def get_sync_logs(config_id):
 def get_all_sync_logs():
     """获取所有配置的同步日志"""
     try:
-        limit = request.args.get('limit', 50, type=int)
+        limit = _parse_log_limit(50)
         logs = get_all_logs(limit)
         return jsonify({
             "logs": logs,

@@ -401,7 +401,7 @@ const isAuthCallbackRoute = computed(() => route.path === '/auth/callback')
 const isSmartAskRoute = computed(() => route.path === '/smart-ask')
 const showBackToConsole = computed(() => route.query?.from === 'admin-console' && route.path !== '/admin-console')
 const authRole = computed(() => authUser.value?.role || 'user')
-const authRoleLabel = computed(() => authUser.value?.role_label || ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
+const authRoleLabel = computed(() => ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
 const canAccessRole = (minRole) => (roleRank[authRole.value] || 0) >= (roleRank[minRole] || 0)
 const isFeatureEnabled = (key) => {
   if (!key) return true
@@ -410,7 +410,15 @@ const isFeatureEnabled = (key) => {
   if (typeof feature.available === 'boolean') return feature.available
   return Boolean(feature.enabled)
 }
-const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessRole(item.minRole) && isFeatureEnabled(item.featureKey)))
+const hasLoadedFeatureDecision = (key) => Boolean(key && featureFlagsReady.value && featureFlags.value?.[key])
+const canAccessMenuItem = (item) => {
+  if (!item) return true
+  if (hasLoadedFeatureDecision(item.featureKey)) {
+    return isFeatureEnabled(item.featureKey)
+  }
+  return canAccessRole(item.minRole)
+}
+const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessMenuItem(item)))
 const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask'))
 const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask'))
 const managementDefaultOpeneds = computed(() => (
@@ -672,11 +680,7 @@ const refreshCurrentPage = () => {
 const handleMenuSelect = (index) => {
   if (!index || index === route.path) return
   const target = menuItems.find((item) => item.path === index)
-  if (target && !canAccessRole(target.minRole)) {
-    ElMessage.warning('当前账号无权访问该功能')
-    return
-  }
-  if (target && !isFeatureEnabled(target.featureKey)) {
+  if (target && !canAccessMenuItem(target)) {
     ElMessage.warning('该功能暂未开放')
     return
   }
@@ -688,12 +692,7 @@ const fallbackRoute = () => availableMenuItems.value[0]?.path || '/smart-ask'
 const enforceRouteAccess = () => {
   if (!authUser.value || isAuthCallbackRoute.value) return
   const target = menuItems.find((item) => item.path === route.path)
-  if (target && !canAccessRole(target.minRole)) {
-    const nextPath = fallbackRoute()
-    if (route.path !== nextPath) router.replace(nextPath)
-    return
-  }
-  if (target && !isFeatureEnabled(target.featureKey)) {
+  if (target && !canAccessMenuItem(target)) {
     const nextPath = fallbackRoute()
     if (route.path !== nextPath) router.replace(nextPath)
   }

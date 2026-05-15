@@ -75,8 +75,14 @@
       </el-table>
     </section>
 
-    <el-dialog v-model="userDialog.visible" :title="userDialog.mode === 'create' ? '新增账号' : '编辑账号'" width="760px">
-      <el-form label-position="top" class="user-form">
+    <el-dialog
+      v-model="userDialog.visible"
+      :title="userDialog.mode === 'create' ? '新增账号' : '编辑账号'"
+      width="760px"
+      class="compact-user-dialog"
+      top="5vh"
+    >
+      <el-form label-position="top" class="user-form compact-user-form">
         <el-form-item label="姓名">
           <el-input v-model.trim="userForm.name" />
         </el-form-item>
@@ -110,6 +116,10 @@
             </template>
           </el-tree-select>
         </el-form-item>
+        <el-form-item v-if="userDialog.mode === 'create'" label="初始密码">
+          <el-input v-model.trim="userForm.password" placeholder="默认 12345678" />
+        </el-form-item>
+        <div class="form-section-title">飞书 / OA 信息</div>
         <el-form-item label="飞书 unionid">
           <el-input v-model.trim="userForm.union_id" />
         </el-form-item>
@@ -133,9 +143,6 @@
         </el-form-item>
         <el-form-item label="直属上级">
           <el-input v-model.trim="userForm.manager" />
-        </el-form-item>
-        <el-form-item v-if="userDialog.mode === 'create'" label="初始密码">
-          <el-input v-model.trim="userForm.password" placeholder="默认 12345678" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -530,12 +537,56 @@ onMounted(loadAll)
   gap: 0 14px;
 }
 
-.user-form :deep(.el-form-item:nth-child(4)) {
+.compact-user-form :deep(.el-form-item:nth-child(4)),
+.compact-user-form .form-section-title {
   grid-column: 1 / -1;
 }
 
 .user-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+.compact-user-form :deep(.el-form-item__label) {
+  margin-bottom: 4px;
+  line-height: 18px;
+  font-size: 12px;
+}
+
+.compact-user-form :deep(.el-input__wrapper),
+.compact-user-form :deep(.el-select__wrapper),
+.compact-user-form :deep(.el-tree-select__wrapper) {
+  min-height: 34px;
+}
+
+:deep(.compact-user-dialog .el-dialog) {
+  margin-bottom: 0;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.compact-user-dialog .el-dialog__header) {
+  padding: 18px 20px 12px;
+}
+
+:deep(.compact-user-dialog .el-dialog__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 20px 8px;
+}
+
+:deep(.compact-user-dialog .el-dialog__footer) {
+  padding: 10px 20px 16px;
+  border-top: 1px solid #eef2f7;
+}
+
+.form-section-title {
+  margin: 2px 0 8px;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f7;
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
 }
 
 :deep(.el-table) {

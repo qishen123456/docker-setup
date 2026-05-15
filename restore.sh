@@ -87,6 +87,13 @@ if [[ "$SKIP_CONFIG" -eq 0 ]]; then
   else
     warn "备份中没有 config.tar.gz 或 config/，跳过 config 恢复"
   fi
+  info "Restore logs"
+  if [[ -f "$BACKUP_DIR/logs.tar.gz" ]]; then
+    tar -xzf "$BACKUP_DIR/logs.tar.gz" -C "$SCRIPT_DIR"
+  fi
+  if [[ -f "$BACKUP_DIR/backend_logs.tar.gz" ]]; then
+    tar -xzf "$BACKUP_DIR/backend_logs.tar.gz" -C "$SCRIPT_DIR"
+  fi
 fi
 
 if [[ "$RESTORE_ENV" -eq 1 ]]; then

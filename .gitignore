@@ -71,6 +71,10 @@ config/auth_tokens.json
 config/employee_permissions.json
 config/feature_flags.json
 config/organization_trees.json
+config/data_permissions.json
+config/rbac_permissions.json
+config/query_history.json
+config/sql_prompts.json
 
 # Frontend build output / caches
 dist/

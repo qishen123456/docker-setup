@@ -30,6 +30,114 @@
       </article>
     </section>
 
+    <section class="fs-ops-board" v-loading="loading || loadingAllLogs">
+      <div class="fs-board-head">
+        <div>
+          <div class="fs-board-kicker">OPERATIONS VIEW</div>
+          <h3>调度计划与统一日志</h3>
+          <p>集中查看所有任务的预计执行时间、最近状态和全局运行日志，异常任务不用再逐个点卡片排查。</p>
+        </div>
+        <div class="fs-board-tags">
+          <span>{{ nextRunSummary }}</span>
+          <span>{{ filteredAllLogs.length }} 条日志</span>
+        </div>
+      </div>
+
+      <div class="fs-ops-grid">
+        <section class="fs-ops-panel fs-schedule-panel">
+          <div class="fs-panel-title">
+            <div>
+              <strong>全局调度视图</strong>
+              <span>按预计执行时间排序，快速看哪些任务正在跑、等待跑或已暂停。</span>
+            </div>
+            <el-radio-group v-model="scheduleFilter" size="small">
+              <el-radio-button label="all">全部</el-radio-button>
+              <el-radio-button label="active">启用</el-radio-button>
+              <el-radio-button label="failed">异常</el-radio-button>
+            </el-radio-group>
+          </div>
+          <el-table :data="filteredScheduleRows" size="small" border class="fs-compact-table" max-height="360">
+            <el-table-column label="任务" min-width="190" show-overflow-tooltip>
+              <template #default="{ row }">
+                <strong>{{ row.name || '未命名同步任务' }}</strong>
+                <small>{{ row.target_table || '-' }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="98">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.last_sync_status)" effect="light">
+                  {{ getStatusText(row.last_sync_status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="频率" width="94">
+              <template #default="{ row }">{{ formatFrequency(row.sync_frequency) }}</template>
+            </el-table-column>
+            <el-table-column label="最后同步" min-width="150">
+              <template #default="{ row }">{{ formatTime(row.last_sync_time) || '尚未同步' }}</template>
+            </el-table-column>
+            <el-table-column label="预计下次" min-width="150">
+              <template #default="{ row }">
+                <span :class="['fs-next-run', row.nextRunTone]">{{ row.nextRunText }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="156" fixed="right">
+              <template #default="{ row }">
+                <div class="fs-row-actions">
+                  <el-button link type="primary" size="small" @click="startSync(row)" :disabled="!row.is_active || row.last_sync_status === 'running'">同步</el-button>
+                  <el-button link size="small" @click="viewLogs(row)">日志</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <section class="fs-ops-panel fs-log-panel">
+          <div class="fs-panel-title">
+            <div>
+              <strong>统一运行日志</strong>
+              <span>按任务和结果筛选，失败记录会优先暴露出来。</span>
+            </div>
+            <div class="fs-log-actions">
+              <el-select v-model="logTaskFilter" size="small" placeholder="任务" clearable>
+                <el-option label="全部任务" value="" />
+                <el-option v-for="item in syncConfigs" :key="item.id" :label="item.name || `任务 ${item.id}`" :value="String(item.id)" />
+              </el-select>
+              <el-select v-model="logLevelFilter" size="small" placeholder="级别" clearable>
+                <el-option label="全部级别" value="" />
+                <el-option label="错误" value="ERROR" />
+                <el-option label="成功" value="SUCCESS" />
+                <el-option label="信息" value="INFO" />
+              </el-select>
+              <el-button size="small" @click="loadAllLogs" :loading="loadingAllLogs">刷新</el-button>
+              <el-popconfirm v-if="isFeatureEnabled('feishu_log_clear')" title="确认清空全部飞书同步日志？" @confirm="clearAllLogs">
+                <template #reference>
+                  <el-button size="small" type="danger" plain>清空</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </div>
+          <el-table :data="filteredAllLogs" size="small" border class="fs-compact-table" max-height="360">
+            <el-table-column label="时间" min-width="154">
+              <template #default="{ row }">{{ formatTime(row.timestamp) || row.timestamp }}</template>
+            </el-table-column>
+            <el-table-column label="任务" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">{{ taskNameById(row.config_id) }}</template>
+            </el-table-column>
+            <el-table-column label="级别" width="88">
+              <template #default="{ row }">
+                <el-tag :type="getLogLevelType(row.level)" effect="light">{{ getLogLevelText(row.level) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="内容" min-width="260" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.message || '-' }}</template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="!filteredAllLogs.length" description="暂无匹配日志" :image-size="80" />
+        </section>
+      </div>
+    </section>
+
     <section class="fs-board" v-loading="loading">
       <div class="fs-board-head">
         <div>
@@ -345,9 +453,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Document, Edit, Plus, RefreshRight, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import {
+  clearAllFeishuSyncLogs,
   clearFeishuSyncLogs,
   createFeishuSyncConfig,
   deleteFeishuSyncConfig,
+  getAllFeishuSyncLogs,
   getFeishuSyncConfigs,
   getFeishuSyncLogs,
   pauseFeishuSync,
@@ -380,6 +490,11 @@ const logDialogVisible = ref(false)
 const currentConfig = ref(null)
 const logs = ref([])
 const loadingLogs = ref(false)
+const allLogs = ref([])
+const loadingAllLogs = ref(false)
+const scheduleFilter = ref('all')
+const logTaskFilter = ref('')
+const logLevelFilter = ref('')
 
 let statusPollTimer = null
 
@@ -388,11 +503,38 @@ const activeCount = computed(() => syncConfigs.value.filter((c) => c.is_active).
 const runningCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_status === 'running').length)
 const failedCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_status === 'failed').length)
 const successCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_status === 'success').length)
+const taskNameMap = computed(() => new Map(syncConfigs.value.map((item) => [String(item.id), item.name || `任务 ${item.id}`])))
 const schemaFieldRows = computed(() => schemaPreview.value?.field_rows || [])
 const hasSchemaDiff = computed(() => (
   Boolean(schemaPreview.value)
   && ((schemaPreview.value.added_fields?.length || 0) > 0 || (schemaPreview.value.removed_fields?.length || 0) > 0)
 ))
+const scheduleRows = computed(() => syncConfigs.value.map((item) => ({
+  ...item,
+  ...getNextRunInfo(item)
+})).sort((a, b) => {
+  if (a.last_sync_status === 'running' && b.last_sync_status !== 'running') return -1
+  if (b.last_sync_status === 'running' && a.last_sync_status !== 'running') return 1
+  if (!a.nextRunAt && !b.nextRunAt) return 0
+  if (!a.nextRunAt) return 1
+  if (!b.nextRunAt) return -1
+  return a.nextRunAt - b.nextRunAt
+}))
+const filteredScheduleRows = computed(() => scheduleRows.value.filter((row) => {
+  if (scheduleFilter.value === 'active') return row.is_active
+  if (scheduleFilter.value === 'failed') return row.last_sync_status === 'failed'
+  return true
+}))
+const filteredAllLogs = computed(() => allLogs.value.filter((item) => {
+  const matchTask = !logTaskFilter.value || String(item.config_id) === String(logTaskFilter.value)
+  const matchLevel = !logLevelFilter.value || String(item.level || '').toUpperCase() === logLevelFilter.value
+  return matchTask && matchLevel
+}))
+const nextRunSummary = computed(() => {
+  const next = scheduleRows.value.find((item) => item.nextRunAt)
+  if (!next) return activeCount.value ? '等待首轮调度' : '暂无启用任务'
+  return `下次：${next.name || `任务 ${next.id}`} ${next.nextRunText}`
+})
 const statCards = computed(() => [
   {
     label: '同步任务',
@@ -474,9 +616,23 @@ const loadData = async () => {
   try {
     const data = await getFeishuSyncConfigs()
     syncConfigs.value = data.sync_configs || []
+    await loadAllLogs(false)
   } finally {
     loading.value = false
     updateStatusPolling()
+  }
+}
+
+const loadAllLogs = async (showError = true) => {
+  loadingAllLogs.value = true
+  try {
+    const data = await getAllFeishuSyncLogs('all')
+    allLogs.value = data.logs || []
+  } catch {
+    allLogs.value = []
+    if (showError) ElMessage.error('加载统一日志失败')
+  } finally {
+    loadingAllLogs.value = false
   }
 }
 
@@ -671,7 +827,7 @@ const loadLogs = async () => {
   if (!currentConfig.value) return
   loadingLogs.value = true
   try {
-    const data = await getFeishuSyncLogs(currentConfig.value.id, 100)
+    const data = await getFeishuSyncLogs(currentConfig.value.id, 'all')
     logs.value = data.logs || []
   } catch {
     logs.value = []
@@ -690,7 +846,19 @@ const clearLogs = async () => {
   try {
     await clearFeishuSyncLogs(currentConfig.value.id)
     logs.value = []
+    await loadAllLogs()
     ElMessage.success('日志已清空')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.error || '清空失败')
+  }
+}
+
+const clearAllLogs = async () => {
+  try {
+    await clearAllFeishuSyncLogs()
+    logs.value = []
+    allLogs.value = []
+    ElMessage.success('全部飞书同步日志已清空')
   } catch (error) {
     ElMessage.error(error.response?.data?.error || '清空失败')
   }
@@ -701,6 +869,30 @@ const formatFrequency = (f) => `每${Number(f || 0)}分钟`
 const formatTime = (t) => {
   if (!t) return ''
   return new Date(t).toLocaleString('zh-CN')
+}
+
+const getNextRunInfo = (row) => {
+  if (!row?.is_active) {
+    return { nextRunAt: null, nextRunText: '已暂停', nextRunTone: 'is-muted' }
+  }
+  if (row.last_sync_status === 'running') {
+    return { nextRunAt: Date.now(), nextRunText: '运行中', nextRunTone: 'is-running' }
+  }
+  const frequency = Math.max(1, Number(row.sync_frequency || 30))
+  const lastTime = row.last_sync_time ? new Date(row.last_sync_time).getTime() : 0
+  if (!lastTime || Number.isNaN(lastTime)) {
+    return { nextRunAt: null, nextRunText: '等待首轮调度', nextRunTone: 'is-waiting' }
+  }
+  const interval = frequency * 60 * 1000
+  let nextRunAt = lastTime + interval
+  const now = Date.now()
+  while (nextRunAt < now) nextRunAt += interval
+  const minutes = Math.max(0, Math.round((nextRunAt - now) / 60000))
+  return {
+    nextRunAt,
+    nextRunText: `${new Date(nextRunAt).toLocaleString('zh-CN')}（约 ${minutes} 分钟后）`,
+    nextRunTone: minutes <= 5 ? 'is-soon' : 'is-normal'
+  }
 }
 
 const getStatusType = (s) => {
@@ -716,6 +908,25 @@ const getStatusText = (s) => {
   if (s === 'running') return '运行中'
   return '待同步'
 }
+
+const getLogLevelType = (level) => {
+  const text = String(level || '').toUpperCase()
+  if (text === 'ERROR') return 'danger'
+  if (text === 'SUCCESS') return 'success'
+  if (text === 'WARN' || text === 'WARNING') return 'warning'
+  return 'info'
+}
+
+const getLogLevelText = (level) => {
+  const text = String(level || '').toUpperCase()
+  if (text === 'ERROR') return '错误'
+  if (text === 'SUCCESS') return '成功'
+  if (text === 'WARN' || text === 'WARNING') return '警告'
+  if (text === 'INFO') return '信息'
+  return text || '-'
+}
+
+const taskNameById = (id) => taskNameMap.value.get(String(id)) || `任务 ${id || '-'}`
 
 const getBaselineText = (source) => {
   if (source === 'schema_registry') return '历史快照'
@@ -970,6 +1181,103 @@ onUnmounted(() => {
   font-weight: 800;
   display: inline-flex;
   align-items: center;
+}
+
+.fs-ops-board {
+  margin-bottom: 22px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 72, 84, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 48px rgba(15, 72, 84, 0.07);
+}
+
+.fs-ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr);
+  gap: 14px;
+}
+
+.fs-ops-panel {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 72, 84, 0.08);
+  background: #fbfefe;
+}
+
+.fs-panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.fs-panel-title strong {
+  display: block;
+  color: #102033;
+  font-size: 15px;
+}
+
+.fs-panel-title span {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fs-log-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fs-log-actions .el-select {
+  width: 128px;
+}
+
+.fs-compact-table strong {
+  display: block;
+  color: #102033;
+  font-size: 13px;
+}
+
+.fs-compact-table small {
+  display: block;
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.fs-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fs-next-run {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fs-next-run.is-soon,
+.fs-next-run.is-running {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.fs-next-run.is-muted {
+  color: #94a3b8;
+}
+
+.fs-next-run.is-waiting {
+  color: #0f766e;
+  font-weight: 800;
 }
 
 .fs-task-grid {
@@ -1342,6 +1650,10 @@ onUnmounted(() => {
   .fs-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .fs-ops-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1356,6 +1668,7 @@ onUnmounted(() => {
   }
 
   .fs-stat-grid,
+  .fs-ops-grid,
   .fs-task-grid,
   .fs-task-meta,
   .fs-schema-summary,

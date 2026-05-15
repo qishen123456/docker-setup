@@ -420,24 +420,6 @@
             </template>
           </el-tree-select>
         </el-form-item>
-        <el-form-item label="兜底指定员工">
-          <el-select
-            v-model="dataRuleForm.rule.allowed_employee_ids"
-            multiple
-            filterable
-            collapse-tags
-            collapse-tags-tooltip
-            :disabled="dataRuleForm.rule.mode !== 'org_tree'"
-            placeholder="可选，额外放行员工"
-          >
-            <el-option
-              v-for="item in enabledDataPermissionEmployees"
-              :key="item.id"
-              :label="employeeOptionLabel(item)"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="dataRuleForm.rule.note" placeholder="权限说明" />
         </el-form-item>
@@ -787,11 +769,11 @@ const normalizeRule = (dataset, rule = {}) => ({
     : (rule.tree_type_id ? [rule.tree_type_id] : []),
   organization_node_ids: Array.isArray(rule.organization_node_ids) ? rule.organization_node_ids : [],
   organization_codes: Array.isArray(rule.organization_codes) ? rule.organization_codes : [],
-  allowed_roles: Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [],
-  allowed_departments: Array.isArray(rule.allowed_departments) ? rule.allowed_departments : [],
-  allowed_positions: Array.isArray(rule.allowed_positions) ? rule.allowed_positions : [],
-  allowed_employee_ids: Array.isArray(rule.allowed_employee_ids) ? rule.allowed_employee_ids : [],
-  allowed_union_ids: Array.isArray(rule.allowed_union_ids) ? rule.allowed_union_ids : [],
+  allowed_roles: [],
+  allowed_departments: [],
+  allowed_positions: [],
+  allowed_employee_ids: [],
+  allowed_union_ids: [],
   scope: {
     organization_field: rule.scope?.organization_field || '组织编码',
     organization_values: Array.isArray(rule.scope?.organization_values) ? rule.scope.organization_values : [],
@@ -940,7 +922,7 @@ const loadLogs = async () => {
       category: logFilters.value.category || undefined,
       level: logFilters.value.level || undefined,
       keyword: logFilters.value.keyword || undefined,
-      limit: 5000,
+      limit: 'all',
       offset: 0,
     })
     allFetchedLogs.value = Array.isArray(res?.logs) ? res.logs : []

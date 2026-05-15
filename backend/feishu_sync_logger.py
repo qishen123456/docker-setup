@@ -5,7 +5,7 @@
 import json
 import os
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
@@ -40,7 +40,7 @@ def write_log(config_id: int, level: str, message: str, extra_data: Dict = None)
     # 同时输出到控制台
     print(f"[{log_entry['timestamp']}] [{level}] Config-{config_id}: {message}")
 
-def get_logs(config_id: int, limit: int = 100) -> List[Dict]:
+def get_logs(config_id: int, limit: Optional[int] = 100) -> List[Dict]:
     """获取指定配置的日志"""
     log_file = get_log_file_path(config_id)
     
@@ -60,12 +60,14 @@ def get_logs(config_id: int, limit: int = 100) -> List[Dict]:
                         continue
         
         # 返回最新的日志（倒序）
+        if not limit or limit <= 0:
+            return logs
         return logs[-limit:] if len(logs) > limit else logs
     except Exception as e:
         print(f"读取日志失败: {e}")
         return []
 
-def get_all_logs(limit: int = 50) -> List[Dict]:
+def get_all_logs(limit: Optional[int] = 50) -> List[Dict]:
     """获取所有配置的日志"""
     all_logs = []
     
@@ -83,6 +85,8 @@ def get_all_logs(limit: int = 50) -> List[Dict]:
         
         # 按时间排序（最新的在前）
         all_logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        if not limit or limit <= 0:
+            return all_logs
         return all_logs[:limit]
     except Exception as e:
         print(f"获取所有日志失败: {e}")
@@ -121,7 +125,7 @@ def get_log_stats() -> Dict:
                 config_id = filename.replace('feishu_sync_', '').replace('.log', '')
                 try:
                     config_id = int(config_id)
-                    logs = get_logs(config_id)
+                    logs = get_logs(config_id, 0)
                     stats['total_logs'] += len(logs)
                     
                     for log in logs:

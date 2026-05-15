@@ -7,6 +7,12 @@ Files captured (existing only, missing files are simply skipped):
     config/feishu_sync.json
     config/sql_prompts.json
     config/app_config.json
+    config/employee_permissions.json
+    config/data_permissions.json
+    config/rbac_permissions.json
+    config/organization_trees.json
+    config/feature_flags.json
+    config/query_history.json
 
 Sensitive fields (`password_b64`, `api_key_b64`, `app_secret`) are kept AS-IS
 because they are already obfuscated/encrypted by config_manager.
@@ -38,7 +44,10 @@ CAPTURED_FILES = [
     "app_config.json",
     "employee_permissions.json",
     "data_permissions.json",
+    "rbac_permissions.json",
+    "organization_trees.json",
     "feature_flags.json",
+    "query_history.json",
 ]
 
 
