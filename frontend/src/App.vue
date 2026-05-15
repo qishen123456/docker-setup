@@ -36,10 +36,11 @@
           background-color="transparent"
           text-color="#8c919b"
           active-text-color="#22252b"
+          :default-openeds="managementDefaultOpeneds"
           @select="handleMenuSelect"
         >
           <el-menu-item
-            v-for="item in availableMenuItems"
+            v-for="item in primaryMenuItems"
             :key="item.path"
             :index="item.path"
             :data-tooltip="item.label"
@@ -47,6 +48,26 @@
             <el-icon><component :is="item.icon" /></el-icon>
             <template #title>{{ item.label }}</template>
           </el-menu-item>
+          <el-sub-menu
+            v-if="managementMenuItems.length"
+            index="management"
+            class="nav-group"
+            data-tooltip="管理配置"
+          >
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span>管理配置</span>
+            </template>
+            <el-menu-item
+              v-for="item in managementMenuItems"
+              :key="item.path"
+              :index="item.path"
+              :data-tooltip="item.label"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+              <template #title>{{ item.label }}</template>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
 
         <transition name="history-panel">
@@ -298,7 +319,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Setting, UploadFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
@@ -357,6 +378,7 @@ const menuItems = [
   { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin', featureKey: 'report_config' },
   { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin', featureKey: 'feishu_sync' },
   { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin', featureKey: 'runtime_migration' },
+  { path: '/organization-trees', label: '组织树管理', icon: Share, minRole: 'super_admin', featureKey: 'organization_tree_management' },
   { path: '/employee-permissions', label: '角色权限管理', icon: Lock, minRole: 'super_admin', featureKey: 'employee_permissions' },
   { path: '/admin-console', label: '系统控制台', icon: Setting, minRole: 'super_admin', featureKey: 'admin_console', hidden: true }
 ]
@@ -370,6 +392,7 @@ const subtitleMap = {
   '/report-config': '维护数据集对应的报告模板与展示规范',
   '/feishu-sync': '管理飞书多维表格同步、日志与任务控制',
   '/runtime-migration': '导出导入运行态配置，发布前自动备份可回滚',
+  '/organization-trees': '维护多套独立组织树类型与树形节点',
   '/employee-permissions': '维护员工身份映射、角色与可访问范围'
 }
 
@@ -388,6 +411,11 @@ const isFeatureEnabled = (key) => {
   return Boolean(feature.enabled)
 }
 const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessRole(item.minRole) && isFeatureEnabled(item.featureKey)))
+const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask'))
+const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask'))
+const managementDefaultOpeneds = computed(() => (
+  managementMenuItems.value.some((item) => item.path === route.path) ? ['management'] : []
+))
 const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析工作台')
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
@@ -1123,13 +1151,92 @@ body,
 
 .nav-menu .el-menu-item {
   position: relative;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px;
   margin: 4px 0;
+  padding: 0 14px !important;
   border-radius: 14px;
   height: 42px;
   color: #667085 !important;
   border: 1px solid transparent;
   font-weight: 650;
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
+}
+
+.nav-menu .el-sub-menu__title {
+  position: relative;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px;
+  height: 42px;
+  margin: 8px 0 4px;
+  padding: 0 14px !important;
+  border: 1px solid rgba(18, 48, 79, 0.07);
+  border-radius: 14px;
+  color: #4b5563 !important;
+  background: rgba(255, 255, 255, 0.72);
+  font-weight: 800;
+  transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
+}
+
+.nav-menu .el-menu-item .el-icon,
+.nav-menu .el-sub-menu__title .el-icon:first-child {
+  width: 20px;
+  height: 20px;
+  margin: 0 !important;
+  flex: 0 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.nav-menu .el-menu-item span,
+.nav-menu .el-sub-menu__title span {
+  flex: 1;
+  min-width: 0;
+  line-height: 42px;
+}
+
+.nav-menu .el-sub-menu__title .el-sub-menu__icon-arrow {
+  position: static;
+  width: 16px;
+  height: 16px;
+  margin: 0 0 0 auto;
+  transform: none;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.nav-menu .el-sub-menu.is-opened > .el-sub-menu__title .el-sub-menu__icon-arrow {
+  transform: rotate(180deg);
+}
+
+.nav-menu .el-sub-menu__title:hover {
+  color: #0f766e !important;
+  background: #eefaf7 !important;
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.nav-menu .el-sub-menu .el-menu {
+  padding: 2px 0 4px 12px;
+  background: transparent !important;
+}
+
+.nav-menu .el-sub-menu .el-menu-item {
+  height: 36px;
+  margin: 3px 0;
+  border-radius: 11px;
+  font-size: 13px;
+}
+
+.nav-menu .el-sub-menu .el-menu-item .el-icon {
+  font-size: 16px;
 }
 
 .nav-menu .el-menu-item::before {
@@ -1169,6 +1276,23 @@ body,
   overflow: visible !important;
   line-height: 44px !important;
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
+}
+
+.sidebar.sidebar-collapsed .nav-menu .el-sub-menu__title {
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  margin: 4px auto !important;
+  padding: 0 !important;
+  border-radius: 12px;
+  justify-content: center;
+  background: var(--bg-card, #fff);
+}
+
+.sidebar.sidebar-collapsed .nav-menu .el-sub-menu__title .el-sub-menu__icon-arrow,
+.sidebar.sidebar-collapsed .nav-menu .el-sub-menu__title span {
+  display: none;
 }
 
 .sidebar.sidebar-collapsed .nav-menu .el-menu-item:hover {
@@ -1338,9 +1462,9 @@ body,
 
 .sidebar-history {
   position: relative;
-  margin: 14px 0 12px;
+  margin: 12px 0 12px;
   padding: 14px 12px 12px;
-  min-height: 0;
+  min-height: 260px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -2552,3 +2676,4 @@ body,
   }
 }
 </style>
+

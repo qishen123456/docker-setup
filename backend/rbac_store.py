@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import time
+import os
 from copy import deepcopy
 from typing import Any, Dict, Iterable, List, Optional, Set
 from uuid import uuid4
 
-from config_manager import read_json, write_json
+from config_manager import read_json, resolve_read_path, write_json
 
 
 RBAC_FILE = "rbac_permissions.json"
@@ -56,8 +57,44 @@ def max_level(values: Iterable[Any]) -> str:
     return best
 
 
-def builtin_roles(feature_keys: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    feature_keys = feature_keys or []
+def _feature_keys_from_flags(feature_flags: Optional[Dict[str, Any]]) -> List[str]:
+    if not isinstance(feature_flags, dict):
+        return []
+    features = feature_flags.get("features") if isinstance(feature_flags.get("features"), dict) else feature_flags
+    return [str(key) for key in (features or {}).keys()]
+
+
+def _role_default_functions(feature_flags: Any, role_id: str) -> List[str]:
+    if not isinstance(feature_flags, dict):
+        return list(feature_flags or []) if role_id == "super_admin" else []
+    features = feature_flags.get("features") if isinstance(feature_flags.get("features"), dict) else feature_flags
+    result: List[str] = []
+    for key, feature in (features or {}).items():
+        roles = feature.get("roles") if isinstance(feature, dict) else []
+        if role_id in set(_as_list(roles)):
+            result.append(str(key))
+    return result
+
+
+def _rbac_file_exists() -> bool:
+    try:
+        return os.path.exists(resolve_read_path(RBAC_FILE))
+    except Exception:
+        return False
+
+
+def _default_feature_flags() -> Dict[str, Any]:
+    try:
+        from feature_flags import DEFAULT_FEATURE_FLAGS
+
+        return DEFAULT_FEATURE_FLAGS
+    except Exception:
+        return {}
+
+
+def builtin_roles(feature_flags: Optional[Any] = None) -> List[Dict[str, Any]]:
+    source_flags = feature_flags if isinstance(feature_flags, dict) else _default_feature_flags()
+    feature_keys = _feature_keys_from_flags(source_flags) if isinstance(source_flags, dict) else list(feature_flags or [])
     return [
         {
             "id": "super_admin",
@@ -66,7 +103,7 @@ def builtin_roles(feature_keys: Optional[List[str]] = None) -> List[Dict[str, An
             "description": "系统最高权限，内置角色不可修改、删除、停用。",
             "builtin": True,
             "locked": True,
-            "function_permissions": list(feature_keys),
+            "function_permissions": _role_default_functions(source_flags or feature_keys, "super_admin"),
             "resource_permissions": {},
         },
         {
@@ -76,7 +113,7 @@ def builtin_roles(feature_keys: Optional[List[str]] = None) -> List[Dict[str, An
             "description": "内置管理员角色，默认可维护配置和数据资产。",
             "builtin": True,
             "locked": True,
-            "function_permissions": [],
+            "function_permissions": _role_default_functions(source_flags, "admin"),
             "resource_permissions": {},
         },
         {
@@ -86,7 +123,7 @@ def builtin_roles(feature_keys: Optional[List[str]] = None) -> List[Dict[str, An
             "description": "内置普通用户角色，默认可使用智能分析工作台。",
             "builtin": True,
             "locked": True,
-            "function_permissions": [],
+            "function_permissions": _role_default_functions(source_flags, "user"),
             "resource_permissions": {},
         },
     ]
@@ -137,21 +174,14 @@ def _clean_group(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _feature_keys_from_flags(feature_flags: Optional[Dict[str, Any]]) -> List[str]:
-    if not isinstance(feature_flags, dict):
-        return []
-    features = feature_flags.get("features") if isinstance(feature_flags.get("features"), dict) else feature_flags
-    return [str(key) for key in (features or {}).keys()]
-
-
 def load_rbac(feature_flags: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     feature_keys = _feature_keys_from_flags(feature_flags)
     data = read_json(RBAC_FILE)
     if not isinstance(data, dict) or not data.get("roles"):
-        data = {"version": 1, "roles": builtin_roles(feature_keys), "groups": [], "updated_at": _now()}
+        data = {"version": 1, "roles": builtin_roles(feature_flags or feature_keys), "groups": [], "updated_at": _now()}
 
     roles_by_id: Dict[str, Dict[str, Any]] = {}
-    for role in builtin_roles(feature_keys):
+    for role in builtin_roles(feature_flags or feature_keys):
         roles_by_id[role["id"]] = role
     for item in data.get("roles") or []:
         clean = _clean_role(item, feature_keys)
@@ -195,7 +225,7 @@ def save_rbac(data: Dict[str, Any], feature_flags: Optional[Dict[str, Any]] = No
     normalized = load_rbac(feature_flags={**(feature_flags or {}), "_direct": True})
     # Re-run against the just-built data rather than the previous file.
     old_read = deepcopy(result)
-    roles_by_id = {role["id"]: role for role in builtin_roles(_feature_keys_from_flags(feature_flags))}
+    roles_by_id = {role["id"]: role for role in builtin_roles(feature_flags or _feature_keys_from_flags(feature_flags))}
     for role in old_read["roles"]:
         if role["id"] in BUILTIN_ROLE_IDS:
             roles_by_id[role["id"]].update({
@@ -329,7 +359,7 @@ def user_has_function(user: Dict[str, Any], key: str, fallback: bool = False) ->
     perms = effective_permissions(user)
     if key in set(perms.get("function_permissions") or []):
         return True
-    return fallback
+    return fallback if not _rbac_file_exists() else False
 
 
 def user_dataset_level(user: Dict[str, Any], dataset_id: Any) -> str:

@@ -14,8 +14,8 @@
           <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
         </template>
         <template v-else-if="activeConsoleTab === 'data'">
-          <el-button plain :loading="dataPermissionLoading" @click="loadDataPermissions">刷新数据权限</el-button>
-          <el-button type="primary" :loading="dataPermissionSaving" @click="saveDataPermissionRules">保存数据权限</el-button>
+          <el-button plain :loading="dataPermissionLoading" @click="loadDataPermissions">刷新数据集权限</el-button>
+          <el-button type="primary" :loading="dataPermissionSaving" @click="saveDataPermissionRules">保存数据集权限</el-button>
         </template>
         <template v-else>
           <el-button plain :loading="logLoading" @click="loadLogData">刷新日志</el-button>
@@ -25,12 +25,12 @@
     </section>
 
     <section class="console-tabs">
-      <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="activeConsoleTab = 'permissions'">权限配置</button>
-      <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="activeConsoleTab = 'data'; ensureDataPermissionsLoaded()">数据权限</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="activeConsoleTab = 'permissions'">功能权限控制</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="activeConsoleTab = 'data'; ensureDataPermissionsLoaded()">数据集权限控制</button>
       <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="activeConsoleTab = 'logs'; ensureLogsLoaded()">日志管理</button>
     </section>
 
-    <section class="console-command-layout">
+    <section class="console-command-layout" :class="{ 'is-data-tab': activeConsoleTab === 'data' }">
       <main class="console-command-main">
     <template v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'">
     <section v-if="activeConsoleTab === 'permissions'" class="summary-strip">
@@ -45,105 +45,64 @@
     <template v-else-if="activeConsoleTab === 'data'">
       <section class="summary-strip data-summary-strip">
         <div><strong>{{ dataPermissionRows.length }}</strong><span>数据集</span></div>
-        <div><strong>{{ restrictedDatasetCount }}</strong><span>受限数据集</span></div>
-        <div><strong>{{ dataPermissionEmployees.length }}</strong><span>可指定员工</span></div>
-        <div><strong>{{ departmentOptionCount }}</strong><span>部门选项</span></div>
+        <div><strong>{{ orgScopedDatasetCount }}</strong><span>组织树控制</span></div>
+        <div><strong>{{ dataPermissionTreeTypes.length }}</strong><span>组织树类型</span></div>
+        <div><strong>{{ employeesWithOrgCount }}</strong><span>已授权员工</span></div>
       </section>
 
       <section class="data-permission-card" v-loading="dataPermissionLoading">
         <div class="data-permission-toolbar">
           <div>
-            <span class="card-kicker">数据可见范围</span>
-            <h2>按角色、部门或员工授权数据集</h2>
-            <p>公开数据集所有登录员工可见；受限数据集仅匹配下方条件的员工可见。</p>
+            <span class="card-kicker">数据集权限控制</span>
+            <h2>数据集绑定组织树与行级过滤</h2>
+            <p>角色只控制功能板块；数据集按组织树和组织节点控制可见范围，员工在账号页选择组织节点后自动生效。</p>
           </div>
         </div>
         <el-table :data="dataPermissionRows" border stripe class="data-permission-table">
-          <el-table-column label="数据集" min-width="210" fixed>
+          <el-table-column label="数据集" min-width="190">
             <template #default="{ row }">
               <strong>{{ row.dataset_name }}</strong>
               <small>{{ row.business_domain || row.dataset_code }}</small>
             </template>
           </el-table-column>
-          <el-table-column label="模式" width="120">
+          <el-table-column label="模式" width="108">
             <template #default="{ row }">
-              <el-select v-model="row.rule.mode" style="width: 96px">
-                <el-option label="公开" value="public" />
-                <el-option label="受限" value="restricted" />
-              </el-select>
+              <el-tag :type="dataModeTagType(row.rule.mode)" effect="plain">{{ dataModeLabel(row.rule.mode) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="角色" min-width="170">
+          <el-table-column label="组织树" min-width="220">
             <template #default="{ row }">
-              <el-select v-model="row.rule.allowed_roles" multiple collapse-tags collapse-tags-tooltip placeholder="选择角色">
-                <el-option label="管理员" value="admin" />
-                <el-option label="普通用户" value="user" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="部门" min-width="210">
-            <template #default="{ row }">
-              <el-select
-                v-model="row.rule.allowed_departments"
-                multiple
-                filterable
-                allow-create
-                default-first-option
-                collapse-tags
-                collapse-tags-tooltip
-                placeholder="如：东部分公司"
-              >
-                <el-option v-for="item in departmentOptions" :key="item" :label="item" :value="item" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="岗位" min-width="190">
-            <template #default="{ row }">
-              <el-select
-                v-model="row.rule.allowed_positions"
-                multiple
-                filterable
-                allow-create
-                default-first-option
-                collapse-tags
-                collapse-tags-tooltip
-                placeholder="如：总经理"
-              >
-                <el-option v-for="item in positionOptions" :key="item" :label="item" :value="item" />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="指定员工" min-width="230">
-            <template #default="{ row }">
-              <el-select v-model="row.rule.allowed_employee_ids" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择员工">
-                <el-option
-                  v-for="item in enabledDataPermissionEmployees"
-                  :key="item.id"
-                  :label="employeeOptionLabel(item)"
-                  :value="item.id"
-                />
-              </el-select>
-            </template>
-          </el-table-column>
-          <el-table-column label="组织/分公司预留" min-width="260">
-            <template #default="{ row }">
-              <div class="scope-fields">
-                <el-input v-model="row.rule.scope.company_field" placeholder="字段，如 分公司" />
-                <el-select
-                  v-model="row.rule.scope.company_values"
-                  multiple
-                  filterable
-                  allow-create
-                  default-first-option
-                  collapse-tags
-                  placeholder="值，如 东部分公司"
-                />
+              <div class="dataset-scope-tags">
+                <el-tag v-for="item in dataRuleTreeLabels(row.rule)" :key="item" size="small">{{ item }}</el-tag>
+                <span v-if="!dataRuleTreeLabels(row.rule).length" class="muted-text">未绑定</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="备注" min-width="180">
+          <el-table-column label="授权组织" min-width="260">
             <template #default="{ row }">
-              <el-input v-model="row.rule.note" placeholder="权限说明" />
+              <div class="dataset-scope-tags">
+                <el-tag v-for="item in dataRuleOrgLabels(row.rule).slice(0, 4)" :key="item" size="small" type="success">{{ item }}</el-tag>
+                <el-tag v-if="dataRuleOrgLabels(row.rule).length > 4" size="small">+{{ dataRuleOrgLabels(row.rule).length - 4 }}</el-tag>
+                <span v-if="!dataRuleOrgLabels(row.rule).length" class="muted-text">未选择</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="命中员工" width="118">
+            <template #default="{ row }">
+              <div class="scope-summary">
+                <strong>{{ scopedEmployeeCount(row.rule) }}</strong>
+                <span>人</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.rule.note || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="96" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openDataRuleEditor(row)">编辑</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -407,64 +366,87 @@
     </template>
       </main>
 
-      <aside class="console-side-board">
-        <section class="side-card side-hero-card">
-          <span class="side-kicker">控制台工作区</span>
-          <h3>{{ activeHero.kicker }}</h3>
-          <p>{{ activeHero.description }}</p>
-        </section>
-
-        <section class="side-card">
-          <div class="side-card-head">
-            <h4>近期能力板块</h4>
-            <span>{{ consoleCapabilityCards.length }} 项</span>
-          </div>
-          <div class="capability-list">
-            <article v-for="item in consoleCapabilityCards" :key="item.title" class="capability-item" :class="item.tone">
-              <div>
-                <strong>{{ item.title }}</strong>
-                <p>{{ item.desc }}</p>
-              </div>
-              <em>{{ item.status }}</em>
-            </article>
-          </div>
-        </section>
-
-        <section class="side-card">
-          <div class="side-card-head">
-            <h4>治理入口</h4>
-            <span>常用</span>
-          </div>
-          <div class="quick-link-list">
-            <RouterLink
-              v-for="item in consoleQuickLinks"
-              :key="item.to"
-              :to="{ path: item.to, query: { from: 'admin-console' } }"
-              class="quick-link"
-            >
-              <div>
-                <strong>{{ item.title }}</strong>
-                <small>{{ item.desc }}</small>
-              </div>
-              <i>›</i>
-            </RouterLink>
-          </div>
-        </section>
-
-        <section class="side-card">
-          <div class="side-card-head">
-            <h4>当前健康度</h4>
-            <span>{{ activeConsoleTab === 'logs' ? '审计' : '配置' }}</span>
-          </div>
-          <div class="side-stats">
-            <div v-for="item in consoleSideStats" :key="item.label">
-              <strong>{{ item.value }}</strong>
-              <span>{{ item.label }}</span>
-            </div>
-          </div>
-        </section>
-      </aside>
     </section>
+
+    <el-dialog v-model="dataRuleDialog.visible" title="编辑数据集权限" width="720px" destroy-on-close>
+      <el-form v-if="dataRuleForm" label-position="top" class="data-rule-form">
+        <div class="data-rule-dataset">
+          <span>数据集</span>
+          <strong>{{ dataRuleForm.dataset_name }}</strong>
+          <small>{{ dataRuleForm.business_domain || dataRuleForm.dataset_code }}</small>
+        </div>
+        <el-form-item label="权限模式">
+          <el-radio-group v-model="dataRuleForm.rule.mode">
+            <el-radio-button label="public">公开</el-radio-button>
+            <el-radio-button label="org_tree">按组织树控制</el-radio-button>
+            <el-radio-button label="disabled">停用</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="组织树类型">
+          <el-select
+            v-model="dataRuleForm.rule.tree_type_ids"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            clearable
+            :disabled="dataRuleForm.rule.mode !== 'org_tree'"
+            placeholder="可选择多棵组织树"
+            @change="onDataRuleTreeChange(dataRuleForm)"
+          >
+            <el-option v-for="item in dataPermissionTreeTypes" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="授权组织">
+          <el-tree-select
+            v-model="dataRuleForm.rule.organization_node_ids"
+            :data="datasetOrganizationOptions(dataRuleForm.rule.tree_type_ids)"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            check-strictly
+            filterable
+            node-key="id"
+            :props="{ label: 'label', value: 'id', children: 'children' }"
+            :disabled="dataRuleForm.rule.mode !== 'org_tree' || !(dataRuleForm.rule.tree_type_ids || []).length"
+            placeholder="选择具体组织节点"
+          >
+            <template #header>
+              <div class="tree-select-panel-actions compact-actions" @click.stop>
+                <el-button size="small" @click="selectDataRuleCurrentTree(dataRuleForm)">全选当前树</el-button>
+                <el-button size="small" @click="completeDataRuleChildren(dataRuleForm)">补齐含下级</el-button>
+                <el-button size="small" @click="clearDataRuleOrganizations(dataRuleForm)">全部清空</el-button>
+              </div>
+            </template>
+          </el-tree-select>
+        </el-form-item>
+        <el-form-item label="兜底指定员工">
+          <el-select
+            v-model="dataRuleForm.rule.allowed_employee_ids"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            :disabled="dataRuleForm.rule.mode !== 'org_tree'"
+            placeholder="可选，额外放行员工"
+          >
+            <el-option
+              v-for="item in enabledDataPermissionEmployees"
+              :key="item.id"
+              :label="employeeOptionLabel(item)"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="dataRuleForm.rule.note" placeholder="权限说明" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dataRuleDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="applyDataRuleEditor">应用</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -497,12 +479,15 @@ const loading = ref(false)
 const saving = ref(false)
 const resetting = ref(false)
 const features = ref({})
-const openModules = ref(['runtime_migration', 'employee_permissions'])
+const openModules = ref(['organization_tree_management', 'employee_permissions', 'runtime_migration'])
 const activeConsoleTab = ref('permissions')
 const dataPermissionLoading = ref(false)
 const dataPermissionSaving = ref(false)
 const dataPermissionRows = ref([])
+const dataRuleDialog = ref({ visible: false })
+const dataRuleForm = ref(null)
 const dataPermissionEmployees = ref([])
+const dataPermissionOrganizationTrees = ref({ tree_types: [], nodes: [], trees: {} })
 const logs = ref([])
 const logStats = ref({})
 const totalLogs = ref(0)
@@ -522,12 +507,6 @@ const logFilters = ref({
   date_range: [],
 })
 
-const uniqueOptionList = (items) => Array.from(new Set(
-  (items || [])
-    .map((item) => String(item || '').trim())
-    .filter(Boolean)
-)).sort((a, b) => a.localeCompare(b, 'zh-CN'))
-
 const activeHero = computed(() => {
   if (activeConsoleTab.value === 'logs') {
     return {
@@ -537,13 +516,13 @@ const activeHero = computed(() => {
   }
   if (activeConsoleTab.value === 'data') {
     return {
-      kicker: '数据权限',
-      description: '按员工角色、部门、岗位和指定人员控制可见数据集，并为组织/分公司行级范围预留规则。'
+      kicker: '数据集权限控制',
+      description: '按数据集绑定组织树和组织节点，员工在账号页选择组织节点后自动获得对应数据范围。'
     }
   }
   return {
-    kicker: '权限矩阵',
-    description: '按身份勾选左侧导航和页面按钮权限。勾选即代表该身份可见，取消即隐藏。'
+    kicker: '功能权限控制',
+    description: '按角色勾选左侧导航和页面按钮权限；数据范围不在这里配置。'
   }
 })
 
@@ -570,72 +549,11 @@ const buttonItems = computed(() => featureList.value.filter((item) => item.kind 
 const navigationEnabledCount = computed(() => navigationItems.value.filter((item) => item.enabled).length)
 const enabledButtonCount = computed(() => buttonItems.value.filter((item) => item.enabled).length)
 const highRiskCount = computed(() => buttonItems.value.filter((item) => item.risk === 'high').length)
-const restrictedDatasetCount = computed(() => dataPermissionRows.value.filter((item) => item.rule?.mode === 'restricted').length)
+const orgScopedDatasetCount = computed(() => dataPermissionRows.value.filter((item) => item.rule?.mode === 'org_tree').length)
 const enabledDataPermissionEmployees = computed(() => dataPermissionEmployees.value.filter((item) => item.enabled !== false))
-const consoleCapabilityCards = computed(() => [
-  {
-    title: '账号生命周期',
-    desc: '新建用户、批量新增、停用启用和密码重置已经纳入权限闭环。',
-    status: '已接入',
-    tone: 'blue',
-  },
-  {
-    title: 'RBAC 角色分组',
-    desc: '角色、用户分组、资源权限和双向权限视图集中在角色权限管理。',
-    status: '核心',
-    tone: 'green',
-  },
-  {
-    title: '经营报告治理',
-    desc: '报告模板、数据集口径、二级下钻展示和右侧报告区持续迭代。',
-    status: '升级中',
-    tone: 'amber',
-  },
-  {
-    title: '审计追踪',
-    desc: '用户新建、重置密码、批量授权、问数链路统一进入系统日志。',
-    status: '可追溯',
-    tone: 'slate',
-  },
-])
-const consoleQuickLinks = computed(() => [
-  { title: '角色权限管理', desc: '用户、角色、分组、资源授权', to: '/employee-permissions' },
-  { title: '数据资产管理', desc: '数据集、字段、语义配置', to: '/datasets' },
-  { title: '报告模板配置', desc: '报告结构和展示契约', to: '/report-config' },
-  { title: '智能分析工作台', desc: '回到经营问数会话', to: '/smart-ask' },
-])
-const consoleSideStats = computed(() => {
-  if (activeConsoleTab.value === 'logs') {
-    return [
-      { label: '24小时记录', value: logStats.value.last_24h || 0 },
-      { label: '7天报错', value: logStats.value.errors_7d || 0 },
-      { label: '低置信问答', value: logStats.value.low_confidence_7d || 0 },
-      { label: '当前筛选', value: totalLogs.value || 0 },
-    ]
-  }
-  if (activeConsoleTab.value === 'data') {
-    return [
-      { label: '数据集', value: dataPermissionRows.value.length },
-      { label: '受限数据集', value: restrictedDatasetCount.value },
-      { label: '可指定员工', value: dataPermissionEmployees.value.length },
-      { label: '部门选项', value: departmentOptionCount.value },
-    ]
-  }
-  return [
-    { label: '导航项', value: navigationItems.value.length },
-    { label: '按钮项', value: buttonItems.value.length },
-    { label: '已开放按钮', value: enabledButtonCount.value },
-    { label: '高风险项', value: highRiskCount.value },
-  ]
-})
-const departmentOptions = computed(() => uniqueOptionList(dataPermissionEmployees.value.flatMap((item) => [
-  item.department,
-  ...(Array.isArray(item.departments) ? item.departments : []),
-  ...(Array.isArray(item.department_ids) ? item.department_ids : []),
-])))
-const positionOptions = computed(() => uniqueOptionList(dataPermissionEmployees.value.map((item) => item.position)))
-const departmentOptionCount = computed(() => departmentOptions.value.length)
-
+const dataPermissionTreeTypes = computed(() => dataPermissionOrganizationTrees.value?.tree_types || [])
+const employeesWithOrgCount = computed(() => dataPermissionEmployees.value.filter((item) => (item.organization_node_ids || []).length > 0).length)
+const dataPermissionNodeById = computed(() => new Map((dataPermissionOrganizationTrees.value?.nodes || []).map((node) => [node.id, node])))
 const moduleInfoMap = computed(() => {
   const map = new Map()
   for (const item of navigationItems.value) {
@@ -777,16 +695,105 @@ const showRequestError = (error, fallback) => {
   ElMessage.error(message)
 }
 
+const clonePlain = (value) => JSON.parse(JSON.stringify(value ?? null))
+const uniqueList = (items = []) => Array.from(new Set((items || []).filter(Boolean)))
+const mapDatasetTreeOptions = (items = []) => items.map((node) => ({
+  id: node.id,
+  label: `${node.name}（${node.code}）`,
+  children: mapDatasetTreeOptions(node.children || []),
+}))
+const selectedTreeTypeIds = (rule = {}) => Array.isArray(rule.tree_type_ids)
+  ? rule.tree_type_ids
+  : (rule.tree_type_id ? [rule.tree_type_id] : [])
+const treeTypeName = (id) => dataPermissionTreeTypes.value.find(item => item.id === id)?.name || id
+const dataRuleTreeLabels = (rule = {}) => selectedTreeTypeIds(rule).map(treeTypeName).filter(Boolean)
+const dataRuleOrgLabels = (rule = {}) => (rule.organization_node_ids || [])
+  .map(id => dataPermissionNodeById.value.get(id))
+  .filter(Boolean)
+  .map(node => `${node.name}（${node.code}）`)
+const dataModeLabel = (mode) => ({ public: '公开', org_tree: '组织树', disabled: '停用', restricted: '组织树' }[mode] || '公开')
+const dataModeTagType = (mode) => ({ public: 'success', org_tree: 'primary', disabled: 'danger', restricted: 'primary' }[mode] || 'info')
+const datasetOrganizationOptions = (treeTypeIds = []) => {
+  const ids = Array.isArray(treeTypeIds) ? treeTypeIds : (treeTypeIds ? [treeTypeIds] : [])
+  if (!ids.length) return []
+  return ids.map((treeTypeId) => {
+    const tree = dataPermissionTreeTypes.value.find(item => item.id === treeTypeId)
+    return {
+      id: `tree:${treeTypeId}`,
+      label: tree?.name || treeTypeId,
+      disabled: true,
+      children: mapDatasetTreeOptions((dataPermissionOrganizationTrees.value?.trees || {})[treeTypeId] || []),
+    }
+  })
+}
+const expandDataPermissionNodeIds = (ids = [], treeTypeId = '') => {
+  const selected = new Set((ids || []).filter(id => dataPermissionNodeById.value.has(id)))
+  if (!selected.size && !treeTypeId) return []
+  const result = []
+  ;(dataPermissionOrganizationTrees.value?.nodes || []).forEach((node) => {
+    if (treeTypeId && node.tree_type_id !== treeTypeId) return
+    const pathIds = Array.isArray(node.path_ids) ? node.path_ids : [node.id]
+    if ((selected.size && (selected.has(node.id) || pathIds.some(id => selected.has(id)))) || (!selected.size && treeTypeId)) {
+      result.push(node.id)
+    }
+  })
+  return uniqueList(result)
+}
+const organizationCodesFromDataNodeIds = (ids = [], treeTypeId = '') => expandDataPermissionNodeIds(ids, treeTypeId)
+  .map(id => dataPermissionNodeById.value.get(id)?.code)
+  .filter(Boolean)
+const onDataRuleTreeChange = (row) => {
+  row.rule.tree_type_id = selectedTreeTypeIds(row.rule)[0] || ''
+  row.rule.organization_node_ids = []
+  row.rule.organization_codes = []
+}
+const currentTreeTypeIdFromDataRule = (rule = {}) => {
+  const selectedNode = (rule.organization_node_ids || [])
+    .map(id => dataPermissionNodeById.value.get(id))
+    .find(Boolean)
+  if (selectedNode?.tree_type_id) return selectedNode.tree_type_id
+  const ids = selectedTreeTypeIds(rule)
+  return ids.length === 1 ? ids[0] : ''
+}
+const selectDataRuleCurrentTree = (row) => {
+  const treeTypeId = currentTreeTypeIdFromDataRule(row.rule)
+  if (row.rule.mode !== 'org_tree' || !treeTypeId) {
+    ElMessage.warning('请先选择一个组织树类型，或在下方点选该组织树里的任意节点')
+    return
+  }
+  const otherTreeNodeIds = (row.rule.organization_node_ids || []).filter((id) => dataPermissionNodeById.value.get(id)?.tree_type_id !== treeTypeId)
+  row.rule.organization_node_ids = uniqueList([...otherTreeNodeIds, ...expandDataPermissionNodeIds([], treeTypeId)])
+  row.rule.organization_codes = organizationCodesFromDataNodeIds(row.rule.organization_node_ids)
+}
+const completeDataRuleChildren = (row) => {
+  if (!(row.rule.organization_node_ids || []).length) {
+    ElMessage.warning('请先选择一个或多个组织节点')
+    return
+  }
+  row.rule.organization_node_ids = expandDataPermissionNodeIds(row.rule.organization_node_ids)
+  row.rule.organization_codes = organizationCodesFromDataNodeIds(row.rule.organization_node_ids)
+}
+const clearDataRuleOrganizations = (row) => {
+  row.rule.organization_node_ids = []
+  row.rule.organization_codes = []
+}
+
 const normalizeRule = (dataset, rule = {}) => ({
   dataset_id: Number(dataset.id || rule.dataset_id || 0),
-  mode: rule.mode === 'restricted' ? 'restricted' : 'public',
+  mode: ['public', 'org_tree', 'disabled', 'restricted'].includes(rule.mode) ? (rule.mode === 'restricted' ? 'org_tree' : rule.mode) : 'public',
+  tree_type_id: (Array.isArray(rule.tree_type_ids) ? rule.tree_type_ids[0] : rule.tree_type_id) || '',
+  tree_type_ids: Array.isArray(rule.tree_type_ids)
+    ? rule.tree_type_ids
+    : (rule.tree_type_id ? [rule.tree_type_id] : []),
+  organization_node_ids: Array.isArray(rule.organization_node_ids) ? rule.organization_node_ids : [],
+  organization_codes: Array.isArray(rule.organization_codes) ? rule.organization_codes : [],
   allowed_roles: Array.isArray(rule.allowed_roles) ? rule.allowed_roles : [],
   allowed_departments: Array.isArray(rule.allowed_departments) ? rule.allowed_departments : [],
   allowed_positions: Array.isArray(rule.allowed_positions) ? rule.allowed_positions : [],
   allowed_employee_ids: Array.isArray(rule.allowed_employee_ids) ? rule.allowed_employee_ids : [],
   allowed_union_ids: Array.isArray(rule.allowed_union_ids) ? rule.allowed_union_ids : [],
   scope: {
-    organization_field: rule.scope?.organization_field || '',
+    organization_field: rule.scope?.organization_field || '组织编码',
     organization_values: Array.isArray(rule.scope?.organization_values) ? rule.scope.organization_values : [],
     company_field: rule.scope?.company_field || '',
     company_values: Array.isArray(rule.scope?.company_values) ? rule.scope.company_values : [],
@@ -795,6 +802,28 @@ const normalizeRule = (dataset, rule = {}) => ({
   note: rule.note || '',
 })
 
+const openDataRuleEditor = (row) => {
+  dataRuleForm.value = clonePlain({
+    ...row,
+    rule: normalizeRule(row, row.rule),
+  })
+  dataRuleDialog.value.visible = true
+}
+
+const applyDataRuleEditor = () => {
+  if (!dataRuleForm.value) return
+  const edited = clonePlain(dataRuleForm.value)
+  edited.rule = normalizeRule(edited, edited.rule)
+  edited.rule.tree_type_id = selectedTreeTypeIds(edited.rule)[0] || ''
+  edited.rule.organization_codes = organizationCodesFromDataNodeIds(edited.rule.organization_node_ids)
+  edited.rule.scope.organization_field = '组织编码'
+  dataPermissionRows.value = dataPermissionRows.value.map((row) => (
+    row.id === edited.id ? { ...row, rule: edited.rule } : row
+  ))
+  dataRuleDialog.value.visible = false
+  ElMessage.success('已应用，记得点击顶部保存数据集权限')
+}
+
 const loadDataPermissions = async () => {
   dataPermissionLoading.value = true
   try {
@@ -802,12 +831,13 @@ const loadDataPermissions = async () => {
     const datasets = Array.isArray(res?.datasets) ? res.datasets : []
     const rules = res?.rules || {}
     dataPermissionEmployees.value = Array.isArray(res?.employees) ? res.employees : []
+    dataPermissionOrganizationTrees.value = res?.organization_trees || { tree_types: [], nodes: [], trees: {} }
     dataPermissionRows.value = datasets.map((dataset) => ({
       ...dataset,
       rule: normalizeRule(dataset, rules[String(dataset.id)] || {}),
     }))
   } catch (error) {
-    showRequestError(error, '数据权限加载失败')
+    showRequestError(error, '数据集权限加载失败')
   } finally {
     dataPermissionLoading.value = false
   }
@@ -822,7 +852,11 @@ const saveDataPermissionRules = async () => {
   try {
     const rules = {}
     dataPermissionRows.value.forEach((row) => {
-      rules[String(row.id)] = normalizeRule(row, row.rule)
+      const rule = normalizeRule(row, row.rule)
+      rule.tree_type_id = selectedTreeTypeIds(rule)[0] || ''
+      rule.organization_codes = organizationCodesFromDataNodeIds(rule.organization_node_ids)
+      rule.scope.organization_field = '组织编码'
+      rules[String(row.id)] = rule
     })
     const res = await saveDataPermissions(rules)
     const savedRules = res?.rules || rules
@@ -830,9 +864,9 @@ const saveDataPermissionRules = async () => {
       ...row,
       rule: normalizeRule(row, savedRules[String(row.id)] || row.rule),
     }))
-    ElMessage.success('数据权限已保存')
+    ElMessage.success('数据集权限已保存')
   } catch (error) {
-    showRequestError(error, '数据权限保存失败')
+    showRequestError(error, '数据集权限保存失败')
   } finally {
     dataPermissionSaving.value = false
   }
@@ -843,6 +877,14 @@ const employeeOptionLabel = (item) => {
   if (item.department) parts.push(item.department)
   if (item.position) parts.push(item.position)
   return parts.join(' / ')
+}
+
+const scopedEmployeeCount = (rule) => {
+  if (!selectedTreeTypeIds(rule).length || !(rule?.organization_node_ids || []).length) return 0
+  const ruleNodeIds = new Set(expandDataPermissionNodeIds(rule.organization_node_ids))
+  return enabledDataPermissionEmployees.value.filter((employee) => (
+    expandDataPermissionNodeIds(employee.organization_node_ids || []).some(nodeId => ruleNodeIds.has(nodeId))
+  )).length
 }
 
 const syncAdminFloatState = () => {
@@ -1246,10 +1288,7 @@ onMounted(() => {
 }
 
 .console-command-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 16px;
-  align-items: start;
+  display: block;
   margin-top: 16px;
 }
 
@@ -1260,172 +1299,6 @@ onMounted(() => {
 .console-command-main > .summary-strip:first-child,
 .console-command-main > .log-summary-strip:first-child {
   margin-top: 0;
-}
-
-.console-side-board {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-
-.side-card {
-  padding: 14px;
-  border: 1px solid rgba(203, 213, 225, 0.82);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
-}
-
-.side-hero-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.side-kicker {
-  display: inline-flex;
-  margin-bottom: 6px;
-  color: #1677ff;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .06em;
-}
-
-.side-card h3,
-.side-card h4 {
-  margin: 0;
-  color: #0f172a;
-}
-
-.side-card h3 {
-  font-size: 19px;
-}
-
-.side-card p {
-  margin: 8px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.side-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.side-card-head span {
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.capability-list,
-.quick-link-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.capability-item,
-.quick-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid #edf2f7;
-  border-radius: 12px;
-  background: #fbfdff;
-  text-decoration: none;
-}
-
-.capability-item strong,
-.quick-link strong {
-  display: block;
-  color: #1e293b;
-  font-size: 13px;
-}
-
-.capability-item p,
-.quick-link small {
-  display: block;
-  margin: 4px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.capability-item em {
-  flex: 0 0 auto;
-  padding: 3px 7px;
-  border-radius: 999px;
-  color: #1677ff;
-  background: #eef6ff;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 900;
-}
-
-.capability-item.green em {
-  color: #0f766e;
-  background: #ecfdf5;
-}
-
-.capability-item.amber em {
-  color: #b45309;
-  background: #fff7ed;
-}
-
-.capability-item.slate em {
-  color: #475569;
-  background: #f1f5f9;
-}
-
-.quick-link {
-  color: inherit;
-  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
-}
-
-.quick-link:hover {
-  border-color: #b8d4ff;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, .07);
-}
-
-.quick-link i {
-  color: #94a3b8;
-  font-style: normal;
-  font-size: 20px;
-}
-
-.side-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.side-stats div {
-  padding: 10px;
-  border: 1px solid #edf2f7;
-  border-radius: 12px;
-  background: #fbfdff;
-}
-
-.side-stats strong {
-  display: block;
-  color: #0f766e;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.side-stats span {
-  display: block;
-  margin-top: 5px;
-  color: #64748b;
-  font-size: 12px;
 }
 
 .permission-card {
@@ -1753,9 +1626,23 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.data-permission-table :deep(.el-table__cell) {
+  vertical-align: top;
+}
+
+.data-permission-table :deep(.el-select),
+.data-permission-table :deep(.el-input) {
+  width: 100%;
+}
+
 .scope-fields {
   display: grid;
   grid-template-columns: minmax(88px, 0.8fr) minmax(130px, 1.2fr);
+  gap: 8px;
+}
+
+.dataset-org-scope {
+  display: grid;
   gap: 8px;
 }
 
@@ -1979,17 +1866,21 @@ onMounted(() => {
   text-align: right;
 }
 
+.scope-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #64748b;
+}
+
+.scope-summary strong {
+  color: #0f766e;
+  font-size: 18px;
+}
+
 @media (max-width: 900px) {
   .console-page {
     padding: 14px;
-  }
-
-  .console-command-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .console-side-board {
-    order: -1;
   }
 
   .console-hero {
@@ -2011,6 +1902,33 @@ onMounted(() => {
 
   .matrix-row {
     grid-template-columns: minmax(220px, 1fr) 86px 86px 86px;
+  }
+}
+</style>
+
+<style>
+.tree-select-panel-actions {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) repeat(4, auto);
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid #eef2f7;
+  background: #f8fafc;
+}
+
+.tree-select-panel-actions.compact-actions {
+  grid-template-columns: repeat(3, auto);
+  justify-content: start;
+}
+
+.tree-select-panel-actions .el-button {
+  margin-left: 0;
+}
+
+@media (max-width: 720px) {
+  .tree-select-panel-actions,
+  .tree-select-panel-actions.compact-actions {
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

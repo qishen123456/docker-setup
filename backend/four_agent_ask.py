@@ -20,6 +20,7 @@ from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
 from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
+from data_permission_store import apply_row_level_filter, load_data_permissions
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
 import dataset_report_config as report_config_store
 from report_spec_builder import build_report_spec
@@ -2176,6 +2177,16 @@ class FourAgentAskService:
         }
 
     def _build_context_blob(self, context: Dict[str, Any]) -> str:
+        row_security = self._safe_dict(context.get("row_security"))
+        row_security_lines = []
+        if row_security.get("mode") == "org_tree":
+            row_security_lines.append(
+                "当前数据集启用了组织树数据权限。SQL 最终 SELECT 必须输出组织编码字段，"
+                f"并将对应组织字段别名为：{row_security.get('organization_field') or '组织编码'}。"
+            )
+            row_security_lines.append(
+                "该列的值必须与员工授权组织节点编码一致；不要在最终 SELECT 中遗漏或改名。"
+            )
         dictionary_lines = []
         for item in context.get("data_dictionary", [])[:150]:
             dictionary_lines.append(
@@ -2209,6 +2220,7 @@ class FourAgentAskService:
         return "\n\n".join(
             [
                 f"LLD:\n{self._get_lld_content(context)}",
+                "Row Security:\n" + "\n".join(row_security_lines),
                 "Common Questions:\n" + "\n".join(common_question_lines),
                 "Data Dictionary:\n" + "\n".join(dictionary_lines),
                 "Schema Definition:\n" + "\n\n".join(schema_lines),
@@ -3056,6 +3068,7 @@ Agent3 复核结果：
         started: float,
         steps: List[Dict[str, Any]],
         trace: Optional[Dict[str, Any]] = None,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         dataset_ids = route.get("dataset_ids", [])
         if not dataset_ids:
@@ -3065,6 +3078,13 @@ Agent3 复核结果：
         for dataset_id in dataset_ids:
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
             dataset_meta = self._safe_dict(context.get("dataset"))
+            permission_rule = (load_data_permissions().get("rules") or {}).get(str(int(dataset_id))) or {}
+            context["row_security"] = {
+                "mode": permission_rule.get("mode") or "public",
+                "tree_type_id": permission_rule.get("tree_type_id") or "",
+                "tree_type_ids": permission_rule.get("tree_type_ids") or ([permission_rule.get("tree_type_id")] if permission_rule.get("tree_type_id") else []),
+                "organization_field": self._safe_dict(permission_rule.get("scope")).get("organization_field") or "组织编码",
+            }
             saved_report_config = report_config_store.get_config(int(dataset_id))
             report_config_source = "dataset_config" if saved_report_config else "default"
             report_config = saved_report_config or report_config_store.get_default_config()
@@ -3187,6 +3207,7 @@ Agent3 复核结果：
 
             step_started = time.time()
             try:
+                final_sql = apply_row_level_filter(final_sql, current_user or {}, int(dataset_id))
                 result = self._execute_sql(
                     context["dataset"]["source_id"],
                     final_sql,
@@ -3422,6 +3443,7 @@ Agent3 复核结果：
         model_id: Optional[int] = None,
         session_id: str = "",
         conversation_history: Optional[List[Dict[str, Any]]] = None,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         question = (question or "").strip()
         conversation_session_id = str(session_id or "").strip()
@@ -3562,7 +3584,7 @@ Agent3 复核结果：
                 self._flush_trace(trace, result)
                 return result
 
-            result = self._run_pipeline(effective_question, route, started, steps, trace=trace)
+            result = self._run_pipeline(effective_question, route, started, steps, trace=trace, current_user=current_user)
             result["question"] = question
             result["effective_question"] = effective_question
             result["conversation_session_id"] = conversation_session_id
@@ -3589,6 +3611,7 @@ Agent3 复核结果：
         allowed_dataset_ids: Optional[List[int]] = None,
         option_id: str = "",
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         started = time.time()
         steps: List[Dict[str, Any]] = []
@@ -3709,7 +3732,7 @@ Agent3 复核结果：
             }
         )
 
-        result = self._run_pipeline(question, route, started, steps, trace=trace)
+        result = self._run_pipeline(question, route, started, steps, trace=trace, current_user=current_user)
         result["session_id"] = session_id
         result["conversation_session_id"] = conversation_session_id
         if conversation_session_id and not result.get("error"):

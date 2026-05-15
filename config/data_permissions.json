@@ -1,0 +1,42 @@
+{
+  "rules": {
+    "3": {
+      "dataset_id": 3,
+      "mode": "restricted",
+      "allowed_roles": [],
+      "allowed_departments": [],
+      "allowed_positions": [],
+      "allowed_employee_ids": [],
+      "allowed_union_ids": [],
+      "scope": {
+        "organization_field": "",
+        "organization_values": [],
+        "company_field": "",
+        "company_values": [],
+        "row_filter_note": ""
+      },
+      "note": ""
+    },
+    "11": {
+      "dataset_id": 11,
+      "mode": "restricted",
+      "allowed_roles": [
+        "user"
+      ],
+      "allowed_departments": [],
+      "allowed_positions": [],
+      "allowed_employee_ids": [
+        "emp_1778135664319_d72d234c1435c8"
+      ],
+      "allowed_union_ids": [],
+      "scope": {
+        "organization_field": "",
+        "organization_values": [],
+        "company_field": "",
+        "company_values": [],
+        "row_filter_note": ""
+      },
+      "note": ""
+    }
+  }
+}

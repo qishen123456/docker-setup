@@ -11,6 +11,7 @@ from auth_store import get_current_user
 from bookshelf_repository import BookshelfRepository
 from config_manager import read_json, write_json
 from feature_flags import load_feature_flags
+from organization_tree_store import overview as organization_tree_overview
 from rbac_store import (
     BUILTIN_ROLE_IDS,
     LEVEL_LABELS,
@@ -94,10 +95,19 @@ def _public_employee(item: Dict[str, Any], index: int = 0) -> Dict[str, Any]:
         "union_id": _as_text(item.get("union_id") or item.get("identifier")),
         "open_id": _as_text(item.get("open_id")),
         "user_id": _as_text(item.get("user_id")),
+        "email": _as_text(item.get("email") or item.get("enterprise_email")),
+        "enterprise_email": _as_text(item.get("enterprise_email") or item.get("email")),
+        "mobile": _as_text(item.get("mobile") or item.get("phone") or account),
+        "job_number": _as_text(item.get("job_number") or item.get("employee_no") or item.get("work_no")),
+        "employee_no": _as_text(item.get("employee_no") or item.get("job_number") or item.get("work_no")),
+        "oa_account": _as_text(item.get("oa_account") or item.get("oa_username")),
+        "manager": _as_text(item.get("manager") or item.get("leader") or item.get("direct_manager")),
         "department": _as_text(item.get("department") or item.get("department_name")),
         "department_ids": item.get("department_ids") if isinstance(item.get("department_ids"), list) else [],
         "position": _as_text(item.get("position") or item.get("job_title")),
         "organization": _as_text(item.get("organization")),
+        "organization_node_ids": _as_list(item.get("organization_node_ids")),
+        "organization_codes": _as_list(item.get("organization_codes")),
         "company": _as_text(item.get("company")),
         "role": role,
         "role_ids": _as_list(item.get("role_ids")),
@@ -218,6 +228,7 @@ def rbac_overview():
         "users": employees,
         "features": features,
         "datasets": datasets,
+        "organization_trees": organization_tree_overview(),
         "resource_levels": [{"value": key, "label": label, "rank": RESOURCE_LEVELS[key]} for key, label in LEVEL_LABELS.items()],
         "user_permissions": user_permissions,
         "updated_at": rbac_data.get("updated_at", ""),
@@ -386,10 +397,19 @@ def create_user_assignment():
         "union_id": _as_text(payload.get("union_id") or payload.get("identifier")),
         "open_id": _as_text(payload.get("open_id")),
         "user_id": _as_text(payload.get("user_id")),
+        "email": _as_text(payload.get("email") or payload.get("enterprise_email")),
+        "enterprise_email": _as_text(payload.get("enterprise_email") or payload.get("email")),
+        "mobile": _as_text(payload.get("mobile") or payload.get("phone") or account),
+        "job_number": _as_text(payload.get("job_number") or payload.get("employee_no") or payload.get("work_no")),
+        "employee_no": _as_text(payload.get("employee_no") or payload.get("job_number") or payload.get("work_no")),
+        "oa_account": _as_text(payload.get("oa_account") or payload.get("oa_username")),
+        "manager": _as_text(payload.get("manager") or payload.get("leader") or payload.get("direct_manager")),
         "department": _as_text(payload.get("department")),
         "department_ids": payload.get("department_ids") if isinstance(payload.get("department_ids"), list) else [],
         "position": _as_text(payload.get("position")),
         "organization": _as_text(payload.get("organization")),
+        "organization_node_ids": _as_list(payload.get("organization_node_ids")),
+        "organization_codes": _as_list(payload.get("organization_codes")),
         "company": _as_text(payload.get("company")),
         "role": role,
         "role_ids": _as_list(payload.get("role_ids")),
@@ -428,9 +448,12 @@ def update_user_assignment(user_id: str):
             employee["role"] = _as_text(payload.get("role"))
         if "role_ids" in payload:
             employee["role_ids"] = _as_list(payload.get("role_ids"))
-        for key in ("name", "account", "identifier", "union_id", "open_id", "user_id", "department", "position", "organization", "company", "note"):
+        for key in ("name", "account", "identifier", "union_id", "open_id", "user_id", "email", "enterprise_email", "mobile", "job_number", "employee_no", "oa_account", "manager", "department", "position", "organization", "company", "note"):
             if key in payload:
                 employee[key] = _as_text(payload.get(key))
+        for key in ("organization_node_ids", "organization_codes"):
+            if key in payload:
+                employee[key] = _as_list(payload.get(key))
         changed = True
         break
     if not changed:
@@ -486,8 +509,19 @@ def bulk_user_assignment():
         if public["id"] not in user_ids or public.get("role") == "super_admin":
             continue
         current = set(_as_list(employee.get("role_ids")))
+        if action == "delete":
+            employees[index] = None
+            changed_count += 1
+            continue
         if action == "remove_roles":
             current.difference_update(role_ids)
+        elif action == "set_role":
+            next_role = _as_text(payload.get("role"))
+            if next_role in {"admin", "user"}:
+                employee["role"] = next_role
+        elif action == "set_organizations":
+            employee["organization_node_ids"] = _as_list(payload.get("organization_node_ids"))
+            employee["organization_codes"] = _as_list(payload.get("organization_codes"))
         elif action == "set_enabled":
             employee["enabled"] = bool(payload.get("enabled"))
         elif action == "reset_password":
@@ -496,6 +530,7 @@ def bulk_user_assignment():
             current.update(role_ids)
         employee["role_ids"] = sorted(current)
         changed_count += 1
+    employees = [item for item in employees if isinstance(item, dict)]
     _save_employees(employees)
     _log("user_bulk_update", "批量更新用户授权", user, count=changed_count, action=action)
     return jsonify({

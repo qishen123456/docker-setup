@@ -153,7 +153,7 @@ def _refresh_user_from_employee(user: Dict[str, Any]) -> Dict[str, Any]:
             or refreshed.get("account")
             or ""
         )
-        for key in ("department", "department_ids", "position", "organization", "company"):
+        for key in ("department", "department_ids", "position", "email", "enterprise_email", "mobile", "job_number", "employee_no", "oa_account", "manager", "organization", "organization_node_ids", "organization_codes", "company"):
             if item.get(key):
                 refreshed[key] = item[key]
         return refreshed

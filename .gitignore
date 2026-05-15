@@ -70,6 +70,7 @@ config/app_config.json
 config/auth_tokens.json
 config/employee_permissions.json
 config/feature_flags.json
+config/organization_trees.json
 
 # Frontend build output / caches
 dist/

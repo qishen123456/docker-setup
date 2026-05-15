@@ -76,6 +76,12 @@ const routes = [
     meta: { title: '迁移发布管理', roles: ['super_admin'] }
   },
   {
+    path: '/organization-trees',
+    name: 'OrganizationTrees',
+    component: () => import('../views/OrganizationTrees.vue'),
+    meta: { title: '组织树管理', roles: ['super_admin'] }
+  },
+  {
     path: '/admin-console',
     name: 'AdminConsole',
     component: () => import('../views/AdminConsole.vue'),

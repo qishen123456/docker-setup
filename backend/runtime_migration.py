@@ -34,6 +34,7 @@ RUNTIME_CONFIG_FILES = [
     "employee_permissions.json",
     "data_permissions.json",
     "rbac_permissions.json",
+    "organization_trees.json",
     "feature_flags.json",
 ]
 

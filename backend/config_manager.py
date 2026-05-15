@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 # 配置目录：backend/ 同级的 config/ 文件夹
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_DIR = os.path.join(BASE_DIR, 'config')
+CONFIG_DIR = os.getenv('SMARTASK_CONFIG_DIR') or os.path.join(BASE_DIR, 'config')
 LOCAL_OVERRIDE_FILES = {'datasources.json'}
 ENV_PATH = os.path.join(BASE_DIR, '.env')
 ENV_LOCAL_PATH = os.path.join(BASE_DIR, '.env.local')

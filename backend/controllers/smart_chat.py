@@ -257,6 +257,7 @@ def smart_chat():
             allowed_dataset_ids=allowed_dataset_ids,
             session_id=session_id,
             conversation_history=conversation_history if isinstance(conversation_history, list) else None,
+            current_user=user,
         )
         _append_controller_debug(
             "smart_chat.service.ask.done",
@@ -344,6 +345,7 @@ def smart_chat_stream():
                     model_id=model_id,
                     session_id=session_id,
                     conversation_history=conversation_history if isinstance(conversation_history, list) else None,
+                    current_user=user,
                 )
                 result["total_duration"] = round(time.time() - started, 2)
                 # Attach report_config if dataset was identified
@@ -444,6 +446,7 @@ def confirm_by_boss():
             selected_dataset_ids=selected_dataset_ids,
             allowed_dataset_ids=allowed_dataset_ids,
             option_id=option_id,
+            current_user=user,
         )
         result["total_duration"] = round(time.time() - started, 2)
         _log_smart_chat_result(
@@ -514,6 +517,7 @@ def confirm_by_boss_stream():
                     allowed_dataset_ids=allowed_dataset_ids,
                     option_id=option_id,
                     live_callback=emit,
+                    current_user=user,
                 )
                 result["total_duration"] = round(time.time() - started, 2)
                 ds_id = result.get("dataset_id")
