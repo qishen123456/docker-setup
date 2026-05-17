@@ -35,7 +35,9 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const message = error.response?.data?.error || error.message || '请求失败'
-    ElMessage.error(message)
+    if (!error.config?.silent) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )
@@ -262,6 +264,11 @@ export const sendSmartChatStream = (question, signal, selectedDatasetIds, onEven
     session_id: sessionId || undefined,
     conversation_history: conversationHistory || undefined,
   }, signal, onEvent)
+
+export const getSmartAskReportHistory = (limit = 50) => api.get('/smart-chat/report-history', { params: { limit }, silent: true })
+export const saveSmartAskReportHistory = (item) => api.post('/smart-chat/report-history', { item }, { silent: true })
+export const deleteSmartAskReportHistory = (id) => api.delete(`/smart-chat/report-history/${encodeURIComponent(id)}`, { silent: true })
+export const clearSmartAskReportHistory = () => api.delete('/smart-chat/report-history', { silent: true })
 
 export const confirmByBoss = (payload) => api.post('/smart-chat/confirm-by-boss', payload)
 export const confirmByBossStream = (payload, signal, onEvent) =>

@@ -1544,6 +1544,9 @@ const finalizeFromResult = (data) => {
   state.updatedAt = new Date().toISOString()
 
   if (data?.error) {
+    const diagnostics = data?.diagnostics && typeof data.diagnostics === 'object'
+      ? Object.entries(data.diagnostics).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`)
+      : []
     state.status = 'error'
     state.error = data.error
     appendLog({
@@ -1553,7 +1556,7 @@ const finalizeFromResult = (data) => {
       toolType: 'default',
       detail: data.error,
       summary: '当前任务执行失败。',
-      detailLines: ['当前任务执行失败。', data.error],
+      detailLines: ['当前任务执行失败。', data.error, ...diagnostics],
       status: 'error',
     })
     persist()

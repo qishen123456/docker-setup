@@ -1,4 +1,10 @@
 import { ref } from 'vue'
+import {
+  clearSmartAskReportHistory,
+  deleteSmartAskReportHistory,
+  getSmartAskReportHistory,
+  saveSmartAskReportHistory,
+} from '../api/index.js'
 
 export const SMART_ASK_HISTORY_KEY = 'smartask_history_sessions_v1'
 
@@ -69,6 +75,55 @@ const persistSmartAskHistory = () => {
   localStorage.setItem(getScopedHistoryKey(), JSON.stringify(historySessions.value))
 }
 
+const itemTime = (item) => {
+  const raw = item?.reportSnapshot?.updatedAt || item?.serverUpdatedAt || item?.updatedAt || ''
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const mergeHistoryItems = (localItems = [], remoteItems = []) => {
+  const byId = new Map()
+  ;[...remoteItems, ...localItems].forEach((item) => {
+    if (!item?.id) return
+    const existing = byId.get(item.id)
+    if (!existing || itemTime(item) >= itemTime(existing)) {
+      byId.set(item.id, clone(item))
+    }
+  })
+  return Array.from(byId.values())
+    .sort((a, b) => itemTime(b) - itemTime(a))
+    .slice(0, 50)
+}
+
+const pushHistoryToServer = async (item) => {
+  if (!item?.id || typeof window === 'undefined') return
+  try {
+    await saveSmartAskReportHistory(item)
+  } catch {
+    // Local history remains available if the backend is offline.
+  }
+}
+
+export const syncSmartAskHistoryFromServer = async () => {
+  ensureLoaded()
+  if (typeof window === 'undefined') return historySessions.value
+  try {
+    const localItems = clone(historySessions.value)
+    const response = await getSmartAskReportHistory(50)
+    const remoteItems = Array.isArray(response?.history) ? response.history : []
+    historySessions.value = mergeHistoryItems(localItems, remoteItems)
+    persistSmartAskHistory()
+
+    const remoteIds = new Set(remoteItems.map(item => item?.id).filter(Boolean))
+    localItems
+      .filter(item => item?.id && !remoteIds.has(item.id))
+      .forEach(item => { pushHistoryToServer(item) })
+  } catch {
+    // Keep localStorage as the fallback cache.
+  }
+  return historySessions.value
+}
+
 export const upsertSmartAskHistory = (payload) => {
   ensureLoaded()
   const nextItem = clone(payload)
@@ -77,6 +132,7 @@ export const upsertSmartAskHistory = (payload) => {
     ...historySessions.value.filter(item => item.id !== nextItem.id),
   ].slice(0, 50)
   persistSmartAskHistory()
+  pushHistoryToServer(nextItem)
   return nextItem.id
 }
 
@@ -87,12 +143,18 @@ export const removeSmartAskHistory = (id) => {
     activeHistoryId.value = ''
   }
   persistSmartAskHistory()
+  if (id) {
+    deleteSmartAskReportHistory(id).catch(() => {})
+  }
 }
 
 export const clearSmartAskHistory = () => {
   ensureLoaded()
   historySessions.value = []
+  activeHistoryId.value = ''
+  pendingRestoreId.value = ''
   persistSmartAskHistory()
+  clearSmartAskReportHistory().catch(() => {})
 }
 
 export const findSmartAskHistoryById = (id) => {
@@ -119,6 +181,7 @@ export const useSmartAskHistory = () => ({
   buildHistoryScope: buildSmartAskHistoryScope,
   setHistoryScope: setSmartAskHistoryScope,
   loadHistory: loadSmartAskHistory,
+  syncHistory: syncSmartAskHistoryFromServer,
   upsertHistory: upsertSmartAskHistory,
   removeHistory: removeSmartAskHistory,
   clearHistory: clearSmartAskHistory,

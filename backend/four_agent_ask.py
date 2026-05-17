@@ -20,7 +20,7 @@ from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
 from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
-from data_permission_store import apply_row_level_filter, load_data_permissions
+from data_permission_store import apply_row_level_filter, load_data_permissions, org_mention_permission_check, user_org_scope_for_rule
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
 import dataset_report_config as report_config_store
 from report_spec_builder import build_report_spec
@@ -2181,11 +2181,15 @@ class FourAgentAskService:
         row_security_lines = []
         if row_security.get("mode") == "org_tree":
             row_security_lines.append(
-                "当前数据集启用了组织树数据权限。SQL 最终 SELECT 必须输出组织编码字段，"
-                f"并将对应组织字段别名为：{row_security.get('organization_field') or '组织编码'}。"
+                "当前数据集启用了组织树数据权限。SQL 最终 SELECT 必须保留可识别组织范围的结果列，"
+                "优先输出 节点名称、上级名称、分公司、事业部、业务部、代表处；如源数据有编码，也输出组织编码。"
             )
             row_security_lines.append(
-                "该列的值必须与员工授权组织节点编码一致；不要在最终 SELECT 中遗漏或改名。"
+                "系统会在执行前二次套行级过滤；如果最终结果没有任何组织列，普通用户可能查询不到数据。"
+            )
+            row_security_lines.append(
+                f"当前用户授权组织名称：{', '.join(row_security.get('allowed_names') or []) or '无'}；"
+                f"授权组织编码：{', '.join(row_security.get('allowed_codes') or []) or '无'}。"
             )
         dictionary_lines = []
         for item in context.get("data_dictionary", [])[:150]:
@@ -2444,8 +2448,13 @@ LIMIT 100
         return ""
 
     def _build_consumer_business_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
+        asks_branch_extremes = (
+            "分公司" in normalized_question
+            and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
+            and any(token in normalized_question for token in ["对比", "比较", "差距", "差异", "二者", "两家", "任务体量", "实际开单", "缺口"])
+        )
         entity_names = self._resolved_entity_names(context)
-        if not entity_names:
+        if not entity_names and not asks_branch_extremes:
             for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:分公司|城市公司|城市分公司|事业部)", normalized_question):
                 cleaned = match.strip("，,、 和与及的业绩情况表现整体")
                 if cleaned and cleaned not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
@@ -2465,7 +2474,7 @@ WHERE 节点名称 = '消费者事业部'
    )
 """
 
-        return f"""
+        base_sql = """
 WITH 字段提取 AS (
     SELECT
         id,
@@ -2545,6 +2554,60 @@ WITH 字段提取 AS (
     WHERE 节点名称 <> ''
       AND (总任务金额 > 0 OR 年度开单金额 > 0)
 )
+""".strip()
+
+        if asks_branch_extremes:
+            return f"""
+{base_sql},
+分公司排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (ORDER BY 达成率 DESC, 年度开单金额 DESC, 节点名称) AS 达成率正序排名,
+        ROW_NUMBER() OVER (ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称) AS 达成率倒序排名
+    FROM 汇总结果
+    WHERE 层级 = '分公司'
+),
+头尾分公司 AS (
+    SELECT
+        CASE WHEN 达成率正序排名 = 1 THEN '达成率最高'
+             WHEN 达成率倒序排名 = 1 THEN '达成率最低'
+             ELSE '对比对象'
+        END AS 对比角色,
+        *
+    FROM 分公司排序
+    WHERE 达成率正序排名 = 1 OR 达成率倒序排名 = 1
+)
+SELECT
+    对比角色,
+    条线,
+    层级,
+    节点名称,
+    上级名称,
+    总任务金额,
+    年度开单金额,
+    剩余任务金额,
+    达成率,
+    达成率正序排名,
+    达成率倒序排名,
+    线下任务_万元,
+    新零售任务_万元,
+    燃气定制任务_万元,
+    地产任务_万元,
+    线下实际_万元,
+    新零售实际_万元,
+    燃气定制实际_万元,
+    地产实际_万元,
+    MAX(总任务金额) OVER () - MIN(总任务金额) OVER () AS 任务体量差额,
+    MAX(年度开单金额) OVER () - MIN(年度开单金额) OVER () AS 实际开单差额,
+    MAX(剩余任务金额) OVER () - MIN(剩余任务金额) OVER () AS 缺口差额,
+    MAX(达成率) OVER () - MIN(达成率) OVER () AS 达成率差距
+FROM 头尾分公司
+ORDER BY CASE 对比角色 WHEN '达成率最高' THEN 1 WHEN '达成率最低' THEN 2 ELSE 9 END, 节点名称
+LIMIT 2
+""".strip()
+
+        return f"""
+{base_sql}
 SELECT *
 FROM 汇总结果
 {scope_filter}
@@ -2579,11 +2642,19 @@ LIMIT 10000
             and any(token in normalized_question for token in ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"])
         )
         force_resolved_scope_rule = bool(rule_based_sql and self._resolved_entity_names(context))
-        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule):
+        force_descendant_scope_rule = (
+            defer_rule_fallback
+            and rule_based_sql
+            and re.search(r"(?:代表处|分公司|业务部)", normalized_question)
+            and any(token in normalized_question for token in ["下面", "下级", "业务代表", "业务员", "人员", "的人", "明细", "咋样", "怎么样"])
+        )
+        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule or force_descendant_scope_rule):
             self._append_trace(
                 trace,
                 "agent2.sql_generate.grouped_rule" if force_grouped_ranking else (
-                    "agent2.sql_generate.resolved_scope_rule" if force_resolved_scope_rule else "agent2.sql_generate.rule_based"
+                    "agent2.sql_generate.resolved_scope_rule" if force_resolved_scope_rule else (
+                        "agent2.sql_generate.descendant_scope_rule" if force_descendant_scope_rule else "agent2.sql_generate.rule_based"
+                    )
                 ),
                 "info",
                 sql=self._truncate_text(rule_based_sql, 12000),
@@ -2591,7 +2662,9 @@ LIMIT 10000
             return {
                 "sql": rule_based_sql,
                 "notes": "grouped hierarchy ranking rule" if force_grouped_ranking else (
-                    "semantic entity scope resolved; used stable hierarchy sql" if force_resolved_scope_rule else "rule based sql fallback"
+                    "semantic entity scope resolved; used stable hierarchy sql" if force_resolved_scope_rule else (
+                        "explicit descendant scope; used stable hierarchy sql" if force_descendant_scope_rule else "rule based sql fallback"
+                    )
                 ),
             }
         seed_block = ""
@@ -2794,6 +2867,40 @@ Agent1 路由结果：
         trace: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         dataset = self._safe_dict(context.get("dataset"))
+        normalized_question = str(question or "").replace("\n", " ").strip()
+        needs_descendant_rows = (
+            re.search(r"(?:代表处|分公司|业务部)", normalized_question)
+            and any(token in normalized_question for token in ["下面", "下级", "业务代表", "业务员", "人员", "的人", "明细", "咋样", "怎么样"])
+        )
+        if needs_descendant_rows:
+            normalized_sql = str(sql_text or "")
+            has_hierarchy_columns = all(token in normalized_sql for token in ["节点名称", "上级名称", "层级"])
+            has_descendant_filter = (
+                "业务代表" in normalized_sql
+                and (
+                    "上级名称 IN" in normalized_sql
+                    or "子节点.上级名称" in normalized_sql
+                    or "WITH RECURSIVE" in normalized_sql.upper()
+                    or re.search(r"层级\s*=\s*'业务代表'", normalized_sql)
+                )
+            )
+            if not (has_hierarchy_columns and has_descendant_filter):
+                rule_sql = self._build_rule_based_sql(question, route, context)
+                if rule_sql:
+                    self._append_trace(
+                        trace,
+                        "agent3.sql_review.descendant_rule_fix",
+                        "warning",
+                        review_summary="问题要求查看下级人员，已改用稳定层级 SQL 返回命中节点和业务代表明细。",
+                        sql=self._truncate_text(rule_sql, 12000),
+                    )
+                    return {
+                        "approved": True,
+                        "final_sql": rule_sql,
+                        "review_summary": "已修正为下钻链路 SQL：返回命中组织及下级人员明细。",
+                        "risks": [],
+                        "fixes": ["使用稳定层级 SQL，避免只返回上级汇总行。"],
+                    }
         if self._is_read_only_sql(sql_text) and "angel_group_data" in str(sql_text):
             self._append_trace(
                 trace,
@@ -3079,12 +3186,52 @@ Agent3 复核结果：
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
             dataset_meta = self._safe_dict(context.get("dataset"))
             permission_rule = (load_data_permissions().get("rules") or {}).get(str(int(dataset_id))) or {}
+            user_scope = user_org_scope_for_rule(current_user or {}, permission_rule) if permission_rule.get("mode") == "org_tree" else {}
             context["row_security"] = {
                 "mode": permission_rule.get("mode") or "public",
                 "tree_type_id": permission_rule.get("tree_type_id") or "",
                 "tree_type_ids": permission_rule.get("tree_type_ids") or ([permission_rule.get("tree_type_id")] if permission_rule.get("tree_type_id") else []),
                 "organization_field": self._safe_dict(permission_rule.get("scope")).get("organization_field") or "组织编码",
+                "allowed_codes": user_scope.get("codes") or [],
+                "allowed_names": user_scope.get("names") or [],
             }
+            org_permission = org_mention_permission_check(
+                current_user or {},
+                int(dataset_id),
+                route.get("refined_query", question),
+            )
+            if not org_permission.get("ok", True):
+                result = {
+                    "error": org_permission.get("message") or "当前账号没有查询该组织范围的权限。",
+                    "diagnostics": {
+                        "dataset_id": int(dataset_id),
+                        "dataset_name": dataset_meta.get("dataset_name"),
+                        "blocked_mentions": org_permission.get("blocked_mentions") or [],
+                        "allowed_names": org_permission.get("allowed_names") or [],
+                        "allowed_codes": org_permission.get("allowed_codes") or [],
+                        "user_org_node_ids": (current_user or {}).get("organization_node_ids") or [],
+                    },
+                    "question": question,
+                    "route": route,
+                    "confidence": self._build_confidence_payload(route),
+                    "dataset_results": [],
+                    "sql": "",
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                    "analysis": "",
+                    "steps": steps,
+                    "requires_confirmation": False,
+                    "total_duration": round(time.time() - started, 2),
+                }
+                self._append_trace(
+                    trace,
+                    "data_permission.org_mention_denied",
+                    "warning",
+                    **result["diagnostics"],
+                )
+                self._flush_trace(trace, result)
+                return result
             saved_report_config = report_config_store.get_config(int(dataset_id))
             report_config_source = "dataset_config" if saved_report_config else "default"
             report_config = saved_report_config or report_config_store.get_default_config()
@@ -3113,6 +3260,7 @@ Agent3 复核结果：
                     "track": report_config.get("trackColumn"),
                 },
                 resolved_entities=context.get("resolved_entities"),
+                row_security=context.get("row_security"),
             )
             prompts = context.get("agent_prompts", {})
             agent2_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(2, []))
@@ -3208,6 +3356,15 @@ Agent3 复核结果：
             step_started = time.time()
             try:
                 final_sql = apply_row_level_filter(final_sql, current_user or {}, int(dataset_id))
+                self._append_trace(
+                    trace,
+                    "pipeline.row_security_applied",
+                    "info",
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_meta.get("dataset_name"),
+                    scope=context.get("row_security"),
+                    sql=self._truncate_text(final_sql, 12000),
+                )
                 result = self._execute_sql(
                     context["dataset"]["source_id"],
                     final_sql,
@@ -3242,6 +3399,16 @@ Agent3 复核结果：
                         repaired_final_sql = (repair_review.get("final_sql") or repaired_sql).strip()
                         if not self._is_read_only_sql(repaired_final_sql):
                             raise ValueError("SQL 自动修复结果未通过只读校验")
+                        repaired_final_sql = apply_row_level_filter(repaired_final_sql, current_user or {}, int(dataset_id))
+                        self._append_trace(
+                            trace,
+                            "pipeline.row_security_applied_after_repair",
+                            "info",
+                            dataset_id=dataset_id,
+                            dataset_name=dataset_meta.get("dataset_name"),
+                            scope=context.get("row_security"),
+                            sql=self._truncate_text(repaired_final_sql, 12000),
+                        )
                         result = self._execute_sql(
                             context["dataset"]["source_id"],
                             repaired_final_sql,
@@ -3497,7 +3664,15 @@ Agent3 复核结果：
                 if allowed_set is not None:
                     selected_dataset_ids = [item for item in selected_dataset_ids if item in allowed_set]
                 if not selected_dataset_ids:
-                    result = {"error": "当前账号没有访问所选数据集的权限。请联系超级管理员调整数据权限。"}
+                    result = {
+                        "error": "当前账号没有访问所选数据集的权限。请联系超级管理员调整数据权限。",
+                        "diagnostics": {
+                            "requested_dataset_ids": preferred_dataset_ids or [],
+                            "allowed_dataset_ids": allowed_dataset_ids or [],
+                            "user_org_codes": (current_user or {}).get("organization_codes") or [],
+                            "user_org_node_ids": (current_user or {}).get("organization_node_ids") or [],
+                        },
+                    }
                     self._append_trace(trace, "data_permission.denied", "warning", preferred_dataset_ids=preferred_dataset_ids)
                     self._flush_trace(trace, result)
                     return result
@@ -3541,7 +3716,15 @@ Agent3 复核结果：
             if allowed_set is not None:
                 route = self._filter_route_by_allowed_datasets(route, allowed_set)
                 if not route.get("dataset_ids"):
-                    result = {"error": "当前账号没有可访问的数据集。请联系超级管理员调整数据权限。"}
+                    result = {
+                        "error": "当前账号没有可访问的数据集。请联系超级管理员调整数据权限。",
+                        "diagnostics": {
+                            "allowed_dataset_ids": allowed_dataset_ids or [],
+                            "user_org_codes": (current_user or {}).get("organization_codes") or [],
+                            "user_org_node_ids": (current_user or {}).get("organization_node_ids") or [],
+                            "route_before_filter": route,
+                        },
+                    }
                     self._append_trace(trace, "data_permission.no_allowed_dataset", "warning", allowed_dataset_ids=allowed_dataset_ids or [])
                     self._flush_trace(trace, result)
                     return result

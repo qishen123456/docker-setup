@@ -352,20 +352,148 @@ def _sql_literal(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _nodes_for_scope(node_ids: List[str], tree_type_id: str) -> List[Dict[str, Any]]:
+    nodes = _org_node_tree_map()
+    return [
+        nodes[node_id]
+        for node_id in _expand_node_ids_for_tree(node_ids, tree_type_id)
+        if nodes.get(node_id)
+    ]
+
+
+def user_org_scope_for_rule(user: Dict[str, Any], rule: Dict[str, Any]) -> Dict[str, Any]:
+    tree_type_ids = _rule_tree_type_ids(rule)
+    if not tree_type_ids:
+        return {"codes": [], "names": [], "node_ids": [], "tree_type_ids": []}
+
+    codes: List[str] = []
+    names: List[str] = []
+    node_ids: List[str] = []
+    seen_codes = set()
+    seen_names = set()
+    seen_nodes = set()
+
+    for tree_type_id in tree_type_ids:
+        rule_nodes = _nodes_for_scope(_as_list(rule.get("organization_node_ids")), tree_type_id)
+        user_nodes = _nodes_for_scope(_as_list(user.get("organization_node_ids")), tree_type_id)
+        if not rule_nodes or not user_nodes:
+            continue
+        user_codes = {_as_text(node.get("code")).lower() for node in user_nodes if _as_text(node.get("code"))}
+        user_node_ids = {str(node.get("id")) for node in user_nodes if node.get("id")}
+        for node in rule_nodes:
+            code = _as_text(node.get("code"))
+            node_id = str(node.get("id") or "")
+            if not ((code and code.lower() in user_codes) or (node_id and node_id in user_node_ids)):
+                continue
+            name = _as_text(node.get("name"))
+            if code and code.lower() not in seen_codes:
+                seen_codes.add(code.lower())
+                codes.append(code)
+            if name and name.lower() not in seen_names:
+                seen_names.add(name.lower())
+                names.append(name)
+            if node_id and node_id not in seen_nodes:
+                seen_nodes.add(node_id)
+                node_ids.append(node_id)
+
+    return {"codes": codes, "names": names, "node_ids": node_ids, "tree_type_ids": tree_type_ids}
+
+
+def _node_mention_aliases(name: str, code: str = "") -> List[str]:
+    aliases: List[str] = []
+    for value in (name, code):
+        text = _as_text(value)
+        if len(text) >= 2:
+            aliases.append(text)
+    suffixes = ("事业部", "分公司", "业务部", "代表处", "城市公司", "公司", "部门")
+    for suffix in suffixes:
+        text = _as_text(name)
+        if text.endswith(suffix):
+            short = text[: -len(suffix)]
+            if len(short) >= 2:
+                aliases.append(short)
+    result: List[str] = []
+    seen = set()
+    for item in aliases:
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
+def org_mention_permission_check(
+    user: Dict[str, Any],
+    dataset_id: int,
+    question: str,
+    permissions: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    user = user if isinstance(user, dict) else {}
+    if user.get("role") == "super_admin":
+        return {"ok": True}
+    data = permissions or load_data_permissions()
+    rule = (data.get("rules") or {}).get(str(int(dataset_id))) or {}
+    if rule.get("mode") != "org_tree":
+        return {"ok": True}
+
+    text = _as_text(question)
+    scope = user_org_scope_for_rule(user, rule)
+    allowed_node_ids = {str(item) for item in scope.get("node_ids") or []}
+    blocked: List[str] = []
+    seen_blocked = set()
+    for tree_type_id in _rule_tree_type_ids(rule):
+        for node in _nodes_for_scope(_as_list(rule.get("organization_node_ids")), tree_type_id):
+            node_id = str(node.get("id") or "")
+            if node_id in allowed_node_ids:
+                continue
+            name = _as_text(node.get("name"))
+            code = _as_text(node.get("code"))
+            if any(alias and alias in text for alias in _node_mention_aliases(name, code)):
+                key = (name or code).lower()
+                if key and key not in seen_blocked:
+                    seen_blocked.add(key)
+                    blocked.append(name or code)
+
+    ok = not blocked
+    return {
+        "ok": ok,
+        "blocked_mentions": blocked,
+        "allowed_names": scope.get("names") or [],
+        "allowed_codes": scope.get("codes") or [],
+        "dataset_id": int(dataset_id),
+        "mode": rule.get("mode") or "",
+        "message": "" if ok else (
+            f"当前账号仅授权查看：{', '.join(scope.get('names') or scope.get('codes') or ['未授权组织'])}；"
+            f"不能查询：{', '.join(blocked)}。"
+        ),
+    }
+
+
 def apply_row_level_filter(sql: str, user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> str:
     data = permissions or load_data_permissions()
     rule = (data.get("rules") or {}).get(str(int(dataset_id))) or {}
     if (user or {}).get("role") == "super_admin" or rule.get("mode") != "org_tree":
         return sql
     field = _as_text((rule.get("scope") or {}).get("organization_field")) or "组织编码"
-    if not field:
-        return sql
-    values = user_org_codes_for_rule(user or {}, rule)
-    if not values:
+    scope = user_org_scope_for_rule(user or {}, rule)
+    codes = scope.get("codes") or []
+    names = scope.get("names") or []
+    if not codes and not names:
         condition = "1 = 0"
     else:
-        literals = ", ".join(_sql_literal(item) for item in values)
-        condition = f"CAST({_quote_identifier(field)} AS TEXT) IN ({literals})"
+        conditions: List[str] = []
+        if codes:
+            code_literals = ", ".join(_sql_literal(item) for item in codes)
+            for candidate in _as_list([field, "组织编码", "分公司编码", "部门编码", "节点编码"]):
+                conditions.append(f"(to_jsonb(__smartask_row_scope)->>{_sql_literal(candidate)}) IN ({code_literals})")
+        if names:
+            name_literals = ", ".join(_sql_literal(item) for item in names)
+            for candidate in _as_list([
+                "节点名称", "上级名称", "组织名称", "分公司", "事业部", "业务部",
+                "代表处", "城市公司", "部门", "条线", "区域", "公司名称",
+            ]):
+                conditions.append(f"(to_jsonb(__smartask_row_scope)->>{_sql_literal(candidate)}) IN ({name_literals})")
+        condition = "(" + " OR ".join(conditions) + ")" if conditions else "1 = 0"
     return f"SELECT * FROM (\n{sql.strip().rstrip(';')}\n) AS __smartask_row_scope\nWHERE {condition}"
 
 

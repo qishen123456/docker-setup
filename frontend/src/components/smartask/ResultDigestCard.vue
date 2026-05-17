@@ -73,26 +73,32 @@
           <span>缺口</span>
           <span>达成率</span>
         </div>
-        <div v-for="row in secondaryDrillRows" :key="`drill-${row.name}`" class="sa-drill-row" role="row">
-          <div class="sa-drill-node">
-            <strong>{{ row.name }}</strong>
-            <span>{{ row.level || secondaryLevelLabel }}</span>
+        <template v-for="group in secondaryDrillGroups" :key="group.key">
+          <div v-if="group.title" class="sa-drill-group-row" role="row">
+            <span>{{ group.title }}</span>
+            <small>{{ group.rows.length }}个{{ secondaryLevelLabel }}</small>
           </div>
-          <div class="sa-drill-number">
-            <strong>{{ row.taskText || '-' }}</strong>
-            <span>完成 {{ row.actualText || '-' }}</span>
-          </div>
-          <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
-          <div class="sa-drill-rate" :class="secondaryRateTone(row)">
-            <div class="sa-drill-rate-head">
-              <strong>{{ row.rateText || '-' }}</strong>
-              <span>{{ secondaryRateHint(row) }}</span>
+          <div v-for="(row, index) in group.rows" :key="`drill-${row.level}-${row.parent}-${row.name}-${index}`" class="sa-drill-row" role="row">
+            <div class="sa-drill-node">
+              <strong>{{ row.name }}</strong>
+              <span>{{ row.level || secondaryLevelLabel }}</span>
             </div>
-            <div class="sa-drill-bar" aria-hidden="true">
-              <i :style="{ width: secondaryBarWidth(row) }"></i>
+            <div class="sa-drill-number">
+              <strong>{{ row.taskText || '-' }}</strong>
+              <span>完成 {{ row.actualText || '-' }}</span>
+            </div>
+            <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
+            <div class="sa-drill-rate" :class="secondaryRateTone(row)">
+              <div class="sa-drill-rate-head">
+                <strong>{{ row.rateText || '-' }}</strong>
+                <span>{{ secondaryRateHint(row) }}</span>
+              </div>
+              <div class="sa-drill-bar" aria-hidden="true">
+                <i :style="{ width: secondaryBarWidth(row) }"></i>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -796,13 +802,27 @@ const focusDrillRows = computed(() => {
   return rows.filter(item => item.name !== singleFocusRow.value?.name)
 })
 
+const comparisonDrillRows = computed(() => {
+  if (comparisonDigestRows.value.length < 2) return []
+  const parentNames = new Set(comparisonDigestRows.value.map(item => item.name).filter(Boolean))
+  if (!parentNames.size) return []
+  return normalizedRows.value.filter(item => (
+    item.rate !== null &&
+    parentNames.has(item.parent) &&
+    !parentNames.has(item.name)
+  ))
+})
+
 const secondaryDrillAllRows = computed(() => {
-  const source = focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value
+  const source = comparisonDrillRows.value.length
+    ? comparisonDrillRows.value
+    : (focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value)
   const unique = []
   const seen = new Set()
   source.forEach((item) => {
-    if (!item?.name || item.name === singleFocusName.value || seen.has(item.name)) return
-    seen.add(item.name)
+    const key = `${item?.level || ''}|${item?.parent || ''}|${item?.name || ''}`
+    if (!item?.name || item.name === singleFocusName.value || seen.has(key)) return
+    seen.add(key)
     unique.push(item)
   })
   const ranked = unique
@@ -813,20 +833,27 @@ const secondaryDrillAllRows = computed(() => {
   return rows
 })
 
-const secondaryDrillRows = computed(() => {
-  const rows = secondaryDrillAllRows.value
-  if (rows.length <= 20) return rows
-  const ranked = rows.filter(item => item.rate !== null)
-  const leaders = ranked.slice(0, 10)
-  const laggards = [...ranked].reverse().slice(0, 10)
-  const fallback = rows.filter(item => item.rate === null)
-  const picked = [...leaders, ...laggards, ...fallback]
-  const pickedSeen = new Set()
-  return picked.filter((item) => {
-    if (pickedSeen.has(item.name)) return false
-    pickedSeen.add(item.name)
-    return true
-  }).slice(0, 20)
+const secondaryDrillRows = computed(() => secondaryDrillAllRows.value)
+
+const secondaryDrillGroups = computed(() => {
+  const rows = secondaryDrillRows.value
+  const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
+  const shouldGroup = comparisonDigestRows.value.length >= 2 && parents.length >= 2
+  if (!shouldGroup) return [{ key: 'all', title: '', rows }]
+
+  const parentOrder = comparisonDigestRows.value.map(item => item.name).filter(Boolean)
+  const orderedParents = [
+    ...parentOrder.filter(name => parents.includes(name)),
+    ...parents.filter(name => !parentOrder.includes(name)),
+  ]
+
+  return orderedParents
+    .map(parent => ({
+      key: `group-${parent}`,
+      title: parent,
+      rows: rows.filter(item => item.parent === parent),
+    }))
+    .filter(group => group.rows.length)
 })
 
 const secondaryLevelLabel = computed(() => (
@@ -1259,6 +1286,33 @@ const actionItems = computed(() => {
   font-weight: 700;
 }
 
+.sa-drill-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid rgba(22, 93, 255, 0.08);
+  background: linear-gradient(90deg, rgba(22, 93, 255, 0.08), rgba(22, 93, 255, 0.02));
+}
+
+.sa-drill-group-row span {
+  min-width: 0;
+  color: #165dff;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-drill-group-row small {
+  flex: 0 0 auto;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .sa-drill-node,
 .sa-drill-number,
 .sa-drill-rate {
@@ -1593,6 +1647,12 @@ const actionItems = computed(() => {
 
   .sa-drill-row.is-head {
     display: none;
+  }
+
+  .sa-drill-group-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 }
 

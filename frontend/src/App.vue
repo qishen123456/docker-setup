@@ -335,6 +335,7 @@ const {
   buildHistoryScope,
   setHistoryScope,
   loadHistory,
+  syncHistory,
   removeHistory,
   clearHistory,
   requestRestore,
@@ -462,8 +463,10 @@ const refreshAuthUser = async () => {
     const data = await getCurrentUser()
     authUser.value = data?.authenticated ? (data.user || {}) : null
     syncHistoryScope()
-    if (authUser.value) await loadFeatureFlags(true)
-    else clearFeatureFlags()
+    if (authUser.value) {
+      await loadFeatureFlags(true)
+      await syncHistory()
+    } else clearFeatureFlags()
   } catch {
     authUser.value = null
     clearFeatureFlags()
@@ -484,8 +487,10 @@ const syncHistoryScope = () => {
 const handleAuthenticated = async (user) => {
   authUser.value = user || null
   syncHistoryScope()
-  if (authUser.value) await loadFeatureFlags(true)
-  else clearFeatureFlags()
+  if (authUser.value) {
+    await loadFeatureFlags(true)
+    await syncHistory()
+  } else clearFeatureFlags()
   authReady.value = true
   enforceRouteAccess()
 }
@@ -804,11 +809,13 @@ watch(() => route.path, (path) => {
   enforceRouteAccess()
   if (path === '/smart-ask') {
     loadHistory()
+    syncHistory()
   }
 })
 
 watch(authUser, () => {
   syncHistoryScope()
+  if (authUser.value) syncHistory()
   enforceRouteAccess()
 })
 onMounted(() => {

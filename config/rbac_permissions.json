@@ -140,6 +140,7 @@
         "app_password_change",
         "chart_viewer",
         "dataset_management",
+        "debug_execution_trace",
         "report_fullscreen",
         "smart_ask_workspace",
         "smart_confirm_scope",
@@ -199,6 +200,6 @@
       "user_ids": []
     }
   ],
-  "updated_at": "2026-05-15 15:58:46",
+  "updated_at": "2026-05-15 20:51:52",
   "updated_by": "admin"
 }

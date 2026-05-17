@@ -38,6 +38,7 @@ RUNTIME_CONFIG_FILES = [
     "organization_trees.json",
     "feature_flags.json",
     "query_history.json",
+    "smartask_report_history.json",
 ]
 
 EXCLUDED_CONFIG_FILES = {

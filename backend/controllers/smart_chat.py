@@ -19,9 +19,50 @@ import dataset_report_config as drc
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
 from system_log_store import log_event, request_snapshot
+from smartask_report_history_store import (
+    clear_history as clear_report_history,
+    list_history as list_report_history,
+    remove_history as remove_report_history,
+    upsert_history as upsert_report_history,
+)
 
 
 smart_chat_bp = Blueprint("smart_chat", __name__)
+
+
+@smart_chat_bp.route("/api/smart-chat/report-history", methods=["GET"])
+def get_report_history():
+    user = get_current_user()
+    limit = _safe_int(request.args.get("limit"), 50)
+    return jsonify({"history": list_report_history(user, limit=limit)})
+
+
+@smart_chat_bp.route("/api/smart-chat/report-history", methods=["POST"])
+def save_report_history():
+    user = get_current_user()
+    payload = request.get_json() or {}
+    item = payload.get("item") if isinstance(payload.get("item"), dict) else payload
+    if not isinstance(item, dict) or not item.get("id"):
+        return jsonify({"error": "history item id is required."}), 400
+    try:
+        saved = upsert_report_history(user, item)
+        return jsonify({"success": True, "item": saved})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@smart_chat_bp.route("/api/smart-chat/report-history/<item_id>", methods=["DELETE"])
+def delete_report_history_item(item_id):
+    user = get_current_user()
+    remove_report_history(user, item_id)
+    return jsonify({"success": True})
+
+
+@smart_chat_bp.route("/api/smart-chat/report-history", methods=["DELETE"])
+def clear_report_history_items():
+    user = get_current_user()
+    clear_report_history(user)
+    return jsonify({"success": True})
 
 
 def _active_dataset_ids() -> list[int]:
@@ -48,6 +89,19 @@ def _filter_requested_dataset_ids(user: dict, selected_dataset_ids):
         if dataset_id in allowed and dataset_id not in filtered:
             filtered.append(dataset_id)
     return filtered
+
+
+def _permission_denied_response(user: dict, requested_dataset_ids, allowed_dataset_ids):
+    return jsonify({
+        "error": "当前账号没有访问所选数据集的权限。",
+        "diagnostics": {
+            "requested_dataset_ids": requested_dataset_ids or [],
+            "allowed_dataset_ids": allowed_dataset_ids or [],
+            "user_role": (user or {}).get("role"),
+            "user_org_codes": (user or {}).get("organization_codes") or [],
+            "user_org_node_ids": (user or {}).get("organization_node_ids") or [],
+        },
+    }), 403
 
 
 def _append_controller_debug(event: str, **payload):
@@ -243,7 +297,7 @@ def smart_chat():
         allowed_dataset_ids = _allowed_dataset_ids(user)
         selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
         if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
-            return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
+            return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
         _append_controller_debug(
             "smart_chat.service.ask.start",
@@ -316,7 +370,7 @@ def smart_chat_stream():
     allowed_dataset_ids = _allowed_dataset_ids(user)
     selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
     if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
-        return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
+        return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
     # Normalize model_id
     if model_id is not None:
@@ -438,7 +492,7 @@ def confirm_by_boss():
         allowed_dataset_ids = _allowed_dataset_ids(user)
         selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
         if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
-            return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
+            return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
         result = four_agent_ask_service.confirm_by_boss(
             session_id=session_id,
@@ -496,7 +550,7 @@ def confirm_by_boss_stream():
     allowed_dataset_ids = _allowed_dataset_ids(user)
     selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
     if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
-        return jsonify({"error": "当前账号没有访问所选数据集的权限"}), 403
+        return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
     def event_stream():
         event_queue: "queue.Queue[dict]" = queue.Queue()

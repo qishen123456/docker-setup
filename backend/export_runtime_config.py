@@ -13,6 +13,7 @@ Files captured (existing only, missing files are simply skipped):
     config/organization_trees.json
     config/feature_flags.json
     config/query_history.json
+    config/smartask_report_history.json
 
 Sensitive fields (`password_b64`, `api_key_b64`, `app_secret`) are kept AS-IS
 because they are already obfuscated/encrypted by config_manager.
@@ -48,6 +49,7 @@ CAPTURED_FILES = [
     "organization_trees.json",
     "feature_flags.json",
     "query_history.json",
+    "smartask_report_history.json",
 ]
 
 

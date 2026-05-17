@@ -2920,6 +2920,26 @@ const syncPendingConfirmationMessage = () => {
   scheduleChatScroll(36, 'smooth')
 }
 
+const syncCompletedResultMessage = () => {
+  const result = session.state.result
+  if (session.state.status !== 'completed' || !result || result?.requires_confirmation || result?.error) return
+
+  const msg = latestAiMessage.value
+  if (!msg || msg.role !== 'ai') return
+
+  const sameQuestion = !result.question || !session.state.question || result.question === session.state.question
+  if (!sameQuestion) return
+
+  const needsSync = msg.loading || !msg.data || !Array.isArray(msg.data?.dataset_results)
+  if (!needsSync) return
+
+  msg.loading = false
+  msg.data = JSON.parse(JSON.stringify(result))
+  thinkingOpen[msg.id] = false
+  stopTimer()
+  scheduleChatScroll(48, 'smooth')
+}
+
 const shouldShowLiveFeed = (msg) => {
   if (msg?.loading) return true
   if (!session.state.logs.length) return false
@@ -2962,11 +2982,12 @@ const shouldShowResultChain = (msg) => Boolean(
   (getReport(msg) || getPrimaryDataset(msg) || (msg.data && !msg.data.error))
 )
 
-const getDatasets = (msg) => (
-  Array.isArray(msg?.data?.dataset_results)
-    ? msg.data.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
-    : []
-)
+const getDatasets = (msg) => {
+  const raw = Array.isArray(msg?.data?.dataset_results) ? msg.data.dataset_results : []
+  if (!raw.length) return []
+  const visible = raw.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+  return visible.length ? visible : raw
+}
 const getReport = (msg) => mergeDatasetReports(getDatasets(msg))
 const getPrimaryDataset = (msg) => buildAggregateDataset(getDatasets(msg))
 const getResultTitle = (msg) => {
@@ -3932,6 +3953,7 @@ watch(() => session.state.logs.map(log => log.pulseText || '').join('|'), (signa
 
 watch(() => session.state.status, (s) => {
   syncPendingConfirmationMessage()
+  syncCompletedResultMessage()
   if (s === 'completed') {
     nextTick(() => {
       forceScrollChatToBottom('auto')
@@ -3946,6 +3968,7 @@ watch(() => session.state.status, (s) => {
 
 watch(() => session.state.result, () => {
   syncPendingConfirmationMessage()
+  syncCompletedResultMessage()
 }, { flush: 'post' })
 
 watch(() => hasSideReport.value, (ready) => {

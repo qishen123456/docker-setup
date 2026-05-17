@@ -43,6 +43,7 @@ services:
       SMARTASK_DB_PORT: 5432
       SMARTASK_CHROMA_PATH: /app/chroma_db
       SMARTASK_CONFIG_DIR: /app/config
+      SMARTASK_RUNTIME_BACKUP_DIR: /app/backups/runtime
       TZ: Asia/Shanghai
       PYTHONUNBUFFERED: "1"
     depends_on:
@@ -54,6 +55,8 @@ services:
       - smartask_chroma:/app/chroma_db
       - ./logs:/app/logs
       - ./backend/logs:/app/backend/logs
+      # Runtime JSON configs live here, including smartask_report_history.json.
+      # Keep this bind mount when rebuilding so generated report history survives updates.
       - ./config:/app/config
       - ./backend/imports:/app/backend/imports
       - ./backups:/app/backups
@@ -74,9 +77,15 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${SMARTASK_FRONTEND_PORT:-8888}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   smartask_pg_data:

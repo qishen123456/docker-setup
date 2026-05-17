@@ -102,6 +102,7 @@ RUNTIME_CONFIG_FILES=(
   "feature_flags.json"
   "auth_tokens.json"
   "query_history.json"
+  "smartask_report_history.json"
 )
 
 preserve_runtime_config_files() {
