@@ -64,7 +64,56 @@ def _write_store(data: Dict[str, Any]) -> None:
 
 
 def _safe_item(item: Dict[str, Any]) -> Dict[str, Any]:
-    safe = deepcopy(item or {})
+    source = deepcopy(item or {})
+    report_snapshot = source.get("reportSnapshot") if isinstance(source.get("reportSnapshot"), dict) else {}
+    if not report_snapshot.get("result") and isinstance((source.get("sessionState") or {}).get("result"), dict):
+        legacy_result = (source.get("sessionState") or {}).get("result") or {}
+        report_snapshot = {
+            "version": 2,
+            "question": legacy_result.get("question") or source.get("question") or source.get("title") or "",
+            "updatedAt": source.get("updatedAt") or datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+            "datasetId": source.get("datasetId") or legacy_result.get("dataset_id") or None,
+            "datasetName": source.get("datasetName") or legacy_result.get("dataset_name") or "",
+            "result": legacy_result,
+        }
+
+    result = report_snapshot.get("result") if isinstance(report_snapshot.get("result"), dict) else {}
+    if not result:
+        safe = {
+            "id": str(source.get("id") or "").strip(),
+            "title": str(source.get("title") or source.get("question") or "未命名问题")[:24],
+            "question": str(source.get("question") or source.get("title") or ""),
+            "datasetId": source.get("datasetId"),
+            "datasetName": source.get("datasetName") or "自动路由数据集",
+            "updatedAt": source.get("updatedAt") or datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+            "reportSnapshot": {},
+        }
+    else:
+        question = str(
+            source.get("question")
+            or report_snapshot.get("question")
+            or result.get("question")
+            or source.get("title")
+            or "未命名问题"
+        ).strip()
+        dataset_results = result.get("dataset_results") if isinstance(result.get("dataset_results"), list) else []
+        first_dataset = dataset_results[0] if dataset_results and isinstance(dataset_results[0], dict) else {}
+        updated_at = source.get("updatedAt") or report_snapshot.get("updatedAt") or datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        safe = {
+            "id": str(source.get("id") or "").strip(),
+            "title": str(source.get("title") or question or "未命名问题")[:24],
+            "question": question,
+            "datasetId": source.get("datasetId") or report_snapshot.get("datasetId") or result.get("dataset_id") or first_dataset.get("dataset_id"),
+            "datasetName": source.get("datasetName") or report_snapshot.get("datasetName") or result.get("dataset_name") or first_dataset.get("dataset_name") or "自动路由数据集",
+            "updatedAt": updated_at,
+            "reportSnapshot": {
+                **report_snapshot,
+                "version": report_snapshot.get("version") or 2,
+                "question": question,
+                "updatedAt": updated_at,
+                "result": result,
+            },
+        }
     safe["id"] = str(safe.get("id") or "").strip()
     safe["updatedAt"] = safe.get("updatedAt") or datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     safe["serverUpdatedAt"] = datetime.now().isoformat(timespec="seconds")
@@ -91,7 +140,10 @@ def upsert_history(user: Dict[str, Any] | None, item: Dict[str, Any]) -> Dict[st
         by_scope = store.setdefault("history_by_scope", {})
         items = by_scope.get(scope) or []
         items = [entry for entry in items if str(entry.get("id")) != safe["id"]]
-        by_scope[scope] = [safe, *items][:MAX_ITEMS_PER_SCOPE]
+        by_scope[scope] = [
+            entry for entry in [safe, *items]
+            if isinstance((entry.get("reportSnapshot") or {}).get("result"), dict)
+        ][:MAX_ITEMS_PER_SCOPE]
         _write_store(store)
     return deepcopy(safe)
 

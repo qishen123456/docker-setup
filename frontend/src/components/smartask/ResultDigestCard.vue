@@ -881,20 +881,47 @@ const secondaryBarWidth = (row) => {
   return `${Math.max(0, Math.min(100, Number(value)))}%`
 }
 
+const secondaryRelativeTier = (row) => {
+  const rows = secondaryDrillAllRows.value
+    .filter(item => item?.rate !== null && item?.rate !== undefined)
+    .sort((left, right) => (right.rate ?? -Infinity) - (left.rate ?? -Infinity))
+  const index = rows.findIndex(item => (
+    item.name === row?.name &&
+    item.parent === row?.parent &&
+    item.level === row?.level
+  ))
+  if (index < 0) return null
+  if (rows.length === 1) return 'single'
+  if (rows.length === 2) return index === 0 ? 'leader' : 'pressure'
+
+  const topCount = Math.max(1, Math.ceil(rows.length / 3))
+  const pressureCount = Math.max(1, Math.floor(rows.length / 3))
+  const pressureStart = rows.length - pressureCount
+  if (index < topCount) return 'leader'
+  if (index >= pressureStart) return 'pressure'
+  return 'steady'
+}
+
 const secondaryRateTone = (row) => {
   const value = row?.rate
   if (value === null || value === undefined) return 'is-neutral'
+  const tier = secondaryRelativeTier(row)
+  if (tier === 'leader') return 'is-success'
+  if (tier === 'pressure') return 'is-danger'
+  if (tier === 'steady') return 'is-warn'
   if (value < riskThreshold.value) return 'is-danger'
-  if (value < 40) return 'is-warn'
-  return 'is-success'
+  return 'is-warn'
 }
 
 const secondaryRateHint = (row) => {
   const value = row?.rate
   if (value === null || value === undefined) return '缺少口径'
+  const tier = secondaryRelativeTier(row)
+  if (tier === 'leader') return '相对领先'
+  if (tier === 'steady') return '稳定推进'
+  if (tier === 'pressure') return value < riskThreshold.value ? '重点风险' : '相对承压'
   if (value < riskThreshold.value) return '预警'
-  if (value < 40) return '需推进'
-  return '相对健康'
+  return '需推进'
 }
 
 const focusDrillRank = computed(() => {

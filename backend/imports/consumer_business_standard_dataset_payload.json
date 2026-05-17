@@ -1218,12 +1218,16 @@
       "line": "业务线贡献"
     },
     "riskThreshold": 10,
-    "benchmarkThreshold": 20,
+    "benchmarkThreshold": 85,
+    "officeRiskThreshold": 10,
+    "officeBenchmarkThreshold": 85,
+    "personRiskThreshold": 10,
+    "personBenchmarkThreshold": 85,
     "signalRules": [
       {
         "key": "rate",
         "op": ">=",
-        "value": 20,
+        "value": 85,
         "tone": "good",
         "label": "标杆"
       },
@@ -1232,7 +1236,7 @@
         "op": ">=",
         "value": 10,
         "tone": "warn",
-        "label": "中等"
+        "label": "需推进"
       },
       {
         "key": "rate",

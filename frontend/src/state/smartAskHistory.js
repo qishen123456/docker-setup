@@ -6,7 +6,7 @@ import {
   saveSmartAskReportHistory,
 } from '../api/index.js'
 
-export const SMART_ASK_HISTORY_KEY = 'smartask_history_sessions_v1'
+export const SMART_ASK_HISTORY_KEY = 'smartask_history_sessions_v2'
 
 const historySessions = ref([])
 const pendingRestoreId = ref('')
@@ -15,6 +15,7 @@ let loaded = false
 let historyScope = 'anonymous'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
+const MAX_HISTORY_ITEMS = 50
 
 const normalizeScopePart = (value) => String(value || '')
   .trim()
@@ -57,7 +58,8 @@ export const loadSmartAskHistory = () => {
 
   try {
     const raw = localStorage.getItem(getScopedHistoryKey())
-    historySessions.value = raw ? JSON.parse(raw) : []
+    const parsed = raw ? JSON.parse(raw) : []
+    historySessions.value = mergeHistoryItems([], Array.isArray(parsed) ? parsed : [])
   } catch {
     historySessions.value = []
   }
@@ -81,18 +83,70 @@ const itemTime = (item) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const normalizeReportSnapshot = (item = {}) => {
+  const snapshot = item.reportSnapshot && typeof item.reportSnapshot === 'object'
+    ? clone(item.reportSnapshot)
+    : null
+  if (snapshot?.result) return snapshot
+
+  const legacyResult = item?.sessionState?.result
+  if (legacyResult && typeof legacyResult === 'object') {
+    return {
+      version: 2,
+      question: legacyResult.question || item.question || item.title || '',
+      updatedAt: item.updatedAt || item.serverUpdatedAt || new Date().toISOString(),
+      datasetId: item.datasetId || legacyResult.dataset_id || legacyResult.datasetId || null,
+      datasetName: item.datasetName || legacyResult.dataset_name || legacyResult.datasetName || '',
+      result: clone(legacyResult),
+    }
+  }
+  return null
+}
+
+const normalizeHistoryItem = (item = {}) => {
+  if (!item?.id) return null
+  const reportSnapshot = normalizeReportSnapshot(item)
+  if (!reportSnapshot?.result) return null
+  const result = reportSnapshot.result || {}
+  const dataset = Array.isArray(result.dataset_results) ? result.dataset_results[0] : null
+  const question = String(
+    item.question ||
+    reportSnapshot.question ||
+    result.question ||
+    item.title ||
+    '未命名问题'
+  ).trim()
+  const updatedAt = item.updatedAt || reportSnapshot.updatedAt || item.serverUpdatedAt || new Date().toLocaleString()
+  return {
+    id: String(item.id),
+    title: String(item.title || question || '未命名问题').slice(0, 24),
+    question,
+    datasetId: item.datasetId || reportSnapshot.datasetId || result.dataset_id || dataset?.dataset_id || null,
+    datasetName: item.datasetName || reportSnapshot.datasetName || result.dataset_name || dataset?.dataset_name || '自动路由数据集',
+    updatedAt,
+    serverUpdatedAt: item.serverUpdatedAt || '',
+    reportSnapshot: {
+      ...reportSnapshot,
+      version: reportSnapshot.version || 2,
+      question,
+      updatedAt,
+    },
+  }
+}
+
 const mergeHistoryItems = (localItems = [], remoteItems = []) => {
   const byId = new Map()
   ;[...remoteItems, ...localItems].forEach((item) => {
-    if (!item?.id) return
-    const existing = byId.get(item.id)
-    if (!existing || itemTime(item) >= itemTime(existing)) {
-      byId.set(item.id, clone(item))
+    const normalized = normalizeHistoryItem(item)
+    if (!normalized?.id) return
+    const existing = byId.get(normalized.id)
+    if (!existing || itemTime(normalized) >= itemTime(existing)) {
+      byId.set(normalized.id, normalized)
     }
   })
   return Array.from(byId.values())
     .sort((a, b) => itemTime(b) - itemTime(a))
-    .slice(0, 50)
+    .slice(0, MAX_HISTORY_ITEMS)
 }
 
 const pushHistoryToServer = async (item) => {
@@ -126,11 +180,12 @@ export const syncSmartAskHistoryFromServer = async () => {
 
 export const upsertSmartAskHistory = (payload) => {
   ensureLoaded()
-  const nextItem = clone(payload)
+  const nextItem = normalizeHistoryItem(payload)
+  if (!nextItem) return ''
   historySessions.value = [
     nextItem,
     ...historySessions.value.filter(item => item.id !== nextItem.id),
-  ].slice(0, 50)
+  ].slice(0, MAX_HISTORY_ITEMS)
   persistSmartAskHistory()
   pushHistoryToServer(nextItem)
   return nextItem.id

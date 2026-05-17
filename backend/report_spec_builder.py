@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Any, Dict, List, Optional
 
@@ -221,11 +222,12 @@ def _layout_template(mode: str) -> str:
 
 
 def _effective_thresholds(config: Dict[str, Any]) -> Dict[str, float]:
+    generic_benchmark = _to_float(config.get("benchmarkThreshold"))
     return {
         "officeRisk": _to_float(config.get("officeRiskThreshold")) or 10,
-        "officeBenchmark": _to_float(config.get("officeBenchmarkThreshold")) or 15,
+        "officeBenchmark": _to_float(config.get("officeBenchmarkThreshold")) or generic_benchmark or 15,
         "personRisk": _to_float(config.get("personRiskThreshold")) or 10,
-        "personBenchmark": _to_float(config.get("personBenchmarkThreshold")) or 20,
+        "personBenchmark": _to_float(config.get("personBenchmarkThreshold")) or generic_benchmark or 20,
     }
 
 
@@ -244,7 +246,7 @@ def _rate_tag(rate: Optional[float], risk: float, benchmark: float, good_label: 
     if tone == "good":
         return f"✅ {good_label}"
     if tone == "warn":
-        return "🟡 中等"
+        return "🟠 需推进"
     if tone == "danger":
         return "⚠️ 风险"
     return "未分级"
@@ -277,19 +279,43 @@ def _dynamic_performance_groups(
         valid_items.append(item)
 
     if len(valid_items) <= 1:
-        return {"good": [], "weak": [], "ranked": valid_items, "canCompare": False}
+        return {
+            "good": [],
+            "middle": [],
+            "weak": [],
+            "ranked": valid_items,
+            "canCompare": False,
+            "mode": "single",
+            "count": len(valid_items),
+        }
 
     ranked = sorted(valid_items, key=lambda item: rate_getter(item) or 0, reverse=True)
-    best_rate = rate_getter(ranked[0])
-    worst_rate = rate_getter(ranked[-1])
-    if best_rate is None or worst_rate is None or best_rate == worst_rate:
-        return {"good": [], "weak": [], "ranked": ranked, "canCompare": False}
+    if len(ranked) == 2:
+        return {
+            "good": ranked[:1],
+            "middle": [],
+            "weak": ranked[1:],
+            "ranked": ranked,
+            "canCompare": True,
+            "mode": "pair",
+            "count": len(ranked),
+        }
 
-    limit = min(_dynamic_group_limit(len(ranked)), len(ranked) // 2)
-    good = ranked[:limit]
-    good_keys = {_item_identity(item) for item in good}
-    weak = [item for item in reversed(ranked[-limit:]) if _item_identity(item) not in good_keys]
-    return {"good": good, "weak": weak, "ranked": ranked, "canCompare": True}
+    top_count = max(1, math.ceil(len(ranked) / 3))
+    weak_count = max(1, math.floor(len(ranked) / 3))
+    middle_count = max(0, len(ranked) - top_count - weak_count)
+    good = ranked[:top_count]
+    middle = ranked[top_count:top_count + middle_count]
+    weak = ranked[top_count + middle_count:]
+    return {
+        "good": good,
+        "middle": middle,
+        "weak": weak,
+        "ranked": ranked,
+        "canCompare": True,
+        "mode": "tiers",
+        "count": len(ranked),
+    }
 
 
 def _dynamic_performance_tag(item: Dict[str, Any], groups: Dict[str, Any]) -> str:
@@ -297,10 +323,35 @@ def _dynamic_performance_tag(item: Dict[str, Any], groups: Dict[str, Any]) -> st
         return "单体"
     key = _item_identity(item)
     if key in {_item_identity(row) for row in groups.get("good", [])}:
-        return "✅ 表现较好"
+        return "✅ 领先主体" if groups.get("mode") == "pair" else "🔵 第一梯队"
+    if key in {_item_identity(row) for row in groups.get("middle", [])}:
+        return "🟡 第二梯队"
     if key in {_item_identity(row) for row in groups.get("weak", [])}:
-        return "⚠️ 相对承压"
-    return "— 中位"
+        return "⚠️ 承压主体" if groups.get("mode") == "pair" else "🟠 第三梯队"
+    return "— 未分层"
+
+
+def _combined_performance_tag(
+    item: Dict[str, Any],
+    groups: Dict[str, Any],
+    rate: Optional[float],
+    risk: float,
+    benchmark: float,
+    good_label: str = "标杆",
+) -> str:
+    absolute_tone = _rate_tone(rate, risk, benchmark)
+    relative_tag = _dynamic_performance_tag(item, groups)
+    if groups.get("mode") == "single" or not groups.get("canCompare"):
+        return _rate_tag(rate, risk, benchmark, good_label)
+    if relative_tag.startswith("✅") or relative_tag.startswith("🔵"):
+        return f"✅ {good_label}" if absolute_tone == "good" else "🔵 相对领先"
+    if relative_tag.startswith("🟡"):
+        if absolute_tone == "danger":
+            return "⚠️ 中位风险"
+        return "🟡 稳定推进"
+    if relative_tag.startswith("⚠️") or relative_tag.startswith("🟠"):
+        return "⚠️ 重点风险" if absolute_tone == "danger" else "🟠 相对承压"
+    return _rate_tag(rate, risk, benchmark, good_label)
 
 
 def _format_dynamic_group(
@@ -583,6 +634,10 @@ def build_report_spec(
         reverse=True,
     )
     node_rank = {node.get("id"): index + 1 for index, node in enumerate(ranked_comparison_nodes)}
+    comparison_groups = _dynamic_performance_groups(
+        comparison_nodes,
+        lambda item: _row_value(item.get("raw") or {}, rate_metric) if rate_metric else None,
+    )
     for node in ranked_comparison_nodes:
         drill_children = _drill_children(node)
         if not drill_children:
@@ -600,7 +655,15 @@ def build_report_spec(
         child_chart_rows = []
         for child in sorted_children_desc:
             row = chart_row(child)
-            row["标签"] = _dynamic_performance_tag(child, child_groups)
+            child_rate = _row_value(child.get("raw") or {}, rate_metric) if rate_metric else None
+            row["标签"] = _combined_performance_tag(
+                child,
+                child_groups,
+                child_rate,
+                thresholds["personRisk"],
+                thresholds["personBenchmark"],
+                "标杆",
+            )
             child_chart_rows.append(row)
         risk_children = child_groups.get("weak", [])
 
@@ -625,17 +688,33 @@ def build_report_spec(
             )
             for grandchild in sorted_grandchildren:
                 row = chart_row(grandchild)
-                row["标签"] = _dynamic_performance_tag(grandchild, grandchild_groups)
+                grandchild_rate = _row_value(grandchild.get("raw") or {}, rate_metric) if rate_metric else None
+                row["标签"] = _combined_performance_tag(
+                    grandchild,
+                    grandchild_groups,
+                    grandchild_rate,
+                    thresholds["personRisk"],
+                    thresholds["personBenchmark"],
+                    "标杆",
+                )
                 group_rows.append(row)
             risk_grandchildren = grandchild_groups.get("weak", [])
+            child_tag = _combined_performance_tag(
+                child,
+                child_groups,
+                child_rate,
+                thresholds["personRisk"],
+                thresholds["personBenchmark"],
+                "标杆",
+            )
             return {
                 "id": child.get("id"),
                 "title": child.get("name"),
                 "parentName": child.get("parentName"),
                 "levelLabel": child.get("levelValue") or child.get("levelName") or node_detail_label,
                 "detailLevelLabel": group_detail_label,
-                "tone": "good" if _dynamic_performance_tag(child, child_groups).startswith("✅") else ("danger" if _dynamic_performance_tag(child, child_groups).startswith("⚠️") else "neutral"),
-                "tag": _dynamic_performance_tag(child, child_groups),
+                "tone": _rate_tone(child_rate, thresholds["personRisk"], thresholds["personBenchmark"]),
+                "tag": child_tag,
                 "kpis": [
                     {
                         "label": metric.get("label") or metric.get("column") or metric.get("key"),
@@ -671,9 +750,16 @@ def build_report_spec(
         node_task = _format_value(_row_value(node["raw"], task_metric), task_metric) if task_metric else "-"
         node_rate = _format_value(rate, rate_metric) if rate_metric else "-"
         node_remain = _format_value(_row_value(node["raw"], remain_metric), remain_metric) if remain_metric else "-"
-        node_tag = _rate_tag(rate, thresholds["officeRisk"], thresholds["officeBenchmark"], "区域标杆")
+        node_tag = _combined_performance_tag(
+            node,
+            comparison_groups,
+            rate,
+            thresholds["officeRisk"],
+            thresholds["officeBenchmark"],
+            "区域标杆",
+        )
         if child_groups.get("canCompare"):
-            highlight = f"表现较好：{_format_dynamic_group(child_groups.get('good', []), rate_metric, '暂无明显领先节点')}"
+            highlight = f"领先节点：{_format_dynamic_group(child_groups.get('good', []), rate_metric, '暂无明显领先节点')}"
             risk_text = f"相对承压：{_format_dynamic_group(risk_children, rate_metric, '暂无明显落后节点')}"
         elif len(sorted_children_desc) <= 1:
             highlight = f"仅 {len(sorted_children_desc)} 个{node_detail_label}，不做横向好坏对比"
@@ -710,7 +796,7 @@ def build_report_spec(
                          f"{highlight}；{risk_text}\n"
                          f"点击展开{len(sorted_children_desc)}个{node_detail_label}明细。",
             "detailNarrative": (
-                f"{node['name']}下钻到{node_detail_label}层：表现较好为{describe_detail(best)}；相对承压为{describe_detail(worst)}。"
+                f"{node['name']}下钻到{node_detail_label}层：领先节点为{describe_detail(best)}；承压节点为{describe_detail(worst)}。"
                 if child_groups.get("canCompare")
                 else f"{node['name']}下钻到{node_detail_label}层：样本不足或差异不明显，不做首尾对比。"
             ),
@@ -728,7 +814,14 @@ def build_report_spec(
         lambda item: _row_value(item.get("raw") or {}, rate_metric) if rate_metric else None,
     )
     comparison_tag_by_name = {
-        node.get("name"): _dynamic_performance_tag(node, comparison_groups)
+        node.get("name"): _combined_performance_tag(
+            node,
+            comparison_groups,
+            _row_value(node.get("raw") or {}, rate_metric) if rate_metric else None,
+            thresholds["officeRisk"],
+            thresholds["officeBenchmark"],
+            "区域标杆",
+        )
         for node in comparison_nodes
         if node.get("name")
     }
@@ -776,12 +869,20 @@ def build_report_spec(
                     f"首尾差异：{best_node['name']}达成率比{worst_node['name']}高{abs(best_rate - worst_rate):.2f}个百分点"
                 )
     if comparison_groups.get("canCompare") and rate_metric:
+        leading_label = "领先主体" if comparison_groups.get("mode") == "pair" else "第一梯队"
+        middle_label = "第二梯队"
+        weak_label = "承压主体" if comparison_groups.get("mode") == "pair" else "第三梯队"
         summary_parts.append(
-            "表现较好："
+            f"{leading_label}："
             + _format_dynamic_group(comparison_groups.get("good", []), rate_metric, "暂无明显领先节点")
         )
+        if comparison_groups.get("middle"):
+            summary_parts.append(
+                f"{middle_label}："
+                + _format_dynamic_group(comparison_groups.get("middle", []), rate_metric, "暂无中位节点")
+            )
         summary_parts.append(
-            "相对承压："
+            f"{weak_label}："
             + _format_dynamic_group(comparison_groups.get("weak", []), rate_metric, "暂无明显落后节点")
         )
     elif len(comparison_nodes) <= 1:

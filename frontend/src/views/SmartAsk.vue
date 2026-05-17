@@ -170,7 +170,7 @@
                       :dataset="getPrimaryDataset(msg)"
                       :datasets="getDatasets(msg)"
                       :route="msg.data?.route || null"
-                      @view-details="openDetailPanel"
+                      @view-details="openDetailPanel(msg)"
                     />
 
                     <div
@@ -1145,6 +1145,7 @@ const chartViewerVisible = ref(false)
 const chartViewerTitle = ref('图表预览')
 const chartViewerSpec = ref(null)
 const chartViewerMode = ref('chart')
+const detailReportResult = ref(null)
 const officeDrillOpen = reactive({})
 let activePrintFrame = null
 let msgCounter = 0
@@ -1153,6 +1154,7 @@ let timerInst = null
 let chatScrollTimer = null
 let panelScrollTimer = null
 const pendingQuickDataset = ref(null)
+const lastSavedHistorySignature = ref('')
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
@@ -1170,8 +1172,10 @@ const statusBarText = computed(() => {
   return m[session.state.status] || ''
 })
 
+const activeReportResult = computed(() => detailReportResult.value || session.state.result || null)
+
 const latestDatasets = computed(() => (
-  Array.isArray(session.state.result?.dataset_results) ? session.state.result.dataset_results : []
+  Array.isArray(activeReportResult.value?.dataset_results) ? activeReportResult.value.dataset_results : []
 ))
 
 const mergeDatasetReports = (datasetResults) => (
@@ -1241,7 +1245,7 @@ const reportSceneTemplate = computed(() => {
   const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
   const specTemplate = sourceDatasets.find(item => item?.report_spec?.layoutTemplate)?.report_spec?.layoutTemplate
   if (specTemplate) return specTemplate
-  const questionText = String(session.state.question || query.value || '')
+  const questionText = String(activeReportResult.value?.question || session.state.question || query.value || '')
   if (/对比|比较|哪个|谁更|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText)) return 'comparison'
   if (/排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
   return 'detail'
@@ -1308,7 +1312,7 @@ const buildResultConfidenceMeta = (route = {}, datasets = []) => {
 }
 
 const sideConfidenceBadges = computed(() => {
-  const backendConfidence = session.state.result?.confidence || {}
+  const backendConfidence = activeReportResult.value?.confidence || {}
   const routeMeta = backendConfidence?.route
     ? {
         score: Number(backendConfidence.route.score || 0),
@@ -1316,7 +1320,7 @@ const sideConfidenceBadges = computed(() => {
         label: '路由把握',
         value: `${backendConfidence.route.label || ''} ${backendConfidence.route.score || 0}`.trim(),
       }
-    : buildRouteConfidenceMeta(session.state.result?.route || {})
+    : buildRouteConfidenceMeta(activeReportResult.value?.route || {})
   const resultMeta = backendConfidence?.result
     ? {
         score: Number(backendConfidence.result.score || 0),
@@ -1324,14 +1328,14 @@ const sideConfidenceBadges = computed(() => {
         label: '结果可信',
         value: `${backendConfidence.result.label || ''} ${backendConfidence.result.score || 0}`.trim(),
       }
-    : buildResultConfidenceMeta(session.state.result?.route || {}, latestDatasets.value)
+    : buildResultConfidenceMeta(activeReportResult.value?.route || {}, latestDatasets.value)
   return [routeMeta, resultMeta].filter(item => item?.score > 0)
 })
 
 const sideConfidenceNote = computed(() => {
-  const routeConfidence = session.state.result?.confidence?.route
+  const routeConfidence = activeReportResult.value?.confidence?.route
   if (routeConfidence?.summary) return routeConfidence.summary
-  const route = session.state.result?.route || {}
+  const route = activeReportResult.value?.route || {}
   if (!route?.match_score) return ''
   const candidateCount = Array.isArray(route.candidate_dataset_ids) ? route.candidate_dataset_ids.length : 0
   if (route.requires_confirmation) return '当前命中仍存在不确定性，系统已暂停并等待确认。'
@@ -1455,8 +1459,8 @@ const pickColumn = (dataset, names) => {
 
 const getDatasetReportConfig = (dataset) => (
   dataset?.report_config
-  || session.state.result?.report_configs?.[String(dataset?.dataset_id)]
-  || session.state.result?.report_config
+  || activeReportResult.value?.report_configs?.[String(dataset?.dataset_id)]
+  || activeReportResult.value?.report_config
   || getDefaultReportTreeConfig()
 )
 
@@ -1524,6 +1528,57 @@ const getRateTag = (rate, benchmark = 15, risk = 10, goodLabel = '标杆') => {
   if (tone === 'warn') return '🟡 中等'
   if (tone === 'danger') return '⚠️ 风险'
   return '未分级'
+}
+
+const getOfficeThresholds = (config = {}) => {
+  const risk = toNumber(config?.officeRiskThreshold ?? config?.riskThreshold) ?? 10
+  const configuredBenchmark = toNumber(config?.officeBenchmarkThreshold ?? config?.benchmarkThreshold)
+  return {
+    risk,
+    benchmark: configuredBenchmark ?? 15,
+  }
+}
+
+const getOfficeRateTone = (rate, config = {}) => {
+  const { benchmark, risk } = getOfficeThresholds(config)
+  return getRateTone(rate, benchmark, risk)
+}
+
+const getOfficeToneLabel = (tone) => ({ good: '区域标杆', warn: '需推进', danger: '低达成风险' }[tone] || '待观察')
+
+const getOfficeRateTag = (rate, config = {}, goodLabel = '区域标杆') => {
+  const tone = getOfficeRateTone(rate, config)
+  if (tone === 'good') return `✅ ${goodLabel}`
+  if (tone === 'warn') return '🟠 需推进'
+  if (tone === 'danger') return '⚠️ 风险'
+  return '未分级'
+}
+
+const getToneFromDisplayTag = (label = '', fallback = 'neutral') => {
+  const text = String(label || '')
+  if (/风险|重点风险/.test(text)) return 'danger'
+  if (/承压|第三梯队/.test(text)) return 'danger'
+  if (/推进|第二梯队|稳定|中位/.test(text)) return 'warn'
+  if (/标杆|领先|第一梯队/.test(text)) return 'good'
+  return fallback
+}
+
+const normalizeOfficeCompareSpec = (chartSpec = {}, config = {}) => {
+  if (!chartSpec || typeof chartSpec !== 'object') return chartSpec
+  const rows = Array.isArray(chartSpec.rows) ? chartSpec.rows : []
+  const columns = Array.isArray(chartSpec.columns) && chartSpec.columns.length
+    ? [...chartSpec.columns]
+    : Object.keys(rows[0] || {})
+  const rateColumn = findColumn(columns, column => isRateColumn(column)) || '达成率'
+  const nextColumns = columns.includes('标签') ? columns : [...columns, '标签']
+  return {
+    ...chartSpec,
+    columns: nextColumns,
+    rows: rows.map(row => ({
+      ...row,
+      标签: row?.标签 || getOfficeRateTag(row?.[rateColumn], config),
+    })),
+  }
 }
 
 const subjectAccentPalette = [
@@ -1680,7 +1735,7 @@ const getDrillWorstText = (office) => {
 
 const findColumn = (columns = [], matcher) => columns.find(column => matcher(String(column || ''))) || ''
 
-const buildOfficeDetailRows = (chartSpec = {}) => {
+const buildOfficeDetailRows = (chartSpec = {}, config = {}) => {
   const rows = Array.isArray(chartSpec.rows) ? chartSpec.rows : []
   const columns = Array.isArray(chartSpec.columns) && chartSpec.columns.length
     ? chartSpec.columns
@@ -1696,7 +1751,7 @@ const buildOfficeDetailRows = (chartSpec = {}) => {
     const remain = toNumber(row?.[remainColumn]) || 0
     const task = toNumber(row?.[taskColumn]) || 0
     const actual = toNumber(row?.[actualColumn]) || 0
-    const label = row?.标签 || getRateTag(rate, 20, 10)
+    const label = row?.标签 || getOfficeRateTag(rate, config, '标杆')
     return {
       name: row?.[nameColumn] || row?.名称 || '-',
       rate,
@@ -1708,7 +1763,7 @@ const buildOfficeDetailRows = (chartSpec = {}) => {
       remain,
       remainLabel: remainColumn ? formatAmount(remain) : '-',
       label,
-      tone: label.includes('风险') ? 'danger' : label.includes('中等') ? 'warn' : label.includes('标杆') ? 'good' : getRateTone(rate, 20, 10),
+      tone: getToneFromDisplayTag(label, getOfficeRateTone(rate, config)),
       progress: Math.max(0, Math.min(100, rate)),
       gapProgress: 0,
     }
@@ -1777,26 +1832,30 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   const accordions = Array.isArray(spec.accordions) ? spec.accordions : []
   if (!overviewChart && !accordions.length) return null
 
+  const config = getDatasetReportConfig(dataset)
   const compareLevelLabel = spec.scope?.compareLevelLabel || '下一层级'
   const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
   const offices = accordions.map((item) => {
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
+    const rateValue = toNumber(rateKpi?.value)
     const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
     const narrative = String(item.narrative || '').trim()
-    const detailRows = buildOfficeDetailRows(item.chart)
+    const detailRows = buildOfficeDetailRows(item.chart, config)
     const drillGroups = (Array.isArray(item.drillGroups) ? item.drillGroups : [])
       .map((group) => {
         const groupRateKpi = (group.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
-        const groupRows = buildOfficeDetailRows(group.chart)
+        const groupRateValue = toNumber(groupRateKpi?.value)
+        const groupRows = buildOfficeDetailRows(group.chart, config)
+        const groupTag = group.tag || getOfficeRateTag(groupRateValue, config, '代表处标杆')
         return {
           id: group.id || `${item.id || item.title}-${group.title}`,
           name: group.title || '未命名下级节点',
           parentName: group.parentName || item.title || '',
-          tone: group.tone || 'neutral',
-          tag: group.tag || getRateTag(groupRateKpi?.value, 15, 10, '代表处标杆'),
-          rate: toNumber(groupRateKpi?.value),
+          tone: getToneFromDisplayTag(groupTag, getOfficeRateTone(groupRateValue, config)),
+          tag: groupTag,
+          rate: groupRateValue,
           rateLabel: groupRateKpi?.value || '-',
-          progress: Math.max(0, Math.min(100, toNumber(groupRateKpi?.value) || 0)),
+          progress: Math.max(0, Math.min(100, groupRateValue || 0)),
           childCount: groupRows.length,
           kpis: group.kpis || [],
           summary: String(group.narrative || '').trim(),
@@ -1812,17 +1871,18 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       .filter(Boolean)
       .slice(0, 3)
       .join('；') || narrative
+    const itemTag = item.tag || getOfficeRateTag(rateValue, config, '区域标杆')
     return {
       id: item.id || item.title,
       name: item.title || '未命名节点',
       parentName: item.parentName || item.levelLabel || '',
-      tone: item.tone || 'neutral',
-      tag: item.tag || getRateTag(rateKpi?.value, 15, 10, '区域标杆'),
+      tone: getToneFromDisplayTag(itemTag, getOfficeRateTone(rateValue, config)),
+      tag: itemTag,
       highlight: item.highlight || '',
       rankLabel: item.rankLabel || '',
-      rate: toNumber(rateKpi?.value),
+      rate: rateValue,
       rateLabel: rateKpi?.value || '-',
-      progress: Math.max(0, Math.min(100, toNumber(rateKpi?.value) || 0)),
+      progress: Math.max(0, Math.min(100, rateValue || 0)),
       childCount: chartRows.length,
       kpis: item.kpis || [],
       summary: summaryText,
@@ -1849,7 +1909,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     offices,
     compareLevelLabel,
     detailLevelLabel,
-    officeCompareSpec: overviewChart,
+    officeCompareSpec: normalizeOfficeCompareSpec(overviewChart, config),
     officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '一行一个同层级对象，对齐展示任务、开单、缺口、达成率和进度条；展开后查看下一层级。',
     summary,
     riskTone: riskCount ? 'danger' : 'good',
@@ -1887,7 +1947,7 @@ const buildBusinessDrillReport = (dataset) => {
       .sort((a, b) => (getNodeMetricValue(a, rateMetric) || 0) - (getNodeMetricValue(b, rateMetric) || 0))
     const sortedPeopleDesc = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))
     const rate = getNodeMetricValue(office, rateMetric)
-    const tone = getRateTone(rate, 15, 10)
+    const tone = getOfficeRateTone(rate, config)
     const riskPeople = sortedPeople.filter(item => getRateTone(getNodeMetricValue(item, rateMetric), 20, 10) === 'danger')
     const bestPerson = sortedPeopleDesc[0]
     const worstPerson = sortedPeople[0]
@@ -1910,7 +1970,7 @@ const buildBusinessDrillReport = (dataset) => {
       [actualMetric?.label || actualMetric?.column || '完成']: getNodeMetricValue(person, actualMetric) || 0,
       [taskMetric?.label || taskMetric?.column || '任务']: getNodeMetricValue(person, taskMetric) || 0,
       ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(person, remainMetric) || 0 } : {}),
-      标签: getRateTag(personRate, 20, 10),
+      标签: getOfficeRateTag(personRate, config, '标杆'),
     }
     })
     const officeKpis = [
@@ -1930,10 +1990,10 @@ const buildBusinessDrillReport = (dataset) => {
       progress: Math.max(0, Math.min(100, rate || 0)),
       childCount: sortedPeople.length,
       kpis: officeKpis,
-      tag: getRateTag(rate, 15, 10, '区域标杆'),
+      tag: getOfficeRateTag(rate, config, '区域标杆'),
       highlight: bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : '',
       rankLabel: '',
-      summary: `${office.name}达成率${formatMetricByDefinition(rate, rateMetric)}，${getToneLabel(tone)}；任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'} / 已完成${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}${remainMetric ? ` / 缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : `暂无${detailLevelLabel}明细`}；${riskPeople.length ? `${riskPeople.length} 个${detailLevelLabel}低于10%风险线` : `暂无低于10%的风险${detailLevelLabel}`}。`,
+      summary: `${office.name}达成率${formatMetricByDefinition(rate, rateMetric)}，${getOfficeToneLabel(tone)}；任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'} / 已完成${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}${remainMetric ? ` / 缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : `暂无${detailLevelLabel}明细`}；${riskPeople.length ? `${riskPeople.length} 个${detailLevelLabel}低于10%风险线` : `暂无低于10%的风险${detailLevelLabel}`}。`,
       chartText: `${office.name}下钻到${detailLevelLabel}层：${bestPerson ? `最高为${describePerson(bestPerson)}` : `暂无${detailLevelLabel}明细`}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
       chartSpec: {
         chartType: 'horizontalDrill',
@@ -1944,7 +2004,7 @@ const buildBusinessDrillReport = (dataset) => {
       detailRows: buildOfficeDetailRows({
         columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
         rows: chartRows,
-      }),
+      }, config),
     }
   }).sort((a, b) => (b.rate || 0) - (a.rate || 0))
 
@@ -1961,11 +2021,12 @@ const buildBusinessDrillReport = (dataset) => {
     [taskMetric?.label || taskMetric?.column || '任务']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), taskMetric) || 0,
     ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), remainMetric) || 0 } : {}),
     [rateMetric.label || rateMetric.column || '达成率']: office.rate || 0,
+    标签: office.tag,
   })).sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
   const officeCompareSpec = {
     chartType: 'horizontalRateBar',
     title: `各${compareLevelLabel}达成率排序`,
-    columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
+    columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率', '标签'].filter(Boolean),
     rows: officeCompareRows,
   }
   return {
@@ -2703,7 +2764,12 @@ const splitReportSections = (text) => {
 const togglePanel = () => { showPanel.value = !showPanel.value }
 const toggleThinking = (id) => { thinkingOpen[id] = !thinkingOpen[id] }
 const toggleLog = (i) => { logOpen[i] = !logOpen[i] }
-const openDetailPanel = () => {
+const openDetailPanel = (msg = null) => {
+  if (msg?.data && !msg.data.error && !msg.data.requires_confirmation) {
+    detailReportResult.value = JSON.parse(JSON.stringify(msg.data))
+  } else {
+    detailReportResult.value = null
+  }
   showPanel.value = true
   scrollPanelToReportTop()
 }
@@ -2725,6 +2791,7 @@ const scrollPanelToReportTop = () => nextTick(() => {
 })
 
 const clearExecutionPanelState = () => {
+  detailReportResult.value = null
   Object.keys(logOpen).forEach(k => delete logOpen[k])
   timelineVersion.value += 1
   nextTick(() => {
@@ -3110,6 +3177,7 @@ const rerunQuestion = async (msg) => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
+      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
@@ -3157,6 +3225,7 @@ const handleSend = async () => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
+      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
@@ -3351,23 +3420,50 @@ const buildHistoryTitle = () => {
   return String(q).slice(0, 24)
 }
 
+const createHistoryId = () => {
+  if (window.crypto?.randomUUID) return `history-report-${window.crypto.randomUUID()}`
+  return `history-report-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const buildReportHistorySnapshot = (result = session.state.result) => {
+  if (!result || result?.error || result?.requires_confirmation) return null
+  const clonedResult = JSON.parse(JSON.stringify(result))
+  const firstDataset = Array.isArray(clonedResult.dataset_results) ? clonedResult.dataset_results[0] : null
+  const selectedId = datasetId.value || session.state.selectedDatasetId || clonedResult.dataset_id || firstDataset?.dataset_id || null
+  const selectedDataset = datasets.value.find(item => Number(item.id) === Number(selectedId))
+  const question = clonedResult.question || session.state.question || buildHistoryTitle()
+  const updatedAt = new Date().toLocaleString()
+  return {
+    version: 2,
+    question,
+    updatedAt,
+    datasetId: selectedId,
+    datasetName: selectedDataset?.dataset_name || clonedResult.dataset_name || firstDataset?.dataset_name || '自动路由数据集',
+    result: clonedResult,
+  }
+}
+
 const saveCurrentToHistory = () => {
-  if (messages.length === 0) return
+  const reportSnapshot = buildReportHistorySnapshot()
+  if (!reportSnapshot?.result) return ''
+
+  const signature = JSON.stringify({
+    question: reportSnapshot.question,
+    updatedAt: session.state.updatedAt,
+    datasetId: reportSnapshot.datasetId,
+  })
+  if (signature === lastSavedHistorySignature.value) return ''
 
   loadHistory()
-  const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-  const d = datasets.value.find(x => x.id === datasetId.value)
+  lastSavedHistorySignature.value = signature
   const payload = {
-    id,
-    title: buildHistoryTitle(),
-    datasetId: datasetId.value,
-    datasetName: d?.dataset_name || '自动路由数据集',
-    updatedAt: new Date().toLocaleString(),
-    messages: JSON.parse(JSON.stringify(messages)),
-    sessionState: JSON.parse(JSON.stringify(session.state)),
-    showPanel: showPanel.value,
-    thinkingOpen: JSON.parse(JSON.stringify(thinkingOpen)),
-    logOpen: JSON.parse(JSON.stringify(logOpen)),
+    id: createHistoryId(),
+    title: String(reportSnapshot.question || buildHistoryTitle()).slice(0, 24),
+    question: reportSnapshot.question,
+    datasetId: reportSnapshot.datasetId,
+    datasetName: reportSnapshot.datasetName,
+    updatedAt: reportSnapshot.updatedAt,
+    reportSnapshot,
   }
   return upsertHistory(payload)
 }
@@ -3380,33 +3476,52 @@ const restoreHistory = (item) => {
   }
 
   setActiveHistory(item.id)
-  messages.splice(0, messages.length, ...JSON.parse(JSON.stringify(item.messages || [])))
-  session.state.question = item.sessionState?.question || ''
-  const restoredSelectedDatasetId = item.sessionState?.selectedDatasetId || null
+  const reportSnapshot = item.reportSnapshot || {}
+  const result = reportSnapshot.result || item.sessionState?.result || null
+  if (!result) {
+    ElMessage.warning('该历史记录缺少报告快照，无法恢复完整报告。')
+    return false
+  }
+
+  const restoredResult = JSON.parse(JSON.stringify(result))
+  if (Array.isArray(restoredResult?.dataset_results)) {
+    restoredResult.dataset_results = restoredResult.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+  }
+  const question = item.question || reportSnapshot.question || restoredResult.question || item.title || ''
+  const uid = ++msgCounter
+  const aid = ++msgCounter
+  messages.splice(0, messages.length,
+    { id: uid, role: 'user', content: question },
+    { id: aid, role: 'ai', loading: false, data: restoredResult },
+  )
+
+  session.state.question = question
+  const restoredSelectedDatasetId = reportSnapshot.datasetId || item.datasetId || restoredResult.selectedDatasetId || restoredResult.dataset_id || null
   session.state.selectedDatasetId = restoredSelectedDatasetId && isDatasetVisible(restoredSelectedDatasetId)
     ? restoredSelectedDatasetId
     : null
-  session.state.status = item.sessionState?.status || 'idle'
-  session.state.result = item.sessionState?.result ? JSON.parse(JSON.stringify(item.sessionState.result)) : null
-  if (Array.isArray(session.state.result?.dataset_results)) {
-    session.state.result.dataset_results = session.state.result.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
-  }
-  session.state.error = item.sessionState?.error || ''
-  session.state.logs = item.sessionState?.logs || []
-  session.state.startedAt = item.sessionState?.startedAt || ''
-  session.state.updatedAt = item.sessionState?.updatedAt || ''
-  session.state.currentSessionId = item.sessionState?.currentSessionId || ''
+  session.state.status = 'completed'
+  session.state.result = restoredResult
+  detailReportResult.value = null
+  session.state.error = ''
+  session.state.logs = []
+  session.state.startedAt = ''
+  session.state.updatedAt = reportSnapshot.updatedAt || item.updatedAt || ''
+  session.state.currentSessionId = ''
 
   datasetId.value = item.datasetId && isDatasetVisible(item.datasetId) ? item.datasetId : null
   if ((item.datasetId || restoredSelectedDatasetId) && !datasetId.value && !session.state.selectedDatasetId) {
     ElMessage.warning('该历史会话包含当前账号无权访问的数据集，已隐藏相关结果。')
   }
-  showPanel.value = !!item.showPanel
+  showPanel.value = true
 
   Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
-  Object.assign(thinkingOpen, item.thinkingOpen || {})
   Object.keys(logOpen).forEach(k => delete logOpen[k])
-  Object.assign(logOpen, item.logOpen || {})
+  lastSavedHistorySignature.value = JSON.stringify({
+    question,
+    updatedAt: session.state.updatedAt,
+    datasetId: reportSnapshot.datasetId || item.datasetId || restoredSelectedDatasetId,
+  })
   timelineVersion.value += 1
 
   nextTick(() => {
@@ -3495,6 +3610,7 @@ const getConfirmationScopeSummary = (msg) => {
 
 const doConfirm = async (opt, msg) => {
   startTimer()
+  detailReportResult.value = null
   if (msg?.id) confirmationSubmitting[msg.id] = true
   const originalData = msg?.data ? JSON.parse(JSON.stringify(msg.data)) : null
   if (msg) {
@@ -3516,6 +3632,7 @@ const doConfirm = async (opt, msg) => {
       last.loading = false
       last.data = res
     }
+    if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
     scheduleChatScroll(36, 'smooth')
   } catch (error) {
