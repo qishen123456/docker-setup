@@ -5,6 +5,7 @@ Smart chat controller for dataset-isolated four-agent orchestration.
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 import json
 import inspect
+import math
 import os
 import queue
 import sys
@@ -200,6 +201,93 @@ def _compact_trace_events(trace_events: list) -> list:
     return rows[-180:]
 
 
+def _token_number(value) -> int:
+    try:
+        return max(0, int(float(value or 0)))
+    except Exception:
+        return 0
+
+
+def _usage_from_mapping(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    prompt_tokens = _token_number(value.get("prompt_tokens") or value.get("input_tokens"))
+    completion_tokens = _token_number(value.get("completion_tokens") or value.get("output_tokens"))
+    total_tokens = _token_number(value.get("total_tokens"))
+    if total_tokens <= 0:
+        total_tokens = prompt_tokens + completion_tokens
+    if total_tokens <= 0:
+        return {}
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "source": value.get("source") or "actual",
+        "estimated": bool(value.get("estimated", False)),
+    }
+
+
+def _estimate_text_tokens(text) -> int:
+    text = str(text or "")
+    if not text:
+        return 0
+    cjk = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+    other = len(text) - cjk
+    return max(1, int(math.ceil(cjk * 1.1 + other / 4)))
+
+
+def _extract_event(payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+    if payload.get("type") == "trace" and isinstance(payload.get("event"), dict):
+        return payload.get("event") or {}
+    return payload
+
+
+def _extract_token_usage(result: dict, trace_events: list | None = None) -> dict:
+    result = result or {}
+    for key in ("token_usage", "usage", "llm_usage"):
+        usage = _usage_from_mapping(result.get(key))
+        if usage:
+            return usage
+    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    for key in ("token_usage", "usage"):
+        usage = _usage_from_mapping(details.get(key))
+        if usage:
+            return usage
+
+    prompt_tokens = 0
+    completion_tokens = 0
+    for payload in trace_events or []:
+        event = _extract_event(payload)
+        if not event:
+            continue
+        usage = _usage_from_mapping(event.get("token_usage") or event.get("usage") or {})
+        if usage and not usage.get("estimated"):
+            prompt_tokens += usage.get("prompt_tokens") or 0
+            completion_tokens += usage.get("completion_tokens") or 0
+            continue
+        if event.get("status") == "request":
+            prompt_tokens += _estimate_text_tokens(event.get("system_prompt"))
+            prompt_tokens += _estimate_text_tokens(event.get("user_prompt"))
+        elif event.get("status") == "response":
+            completion_tokens += _estimate_text_tokens(event.get("response_text"))
+
+    if prompt_tokens <= 0 and completion_tokens <= 0:
+        prompt_tokens = _estimate_text_tokens(result.get("question"))
+        completion_tokens = _estimate_text_tokens(result.get("analysis") or result.get("answer_text") or result.get("sql"))
+    total_tokens = prompt_tokens + completion_tokens
+    if total_tokens <= 0:
+        return {}
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "source": "trace_estimate",
+        "estimated": True,
+    }
+
+
 def _compact_dataset_results(result: dict) -> list:
     compact = []
     for item in result.get("dataset_results") or []:
@@ -250,6 +338,8 @@ def _log_smart_chat_result(
         event_type = f"{event_prefix}_answer"
         title = "智能问数结果"
 
+    token_usage = _extract_token_usage(result, trace_events or [])
+
     log_event(
         category=category,
         event_type=event_type,
@@ -277,6 +367,8 @@ def _log_smart_chat_result(
             "requires_confirmation": bool(result.get("requires_confirmation")),
             "conversation_session_id": result.get("conversation_session_id") or "",
             "confirmation_session_id": result.get("session_id") or "",
+            "token_usage": token_usage,
+            "total_tokens": token_usage.get("total_tokens") or 0,
         },
     )
 

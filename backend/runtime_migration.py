@@ -162,6 +162,12 @@ def _line_count(text: Any) -> int:
     return len([line for line in text.splitlines() if line.strip()])
 
 
+def _byte_size(text: Any) -> int:
+    if not isinstance(text, str) or not text:
+        return 0
+    return len(text.encode("utf-8"))
+
+
 def _merge_log_text(existing: str, incoming: str) -> str:
     existing_lines = existing.splitlines()
     seen = set(existing_lines)
@@ -389,6 +395,8 @@ def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
         "config_files": list(configs.keys()),
         "log_file_counts": {name: _line_count(content) for name, content in log_files.items()},
         "log_file_total": sum(_line_count(content) for content in log_files.values()),
+        "log_file_sizes": {name: _byte_size(content) for name, content in log_files.items()},
+        "log_file_size_total": sum(_byte_size(content) for content in log_files.values()),
     }
 
 
@@ -477,6 +485,8 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
                 "file": rel_path,
                 "incoming_lines": _line_count(content),
                 "existing_lines": _line_count(existing_text),
+                "incoming_size": _byte_size(content),
+                "existing_size": _byte_size(existing_text),
                 "action": "replace" if mode == "replace" else ("merge" if os.path.exists(target_path) else "create"),
             }
         )

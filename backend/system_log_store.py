@@ -222,6 +222,46 @@ def _parse_limit(value: Any, default: int = 100) -> Optional[int]:
         return default
 
 
+def _parse_date_bound(value: Any, *, end: bool = False) -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+    return parsed + timedelta(days=1) if end else parsed
+
+
+def _append_date_filters(where: List[str], params: List[Any], filters: Dict[str, Any]) -> None:
+    start = _parse_date_bound(filters.get("date_from"))
+    end = _parse_date_bound(filters.get("date_to"), end=True)
+    if start:
+        where.append("created_at >= %s")
+        params.append(start)
+    if end:
+        where.append("created_at < %s")
+        params.append(end)
+
+
+TOKEN_USAGE_SQL = """
+    GREATEST(
+        CASE WHEN (details->>'total_tokens') ~ '^[0-9]+(\\.[0-9]+)?$'
+            THEN (details->>'total_tokens')::numeric ELSE 0 END,
+        CASE WHEN (details #>> '{token_usage,total_tokens}') ~ '^[0-9]+(\\.[0-9]+)?$'
+            THEN (details #>> '{token_usage,total_tokens}')::numeric ELSE 0 END,
+        CASE WHEN (details #>> '{usage,total_tokens}') ~ '^[0-9]+(\\.[0-9]+)?$'
+            THEN (details #>> '{usage,total_tokens}')::numeric ELSE 0 END,
+        CASE
+            WHEN category IN ('qa', 'low_confidence', 'error')
+             AND (question <> '' OR sql_text <> '' OR answer_text <> '')
+            THEN CEIL((char_length(question) + char_length(sql_text) + char_length(answer_text))::numeric / 3)
+            ELSE 0
+        END
+    )
+"""
+
+
 def list_logs(filters: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
     _ensure_schema()
     where = []
@@ -246,9 +286,17 @@ def list_logs(filters: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
         where.append(
             "(title ILIKE %s OR event_type ILIKE %s OR username ILIKE %s OR user_name ILIKE %s "
             "OR request_path ILIKE %s OR question ILIKE %s OR sql_text ILIKE %s "
-            "OR answer_text ILIKE %s OR error_message ILIKE %s)"
+            "OR answer_text ILIKE %s OR error_message ILIKE %s OR details::text ILIKE %s)"
         )
-        params.extend([like] * 9)
+        params.extend([like] * 10)
+
+    trace_id = str(filters.get("trace_id") or "").strip()
+    if trace_id:
+        like = f"%{trace_id}%"
+        where.append("(details::text ILIKE %s OR request_path ILIKE %s)")
+        params.extend([like, like])
+
+    _append_date_filters(where, params, filters)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     limit = _parse_limit(filters.get("limit"), 100)
@@ -281,25 +329,79 @@ def get_log(log_id: int) -> Optional[Dict[str, Any]]:
         return _serialize_row(dict(row)) if row else None
 
 
-def get_stats() -> Dict[str, Any]:
+def get_stats(filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     _ensure_schema()
+    filters = filters or {}
+    range_where: List[str] = []
+    range_params: List[Any] = []
+    _append_date_filters(range_where, range_params, filters)
+    if not range_where:
+        range_where.append("created_at >= CURRENT_DATE")
+    range_sql = f"WHERE {' AND '.join(range_where)}"
+
+    def _count(cur: Any, extra: str = "") -> int:
+        sql = f"SELECT COUNT(*) AS count FROM system_event_logs {range_sql}"
+        if extra:
+            sql += f" AND {extra}"
+        cur.execute(sql, range_params)
+        return int((cur.fetchone() or {}).get("count") or 0)
+
+    def _top_users(cur: Any, metric_sql: str, alias: str, extra: str = "") -> List[Dict[str, Any]]:
+        sql = f"""
+            SELECT
+                COALESCE(NULLIF(user_name, ''), NULLIF(username, ''), '未知用户') AS display_name,
+                COALESCE(NULLIF(username, ''), NULLIF(user_name, ''), 'unknown') AS username,
+                MAX(user_name) AS user_name,
+                MAX(user_role) AS user_role,
+                {metric_sql} AS {alias},
+                COUNT(*) AS event_count,
+                MAX(created_at) AS last_seen
+            FROM system_event_logs
+            {range_sql}
+        """
+        if extra:
+            sql += f" AND {extra}"
+        sql += f"""
+            GROUP BY COALESCE(NULLIF(user_name, ''), NULLIF(username, ''), '未知用户'),
+                     COALESCE(NULLIF(username, ''), NULLIF(user_name, ''), 'unknown')
+            HAVING {metric_sql} > 0
+            ORDER BY {alias} DESC, event_count DESC, last_seen DESC
+            LIMIT 8;
+        """
+        cur.execute(sql, range_params)
+        rows = []
+        for row in cur.fetchall():
+            item = dict(row)
+            item["access_count"] = int(float(item.get("access_count") or item.get("event_count") or 0))
+            item["event_count"] = int(float(item.get("event_count") or 0))
+            for key in (alias,):
+                item[key] = int(float(item.get(key) or 0))
+            if isinstance(item.get("last_seen"), datetime):
+                item["last_seen"] = item["last_seen"].astimezone(timezone.utc).isoformat()
+            rows.append(item)
+        return rows
+
     with _connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            """
+            f"""
             SELECT category, COUNT(*) AS count
             FROM system_event_logs
+            {range_sql}
             GROUP BY category
             ORDER BY count DESC;
-            """
+            """,
+            range_params,
         )
         by_category = [dict(row) for row in cur.fetchall()]
         cur.execute(
-            """
+            f"""
             SELECT level, COUNT(*) AS count
             FROM system_event_logs
+            {range_sql}
             GROUP BY level
             ORDER BY count DESC;
-            """
+            """,
+            range_params,
         )
         by_level = [dict(row) for row in cur.fetchall()]
         cur.execute(
@@ -328,12 +430,89 @@ def get_stats() -> Dict[str, Any]:
             """
         )
         errors_7d = int((cur.fetchone() or {}).get("count") or 0)
+
+        range_access = _count(cur)
+        range_qa = _count(cur, "category IN ('qa', 'low_confidence')")
+        range_errors = _count(cur, "(category = 'error' OR level = 'error')")
+        range_low_confidence = _count(cur, "category = 'low_confidence'")
+        cur.execute(
+            f"""
+            SELECT COALESCE(SUM({TOKEN_USAGE_SQL}), 0) AS total_tokens
+            FROM system_event_logs
+            {range_sql};
+            """,
+            range_params,
+        )
+        range_tokens = int(float((cur.fetchone() or {}).get("total_tokens") or 0))
+        cur.execute(
+            f"""
+            SELECT *
+            FROM system_event_logs
+            {range_sql}
+              AND category = 'low_confidence'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 8;
+            """,
+            range_params,
+        )
+        recent_low_confidence = [_serialize_row(dict(row)) for row in cur.fetchall()]
+        cur.execute(
+            f"""
+            SELECT *
+            FROM system_event_logs
+            {range_sql}
+              AND (category = 'error' OR level = 'error')
+            ORDER BY created_at DESC, id DESC
+            LIMIT 8;
+            """,
+            range_params,
+        )
+        recent_errors = [_serialize_row(dict(row)) for row in cur.fetchall()]
+        cur.execute(
+            """
+            SELECT date_trunc('hour', created_at) AS bucket, COUNT(*) AS count
+            FROM system_event_logs
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+            GROUP BY bucket
+            ORDER BY bucket;
+            """
+        )
+        hourly_access = [
+            {
+                "hour": row["bucket"].astimezone(timezone.utc).isoformat() if isinstance(row.get("bucket"), datetime) else str(row.get("bucket") or ""),
+                "count": int(row.get("count") or 0),
+            }
+            for row in cur.fetchall()
+        ]
+        top_users_by_access = _top_users(cur, "COUNT(*)", "access_count")
+        top_users_by_qa = _top_users(cur, "COUNT(*)", "qa_count", "category IN ('qa', 'low_confidence')")
+        top_users_by_tokens = _top_users(cur, f"COALESCE(SUM({TOKEN_USAGE_SQL}), 0)", "total_tokens")
+        top_users_by_errors = _top_users(cur, "COUNT(*)", "error_count", "(category = 'error' OR level = 'error')")
+        top_users_by_low_confidence = _top_users(cur, "COUNT(*)", "low_confidence_count", "category = 'low_confidence'")
     return {
         "by_category": by_category,
         "by_level": by_level,
         "last_24h": last_24h,
         "low_confidence_7d": low_confidence_7d,
         "errors_7d": errors_7d,
+        "today_access": range_access,
+        "today_qa": range_qa,
+        "today_errors": range_errors,
+        "today_low_confidence": range_low_confidence,
+        "today_tokens": range_tokens,
+        "range_access": range_access,
+        "range_qa": range_qa,
+        "range_errors": range_errors,
+        "range_low_confidence": range_low_confidence,
+        "range_tokens": range_tokens,
+        "recent_low_confidence": recent_low_confidence,
+        "recent_errors": recent_errors,
+        "hourly_access": hourly_access,
+        "top_users_by_access": top_users_by_access,
+        "top_users_by_qa": top_users_by_qa,
+        "top_users_by_tokens": top_users_by_tokens,
+        "top_users_by_errors": top_users_by_errors,
+        "top_users_by_low_confidence": top_users_by_low_confidence,
     }
 
 

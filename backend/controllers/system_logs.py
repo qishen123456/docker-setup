@@ -27,6 +27,9 @@ def list_system_logs():
                 "category": request.args.get("category", ""),
                 "level": request.args.get("level", ""),
                 "keyword": request.args.get("keyword", ""),
+                "trace_id": request.args.get("trace_id", ""),
+                "date_from": request.args.get("date_from", ""),
+                "date_to": request.args.get("date_to", ""),
                 "limit": request.args.get("limit", 100),
                 "offset": request.args.get("offset", 0),
             }
@@ -42,7 +45,10 @@ def system_log_stats():
     if error:
         return error
     try:
-        return jsonify({"success": True, "stats": get_stats()})
+        return jsonify({"success": True, "stats": get_stats({
+            "date_from": request.args.get("date_from", ""),
+            "date_to": request.args.get("date_to", ""),
+        })})
     except Exception as exc:
         return jsonify({"success": False, "error": f"获取日志统计失败: {exc}"}), 500
 

@@ -84,7 +84,7 @@ export const createOrganizationTreeNode = (data) => api.post('/admin/organizatio
 export const updateOrganizationTreeNode = (id, data) => api.put(`/admin/organization-trees/nodes/${id}`, data)
 export const deleteOrganizationTreeNode = (id) => api.delete(`/admin/organization-trees/nodes/${id}`)
 export const getSystemLogs = (params = {}) => api.get('/admin/system-logs', { params })
-export const getSystemLogStats = () => api.get('/admin/system-logs/stats')
+export const getSystemLogStats = (params = {}) => api.get('/admin/system-logs/stats', { params })
 export const getSystemLogDetail = (id) => api.get(`/admin/system-logs/${id}`)
 export const clearSystemLogs = (data) => api.post('/admin/system-logs/clear', data)
 

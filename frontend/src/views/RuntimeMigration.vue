@@ -5,7 +5,7 @@
         <p class="eyebrow">RELEASE GUARD</p>
         <h1>迁移发布与配置保护</h1>
         <p class="hero-copy">
-          管理数据源、数据集、字段字典、Agent 提示词、模型配置、报告模板和员工权限等运行态资源。
+          管理数据源、数据集、字段字典、Agent 提示词、模型配置、报告模板、员工权限和系统日志等运行态资源。
           发布代码前后可以在这里导出、预检、备份和导入，避免生产环境配置被误覆盖。
         </p>
       </div>
@@ -19,7 +19,7 @@
       <article class="metric-card">
         <span>配置文件</span>
         <strong>{{ summaryStats.configCount }}</strong>
-        <small>不含 token、历史记录、local 配置</small>
+        <small>包含权限和问数历史；不含登录 token 与 local 私有配置</small>
       </article>
       <article class="metric-card">
         <span>启用数据集</span>
@@ -27,9 +27,14 @@
         <small>{{ inactiveDatasetCount ? `另有 ${inactiveDatasetCount} 个停用数据集随迁移包保留` : '来自 bs_datasets 当前启用项' }}</small>
       </article>
       <article class="metric-card">
-        <span>书架记录</span>
-        <strong>{{ summaryStats.tableRows }}</strong>
+        <span>运行态记录</span>
+        <strong>{{ summaryStats.runtimeRows }}</strong>
         <small>字段字典、Golden SQL、提示词等</small>
+      </article>
+      <article class="metric-card">
+        <span>系统日志</span>
+        <strong>{{ summaryStats.systemLogRows }}</strong>
+        <small>{{ logFileSummaryText }}</small>
       </article>
       <article class="metric-card">
         <span>最近备份</span>
@@ -117,11 +122,27 @@
             </el-table-column>
           </el-table>
           <el-table :data="tablePlan" size="small" max-height="260" class="table-plan">
-            <el-table-column prop="table" label="书架表" min-width="210" />
+            <el-table-column label="运行态表" min-width="210">
+              <template #default="{ row }">{{ tableLabel(row.table) }}</template>
+            </el-table-column>
             <el-table-column prop="incoming" label="导入记录" width="90" />
             <el-table-column prop="existing" label="现有记录" width="90" />
             <el-table-column prop="id_overlaps" label="ID 重合" width="90" />
             <el-table-column prop="action" label="动作" width="100" />
+          </el-table>
+          <el-table v-if="logPlan.length" :data="logPlan" size="small" max-height="180" class="table-plan">
+            <el-table-column prop="file" label="日志文件" min-width="240" />
+            <el-table-column prop="incoming_lines" label="导入行数" width="90" />
+            <el-table-column label="导入大小" width="100">
+              <template #default="{ row }">{{ formatSize(row.incoming_size) }}</template>
+            </el-table-column>
+            <el-table-column prop="existing_lines" label="现有行数" width="90" />
+            <el-table-column label="现有大小" width="100">
+              <template #default="{ row }">{{ formatSize(row.existing_size) }}</template>
+            </el-table-column>
+            <el-table-column prop="action" label="动作" width="100">
+              <template #default="{ row }">{{ actionLabel(row.action) }}</template>
+            </el-table-column>
           </el-table>
         </div>
       </el-card>
@@ -132,7 +153,7 @@
         <div class="panel-title">
           <div>
             <h2>备份与回滚线索</h2>
-            <p>每次正式导入前都会自动生成当前环境的完整运行态包，误操作时可用该包回滚。</p>
+            <p>每次正式导入前都会自动生成当前环境的完整运行态包，包含系统日志和同步日志线索，误操作时可用该包回滚。</p>
           </div>
         </div>
       </template>
@@ -184,9 +205,16 @@ const runtimeOverwriteConfigEnabled = computed(() => isFeatureEnabled('runtime_o
 const summaryStats = computed(() => {
   const current = summary.value || {}
   const tableCounts = current.table_counts || {}
+  const systemLogRows = Number(tableCounts.system_event_logs || 0)
+  const runtimeRows = Object.entries(tableCounts)
+    .filter(([name]) => name !== 'system_event_logs')
+    .reduce((sum, [, value]) => sum + Number(value || 0), 0)
   return {
     configCount: (current.config_files || []).length,
-    tableRows: Object.values(tableCounts).reduce((sum, value) => sum + Number(value || 0), 0),
+    runtimeRows,
+    systemLogRows,
+    logFileLines: Number(current.log_file_total || 0),
+    logFileSize: Number(current.log_file_size_total || 0),
   }
 })
 
@@ -198,6 +226,13 @@ const configPlan = computed(() => previewResult.value?.config_plan || [])
 const tablePlan = computed(() => {
   const plan = previewResult.value?.table_plan || {}
   return Object.entries(plan).map(([table, item]) => ({ table, ...item }))
+})
+const logPlan = computed(() => previewResult.value?.log_file_plan || [])
+const logFileSummaryText = computed(() => {
+  const lines = summaryStats.value.logFileLines
+  const size = summaryStats.value.logFileSize
+  if (!lines && !size) return '来自 system_event_logs'
+  return `另有 ${lines} 行日志文件，${formatSize(size)} 随包保留`
 })
 
 const loadSummary = async () => {
@@ -296,9 +331,21 @@ const handleBackup = async () => {
 
 const actionLabel = (action) => ({
   create: '新建',
+  merge: '合并',
+  replace: '替换',
   overwrite: '覆盖',
   skip_existing: '跳过已有',
 }[action] || action)
+
+const tableLabel = (table) => ({
+  system_event_logs: '系统事件日志',
+  bs_datasets: '数据集',
+  bs_common_questions: '常见问题',
+  bs_golden_sql_samples: 'Golden SQL',
+  bs_agent_prompt_fragments: 'Agent 提示词',
+  bs_data_dictionary_items: '字段字典',
+  bs_dataset_report_config: '报告模板',
+}[table] || table)
 
 const formatSize = (size) => {
   const value = Number(size || 0)
@@ -370,7 +417,7 @@ onMounted(() => {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   margin: 18px 0;
 }

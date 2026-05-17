@@ -528,7 +528,18 @@ def build_report_spec(
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
     requested_levels = _requested_level_values(question or "", config)
     if requested_levels:
-        scoped_nodes = _descendants(focus_node) if focus_node else nodes
+        if explicit_comparative and len(comparison_nodes) > 1:
+            scoped_nodes = []
+            seen_scoped_ids = set()
+            for node in comparison_nodes:
+                for child in _descendants(node):
+                    child_id = child.get("id")
+                    if child_id in seen_scoped_ids:
+                        continue
+                    seen_scoped_ids.add(child_id)
+                    scoped_nodes.append(child)
+        else:
+            scoped_nodes = _descendants(focus_node) if focus_node else nodes
         level_nodes = [
             node for node in scoped_nodes
             if node.get("name")

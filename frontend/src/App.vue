@@ -555,13 +555,21 @@ const openPasswordDialog = () => {
   passwordDialogVisible.value = true
 }
 
+const ADMIN_CONSOLE_LAST_ROUTE_KEY = 'smartask_admin_console_last_route'
+
+const getAdminConsoleTarget = () => {
+  const fallback = '/admin-console'
+  const saved = localStorage.getItem(ADMIN_CONSOLE_LAST_ROUTE_KEY) || sessionStorage.getItem(ADMIN_CONSOLE_LAST_ROUTE_KEY) || ''
+  return saved.startsWith('/admin-console') ? saved : fallback
+}
+
 const openAdminConsole = () => {
   closeUserMenu()
-  router.push('/admin-console')
+  router.push(getAdminConsoleTarget())
 }
 
 const backToConsole = () => {
-  router.push('/admin-console')
+  router.push(getAdminConsoleTarget())
 }
 
 const ADMIN_CONSOLE_FLOAT_POSITION_KEY = 'smartask_admin_console_float_position'

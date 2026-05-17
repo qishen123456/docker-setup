@@ -74,7 +74,7 @@
           <span>达成率</span>
         </div>
         <template v-for="group in secondaryDrillGroups" :key="group.key">
-          <div v-if="group.title" class="sa-drill-group-row" role="row">
+          <div v-if="group.title" class="sa-drill-group-row" :class="`is-group-${(group.index % 4) + 1}`" role="row">
             <span>{{ group.title }}</span>
             <small>{{ group.rows.length }}个{{ secondaryLevelLabel }}</small>
           </div>
@@ -186,6 +186,13 @@ const questionLabel = computed(() => cleanText(props.question || props.title || 
 const rows = computed(() => (Array.isArray(props.dataset?.rows) ? props.dataset.rows : []))
 
 const cleanText = (value) => String(value ?? '').trim()
+const sameOrgName = (left, right) => {
+  const leftText = cleanText(left)
+  const rightText = cleanText(right)
+  if (!leftText || !rightText) return false
+  return leftText === rightText || leftText.includes(rightText) || rightText.includes(leftText)
+}
+
 const toNumber = (value) => {
   if (value === null || value === undefined || value === '') return null
   const numeric = Number(String(value).replace(/[%万,，\s]/g, ''))
@@ -262,6 +269,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     taskText: amountText(taskKey ? row[taskKey] : null),
     actualText: amountText(actualKey ? row[actualKey] : null),
     remainText: amountText(remainKey ? row[remainKey] : null),
+    raw: row,
   }
 }).filter(item => item.name))
 
@@ -664,6 +672,29 @@ const comparisonDigestRows = computed(() => (
 
 const isComparisonDigest = computed(() => comparisonDigestRows.value.length >= 2)
 
+const comparisonParentNames = computed(() => {
+  const names = []
+  ;[
+    ...comparisonDigestRows.value.map(item => item.name),
+    ...resolvedMemberNames.value,
+  ].forEach((name) => {
+    const value = cleanText(name)
+    if (value && !names.some(item => sameOrgName(item, value))) names.push(value)
+  })
+  return names
+})
+
+const rawRowText = (row) => Object.values(row?.raw || {})
+  .map(value => cleanText(value))
+  .filter(Boolean)
+  .join(' ')
+
+const rowMatchedParentName = (row, parentNames = []) => parentNames.find((parent) => {
+  if (sameOrgName(row?.parent, parent)) return true
+  const rawText = rawRowText(row)
+  return rawText ? rawText.includes(parent) : false
+}) || ''
+
 const comparisonLevelLabel = computed(() => {
   const level = comparisonDigestRows.value.find(item => item.level)?.level || ''
   if (level) return level
@@ -804,13 +835,19 @@ const focusDrillRows = computed(() => {
 
 const comparisonDrillRows = computed(() => {
   if (comparisonDigestRows.value.length < 2) return []
-  const parentNames = new Set(comparisonDigestRows.value.map(item => item.name).filter(Boolean))
-  if (!parentNames.size) return []
-  return normalizedRows.value.filter(item => (
-    item.rate !== null &&
-    parentNames.has(item.parent) &&
-    !parentNames.has(item.name)
-  ))
+  const parentNames = comparisonParentNames.value
+  if (!parentNames.length) return []
+  return normalizedRows.value
+    .map((item) => {
+      const matchedParent = rowMatchedParentName(item, parentNames)
+      return matchedParent ? { ...item, parent: matchedParent } : item
+    })
+    .filter(item => (
+      item.rate !== null &&
+      item.parent &&
+      parentNames.some(parent => sameOrgName(item.parent, parent)) &&
+      !parentNames.some(parent => sameOrgName(item.name, parent))
+    ))
 })
 
 const secondaryDrillAllRows = computed(() => {
@@ -838,20 +875,21 @@ const secondaryDrillRows = computed(() => secondaryDrillAllRows.value)
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
-  const shouldGroup = comparisonDigestRows.value.length >= 2 && parents.length >= 2
+  const shouldGroup = comparisonParentNames.value.length >= 2 && parents.length >= 1
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
 
-  const parentOrder = comparisonDigestRows.value.map(item => item.name).filter(Boolean)
+  const parentOrder = comparisonParentNames.value
   const orderedParents = [
-    ...parentOrder.filter(name => parents.includes(name)),
-    ...parents.filter(name => !parentOrder.includes(name)),
+    ...parentOrder.filter(name => parents.some(parent => sameOrgName(parent, name))),
+    ...parents.filter(name => !parentOrder.some(parent => sameOrgName(parent, name))),
   ]
 
   return orderedParents
-    .map(parent => ({
+    .map((parent, index) => ({
       key: `group-${parent}`,
       title: parent,
-      rows: rows.filter(item => item.parent === parent),
+      index,
+      rows: rows.filter(item => sameOrgName(item.parent, parent)),
     }))
     .filter(group => group.rows.length)
 })
@@ -1320,7 +1358,35 @@ const actionItems = computed(() => {
   gap: 10px;
   padding: 9px 12px;
   border-top: 1px solid rgba(22, 93, 255, 0.08);
+  border-left: 3px solid #165dff;
   background: linear-gradient(90deg, rgba(22, 93, 255, 0.08), rgba(22, 93, 255, 0.02));
+}
+
+.sa-drill-group-row.is-group-2 {
+  border-left-color: #ff7d00;
+  background: linear-gradient(90deg, rgba(255, 125, 0, 0.1), rgba(255, 125, 0, 0.025));
+}
+
+.sa-drill-group-row.is-group-2 span {
+  color: #d46b08;
+}
+
+.sa-drill-group-row.is-group-3 {
+  border-left-color: #00a870;
+  background: linear-gradient(90deg, rgba(0, 168, 112, 0.1), rgba(0, 168, 112, 0.025));
+}
+
+.sa-drill-group-row.is-group-3 span {
+  color: #008f62;
+}
+
+.sa-drill-group-row.is-group-4 {
+  border-left-color: #722ed1;
+  background: linear-gradient(90deg, rgba(114, 46, 209, 0.1), rgba(114, 46, 209, 0.025));
+}
+
+.sa-drill-group-row.is-group-4 span {
+  color: #6d3cc7;
 }
 
 .sa-drill-group-row span {
@@ -1419,16 +1485,36 @@ const actionItems = computed(() => {
   background: #00b42a;
 }
 
+.sa-drill-rate.is-success .sa-drill-rate-head strong,
+.sa-drill-rate.is-success .sa-drill-rate-head span {
+  color: #00a321;
+}
+
 .sa-drill-rate.is-warn .sa-drill-bar i {
   background: #ff7d00;
+}
+
+.sa-drill-rate.is-warn .sa-drill-rate-head strong,
+.sa-drill-rate.is-warn .sa-drill-rate-head span {
+  color: #d46b08;
 }
 
 .sa-drill-rate.is-danger .sa-drill-bar i {
   background: #f53f3f;
 }
 
+.sa-drill-rate.is-danger .sa-drill-rate-head strong,
+.sa-drill-rate.is-danger .sa-drill-rate-head span {
+  color: #d92d20;
+}
+
 .sa-drill-rate.is-neutral .sa-drill-bar i {
   background: #86909c;
+}
+
+.sa-drill-rate.is-neutral .sa-drill-rate-head strong,
+.sa-drill-rate.is-neutral .sa-drill-rate-head span {
+  color: #6b7280;
 }
 
 .sa-advice-section {

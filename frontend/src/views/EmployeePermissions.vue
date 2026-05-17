@@ -37,18 +37,18 @@
         border
         @selection-change="selectedUserIds = $event.map(item => item.id)"
       >
-        <el-table-column type="selection" width="38" />
+        <el-table-column v-if="canSeeField('employee_field_actions')" type="selection" width="38" />
         <el-table-column label="id" type="index" width="48" />
-        <el-table-column label="姓名" min-width="92">
+        <el-table-column v-if="canSeeField('employee_field_name')" label="姓名" min-width="92">
           <template #default="{ row }">{{ row.name || '-' }}</template>
         </el-table-column>
-        <el-table-column label="电话" min-width="116">
+        <el-table-column v-if="canSeeField('employee_field_phone')" label="电话" min-width="116">
           <template #default="{ row }">{{ row.account || row.username || '-' }}</template>
         </el-table-column>
-        <el-table-column label="角色" width="86">
+        <el-table-column v-if="canSeeField('employee_field_role')" label="角色" width="86">
           <template #default="{ row }">{{ roleLabel(row.role) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="76" align="center">
+        <el-table-column v-if="canSeeField('employee_field_status')" label="状态" width="76" align="center">
           <template #default="{ row }">
             <el-switch
               class="status-switch"
@@ -60,15 +60,15 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="组织" min-width="180" show-overflow-tooltip>
+        <el-table-column v-if="canSeeField('employee_field_org')" label="组织" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <span>{{ organizationSummary(row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="飞书信息" min-width="160" show-overflow-tooltip>
+        <el-table-column v-if="canSeeField('employee_field_bookshelf')" label="飞书信息" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">{{ feishuSummary(row) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="112">
+        <el-table-column v-if="canSeeField('employee_field_actions')" label="操作" width="112">
           <template #default="{ row }">
             <el-button v-if="isFeatureEnabled('employee_update')" link type="primary" @click="openEditUser(row)">编辑</el-button>
             <el-button v-if="isFeatureEnabled('employee_delete')" link type="danger" @click="deleteUser(row)">删除</el-button>
@@ -238,6 +238,21 @@ const orgTrees = ref({ tree_types: [], nodes: [], trees: {} })
 const selectedUserIds = ref([])
 const bulkDialogVisible = ref(false)
 const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
+const employeeFieldKeys = [
+  'employee_field_name',
+  'employee_field_phone',
+  'employee_field_role',
+  'employee_field_status',
+  'employee_field_org',
+  'employee_field_org_code',
+  'employee_field_bookshelf',
+  'employee_field_actions',
+]
+const fieldAccess = computed(() => employeeFieldKeys.reduce((map, key) => {
+  map[key] = isFeatureEnabled(key)
+  return map
+}, {}))
+const canSeeField = (key) => Boolean(fieldAccess.value[key])
 
 const userDialog = reactive({ visible: false, mode: 'create' })
 const userForm = reactive({
@@ -320,7 +335,10 @@ const organizationSummary = (row = {}) => {
   const nodes = organizationDisplayNodes(row)
   if (!nodes.length) return '未授权'
   const first = nodes[0]
-  return nodes.length > 1 ? `${first.name}（${first.code}） +${nodes.length - 1}` : `${first.name}（${first.code}）`
+  const label = canSeeField('employee_field_org_code') && first.code
+    ? `${first.name}（${first.code}）`
+    : `${first.name}`
+  return nodes.length > 1 ? `${label} +${nodes.length - 1}` : label
 }
 const feishuSummary = (row = {}) => row.union_id || row.email || row.enterprise_email || row.department || row.position || '-'
 const currentTreeTypeIdFromSelection = (target) => {

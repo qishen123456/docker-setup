@@ -1196,6 +1196,41 @@ for _key, (_label, _description, _order, _risk) in _FEISHU_ACTION_FEATURES.items
         },
     )
 
+_FIELD_FEATURES = {
+    "employee_field_name": ("查看员工姓名", "员工权限管理页，控制姓名列是否显示。", "employee_permissions", "员工权限管理", 901, "", ["super_admin", "admin", "business_admin"]),
+    "employee_field_phone": ("查看员工电话", "员工权限管理页，控制电话/账号列是否显示。", "employee_permissions", "员工权限管理", 902, "high", ["super_admin", "admin"]),
+    "employee_field_role": ("查看员工角色", "员工权限管理页，控制角色列是否显示。", "employee_permissions", "员工权限管理", 903, "medium", ["super_admin", "admin"]),
+    "employee_field_status": ("查看员工状态", "员工权限管理页，控制启停状态列是否显示。", "employee_permissions", "员工权限管理", 904, "medium", ["super_admin", "admin"]),
+    "employee_field_org": ("查看员工组织", "员工权限管理页，控制组织列是否显示。", "employee_permissions", "员工权限管理", 905, "medium", ["super_admin", "admin", "business_admin"]),
+    "employee_field_org_code": ("查看组织编码", "员工权限管理页，控制组织编码是否显示。", "employee_permissions", "员工权限管理", 906, "medium", ["super_admin", "admin"]),
+    "employee_field_bookshelf": ("查看书籍信息", "员工权限管理页，控制书籍/飞书信息列是否显示。", "employee_permissions", "员工权限管理", 907, "medium", ["super_admin", "admin"]),
+    "employee_field_actions": ("查看员工操作列", "员工权限管理页，控制编辑、删除等操作列是否显示。", "employee_permissions", "员工权限管理", 908, "high", ["super_admin", "admin"]),
+    "smart_field_execution_trace": ("查看执行轨迹", "智能分析工作台，控制执行轨迹明细是否展示。", "smart_ask_workspace", "智能分析工作台", 921, "medium", ["super_admin", "admin", "business_admin"]),
+    "smart_field_generated_sql": ("查看生成 SQL", "智能分析工作台，控制生成 SQL 是否展示。", "smart_ask_workspace", "智能分析工作台", 922, "high", ["super_admin", "admin"]),
+    "smart_field_dataset_hit": ("查看命中数据集", "智能分析工作台，控制命中数据集和路由信息是否展示。", "smart_ask_workspace", "智能分析工作台", 923, "", ["super_admin", "admin", "business_admin", "user"]),
+    "smart_field_confidence": ("查看置信度", "智能分析工作台，控制路由/结果置信度是否展示。", "smart_ask_workspace", "智能分析工作台", 924, "medium", ["super_admin", "admin", "business_admin"]),
+    "smart_field_token_usage": ("查看 token 用量", "智能分析工作台和控制台，控制 token 用量明细是否展示。", "smart_ask_workspace", "智能分析工作台", 925, "medium", ["super_admin", "admin"]),
+    "smart_field_error_detail": ("查看错误详情", "智能分析工作台，控制详细错误和调试信息是否展示。", "smart_ask_workspace", "智能分析工作台", 926, "medium", ["super_admin", "admin"]),
+}
+
+for _key, (_label, _description, _module, _module_label, _order, _risk, _roles) in _FIELD_FEATURES.items():
+    DEFAULT_FEATURE_FLAGS["features"].setdefault(
+        _key,
+        {
+            "label": _label,
+            "description": _description,
+            "category": f"字段 · {_module_label}",
+            "module": _module,
+            "module_label": _module_label,
+            "kind": "field",
+            "order": _order,
+            "risk": _risk,
+            "enabled": True,
+            "roles": list(_roles),
+            "experimental": False,
+        },
+    )
+
 _BUSINESS_ADMIN_DEFAULT_FEATURES = {
     "smart_ask_workspace",
     "app_password_change",

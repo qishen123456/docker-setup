@@ -2474,6 +2474,20 @@ WHERE 节点名称 = '消费者事业部'
    )
 """
 
+        channel_metric = ""
+        for candidate in ["燃气定制", "新零售", "线下", "地产"]:
+            if candidate in normalized_question:
+                channel_metric = candidate
+                break
+        if channel_metric:
+            task_metric_expr = f"COALESCE({channel_metric}任务_万元, 0) * 10000"
+            actual_metric_expr = f"COALESCE({channel_metric}实际_万元, 0) * 10000"
+            metric_scope_expr = f"'{channel_metric}'"
+        else:
+            task_metric_expr = "总任务金额"
+            actual_metric_expr = "年度开单金额"
+            metric_scope_expr = "'全部'"
+
         base_sql = """
 WITH 字段提取 AS (
     SELECT
@@ -2535,13 +2549,14 @@ WITH 字段提取 AS (
 汇总结果 AS (
     SELECT
         '消费者经营链路' AS 条线,
+        {metric_scope_expr} AS 分析口径,
         层级,
         节点名称,
         上级名称,
-        ROUND(总任务金额, 2) AS 总任务金额,
-        ROUND(年度开单金额, 2) AS 年度开单金额,
-        CASE WHEN 总任务金额 > 0 THEN ROUND(年度开单金额 / 总任务金额 * 100, 2) ELSE 0 END AS 达成率,
-        ROUND(GREATEST(总任务金额 - 年度开单金额, 0), 2) AS 剩余任务金额,
+        ROUND(({task_metric_expr}), 2) AS 总任务金额,
+        ROUND(({actual_metric_expr}), 2) AS 年度开单金额,
+        CASE WHEN ({task_metric_expr}) > 0 THEN ROUND(({actual_metric_expr}) / ({task_metric_expr}) * 100, 2) ELSE 0 END AS 达成率,
+        ROUND(GREATEST(({task_metric_expr}) - ({actual_metric_expr}), 0), 2) AS 剩余任务金额,
         ROUND(线下任务_万元, 2) AS 线下任务_万元,
         ROUND(新零售任务_万元, 2) AS 新零售任务_万元,
         ROUND(燃气定制任务_万元, 2) AS 燃气定制任务_万元,
@@ -2552,9 +2567,13 @@ WITH 字段提取 AS (
         ROUND(地产实际_万元, 2) AS 地产实际_万元
     FROM 标准行
     WHERE 节点名称 <> ''
-      AND (总任务金额 > 0 OR 年度开单金额 > 0)
+      AND (({task_metric_expr}) > 0 OR ({actual_metric_expr}) > 0)
 )
-""".strip()
+""".format(
+            metric_scope_expr=metric_scope_expr,
+            task_metric_expr=task_metric_expr,
+            actual_metric_expr=actual_metric_expr,
+        ).strip()
 
         if asks_branch_extremes:
             return f"""

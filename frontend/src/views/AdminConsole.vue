@@ -8,7 +8,7 @@
       </div>
       <div class="hero-actions">
         <el-button plain @click="toggleAdminFloat">{{ adminFloatEnabled ? '关闭悬浮入口' : '开启悬浮入口' }}</el-button>
-        <template v-if="activeConsoleTab === 'permissions'">
+        <template v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'fields'">
           <el-button plain :loading="loading" @click="loadFlags">刷新</el-button>
           <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
           <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
@@ -17,30 +17,230 @@
           <el-button plain :loading="dataPermissionLoading" @click="loadDataPermissions">刷新数据集权限</el-button>
           <el-button type="primary" :loading="dataPermissionSaving" @click="saveDataPermissionRules">保存数据集权限</el-button>
         </template>
-        <template v-else>
-          <el-button plain :loading="logLoading" @click="loadLogData">刷新日志</el-button>
-          <el-button plain type="danger" :loading="logClearing" @click="handleClearLogs">清理查询日期内日志</el-button>
+        <template v-else-if="activeConsoleTab === 'logs' || activeConsoleTab === 'dashboard'">
+          <el-button plain :loading="activeConsoleTab === 'dashboard' ? dashboardLoading : logLoading" @click="activeConsoleTab === 'dashboard' ? loadDashboardData() : loadLogData()">{{ activeConsoleTab === 'dashboard' ? '刷新看板' : '刷新日志' }}</el-button>
+          <el-button v-if="activeConsoleTab === 'logs'" plain type="danger" :loading="logClearing" @click="handleClearLogs">清理查询日期内日志</el-button>
         </template>
       </div>
     </section>
 
     <section class="console-tabs">
-      <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="activeConsoleTab = 'permissions'">功能权限控制</button>
-      <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="activeConsoleTab = 'data'; ensureDataPermissionsLoaded()">数据集权限控制</button>
-      <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="activeConsoleTab = 'logs'; ensureLogsLoaded()">日志管理</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'dashboard' }" @click="switchConsoleTab('dashboard')">管理看板</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="switchConsoleTab('permissions')">功能权限控制</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'fields' }" @click="switchConsoleTab('fields')">字段显示权限</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="switchConsoleTab('data')">数据集权限控制</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="switchConsoleTab('logs')">日志管理</button>
     </section>
 
     <section class="console-command-layout" :class="{ 'is-data-tab': activeConsoleTab === 'data' }">
       <main class="console-command-main">
-    <template v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'">
+    <template v-if="activeConsoleTab === 'dashboard'">
+      <section class="dashboard-toolbar">
+        <div>
+          <span class="card-kicker">日期筛选</span>
+          <strong>{{ dashboardRangeLabel }}</strong>
+        </div>
+        <el-date-picker
+          v-model="dashboardDateRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          :clearable="false"
+          @change="loadDashboardData"
+        />
+        <div class="dashboard-toolbar-actions">
+          <el-button plain @click="setDashboardToday">今天</el-button>
+          <el-button plain @click="setDashboardLast7Days">近7天</el-button>
+          <el-button type="primary" :loading="dashboardLoading" @click="loadDashboardData">查询</el-button>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <button
+          v-for="card in dashboardCards"
+          :key="card.key"
+          type="button"
+          class="dashboard-card"
+          :class="`is-${card.tone}`"
+          @click="openLogsFromDashboard(card.filter)"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </button>
+      </section>
+
+      <section class="dashboard-panels dashboard-rank-panels">
+        <article v-for="panel in dashboardUserRankPanels" :key="panel.key" class="dashboard-panel dashboard-rank-panel">
+          <header>
+            <div>
+              <span class="card-kicker">{{ panel.kicker }}</span>
+              <h2>{{ panel.title }}</h2>
+            </div>
+            <el-button link type="primary" @click="openLogsFromDashboard(panel.filter)">看日志</el-button>
+          </header>
+          <el-table :data="panel.rows" border stripe class="dashboard-table" :empty-text="panel.emptyText">
+            <el-table-column label="用户" min-width="150" show-overflow-tooltip>
+              <template #default="{ row }">
+                <div class="dashboard-user-cell">
+                  <strong>{{ userRankName(row) }}</strong>
+                  <small>{{ roleLabel(row.user_role) }}</small>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column :label="panel.metricLabel" width="116">
+              <template #default="{ row }">
+                <strong class="rank-metric" :class="`is-${panel.tone}`">{{ formatNumber(row[panel.metricKey] || 0) }}</strong>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="86">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="jumpToUserLogs(row, panel.filter)">定位</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </article>
+      </section>
+
+      <section class="dashboard-panels">
+        <article class="dashboard-panel">
+          <header>
+            <div>
+              <span class="card-kicker">低置信度问题</span>
+              <h2>需要补口径的问题</h2>
+            </div>
+            <el-button link type="primary" @click="openLogsFromDashboard({ category: 'low_confidence' })">全部日志</el-button>
+          </header>
+          <el-table :data="recentLowConfidenceLogs" border stripe class="dashboard-table" empty-text="暂无低置信度问题">
+            <el-table-column label="时间" width="150">
+              <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column label="用户" width="120" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.user_name || row.username || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="问题" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.question || whatHappened(row) }}</template>
+            </el-table-column>
+            <el-table-column label="置信度" width="120">
+              <template #default="{ row }">{{ confidenceLabel(row.confidence) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="92">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="jumpToLog(row)">看日志</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </article>
+
+        <article class="dashboard-panel">
+          <header>
+            <div>
+              <span class="card-kicker">错误问题</span>
+              <h2>需要排查的异常</h2>
+            </div>
+            <el-button link type="primary" @click="openLogsFromDashboard({ category: 'error', level: 'error' })">全部日志</el-button>
+          </header>
+          <el-table :data="recentErrorLogs" border stripe class="dashboard-table" empty-text="暂无错误日志">
+            <el-table-column label="时间" width="150">
+              <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column label="用户" width="120" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.user_name || row.username || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="错误" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.error_message || whatHappened(row) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="92">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="jumpToLog(row)">看日志</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </article>
+      </section>
+    </template>
+
+    <template v-else-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'fields' || activeConsoleTab === 'data'">
     <section v-if="activeConsoleTab === 'permissions'" class="summary-strip">
       <div><strong>{{ navigationItems.length }}</strong><span>导航项</span></div>
       <div><strong>{{ buttonItems.length }}</strong><span>按钮项</span></div>
       <div><strong>{{ enabledButtonCount }}</strong><span>已开放按钮</span></div>
       <div><strong>{{ highRiskCount }}</strong><span>高风险项</span></div>
     </section>
+    <section v-if="activeConsoleTab === 'fields'" class="summary-strip">
+      <div><strong>{{ fieldItems.length }}</strong><span>字段项</span></div>
+      <div><strong>{{ enabledFieldCount }}</strong><span>已开放字段</span></div>
+      <div><strong>{{ fieldGroups.length }}</strong><span>覆盖模块</span></div>
+      <div><strong>{{ highRiskFieldCount }}</strong><span>敏感字段</span></div>
+    </section>
 
     <el-skeleton v-if="loading && !featureList.length" :rows="8" animated />
+
+    <template v-else-if="activeConsoleTab === 'fields'">
+      <section class="module-section">
+        <div class="module-title">
+          <div>
+            <span class="card-kicker">字段显示权限</span>
+            <h2>按页面模块控制字段可见性</h2>
+          </div>
+          <em>字段权限只控制显示；高敏字段后续会继续补后端裁剪。</em>
+        </div>
+
+        <section
+          v-for="group in fieldGroups"
+          :key="group.module"
+          class="module-card"
+          :class="{ 'is-open': isModuleOpen(group.module) }"
+        >
+          <button class="module-card-head" type="button" @click="toggleModule(group.module)">
+            <div class="module-head-copy">
+              <span class="module-scope">字段显示</span>
+              <strong>{{ group.label }}</strong>
+              <small>{{ group.description }}</small>
+            </div>
+            <div class="module-head-stats">
+              <span>{{ group.enabledCount }}/{{ group.items.length }} 开放</span>
+              <i>{{ group.riskCount }} 个敏感</i>
+            </div>
+          </button>
+
+          <div v-show="isModuleOpen(group.module)" class="matrix-table compact">
+            <div class="matrix-row matrix-head">
+              <div class="feature-col">字段项</div>
+              <label v-for="role in roles" :key="role.value" class="role-head" :class="{ checked: isRoleAllChecked(group.items, role.value) }">
+                <input type="checkbox" :checked="isRoleAllChecked(group.items, role.value)" @change="toggleRoleAll(group.items, role.value, $event.target.checked)" />
+                <span class="check-box"></span>
+                <span class="role-name">{{ role.label }}</span>
+                <small>全选</small>
+              </label>
+            </div>
+            <div v-for="item in group.items" :key="item.key" class="matrix-row" :class="{ 'is-risk': item.risk === 'high' || item.risk === 'medium' }">
+              <div class="feature-col">
+                <span class="feature-tag">{{ item.risk === 'high' ? '高敏' : item.risk === 'medium' ? '敏感' : '字段' }}</span>
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.description }}</small>
+              </div>
+              <label
+                v-for="role in roles"
+                :key="role.value"
+                class="permission-check"
+                :class="{ checked: hasRole(item, role.value), disabled: isFixedPermission(item, role.value) }"
+              >
+                <input
+                  type="checkbox"
+                  :checked="hasRole(item, role.value)"
+                  :disabled="isFixedPermission(item, role.value)"
+                  @change="setRole(item, role.value, $event.target.checked)"
+                />
+                <span class="check-box"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+      </section>
+    </template>
 
     <template v-else-if="activeConsoleTab === 'data'">
       <section class="summary-strip data-summary-strip">
@@ -380,9 +580,9 @@
 
     </section>
 
-    <div v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'" class="console-floating-save">
+    <div v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'fields' || activeConsoleTab === 'data'" class="console-floating-save">
       <el-button
-        v-if="activeConsoleTab === 'permissions'"
+        v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'fields'"
         type="primary"
         :loading="saving"
         :disabled="!featureList.length"
@@ -522,6 +722,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import {
   clearSystemLogs,
   getAdminFeatureFlags,
@@ -534,6 +735,8 @@ import {
   saveAdminFeatureFlags,
 } from '../api/index.js'
 
+const route = useRoute()
+const router = useRouter()
 const roles = [
   { value: 'super_admin', label: '超管' },
   { value: 'admin', label: '管理员' },
@@ -542,15 +745,17 @@ const roles = [
 ]
 const roleOrder = roles.map((item) => item.value)
 const FEATURE_FLAGS_UPDATED_EVENT = 'smartask-feature-flags-updated'
+const ADMIN_CONSOLE_LAST_ROUTE_KEY = 'smartask_admin_console_last_route'
 const ADMIN_CONSOLE_FLOAT_HIDDEN_KEY = 'smartask_admin_console_float_hidden'
 const ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT = 'smartask-admin-console-float-toggle'
+const consoleTabs = ['dashboard', 'permissions', 'fields', 'data', 'logs']
 
 const loading = ref(false)
 const saving = ref(false)
 const resetting = ref(false)
 const features = ref({})
 const openModules = ref(['organization_tree_management', 'employee_permissions', 'runtime_migration'])
-const activeConsoleTab = ref('permissions')
+const activeConsoleTab = ref('dashboard')
 const dataPermissionLoading = ref(false)
 const dataPermissionSaving = ref(false)
 const dataPermissionRows = ref([])
@@ -575,10 +780,34 @@ const logFilters = ref({
   category: '',
   level: '',
   keyword: '',
+  trace_id: '',
   date_range: [],
 })
+const formatDateValue = (date) => {
+  const current = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(current.getTime())) return ''
+  const year = current.getFullYear()
+  const month = String(current.getMonth() + 1).padStart(2, '0')
+  const day = String(current.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const todayDateValue = formatDateValue(new Date())
+const dashboardDateRange = ref([todayDateValue, todayDateValue])
+const dashboardLoading = ref(false)
 
 const activeHero = computed(() => {
+  if (activeConsoleTab.value === 'dashboard') {
+    return {
+      kicker: '管理看板',
+      description: '集中查看访问、问数、token、报错和低置信度问题，并可直接跳转日志定位。'
+    }
+  }
+  if (activeConsoleTab.value === 'fields') {
+    return {
+      kicker: '字段显示权限',
+      description: '控制页面里的敏感字段是否展示，例如员工角色、组织、电话、SQL 和置信度。'
+    }
+  }
   if (activeConsoleTab.value === 'logs') {
     return {
       kicker: '日志审计',
@@ -616,10 +845,13 @@ const featureList = computed(() =>
 )
 
 const navigationItems = computed(() => featureList.value.filter((item) => item.kind === 'navigation'))
-const buttonItems = computed(() => featureList.value.filter((item) => item.kind !== 'navigation'))
+const buttonItems = computed(() => featureList.value.filter((item) => item.kind === 'button'))
+const fieldItems = computed(() => featureList.value.filter((item) => item.kind === 'field'))
 const navigationEnabledCount = computed(() => navigationItems.value.filter((item) => item.enabled).length)
 const enabledButtonCount = computed(() => buttonItems.value.filter((item) => item.enabled).length)
+const enabledFieldCount = computed(() => fieldItems.value.filter((item) => item.enabled).length)
 const highRiskCount = computed(() => buttonItems.value.filter((item) => item.risk === 'high').length)
+const highRiskFieldCount = computed(() => fieldItems.value.filter((item) => ['high', 'medium'].includes(item.risk)).length)
 const orgScopedDatasetCount = computed(() => dataPermissionRows.value.filter((item) => item.rule?.mode === 'org_tree').length)
 const enabledDataPermissionEmployees = computed(() => dataPermissionEmployees.value.filter((item) => item.enabled !== false))
 const dataPermissionTreeTypes = computed(() => dataPermissionOrganizationTrees.value?.tree_types || [])
@@ -742,6 +974,31 @@ const buttonGroups = computed(() => {
         sections: buildPermissionSections(group.items),
         enabledCount: group.items.filter((item) => item.enabled).length,
         riskCount: group.items.filter((item) => item.risk === 'high').length
+      }
+    })
+    .sort((a, b) => a.order - b.order)
+})
+
+const fieldGroups = computed(() => {
+  const grouped = new Map()
+  for (const item of fieldItems.value) {
+    if (!grouped.has(item.module)) {
+      grouped.set(item.module, { module: item.module, items: [] })
+    }
+    grouped.get(item.module).items.push(item)
+  }
+  return Array.from(grouped.values())
+    .map((group) => {
+      const info = moduleInfoMap.value.get(group.module) || {}
+      const firstItem = group.items[0] || {}
+      return {
+        ...group,
+        label: info.label || firstItem.module_label || '其他模块',
+        description: info.description || `控制 ${firstItem.module_label || '页面'} 内字段是否显示。`,
+        order: Number(info.order || Math.min(...group.items.map((item) => item.order || 999))),
+        items: group.items.sort((a, b) => a.order - b.order),
+        enabledCount: group.items.filter((item) => item.enabled).length,
+        riskCount: group.items.filter((item) => ['high', 'medium'].includes(item.risk)).length
       }
     })
     .sort((a, b) => a.order - b.order)
@@ -1171,6 +1428,55 @@ const syncAdminFloatState = () => {
   adminFloatEnabled.value = sessionStorage.getItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY) === '0'
 }
 
+const adminConsoleRouteForQuery = (query = {}) => {
+  const search = new URLSearchParams()
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null && item !== '') search.append(key, String(item))
+      })
+    } else {
+      search.set(key, String(value))
+    }
+  })
+  const queryString = search.toString()
+  return `/admin-console${queryString ? `?${queryString}` : ''}`
+}
+
+const persistAdminConsoleLocation = (query = {}) => {
+  const tab = consoleTabs.includes(String(query.tab || activeConsoleTab.value))
+    ? String(query.tab || activeConsoleTab.value)
+    : 'dashboard'
+  const nextQuery = { ...query, tab }
+  const target = adminConsoleRouteForQuery(nextQuery)
+  sessionStorage.setItem(ADMIN_CONSOLE_LAST_ROUTE_KEY, target)
+  localStorage.setItem(ADMIN_CONSOLE_LAST_ROUTE_KEY, target)
+  return nextQuery
+}
+
+const syncAdminConsoleRoute = async (query = {}) => {
+  const nextQuery = persistAdminConsoleLocation(query)
+  await router.replace({ query: nextQuery }).catch(() => {})
+}
+
+const switchConsoleTab = async (tab) => {
+  if (!consoleTabs.includes(tab)) return
+  activeConsoleTab.value = tab
+  const keepQuery = tab === 'logs' ? {
+    tab,
+    category: logFilters.value.category || undefined,
+    level: logFilters.value.level || undefined,
+    keyword: logFilters.value.keyword || undefined,
+    trace_id: logFilters.value.trace_id || undefined,
+    ...dateRangeParams(logFilters.value.date_range),
+  } : { tab }
+  await syncAdminConsoleRoute(keepQuery)
+  if (tab === 'dashboard') loadDashboardData()
+  else if (tab === 'data') ensureDataPermissionsLoaded()
+  else if (tab === 'logs') ensureLogsLoaded()
+}
+
 const toggleAdminFloat = () => {
   const nextVisible = !adminFloatEnabled.value
   adminFloatEnabled.value = nextVisible
@@ -1182,6 +1488,33 @@ const toggleAdminFloat = () => {
 const normalizeLogDate = (value) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+const dateRangeParams = (range) => {
+  const values = Array.isArray(range) ? range : []
+  if (values.length !== 2 || !values[0] || !values[1]) return {}
+  return { date_from: values[0], date_to: values[1] }
+}
+
+const dashboardStatsParams = computed(() => dateRangeParams(dashboardDateRange.value))
+
+const dashboardRangeLabel = computed(() => {
+  const range = dashboardDateRange.value || []
+  if (range.length !== 2 || !range[0] || !range[1]) return '今日'
+  return range[0] === range[1] ? range[0] : `${range[0]} 至 ${range[1]}`
+})
+
+const setDashboardToday = () => {
+  dashboardDateRange.value = [todayDateValue, todayDateValue]
+  loadDashboardData()
+}
+
+const setDashboardLast7Days = () => {
+  const end = new Date()
+  const start = new Date()
+  start.setDate(end.getDate() - 6)
+  dashboardDateRange.value = [formatDateValue(start), formatDateValue(end)]
+  loadDashboardData()
 }
 
 const filterLogsByDateRange = (items) => {
@@ -1203,9 +1536,9 @@ const refreshLogTable = () => {
   logs.value = filtered.slice(start, start + logPageSize.value)
 }
 
-const loadLogStats = async () => {
+const loadLogStats = async (params = dashboardStatsParams.value) => {
   try {
-    const res = await getSystemLogStats()
+    const res = await getSystemLogStats(params)
     logStats.value = res?.stats || {}
   } catch (error) {
     showRequestError(error, '日志统计加载失败')
@@ -1220,6 +1553,8 @@ const loadLogs = async () => {
       category: logFilters.value.category || undefined,
       level: logFilters.value.level || undefined,
       keyword: logFilters.value.keyword || undefined,
+      trace_id: logFilters.value.trace_id || undefined,
+      ...dateRangeParams(logFilters.value.date_range),
       limit: 'all',
       offset: 0,
     })
@@ -1230,6 +1565,157 @@ const loadLogs = async () => {
   } finally {
     logLoading.value = false
   }
+}
+
+const loadDashboardData = async () => {
+  dashboardLoading.value = true
+  try {
+    await loadLogStats(dashboardStatsParams.value)
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+const recentLowConfidenceLogs = computed(() => (
+  Array.isArray(logStats.value.recent_low_confidence) ? logStats.value.recent_low_confidence : []
+))
+
+const recentErrorLogs = computed(() => (
+  Array.isArray(logStats.value.recent_errors) ? logStats.value.recent_errors : []
+))
+
+const formatNumber = (value) => Number(value || 0).toLocaleString('zh-CN')
+const userRankName = (row = {}) => row.display_name || row.user_name || row.username || '未知用户'
+const topUsersByAccess = computed(() => Array.isArray(logStats.value.top_users_by_access) ? logStats.value.top_users_by_access : [])
+const topUsersByTokens = computed(() => Array.isArray(logStats.value.top_users_by_tokens) ? logStats.value.top_users_by_tokens : [])
+const topUsersByErrors = computed(() => Array.isArray(logStats.value.top_users_by_errors) ? logStats.value.top_users_by_errors : [])
+const topUsersByLowConfidence = computed(() => Array.isArray(logStats.value.top_users_by_low_confidence) ? logStats.value.top_users_by_low_confidence : [])
+const dashboardUserRankPanels = computed(() => [
+  {
+    key: 'access',
+    kicker: '异常用户',
+    title: '访问最多',
+    metricLabel: '访问数',
+    metricKey: 'access_count',
+    tone: 'primary',
+    rows: topUsersByAccess.value,
+    emptyText: '暂无访问用户',
+    filter: {},
+  },
+  {
+    key: 'tokens',
+    kicker: '资源用量',
+    title: 'Token 最高',
+    metricLabel: 'Token',
+    metricKey: 'total_tokens',
+    tone: 'success',
+    rows: topUsersByTokens.value,
+    emptyText: '暂无 token 用量',
+    filter: { category: 'qa_all' },
+  },
+  {
+    key: 'errors',
+    kicker: '异常排查',
+    title: '错误最多',
+    metricLabel: '错误数',
+    metricKey: 'error_count',
+    tone: 'danger',
+    rows: topUsersByErrors.value,
+    emptyText: '暂无错误用户',
+    filter: { category: 'error', level: 'error' },
+  },
+  {
+    key: 'low_confidence',
+    kicker: '口径治理',
+    title: '低置信度最多',
+    metricLabel: '问题数',
+    metricKey: 'low_confidence_count',
+    tone: 'warning',
+    rows: topUsersByLowConfidence.value,
+    emptyText: '暂无低置信度用户',
+    filter: { category: 'low_confidence' },
+  },
+])
+
+const dashboardCards = computed(() => [
+  {
+    key: 'range_access',
+    label: '访问数',
+    value: formatNumber(logStats.value.range_access || logStats.value.today_access || 0),
+    hint: `${dashboardRangeLabel.value}，点击查看访问日志`,
+    tone: 'info',
+    filter: { category: 'access' },
+  },
+  {
+    key: 'range_qa',
+    label: '问数次数',
+    value: formatNumber(logStats.value.range_qa || logStats.value.today_qa || 0),
+    hint: `${dashboardRangeLabel.value}，点击查看问数日志`,
+    tone: 'primary',
+    filter: { category: 'qa_all' },
+  },
+  {
+    key: 'range_tokens',
+    label: 'Token 用量',
+    value: formatNumber(logStats.value.range_tokens || logStats.value.today_tokens || 0),
+    hint: `${dashboardRangeLabel.value}，基于日志用量字段汇总`,
+    tone: 'success',
+    filter: { category: 'qa_all' },
+  },
+  {
+    key: 'range_errors',
+    label: '错误数',
+    value: formatNumber(logStats.value.range_errors || logStats.value.today_errors || 0),
+    hint: `${dashboardRangeLabel.value}，点击查看错误日志`,
+    tone: 'danger',
+    filter: { category: 'error', level: 'error' },
+  },
+  {
+    key: 'range_low_confidence',
+    label: '低置信度',
+    value: formatNumber(logStats.value.range_low_confidence || logStats.value.today_low_confidence || 0),
+    hint: `${dashboardRangeLabel.value}，点击查看低置信度问题`,
+    tone: 'warning',
+    filter: { category: 'low_confidence' },
+  },
+])
+
+const traceIdFromLog = (row = {}) => {
+  const details = eventDetails(row)
+  return details.trace_id
+    || details.conversation_session_id
+    || details.confirmation_session_id
+    || details.session_id
+    || ''
+}
+
+const openLogsFromDashboard = async (filter = {}) => {
+  const rangeParams = dashboardStatsParams.value
+  activeConsoleTab.value = 'logs'
+  logFilters.value.category = filter.category || ''
+  logFilters.value.level = filter.level || ''
+  logFilters.value.keyword = filter.keyword || ''
+  logFilters.value.trace_id = filter.trace_id || ''
+  logFilters.value.date_range = rangeParams.date_from && rangeParams.date_to ? [rangeParams.date_from, rangeParams.date_to] : []
+  logPage.value = 1
+  await syncAdminConsoleRoute({ tab: 'logs', ...filter, ...rangeParams })
+  await loadLogData()
+}
+
+const jumpToUserLogs = (row = {}, filter = {}) => {
+  const keyword = row.username || row.user_name || row.display_name || ''
+  return openLogsFromDashboard({ ...filter, keyword })
+}
+
+const jumpToLog = async (row) => {
+  const traceId = traceIdFromLog(row)
+  await openLogsFromDashboard({
+    category: row?.category || '',
+    level: row?.level === 'error' ? 'error' : '',
+    trace_id: traceId,
+    keyword: traceId ? '' : (row?.question || row?.error_message || row?.title || ''),
+  })
+  openLogDetail(row)
 }
 
 const exportFilteredLogs = async () => {
@@ -1272,7 +1758,7 @@ const exportFilteredLogs = async () => {
 const loadLogData = async () => {
   logLoading.value = true
   try {
-    await Promise.all([loadLogStats(), loadLogs()])
+    await Promise.all([loadLogStats(dateRangeParams(logFilters.value.date_range)), loadLogs()])
   } finally {
     logLoading.value = false
   }
@@ -1430,6 +1916,37 @@ const prettyJson = (value) => {
 
 onMounted(() => {
   syncAdminFloatState()
+  const savedRoute = localStorage.getItem(ADMIN_CONSOLE_LAST_ROUTE_KEY) || sessionStorage.getItem(ADMIN_CONSOLE_LAST_ROUTE_KEY) || ''
+  let savedQuery = {}
+  if (!route.query?.tab && savedRoute.startsWith('/admin-console')) {
+    try {
+      savedQuery = Object.fromEntries(new URL(savedRoute, window.location.origin).searchParams.entries())
+    } catch {
+      savedQuery = {}
+    }
+  }
+  const initialQuery = route.query?.tab ? route.query : savedQuery
+  const tab = String(initialQuery?.tab || '')
+  if (consoleTabs.includes(tab)) {
+    activeConsoleTab.value = tab
+  }
+  const queryDateRange = initialQuery?.date_from && initialQuery?.date_to
+    ? [String(initialQuery.date_from), String(initialQuery.date_to)]
+    : []
+  if (queryDateRange.length === 2) {
+    dashboardDateRange.value = queryDateRange
+  }
+  persistAdminConsoleLocation({ ...initialQuery, tab: activeConsoleTab.value })
+  if (activeConsoleTab.value === 'logs') {
+    logFilters.value.category = String(initialQuery?.category || '')
+    logFilters.value.level = String(initialQuery?.level || '')
+    logFilters.value.keyword = String(initialQuery?.keyword || '')
+    logFilters.value.trace_id = String(initialQuery?.trace_id || '')
+    logFilters.value.date_range = queryDateRange
+    loadLogData()
+  } else if (activeConsoleTab.value === 'dashboard') {
+    loadDashboardData()
+  }
   loadFlags()
 })
 </script>
@@ -1534,6 +2051,163 @@ onMounted(() => {
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-toolbar strong {
+  display: block;
+  margin-top: 3px;
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.dashboard-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dashboard-card {
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 14px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-card span,
+.dashboard-card small {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dashboard-card strong {
+  display: block;
+  margin: 8px 0 6px;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.dashboard-card.is-danger strong {
+  color: #dc2626;
+}
+
+.dashboard-card.is-warning strong {
+  color: #d97706;
+}
+
+.dashboard-card.is-success strong {
+  color: #059669;
+}
+
+.dashboard-card.is-primary strong {
+  color: #1677ff;
+}
+
+.dashboard-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.dashboard-rank-panels {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-rank-panel {
+  padding: 14px;
+}
+
+.dashboard-panel {
+  padding: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-panel h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.dashboard-table :deep(.el-table__cell) {
+  padding: 7px 0;
+}
+
+.dashboard-user-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-user-cell strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-user-cell small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rank-metric {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.rank-metric.is-primary {
+  color: #1677ff;
+}
+
+.rank-metric.is-success {
+  color: #059669;
+}
+
+.rank-metric.is-danger {
+  color: #dc2626;
+}
+
+.rank-metric.is-warning {
+  color: #d97706;
 }
 
 .summary-strip div {
@@ -2323,6 +2997,21 @@ onMounted(() => {
 
   .summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .dashboard-grid,
+  .dashboard-panels,
+  .dashboard-rank-panels {
+    grid-template-columns: 1fr;
   }
 
   .log-toolbar {
