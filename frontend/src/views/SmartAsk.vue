@@ -1104,6 +1104,7 @@ import ComposerArea from '../components/smartask/ComposerArea.vue'
 import LogTimeline from '../components/smartask/LogTimeline.vue'
 import SqlBlock from '../components/smartask/SqlBlock.vue'
 import { useSmartAskHistory } from '../state/smartAskHistory'
+import { useSmartAskReportHistory } from '../composables/useSmartAskReportHistory'
 import { buildOrgTree, getDefaultConfig as getDefaultReportTreeConfig } from '../composables/useOrgTree'
 import '../styles/volcano-design.css'
 
@@ -1154,7 +1155,6 @@ let timerInst = null
 let chatScrollTimer = null
 let panelScrollTimer = null
 const pendingQuickDataset = ref(null)
-const lastSavedHistorySignature = ref('')
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
@@ -2327,8 +2327,8 @@ const reportDialogCharts = computed(() => {
 })
 
 const reportDialogMetricCards = computed(() => {
-  const source = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
-  const drillReport = source.map(buildBusinessDrillReport).find(Boolean)
+  const source = reportSourceDatasets.value
+  const drillReport = activeBusinessDrillReport.value
   if (drillReport?.kpis?.length) {
     const cards = drillReport.isSingleFocus
       ? drillReport.kpis.slice(0, 4).map(item => ({
@@ -2347,11 +2347,25 @@ const reportDialogMetricCards = computed(() => {
 })
 
 const reportTableBlocks = computed(() => (
-  buildReportTableBlocks(reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value)
+  buildReportTableBlocks(reportSourceDatasets.value)
 ))
 
+const reportSourceDatasets = computed(() => (
+  reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
+))
+
+const findBusinessDrillReport = (datasets = []) => (
+  (datasets || []).map(buildBusinessDrillReport).find(Boolean) || null
+)
+
 const businessDrillReport = computed(() => (
-  latestDatasets.value.map(buildBusinessDrillReport).find(Boolean) || null
+  findBusinessDrillReport(latestDatasets.value)
+))
+
+const activeBusinessDrillReport = computed(() => (
+  reportViewerVisible.value
+    ? findBusinessDrillReport(reportViewerDatasets.value)
+    : businessDrillReport.value
 ))
 
 const sideBusinessMetricCards = computed(() => (
@@ -2370,10 +2384,7 @@ const sideBusinessMetricCards = computed(() => (
     : []
 ))
 
-const dialogBusinessDrillReport = computed(() => {
-  const source = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
-  return source.map(buildBusinessDrillReport).find(Boolean) || null
-})
+const dialogBusinessDrillReport = computed(() => activeBusinessDrillReport.value)
 
 const dialogCoreConclusion = computed(() => {
   const report = dialogBusinessDrillReport.value
@@ -2623,8 +2634,7 @@ const buildBusinessNarrativeSections = (report) => {
 }
 
 const reportOverviewTitle = computed(() => {
-  const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
-  const drillReport = sourceDatasets.map(buildBusinessDrillReport).find(Boolean)
+  const drillReport = activeBusinessDrillReport.value
   return drillReport?.isSingleFocus
     ? `${drillReport.focusName || '当前组织'}业绩核心结论`
     : '分析摘要'
@@ -2632,9 +2642,9 @@ const reportOverviewTitle = computed(() => {
 
 const reportSummaryBullets = computed(() => {
   const bullets = []
-  const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
+  const sourceDatasets = reportSourceDatasets.value
   const primary = sourceDatasets[0]
-  const drillReport = sourceDatasets.map(buildBusinessDrillReport).find(Boolean)
+  const drillReport = activeBusinessDrillReport.value
   const names = sourceDatasets.map(item => item.dataset_name).filter(Boolean)
   if (drillReport?.isSingleFocus) {
     const counts = getSingleOrgCounts(drillReport)
@@ -3177,7 +3187,7 @@ const rerunQuestion = async (msg) => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
-      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
+      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
@@ -3225,7 +3235,7 @@ const handleSend = async () => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
-      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
+      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
@@ -3414,123 +3424,6 @@ const handleDownloadReport = () => {
   ElMessage.info('报告下载功能开发中...')
 }
 
-const buildHistoryTitle = () => {
-  const firstUser = messages.find(m => m.role === 'user')
-  const q = firstUser?.content || session.state.question || '未命名对话'
-  return String(q).slice(0, 24)
-}
-
-const createHistoryId = () => {
-  if (window.crypto?.randomUUID) return `history-report-${window.crypto.randomUUID()}`
-  return `history-report-${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-const buildReportHistorySnapshot = (result = session.state.result) => {
-  if (!result || result?.error || result?.requires_confirmation) return null
-  const clonedResult = JSON.parse(JSON.stringify(result))
-  const firstDataset = Array.isArray(clonedResult.dataset_results) ? clonedResult.dataset_results[0] : null
-  const selectedId = datasetId.value || session.state.selectedDatasetId || clonedResult.dataset_id || firstDataset?.dataset_id || null
-  const selectedDataset = datasets.value.find(item => Number(item.id) === Number(selectedId))
-  const question = clonedResult.question || session.state.question || buildHistoryTitle()
-  const updatedAt = new Date().toLocaleString()
-  return {
-    version: 2,
-    question,
-    updatedAt,
-    datasetId: selectedId,
-    datasetName: selectedDataset?.dataset_name || clonedResult.dataset_name || firstDataset?.dataset_name || '自动路由数据集',
-    result: clonedResult,
-  }
-}
-
-const saveCurrentToHistory = () => {
-  const reportSnapshot = buildReportHistorySnapshot()
-  if (!reportSnapshot?.result) return ''
-
-  const signature = JSON.stringify({
-    question: reportSnapshot.question,
-    updatedAt: session.state.updatedAt,
-    datasetId: reportSnapshot.datasetId,
-  })
-  if (signature === lastSavedHistorySignature.value) return ''
-
-  loadHistory()
-  lastSavedHistorySignature.value = signature
-  const payload = {
-    id: createHistoryId(),
-    title: String(reportSnapshot.question || buildHistoryTitle()).slice(0, 24),
-    question: reportSnapshot.question,
-    datasetId: reportSnapshot.datasetId,
-    datasetName: reportSnapshot.datasetName,
-    updatedAt: reportSnapshot.updatedAt,
-    reportSnapshot,
-  }
-  return upsertHistory(payload)
-}
-
-const restoreHistory = (item) => {
-  if (!item) return
-  if (isRunning.value) {
-    ElMessage.warning('正在执行中，无法恢复历史对话')
-    return false
-  }
-
-  setActiveHistory(item.id)
-  const reportSnapshot = item.reportSnapshot || {}
-  const result = reportSnapshot.result || item.sessionState?.result || null
-  if (!result) {
-    ElMessage.warning('该历史记录缺少报告快照，无法恢复完整报告。')
-    return false
-  }
-
-  const restoredResult = JSON.parse(JSON.stringify(result))
-  if (Array.isArray(restoredResult?.dataset_results)) {
-    restoredResult.dataset_results = restoredResult.dataset_results.filter(dataset => isDatasetVisible(dataset?.dataset_id))
-  }
-  const question = item.question || reportSnapshot.question || restoredResult.question || item.title || ''
-  const uid = ++msgCounter
-  const aid = ++msgCounter
-  messages.splice(0, messages.length,
-    { id: uid, role: 'user', content: question },
-    { id: aid, role: 'ai', loading: false, data: restoredResult },
-  )
-
-  session.state.question = question
-  const restoredSelectedDatasetId = reportSnapshot.datasetId || item.datasetId || restoredResult.selectedDatasetId || restoredResult.dataset_id || null
-  session.state.selectedDatasetId = restoredSelectedDatasetId && isDatasetVisible(restoredSelectedDatasetId)
-    ? restoredSelectedDatasetId
-    : null
-  session.state.status = 'completed'
-  session.state.result = restoredResult
-  detailReportResult.value = null
-  session.state.error = ''
-  session.state.logs = []
-  session.state.startedAt = ''
-  session.state.updatedAt = reportSnapshot.updatedAt || item.updatedAt || ''
-  session.state.currentSessionId = ''
-
-  datasetId.value = item.datasetId && isDatasetVisible(item.datasetId) ? item.datasetId : null
-  if ((item.datasetId || restoredSelectedDatasetId) && !datasetId.value && !session.state.selectedDatasetId) {
-    ElMessage.warning('该历史会话包含当前账号无权访问的数据集，已隐藏相关结果。')
-  }
-  showPanel.value = true
-
-  Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
-  Object.keys(logOpen).forEach(k => delete logOpen[k])
-  lastSavedHistorySignature.value = JSON.stringify({
-    question,
-    updatedAt: session.state.updatedAt,
-    datasetId: reportSnapshot.datasetId || item.datasetId || restoredSelectedDatasetId,
-  })
-  timelineVersion.value += 1
-
-  nextTick(() => {
-    scrollChat('auto')
-    scrollPanel('auto')
-  })
-  return true
-}
-
 const quickAsk = (item) => {
   const text = typeof item === 'string' ? item : String(item?.question_text || '').trim()
   if (!text) return
@@ -3632,7 +3525,7 @@ const doConfirm = async (opt, msg) => {
       last.loading = false
       last.data = res
     }
-    if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory()
+    if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
     scheduleChatScroll(36, 'smooth')
   } catch (error) {
@@ -3676,6 +3569,29 @@ const scrollPanel = (behavior = 'auto', force = false) => nextTick(() => {
   if (panelRef.value && (force || shouldFollowPanelBottom() || isPanelNearBottom())) {
     panelRef.value.scrollTo({ top: panelRef.value.scrollHeight, behavior })
   }
+})
+
+const {
+  saveCurrentToHistory,
+  restoreHistory,
+} = useSmartAskReportHistory({
+  session,
+  messages,
+  datasetId,
+  datasets,
+  isRunning,
+  isDatasetVisible,
+  loadHistory,
+  upsertHistory,
+  setActiveHistory,
+  detailReportResult,
+  showPanel,
+  thinkingOpen,
+  logOpen,
+  timelineVersion,
+  scrollChat,
+  scrollPanel,
+  createMessageId: () => ++msgCounter,
 })
 
 const scheduleChatScroll = (delay = 40, behavior = 'smooth') => {
