@@ -5,6 +5,7 @@ from typing import Any, Dict
 from flask import Blueprint, jsonify, request
 
 from auth_store import get_current_user
+from feature_flags import feature_available
 from organization_tree_store import (
     apply_import,
     create_node,
@@ -26,6 +27,15 @@ def _require_super_admin():
     user = get_current_user()
     if user.get("role") != "super_admin":
         return None, (jsonify({"success": False, "error": "只有超级管理员可以维护组织树"}), 403)
+    return user, None
+
+
+def _require_feature(key: str, error_text: str):
+    user, error = _require_super_admin()
+    if error:
+        return user, error
+    if not feature_available(key, user):
+        return user, (jsonify({"success": False, "error": error_text}), 403)
     return user, None
 
 
@@ -59,7 +69,7 @@ def get_organization_trees():
 
 @organization_trees_bp.route("/types", methods=["POST"])
 def add_tree_type():
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_type_create", "当前账号没有新增组织树权限")
     if error:
         return error
     try:
@@ -72,7 +82,7 @@ def add_tree_type():
 
 @organization_trees_bp.route("/import/preview", methods=["POST"])
 def preview_tree_import():
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_import_preview", "当前账号没有预检导入组织树权限")
     if error:
         return error
     try:
@@ -83,7 +93,7 @@ def preview_tree_import():
 
 @organization_trees_bp.route("/import/apply", methods=["POST"])
 def apply_tree_import():
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_import_apply", "当前账号没有确认导入组织树权限")
     if error:
         return error
     try:
@@ -103,7 +113,7 @@ def apply_tree_import():
 
 @organization_trees_bp.route("/types/<tree_id>", methods=["PUT"])
 def edit_tree_type(tree_id: str):
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_type_update", "当前账号没有编辑组织树权限")
     if error:
         return error
     try:
@@ -116,7 +126,7 @@ def edit_tree_type(tree_id: str):
 
 @organization_trees_bp.route("/types/<tree_id>", methods=["DELETE"])
 def remove_tree_type(tree_id: str):
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_type_delete", "当前账号没有删除组织树权限")
     if error:
         return error
     try:
@@ -129,7 +139,7 @@ def remove_tree_type(tree_id: str):
 
 @organization_trees_bp.route("/nodes", methods=["POST"])
 def add_node():
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_node_create", "当前账号没有新增组织节点权限")
     if error:
         return error
     try:
@@ -142,7 +152,7 @@ def add_node():
 
 @organization_trees_bp.route("/nodes/<node_id>", methods=["PUT"])
 def edit_node(node_id: str):
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_node_update", "当前账号没有编辑组织节点权限")
     if error:
         return error
     try:
@@ -155,7 +165,7 @@ def edit_node(node_id: str):
 
 @organization_trees_bp.route("/nodes/<node_id>", methods=["DELETE"])
 def remove_node(node_id: str):
-    user, error = _require_super_admin()
+    user, error = _require_feature("organization_tree_node_delete", "当前账号没有删除组织节点权限")
     if error:
         return error
     try:

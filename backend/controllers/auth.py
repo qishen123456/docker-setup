@@ -22,6 +22,7 @@ DEFAULT_EMPLOYEE_PASSWORD = "12345678"
 ROLE_LABELS = {
     "super_admin": "超级管理员",
     "admin": "管理员",
+    "business_admin": "业务管理员",
     "user": "普通用户",
 }
 
@@ -83,7 +84,7 @@ def _save_permissions(data: dict) -> None:
 
 def _clean_role(role: str) -> str:
     role = str(role or "").strip()
-    return role if role in {"admin", "user"} else "user"
+    return role if role in {"admin", "business_admin", "user"} else "user"
 
 
 def _clean_role_ids(value) -> list[str]:

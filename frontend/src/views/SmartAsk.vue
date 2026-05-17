@@ -8,8 +8,8 @@
           <ChatHeader
             :show-panel="detailPanelVisible"
             :dataset-name="currentDatasetLabel"
-            :allow-toggle-panel="isFeatureEnabled('debug_execution_trace')"
-            :allow-new-chat="isFeatureEnabled('smart_new_chat')"
+            :allow-toggle-panel="featureAccess.debug_execution_trace"
+            :allow-new-chat="featureAccess.smart_new_chat"
             @toggle-panel="togglePanel"
             @new-chat="handleNewChat"
             @show-history="focusSidebarHistory"
@@ -22,6 +22,8 @@
               v-if="messages.length === 0"
               :common-questions="commonQuestions"
               :common-questions-loading="commonQuestionsLoading"
+              :allow-quick-ask="featureAccess.smart_quick_ask"
+              :allow-refresh-questions="featureAccess.smart_quick_refresh"
               @quick-ask="quickAsk"
               @refresh-questions="refreshCommonQuestions"
             />
@@ -34,6 +36,9 @@
                   v-if="msg.role === 'user'"
                   :content="msg.content"
                   :disabled="isRunning"
+                  :allow-copy="featureAccess.smart_question_copy"
+                  :allow-edit="featureAccess.smart_question_edit"
+                  :allow-rerun="featureAccess.smart_question_rerun"
                   @copy="copyQuestion(msg)"
                   @edit="editQuestion(msg)"
                   @rerun="rerunQuestion(msg)"
@@ -105,7 +110,7 @@
                           </div>
                         </div>
                       </div>
-                      <div v-if="isFeatureEnabled('smart_confirm_scope')" class="sa-confirm-opts">
+                      <div v-if="featureAccess.smart_confirm_scope" class="sa-confirm-opts">
                         <button
                           v-for="opt in msg.data.confirmation_options"
                           :key="getConfirmOptionKey(opt)"
@@ -138,7 +143,7 @@
                         <div class="sa-confirm-freeform-actions">
                           <span class="sa-confirm-freeform-hint">补充说明会直接作为老板确认内容继续推进问数流程。</span>
                           <button
-                            v-if="isFeatureEnabled('smart_submit_note')"
+                            v-if="featureAccess.smart_submit_note"
                             class="sa-confirm-send"
                             :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
                             @click="submitConfirmationDraft(msg)"
@@ -197,7 +202,7 @@
                               <div class="sa-inline-visual-card-title">{{ preview.chartSpec?.title || preview.dataset.dataset_name }}</div>
                               <div class="sa-inline-visual-card-subtitle">{{ preview.dataset.dataset_name }}</div>
                             </div>
-                            <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">
+                            <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">
                               放大查看
                             </button>
                           </div>
@@ -248,8 +253,10 @@
             :datasets="datasets"
             :ai-models="aiModels"
             :is-running="isRunning"
-            :allow-send="isFeatureEnabled('smart_send_question')"
-            :allow-stop="isFeatureEnabled('smart_stop_run')"
+            :allow-send="featureAccess.smart_send_question"
+            :allow-stop="featureAccess.smart_stop_run"
+            :allow-dataset-select="featureAccess.smart_dataset_select"
+            :allow-model-select="featureAccess.smart_model_select"
             @send="handleSend"
             @stop="handleStop"
             @dataset-change="handleDatasetChange"
@@ -282,12 +289,12 @@
                 <template #content="{ log, index }">
                   <div v-if="log.sql" class="sa-log-section">
                     <div class="sa-log-section-title">{{ log.sqlTitle || '生成 SQL' }}</div>
-                    <SqlBlock :sql="log.sql" :allow-copy="isFeatureEnabled('smart_sql_copy')" />
+                    <SqlBlock :sql="log.sql" :allow-copy="featureAccess.smart_sql_copy" />
                   </div>
 
                   <div v-if="log.chartData" class="sa-log-section">
                     <div class="sa-log-section-title">{{ log.chartTitle || '图表预览' }}</div>
-                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-log-inline-action" @click="openChartViewer(log.chartData, log.chartTitle || '图表预览')">放大查看</button>
+                    <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn sa-log-inline-action" @click="openChartViewer(log.chartData, log.chartTitle || '图表预览')">放大查看</button>
                     <div class="sa-chart-embed" :ref="el => initLogChart(el, log.chartData, index)"></div>
                   </div>
 
@@ -315,7 +322,7 @@
                     <div>
                       <h3 class="sa-side-report-title">业绩分析报告</h3>
                     </div>
-                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
+                    <button v-if="featureAccess.report_fullscreen" class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
                       <span class="sa-btn-label">全屏报告</span>
                     </button>
                   </div>
@@ -561,7 +568,7 @@
                     >
                       <div class="sa-side-extra-chart-head">
                         <div class="sa-side-extra-chart-title">{{ chart.chartSpec.title || chart.caption }}</div>
-                        <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chart.chartSpec, `${chart.dataset.dataset_name} ${chart.chartSpec.title || chart.caption}`)">
+                        <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chart.chartSpec, `${chart.dataset.dataset_name} ${chart.chartSpec.title || chart.caption}`)">
                           查看
                         </button>
                       </div>
@@ -613,7 +620,7 @@
 
                   <div v-else-if="preview.chartSpec" class="sa-main-chart" :ref="el => initPreviewChart(el, preview.chartSpec, preview.key)"></div>
                   <div v-if="preview.chartSpec" class="sa-chart-actions">
-                    <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">放大查看</button>
+                    <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn" @click="openChartViewer(preview.chartSpec, `${preview.dataset.dataset_name} 图表预览`)">放大查看</button>
                   </div>
 
                   <div v-if="preview.extraCharts?.length" class="sa-side-extra-charts">
@@ -624,7 +631,7 @@
                     >
                       <div class="sa-side-extra-chart-head">
                         <div class="sa-side-extra-chart-title">{{ chartSpec.title || `图表 ${chartIndex + 1}` }}</div>
-                        <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chartSpec, `${preview.dataset.dataset_name} ${chartSpec.title || `图表 ${chartIndex + 1}`}`)">
+                        <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn sa-side-extra-chart-action" @click="openChartViewer(chartSpec, `${preview.dataset.dataset_name} ${chartSpec.title || `图表 ${chartIndex + 1}`}`)">
                           查看
                         </button>
                       </div>
@@ -653,7 +660,7 @@
                 <div v-if="latestReport && !businessDrillReport" class="sa-side-section sa-report-view">
                   <div class="sa-side-section-title">完整报告</div>
                   <div class="sa-chart-actions">
-                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-ghost-btn" @click="openReportViewer">全屏查看</button>
+                    <button v-if="featureAccess.report_fullscreen" class="sa-ghost-btn" @click="openReportViewer">全屏查看</button>
                   </div>
                   <ul class="sa-report-bullet-list sa-report-bullet-list-compact">
                     <li v-for="(item, index) in reportSummaryBullets.slice(0, 4)" :key="index">{{ item }}</li>
@@ -696,10 +703,10 @@
                   </div>
                   <div v-if="!reportNarrativeSections.length" class="sa-report-md" v-html="renderReportMd(latestReport)"></div>
                   <div class="sa-download-row">
-                    <button v-if="isFeatureEnabled('report_fullscreen')" class="sa-secondary-btn" @click="openReportViewer">
+                    <button v-if="featureAccess.report_fullscreen" class="sa-secondary-btn" @click="openReportViewer">
                       <span class="sa-btn-label">查看大图</span>
                     </button>
-                    <button v-if="isFeatureEnabled('smart_report_download')" class="sa-primary-btn" @click="downloadLatestReport">
+                    <button v-if="featureAccess.smart_report_download" class="sa-primary-btn" @click="downloadLatestReport">
                       <span class="sa-btn-label">下载报告</span>
                     </button>
                   </div>
@@ -967,7 +974,7 @@
                     <div class="sa-report-chart-title">{{ block.dataset.dataset_name }}</div>
                     <div class="sa-report-chart-subtitle">{{ block.chartSpec.title || '图表预览' }}</div>
                   </div>
-                  <button v-if="isFeatureEnabled('chart_viewer')" class="sa-ghost-btn" @click="openChartViewer(block.chartSpec, `${block.dataset.dataset_name} 图表预览`)">放大查看</button>
+                  <button v-if="featureAccess.chart_viewer" class="sa-ghost-btn" @click="openChartViewer(block.chartSpec, `${block.dataset.dataset_name} 图表预览`)">放大查看</button>
                 </div>
                 <div v-if="block.chartSpec.chartType === 'metric'" class="sa-insight-metric sa-insight-metric-report">
                   <div class="sa-insight-metric-value">{{ block.chartSpec.value }}</div>
@@ -1110,6 +1117,31 @@ import '../styles/volcano-design.css'
 
 const session = useSmartAskSession()
 const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
+const smartFeatureKeys = [
+  'debug_execution_trace',
+  'smart_new_chat',
+  'smart_quick_ask',
+  'smart_quick_refresh',
+  'smart_question_copy',
+  'smart_question_edit',
+  'smart_question_rerun',
+  'smart_confirm_scope',
+  'smart_submit_note',
+  'chart_viewer',
+  'smart_send_question',
+  'smart_stop_run',
+  'smart_dataset_select',
+  'smart_model_select',
+  'smart_sql_copy',
+  'report_fullscreen',
+  'smart_report_download',
+  'smart_chart_auto_infer',
+]
+const featureAccess = computed(() => smartFeatureKeys.reduce((map, key) => {
+  map[key] = isFeatureEnabled(key)
+  return map
+}, {}))
+const canUseFeature = (key) => Boolean(featureAccess.value[key])
 const {
   pendingRestoreId,
   loadHistory,
@@ -1148,6 +1180,9 @@ const chartViewerSpec = ref(null)
 const chartViewerMode = ref('chart')
 const detailReportResult = ref(null)
 const officeDrillOpen = reactive({})
+const messageDerivedCache = new WeakMap()
+const datasetChartSpecCache = new WeakMap()
+const chartElementCache = new WeakMap()
 let activePrintFrame = null
 let msgCounter = 0
 let elapsed = ref(0)
@@ -1158,9 +1193,9 @@ const pendingQuickDataset = ref(null)
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
-const detailPanelVisible = computed(() => showPanel.value && isFeatureEnabled('debug_execution_trace'))
-const canViewCharts = computed(() => isFeatureEnabled('chart_viewer'))
-const canViewFullscreenReport = computed(() => isFeatureEnabled('report_fullscreen'))
+const detailPanelVisible = computed(() => showPanel.value && canUseFeature('debug_execution_trace'))
+const canViewCharts = computed(() => canUseFeature('chart_viewer'))
+const canViewFullscreenReport = computed(() => canUseFeature('report_fullscreen'))
 
 const statusBarText = computed(() => {
   const m = {
@@ -1239,7 +1274,6 @@ const currentDatasetLabel = computed(() => {
 const datasetResults = computed(() => latestDatasets.value)
 const hasSideReport = computed(() => resultPreviews.value.length > 0 || !!latestReport.value)
 const sideReportHeading = computed(() => '业绩分析报告')
-const sideReportTitle = computed(() => latestDataset.value?.dataset_name || '业绩分析报告')
 
 const reportSceneTemplate = computed(() => {
   const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
@@ -1330,17 +1364,6 @@ const sideConfidenceBadges = computed(() => {
       }
     : buildResultConfidenceMeta(activeReportResult.value?.route || {}, latestDatasets.value)
   return [routeMeta, resultMeta].filter(item => item?.score > 0)
-})
-
-const sideConfidenceNote = computed(() => {
-  const routeConfidence = activeReportResult.value?.confidence?.route
-  if (routeConfidence?.summary) return routeConfidence.summary
-  const route = activeReportResult.value?.route || {}
-  if (!route?.match_score) return ''
-  const candidateCount = Array.isArray(route.candidate_dataset_ids) ? route.candidate_dataset_ids.length : 0
-  if (route.requires_confirmation) return '当前命中仍存在不确定性，系统已暂停并等待确认。'
-  if (candidateCount > 1) return `已比较 ${candidateCount} 个候选数据集，继续保留路由复核记录。`
-  return '当前命中已完成语义复核，后续仍经过 SQL 生成、SQL 复核和报告口径核对。'
 })
 
 const detailPanelState = computed(() => {
@@ -1561,6 +1584,39 @@ const getToneFromDisplayTag = (label = '', fallback = 'neutral') => {
   if (/推进|第二梯队|稳定|中位/.test(text)) return 'warn'
   if (/标杆|领先|第一梯队/.test(text)) return 'good'
   return fallback
+}
+
+const requestedLevelTokens = ['事业部', '业务部', '分公司', '代表处', '业务代表', '业务员', '城市公司', '部门', '条线']
+
+const getQuestionText = () => String(session.state.question || query.value || '').trim()
+
+const getRequestedLevelValues = (questionText = getQuestionText(), config = {}) => {
+  const values = []
+  const configuredValues = (config?.levels || [])
+    .flatMap(level => level?.values || [])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  ;[...configuredValues, ...requestedLevelTokens].forEach((value) => {
+    if (value && questionText.includes(value) && !values.includes(value)) values.push(value)
+  })
+  return values
+}
+
+const isNegativeRankingQuestion = (questionText = getQuestionText()) => (
+  /完成.*不好|不好|差|最差|最低|落后|承压|风险|低于|倒数|垫底|未完成|缺口/.test(questionText || '')
+)
+
+const isRateRankingQuestion = (questionText = getQuestionText()) => (
+  /达成率|完成率|完成|进度|不好|最低|最差|排名|排行|承压|风险/.test(questionText || '')
+)
+
+const sortNodesForQuestion = (nodes = [], rateMetric = null) => {
+  const lowFirst = isNegativeRankingQuestion()
+  return [...nodes].sort((left, right) => {
+    const leftValue = getNodeMetricValue(left, rateMetric) || 0
+    const rightValue = getNodeMetricValue(right, rateMetric) || 0
+    return lowFirst ? leftValue - rightValue : rightValue - leftValue
+  })
 }
 
 const normalizeOfficeCompareSpec = (chartSpec = {}, config = {}) => {
@@ -1807,6 +1863,19 @@ const findQuestionFocusNode = (nodes = []) => {
 
 const getComparisonNodes = (model) => {
   const focusNode = findQuestionFocusNode(model.flatNodes || [])
+  const requestedLevels = getRequestedLevelValues(getQuestionText(), model.config || {})
+  if (requestedLevels.length) {
+    const scopedNodes = focusNode ? getDescendantNodes(focusNode) : (model.flatNodes || [])
+    const levelNodes = scopedNodes.filter(node => (
+      node?.name
+      && (
+        requestedLevels.includes(node.levelValue)
+        || requestedLevels.includes(node.levelName)
+        || requestedLevels.some(value => value && String(node.name || '').includes(value))
+      )
+    ))
+    if (levelNodes.length) return levelNodes
+  }
   if (focusNode?.children?.length) return focusNode.children
   const singleRoot = model.tree?.length === 1 ? model.tree[0] : null
   if (singleRoot?.children?.length) return singleRoot.children
@@ -1833,9 +1902,17 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   if (!overviewChart && !accordions.length) return null
 
   const config = getDatasetReportConfig(dataset)
-  const compareLevelLabel = spec.scope?.compareLevelLabel || '下一层级'
+  const requestedLevels = getRequestedLevelValues(getQuestionText(), config)
+  const matchedAccordions = requestedLevels.length
+    ? accordions.filter(item => (
+        requestedLevels.includes(item?.levelLabel)
+        || requestedLevels.some(value => value && String(item?.title || '').includes(value))
+      ))
+    : []
+  const sourceAccordions = requestedLevels.length && matchedAccordions.length ? matchedAccordions : accordions
+  const compareLevelLabel = requestedLevels[0] || spec.scope?.compareLevelLabel || '下一层级'
   const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
-  const offices = accordions.map((item) => {
+  const offices = sourceAccordions.map((item) => {
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
     const rateValue = toNumber(rateKpi?.value)
     const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
@@ -1893,6 +1970,13 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     }
   })
   const riskCount = offices.filter(item => item.tone === 'danger').length
+  const officeNames = new Set(offices.map(item => item.name))
+  const filteredOverviewChart = overviewChart && officeNames.size
+    ? {
+        ...overviewChart,
+        rows: (overviewChart.rows || []).filter(row => officeNames.has(row?.名称 || row?.name || row?.[overviewChart.columns?.[0]])),
+      }
+    : overviewChart
   const summary = Array.isArray(spec.narrative) && spec.narrative.length
     ? spec.narrative.join('；')
     : spec.sections?.find(section => section.key === 'overview')?.narrative || `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。`
@@ -1909,7 +1993,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     offices,
     compareLevelLabel,
     detailLevelLabel,
-    officeCompareSpec: normalizeOfficeCompareSpec(overviewChart, config),
+    officeCompareSpec: normalizeOfficeCompareSpec(filteredOverviewChart, config),
     officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '一行一个同层级对象，对齐展示任务、开单、缺口、达成率和进度条；展开后查看下一层级。',
     summary,
     riskTone: riskCount ? 'danger' : 'good',
@@ -1962,7 +2046,8 @@ const buildBusinessDrillReport = (dataset) => {
       const rateText = formatPersonMetric(person, rateMetric)
       return `${person.name}开单${actualText} / 任务${taskText}，达成率${rateText}${remainMetric ? `，剩余缺口${remainText}` : ''}`
     }
-    const chartRows = sortedPeopleDesc.map(person => {
+    const chartPeople = isNegativeRankingQuestion() ? sortedPeople : sortedPeopleDesc
+    const chartRows = chartPeople.map(person => {
       const personRate = getNodeMetricValue(person, rateMetric) || 0
       return {
       名称: person.name,
@@ -2006,13 +2091,16 @@ const buildBusinessDrillReport = (dataset) => {
         rows: chartRows,
       }, config),
     }
-  }).sort((a, b) => (b.rate || 0) - (a.rate || 0))
+  }).sort((a, b) => isNegativeRankingQuestion()
+    ? (a.rate || 0) - (b.rate || 0)
+    : (b.rate || 0) - (a.rate || 0)
+  )
 
   const kpis = (config.metrics || []).map(metric => ({
     label: metric.label || metric.column || metric.key,
     value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric),
   })).filter(item => item.value !== '-')
-  const bestOffice = offices[0]
+  const bestOffice = [...offices].sort((a, b) => (b.rate || 0) - (a.rate || 0))[0]
   const worstOffice = [...offices].sort((a, b) => (a.rate || 0) - (b.rate || 0))[0]
   const riskCount = offices.filter(item => item.tone === 'danger').length
   const officeCompareRows = offices.map(office => ({
@@ -2022,12 +2110,18 @@ const buildBusinessDrillReport = (dataset) => {
     ...(remainMetric ? { [remainMetric.label || remainMetric.column || '剩余']: getNodeMetricValue(officeNodes.find(node => node.name === office.name), remainMetric) || 0 } : {}),
     [rateMetric.label || rateMetric.column || '达成率']: office.rate || 0,
     标签: office.tag,
-  })).sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
+  })).sort((a, b) => {
+    const key = rateMetric.label || rateMetric.column || '达成率'
+    return isNegativeRankingQuestion()
+      ? (a[key] || 0) - (b[key] || 0)
+      : (b[key] || 0) - (a[key] || 0)
+  })
   const officeCompareSpec = {
     chartType: 'horizontalRateBar',
     title: `各${compareLevelLabel}达成率排序`,
     columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率', '标签'].filter(Boolean),
     rows: officeCompareRows,
+    lowFirst: isNegativeRankingQuestion(),
   }
   return {
     dataset,
@@ -2039,8 +2133,12 @@ const buildBusinessDrillReport = (dataset) => {
     compareLevelLabel,
     detailLevelLabel,
     officeCompareSpec,
-    officeCompareText: `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。一行一个同层级对象，对齐展示金额和进度条。`,
-    summary: `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
+    officeCompareText: isNegativeRankingQuestion()
+      ? `${worstOffice ? `${worstOffice.name}达成率最低，为${worstOffice.rateLabel}` : ''}${bestOffice ? `；最高为${bestOffice.name}，${bestOffice.rateLabel}` : ''}。按低达成率优先展示，便于定位承压节点。`
+      : `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。一行一个同层级对象，对齐展示金额和进度条。`,
+    summary: isNegativeRankingQuestion()
+      ? `本次结果覆盖 ${offices.length} 个${compareLevelLabel}，已按低达成率优先排序。${worstOffice ? `${worstOffice.name}当前完成最弱，达成率${worstOffice.rateLabel}` : ''}${bestOffice ? `；最高为${bestOffice.name}，达成率${bestOffice.rateLabel}` : ''}。`
+      : `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
   }
@@ -2071,8 +2169,13 @@ const buildLayeredBusinessCharts = (dataset) => {
   const actualMetric = config.metrics?.find(item => item.key === 'actual')
   const rateMetric = config.metrics?.find(item => item.key === 'rate') || config.metrics?.find(item => item.format === 'percent')
   if (!rateMetric) return []
+  const requestedLevels = getRequestedLevelValues(getQuestionText(), config)
 
   return model.levelSections
+    .filter(section => (
+      !requestedLevels.length
+      || requestedLevels.some(value => section.levelValues?.includes(value) || section.levelName?.includes(value))
+    ))
     .map((section) => {
       const rows = section.nodes
         .map(node => ({
@@ -2083,21 +2186,30 @@ const buildLayeredBusinessCharts = (dataset) => {
           signalTone: section.riskNodes.some(item => item.id === node.id) ? 'danger' : section.topNodes.some(item => item.id === node.id) ? 'good' : 'neutral',
         }))
         .filter(row => row.名称)
-        .sort((a, b) => (b[rateMetric.label || rateMetric.column || '达成率'] || 0) - (a[rateMetric.label || rateMetric.column || '达成率'] || 0))
+        .sort((a, b) => {
+          const key = rateMetric.label || rateMetric.column || '达成率'
+          return isNegativeRankingQuestion()
+            ? (a[key] || 0) - (b[key] || 0)
+            : (b[key] || 0) - (a[key] || 0)
+        })
         .slice(0, 12)
       if (!rows.length) return null
       const titlePrefix = section.trackNames.length ? `${section.trackNames.join(' / ')}：` : ''
-      const columns = [
-        '名称',
-        taskMetric?.label || taskMetric?.column,
-        actualMetric?.label || actualMetric?.column,
-        rateMetric?.label || rateMetric?.column,
-      ].filter(Boolean)
+      const rateFocused = requestedLevels.length || isRateRankingQuestion()
+      const columns = rateFocused
+        ? ['名称', rateMetric?.label || rateMetric?.column].filter(Boolean)
+        : [
+            '名称',
+            taskMetric?.label || taskMetric?.column,
+            actualMetric?.label || actualMetric?.column,
+            rateMetric?.label || rateMetric?.column,
+          ].filter(Boolean)
       return {
-        chartType: taskMetric && actualMetric ? 'combo' : 'bar',
+        chartType: rateFocused ? 'horizontalRateBar' : taskMetric && actualMetric ? 'combo' : 'bar',
         title: `${titlePrefix}${section.levelName}完成情况`,
         columns,
         rows,
+        lowFirst: isNegativeRankingQuestion(),
       }
     })
     .filter(Boolean)
@@ -2218,6 +2330,41 @@ const getReportSpecCharts = (dataset) => (
     : []
 )
 
+const dedupeChartSpecs = (charts = []) => {
+  const seen = new Set()
+  const result = []
+  charts.filter(Boolean).forEach((chart) => {
+    const columns = Array.isArray(chart.columns) ? chart.columns.join('|') : ''
+    const key = `${chart.chartType || ''}-${chart.title || ''}-${columns}`
+    if (seen.has(key)) return
+    seen.add(key)
+    result.push(chart)
+  })
+  return result
+}
+
+const getDatasetChartSpecs = (dataset, { includeFallback = true } = {}) => {
+  if (!dataset || typeof dataset !== 'object') return []
+  const cacheKey = [
+    getQuestionText(),
+    includeFallback ? 'fallback' : 'strict',
+    canUseFeature('smart_chart_auto_infer') ? 'infer-on' : 'infer-off',
+  ].join('|')
+  const cached = datasetChartSpecCache.get(dataset)
+  if (cached?.key === cacheKey) return cached.value
+  const specCharts = getReportSpecCharts(dataset)
+  const value = specCharts.length
+    ? dedupeChartSpecs(specCharts)
+    : (!includeFallback || !canUseFeature('smart_chart_auto_infer')) ? []
+    : dedupeChartSpecs([
+    ...buildLayeredBusinessCharts(dataset),
+    inferChartSpec(dataset),
+    ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
+  ])
+  datasetChartSpecCache.set(dataset, { key: cacheKey, value })
+  return value
+}
+
 const buildReportTableBlocks = (datasets = []) => {
   return (datasets || [])
     .filter(dataset => Array.isArray(dataset?.rows) && dataset.rows.length > 0 && Array.isArray(dataset?.columns) && dataset.columns.length > 0)
@@ -2251,21 +2398,15 @@ const buildReportTableBlocks = (datasets = []) => {
 
 const resultPreviews = computed(() => (
   datasetResults.value.slice(0, 4).map((dataset, index) => {
-    const specCharts = getReportSpecCharts(dataset)
-    const derivedCharts = [
-      ...specCharts.slice(1),
-      ...buildLayeredBusinessCharts(dataset).slice(1),
-      ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
-    ]
-      .filter(Boolean)
+    const chartSpecs = getDatasetChartSpecs(dataset)
 
     return {
       key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
       caption: index === 0 ? '主结果视图' : '结果视图',
       dataset,
       metricCards: getMetricCards(dataset),
-      chartSpec: specCharts[0] || inferChartSpec(dataset),
-      extraCharts: derivedCharts,
+      chartSpec: chartSpecs[0] || null,
+      extraCharts: chartSpecs.slice(1),
     }
   })
 ))
@@ -2274,15 +2415,8 @@ const sideReportCharts = computed(() => (
   latestDatasets.value
     .slice(0, 3)
     .flatMap((dataset, datasetIndex) => {
-      const specCharts = getReportSpecCharts(dataset)
-      const derivedCharts = specCharts.length
-        ? specCharts
-        : [
-            inferChartSpec(dataset),
-            ...buildLayeredBusinessCharts(dataset),
-            ...buildSingleRowMetricCharts(dataset).map(item => item.chartSpec),
-          ].filter(Boolean)
-      return derivedCharts.slice(0, 3).map((chartSpec, chartIndex) => ({
+      const chartSpecs = getDatasetChartSpecs(dataset)
+      return chartSpecs.slice(0, 3).map((chartSpec, chartIndex) => ({
         key: `side-report-chart-${dataset.dataset_id || datasetIndex}-${chartIndex}`,
         caption: chartSpec.title || `图表 ${chartIndex + 1}`,
         dataset,
@@ -2294,21 +2428,14 @@ const sideReportCharts = computed(() => (
 const reportDialogCharts = computed(() => {
   const sourceItems = reportViewerVisible.value
     ? reportViewerDatasets.value.slice(0, 4).flatMap((dataset, index) => {
-        const primary = {
-          key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
-          caption: index === 0 ? '主结果视图' : '结果视图',
-          dataset,
-          metricCards: getMetricCards(dataset),
-          chartSpec: inferChartSpec(dataset),
-        }
-        const layered = buildLayeredBusinessCharts(dataset).slice(1).map((chartSpec, chartIndex) => ({
-          key: `${dataset.dataset_id || index}-layer-${chartIndex}`,
-          caption: `层级图表 ${chartIndex + 2}`,
+        const chartSpecs = getDatasetChartSpecs(dataset)
+        return chartSpecs.map((chartSpec, chartIndex) => ({
+          key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}-${chartIndex}`,
+          caption: chartSpec.title || (chartIndex === 0 ? '主结果视图' : `图表 ${chartIndex + 1}`),
           dataset,
           metricCards: getMetricCards(dataset),
           chartSpec,
         }))
-        return [primary, ...layered, ...buildSingleRowMetricCharts(dataset)]
       })
     : resultPreviews.value.flatMap(item => (
         item?.dataset ? [item, ...buildSingleRowMetricCharts(item.dataset)] : [item]
@@ -2771,7 +2898,10 @@ const splitReportSections = (text) => {
   return sections
 }
 
-const togglePanel = () => { showPanel.value = !showPanel.value }
+const togglePanel = () => {
+  showPanel.value = !showPanel.value
+  nextTick(resizeRenderedCharts)
+}
 const toggleThinking = (id) => { thinkingOpen[id] = !thinkingOpen[id] }
 const toggleLog = (i) => { logOpen[i] = !logOpen[i] }
 const openDetailPanel = (msg = null) => {
@@ -2781,6 +2911,7 @@ const openDetailPanel = (msg = null) => {
     detailReportResult.value = null
   }
   showPanel.value = true
+  nextTick(resizeRenderedCharts)
   scrollPanelToReportTop()
 }
 
@@ -2863,14 +2994,7 @@ const isOfficeExpanded = (id) => officeDrillOpen[String(id)] === true
 const toggleOfficeDrill = (id) => {
   const key = String(id)
   officeDrillOpen[key] = !isOfficeExpanded(key)
-  nextTick(() => {
-    window.setTimeout(() => {
-      Object.values(document.querySelectorAll('.sa-office-chart')).forEach((el) => {
-        const chart = echarts.getInstanceByDom(el)
-        if (chart) chart.resize()
-      })
-    }, 40)
-  })
+  nextTick(resizeRenderedCharts)
 }
 
 const chartViewerTableRows = computed(() => (
@@ -3059,14 +3183,55 @@ const shouldShowResultChain = (msg) => Boolean(
   (getReport(msg) || getPrimaryDataset(msg) || (msg.data && !msg.data.error))
 )
 
-const getDatasets = (msg) => {
-  const raw = Array.isArray(msg?.data?.dataset_results) ? msg.data.dataset_results : []
-  if (!raw.length) return []
-  const visible = raw.filter(dataset => isDatasetVisible(dataset?.dataset_id))
-  return visible.length ? visible : raw
+const getMessageDerived = (msg) => {
+  if (!msg || typeof msg !== 'object') return null
+  const data = msg.data || null
+  const datasetResults = data?.dataset_results || null
+  const questionKey = getQuestionText()
+  const cached = messageDerivedCache.get(msg)
+  if (cached?.data === data && cached?.datasetResults === datasetResults && cached?.questionKey === questionKey) {
+    return cached
+  }
+  const entry = {
+    data,
+    datasetResults,
+    questionKey,
+    datasets: null,
+    report: undefined,
+    primaryDataset: undefined,
+    visualPreviews: undefined,
+  }
+  messageDerivedCache.set(msg, entry)
+  return entry
 }
-const getReport = (msg) => mergeDatasetReports(getDatasets(msg))
-const getPrimaryDataset = (msg) => buildAggregateDataset(getDatasets(msg))
+
+const getDatasets = (msg) => {
+  const cache = getMessageDerived(msg)
+  if (cache?.datasets) return cache.datasets
+  const raw = Array.isArray(msg?.data?.dataset_results) ? msg.data.dataset_results : []
+  if (!raw.length) {
+    if (cache) cache.datasets = []
+    return []
+  }
+  const visible = raw.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+  const datasetsForMessage = visible.length ? visible : raw
+  if (cache) cache.datasets = datasetsForMessage
+  return datasetsForMessage
+}
+const getReport = (msg) => {
+  const cache = getMessageDerived(msg)
+  if (cache && cache.report !== undefined) return cache.report
+  const report = mergeDatasetReports(getDatasets(msg))
+  if (cache) cache.report = report
+  return report
+}
+const getPrimaryDataset = (msg) => {
+  const cache = getMessageDerived(msg)
+  if (cache && cache.primaryDataset !== undefined) return cache.primaryDataset
+  const dataset = buildAggregateDataset(getDatasets(msg))
+  if (cache) cache.primaryDataset = dataset
+  return dataset
+}
 const getResultTitle = (msg) => {
   const raw = msg.data?.question || session.state.question || '本月公司经营表现分析'
   return raw.length > 20 ? `${raw.slice(0, 20)}...` : raw
@@ -3091,16 +3256,21 @@ const getMessageElapsedLabel = (msg) => {
   return ''
 }
 
-const getVisualPreviews = (msg) => (
-  hasBusinessDrillDataset(getDatasets(msg)) ? [] : getDatasets(msg)
+const getVisualPreviews = (msg) => {
+  const cache = getMessageDerived(msg)
+  if (cache && cache.visualPreviews !== undefined) return cache.visualPreviews
+  const sourceDatasets = getDatasets(msg)
+  const previews = hasBusinessDrillDataset(sourceDatasets) ? [] : sourceDatasets
     .slice(0, 2)
     .map((dataset, index) => ({
       key: `${dataset.dataset_id || index}-${dataset.dataset_name || 'dataset'}`,
       dataset,
-      chartSpec: getReportSpecCharts(dataset)[0] || inferChartSpec(dataset),
+      chartSpec: getDatasetChartSpecs(dataset)[0] || null,
     }))
     .filter(item => item.chartSpec && (item.chartSpec.chartType === 'metric' || hasChartRows(item.chartSpec)))
-)
+  if (cache) cache.visualPreviews = previews
+  return previews
+}
 
 const focusComposer = (selectAll = false) => nextTick(() => {
   const textarea = document.querySelector('.sa-textarea')
@@ -3127,6 +3297,7 @@ const writeClipboard = async (text) => {
 }
 
 const copyQuestion = async (msg) => {
+  if (!canUseFeature('smart_question_copy')) return
   const text = String(msg?.content || '').trim()
   if (!text) return
   try {
@@ -3138,6 +3309,7 @@ const copyQuestion = async (msg) => {
 }
 
 const editQuestion = (msg) => {
+  if (!canUseFeature('smart_question_edit')) return
   const text = String(msg?.content || '').trim()
   if (!text) return
   if (isRunning.value) {
@@ -3159,6 +3331,7 @@ const clearMessageRuntimeState = (items = []) => {
 }
 
 const rerunQuestion = async (msg) => {
+  if (!canUseFeature('smart_question_rerun')) return
   const text = String(msg?.content || '').trim()
   if (!text || isRunning.value) return
 
@@ -3182,7 +3355,7 @@ const rerunQuestion = async (msg) => {
 
   try {
     const datasetInput = getDatasetInputForQuestion(text)
-    const res = await session.startAsk(text, datasetInput, modelId.value)
+    const res = await session.startAsk(text, datasetInput, getModelInputForQuestion())
     clearPendingQuickDataset()
     if (res) {
       aiMsg.loading = false
@@ -3213,6 +3386,7 @@ const rerunQuestion = async (msg) => {
 }
 
 const handleSend = async () => {
+  if (!canUseFeature('smart_send_question')) return
   const text = query.value.trim()
   if (!text || isRunning.value) return
 
@@ -3230,7 +3404,7 @@ const handleSend = async () => {
 
   try {
     const datasetInput = getDatasetInputForQuestion(text)
-    const res = await session.startAsk(text, datasetInput, modelId.value)
+    const res = await session.startAsk(text, datasetInput, getModelInputForQuestion())
     clearPendingQuickDataset()
     if (res) {
       aiMsg.loading = false
@@ -3262,6 +3436,7 @@ const handleSend = async () => {
 }
 
 const handleStop = () => {
+  if (!canUseFeature('smart_stop_run')) return
   session.stopAsk()
   stopTimer()
   ElMessage.warning('已停止执行')
@@ -3420,11 +3595,8 @@ const downloadLatestReport = (report = latestReport.value, title = sideReportHea
   frame.onload = triggerPrint
   window.setTimeout(triggerPrint, 40)
 }
-const handleDownloadReport = () => {
-  ElMessage.info('报告下载功能开发中...')
-}
-
 const quickAsk = (item) => {
+  if (!canUseFeature('smart_quick_ask')) return
   const text = typeof item === 'string' ? item : String(item?.question_text || '').trim()
   if (!text) return
   const nextDatasetId = typeof item === 'string' ? null : Number(item?.dataset_id || 0)
@@ -3502,6 +3674,7 @@ const getConfirmationScopeSummary = (msg) => {
 }
 
 const doConfirm = async (opt, msg) => {
+  if (!canUseFeature('smart_confirm_scope') && typeof opt !== 'string') return
   startTimer()
   detailReportResult.value = null
   if (msg?.id) confirmationSubmitting[msg.id] = true
@@ -3615,6 +3788,7 @@ const startTimer = () => {
 }
 
 const getDatasetInputForQuestion = (text) => {
+  if (!canUseFeature('smart_dataset_select')) return null
   if (datasetId.value) return datasetId.value
   const pending = pendingQuickDataset.value
   if (pending?.datasetId && String(pending.question || '').trim() === String(text || '').trim()) {
@@ -3623,11 +3797,16 @@ const getDatasetInputForQuestion = (text) => {
   return null
 }
 
+const getModelInputForQuestion = () => (
+  canUseFeature('smart_model_select') ? modelId.value : null
+)
+
 const clearPendingQuickDataset = () => {
   pendingQuickDataset.value = null
 }
 
 const submitConfirmationDraft = (msg) => {
+  if (!canUseFeature('smart_submit_note')) return
   const text = String(confirmationDrafts[msg?.id] || '').trim()
   if (!text || isRunning.value) return
   doConfirm(text, msg)
@@ -3652,11 +3831,17 @@ const loadQuestions = async () => {
 }
 
 const handleDatasetChange = async () => {
+  if (!canUseFeature('smart_dataset_select')) {
+    datasetId.value = null
+    clearPendingQuickDataset()
+    return
+  }
   clearPendingQuickDataset()
   await loadQuestions()
 }
 
 const refreshCommonQuestions = async () => {
+  if (!canUseFeature('smart_quick_refresh')) return
   if (commonQuestionsLoading.value) return
   await loadQuestions()
 }
@@ -3678,16 +3863,20 @@ const getMetricColor = (column) => {
   return '#597ef7'
 }
 
-const sortRowsByCompletionRate = (rows = [], columns = []) => {
+const sortRowsByCompletionRate = (rows = [], columns = [], lowFirst = false) => {
   const rateColumn = columns.find(column => isRateColumn(column)) || Object.keys(rows[0] || {}).find(column => isRateColumn(column))
   if (!rateColumn) return rows
-  return [...rows].sort((a, b) => (toNumber(b?.[rateColumn]) || 0) - (toNumber(a?.[rateColumn]) || 0))
+  return [...rows].sort((a, b) => {
+    const left = toNumber(a?.[rateColumn]) || 0
+    const right = toNumber(b?.[rateColumn]) || 0
+    return lowFirst ? left - right : right - left
+  })
 }
 
 const renderChartSpec = (chart, data) => {
   const labelColumn = data.columns?.[0]
   const numericColumns = data.columns?.slice(1) || []
-  const sortedRows = sortRowsByCompletionRate(data.rows || [], data.columns || [])
+  const sortedRows = sortRowsByCompletionRate(data.rows || [], data.columns || [], Boolean(data.lowFirst))
   const colorPalette = ['#1890ff', '#00b42a', '#faad14', '#f5222d', '#06b6d4', '#597ef7']
   const shortSeriesName = (name) => String(name || '')
     .replace(/^年度/, '')
@@ -3939,23 +4128,62 @@ const renderChartSpec = (chart, data) => {
   })
 }
 
+const chartRenderSignature = (data, key = '') => [
+  key,
+  data?.chartType || '',
+  data?.title || '',
+  Array.isArray(data?.columns) ? data.columns.join('|') : '',
+  Array.isArray(data?.rows) ? data.rows.length : 0,
+  data?.lowFirst ? 'low' : 'high',
+].join('::')
+
+const scheduleChartResize = (chart) => {
+  if (!chart) return
+  requestAnimationFrame(() => chart.resize())
+}
+
+const resizeRenderedCharts = () => {
+  requestAnimationFrame(() => {
+    document
+      .querySelectorAll('.sa-inline-visual-chart, .sa-main-chart, .sa-side-extra-chart-canvas, .sa-report-chart-canvas, .sa-office-chart')
+      .forEach((el) => {
+        const chart = echarts.getInstanceByDom(el)
+        if (chart) chart.resize()
+      })
+    if (chartDialogRef.value) {
+      const dialogChart = echarts.getInstanceByDom(chartDialogRef.value)
+      if (dialogChart) dialogChart.resize()
+    }
+  })
+}
+
 const initPreviewChart = (el, data, key) => {
   if (!el || !data?.rows?.length || !data?.columns?.length) return
+  const signature = chartRenderSignature(data, key)
   nextTick(() => {
     const chart = echarts.getInstanceByDom(el) || echarts.init(el)
+    const cached = chartElementCache.get(el)
+    if (cached?.signature === signature && cached?.data === data) {
+      return
+    }
     renderChartSpec(chart, data)
-    requestAnimationFrame(() => chart.resize())
-    window.setTimeout(() => chart.resize(), 120)
+    chartElementCache.set(el, { signature, data })
+    scheduleChartResize(chart)
   })
 }
 
 const initLogChart = (el, data, key) => {
   if (!el || !data?.rows?.length || !data?.columns?.length) return
+  const signature = chartRenderSignature(data, key)
   nextTick(() => {
     const chart = echarts.getInstanceByDom(el) || echarts.init(el)
+    const cached = chartElementCache.get(el)
+    if (cached?.signature === signature && cached?.data === data) {
+      return
+    }
     renderChartSpec(chart, data)
-    requestAnimationFrame(() => chart.resize())
-    window.setTimeout(() => chart.resize(), 120)
+    chartElementCache.set(el, { signature, data })
+    scheduleChartResize(chart)
   })
 }
 
@@ -4318,7 +4546,7 @@ onUnmounted(() => {
 }
 
 .sa-inline-visuals.is-single {
-  width: min(100%, 760px);
+  width: min(100%, 980px);
 }
 
 .sa-inline-visuals-head {
@@ -4391,7 +4619,7 @@ onUnmounted(() => {
 }
 
 .sa-inline-visual-chart {
-  height: 280px;
+  height: 320px;
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
@@ -4399,7 +4627,7 @@ onUnmounted(() => {
 }
 
 .sa-inline-visuals-grid.is-single .sa-inline-visual-chart {
-  height: 320px;
+  height: 360px;
 }
 
 /* 加载动画 */
@@ -5844,6 +6072,19 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
+.sa-detail-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f2f3f5;
+  line-height: 1;
+}
+
 .sa-detail-progress {
   min-width: 0;
 }
@@ -5851,16 +6092,19 @@ onUnmounted(() => {
 .sa-detail-rate.good,
 .sa-detail-tag.good {
   color: #00b42a;
+  background: #e8ffea;
 }
 
 .sa-detail-rate.warn,
 .sa-detail-tag.warn {
   color: #ff7d00;
+  background: #fff7e8;
 }
 
 .sa-detail-rate.danger,
 .sa-detail-tag.danger {
   color: #f53f3f;
+  background: #ffece8;
 }
 
 .sa-office-bars {
@@ -6009,10 +6253,6 @@ button.sa-compare-row:hover {
 }
 
 .sa-compare-row .sa-detail-name {
-  color: var(--office-accent);
-}
-
-.sa-compare-row .sa-detail-rate {
   color: var(--office-accent);
 }
 
@@ -6269,7 +6509,7 @@ button.sa-compare-row:hover {
 
 .sa-side-extra-chart-canvas {
   width: 100%;
-  height: 220px;
+  height: 280px;
 }
 
 .sa-insight-metric-compact {
@@ -6546,7 +6786,7 @@ button.sa-compare-row:hover {
   border-radius: 8px;
   border: 1px solid rgba(22, 93, 255, 0.1);
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 
 .sa-report-chart-head {
@@ -6571,7 +6811,7 @@ button.sa-compare-row:hover {
 
 .sa-report-chart-canvas {
   width: 100%;
-  height: 280px;
+  height: 340px;
 }
 
 .sa-report-table-stack {

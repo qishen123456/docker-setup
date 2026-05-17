@@ -15,12 +15,14 @@ from config_manager import read_json, write_json
 
 
 FEATURE_FLAGS_FILE = "feature_flags.json"
-ROLE_ORDER = {"user": 1, "admin": 2, "super_admin": 3}
+ROLE_SCHEMA_VERSION = 2
+ROLE_ORDER = {"user": 1, "business_admin": 2, "admin": 3, "super_admin": 4}
 VALID_ROLES = tuple(ROLE_ORDER.keys())
 
 
 DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
     "version": 1,
+    "role_schema_version": ROLE_SCHEMA_VERSION,
     "updated_at": "",
     "features": {
         "smart_ask_workspace": {
@@ -305,6 +307,54 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "roles": ["super_admin"],
             "experimental": False,
         },
+        "employee_create": {
+            "label": "新增员工",
+            "description": "员工权限页，控制新增账号按钮和新增保存。",
+            "category": "按钮 · 员工权限配置",
+            "module": "employee_permissions",
+            "module_label": "员工权限配置",
+            "kind": "button",
+            "order": 911,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "employee_update": {
+            "label": "编辑员工",
+            "description": "员工权限页，控制编辑账号按钮和编辑保存。",
+            "category": "按钮 · 员工权限配置",
+            "module": "employee_permissions",
+            "module_label": "员工权限配置",
+            "kind": "button",
+            "order": 912,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "employee_status_update": {
+            "label": "启停员工",
+            "description": "员工权限页，控制账号状态开关。",
+            "category": "按钮 · 员工权限配置",
+            "module": "employee_permissions",
+            "module_label": "员工权限配置",
+            "kind": "button",
+            "order": 913,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "employee_bulk_update": {
+            "label": "批量修改员工",
+            "description": "员工权限页，控制批量修改角色、组织和状态。",
+            "category": "按钮 · 员工权限配置",
+            "module": "employee_permissions",
+            "module_label": "员工权限配置",
+            "kind": "button",
+            "order": 914,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
         "employee_password_reset": {
             "label": "重置密码",
             "description": "员工权限页，控制默认密码重置入口。",
@@ -326,6 +376,105 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "module_label": "员工权限配置",
             "kind": "button",
             "order": 930,
+            "risk": "high",
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_type_create": {
+            "label": "新增组织树",
+            "description": "组织树管理页，控制新增组织树类型。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 882,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_type_update": {
+            "label": "编辑组织树",
+            "description": "组织树管理页，控制编辑组织树类型。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 883,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_type_delete": {
+            "label": "删除组织树",
+            "description": "组织树管理页，控制删除组织树类型。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 884,
+            "risk": "high",
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_node_create": {
+            "label": "新增组织节点",
+            "description": "组织树管理页，控制新增根节点和新增下级。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 885,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_node_update": {
+            "label": "编辑组织节点",
+            "description": "组织树管理页，控制编辑组织节点。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 886,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_node_delete": {
+            "label": "删除组织节点",
+            "description": "组织树管理页，控制删除组织节点。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 887,
+            "risk": "high",
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_import_preview": {
+            "label": "预检导入组织树",
+            "description": "组织树管理页，控制组织树导入预检。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 888,
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": False,
+        },
+        "organization_tree_import_apply": {
+            "label": "确认导入组织树",
+            "description": "组织树管理页，控制确认写入组织树导入结果。",
+            "category": "按钮 · 组织树管理",
+            "module": "organization_tree_management",
+            "module_label": "组织树管理",
+            "kind": "button",
+            "order": 889,
             "risk": "high",
             "enabled": True,
             "roles": ["super_admin"],
@@ -364,6 +513,18 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "kind": "button",
             "order": 330,
             "risk": "high",
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": True,
+        },
+        "dataset_prompt_generate": {
+            "label": "提示词生成",
+            "description": "数据资产页，控制左侧根据提示词生成数据集按钮。",
+            "category": "按钮 · 数据资产管理",
+            "module": "dataset_management",
+            "module_label": "数据资产管理",
+            "kind": "button",
+            "order": 335,
             "enabled": True,
             "roles": ["super_admin", "admin"],
             "experimental": True,
@@ -520,6 +681,30 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "module_label": "数据资产管理",
             "kind": "button",
             "order": 440,
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": False,
+        },
+        "dataset_sql_preview_run": {
+            "label": "执行 SQL 测试",
+            "description": "数据资产页，控制 SQL 测试页签内的执行 SQL 按钮。",
+            "category": "按钮 · 数据资产管理",
+            "module": "dataset_management",
+            "module_label": "数据资产管理",
+            "kind": "button",
+            "order": 445,
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": False,
+        },
+        "dataset_sql_preview_copy": {
+            "label": "复制 SQL 测试结果",
+            "description": "数据资产页，控制 SQL 测试结果的复制表格和复制 JSON 按钮。",
+            "category": "按钮 · 数据资产管理",
+            "module": "dataset_management",
+            "module_label": "数据资产管理",
+            "kind": "button",
+            "order": 446,
             "enabled": True,
             "roles": ["super_admin", "admin"],
             "experimental": False,
@@ -815,8 +1000,256 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "roles": ["super_admin", "admin", "user"],
             "experimental": False,
         },
+        "smart_question_copy": {
+            "label": "复制问题",
+            "description": "智能分析页，控制用户问题气泡上的复制按钮。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 190,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_question_edit": {
+            "label": "修改问题",
+            "description": "智能分析页，控制用户问题气泡上的修改按钮。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 191,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_question_rerun": {
+            "label": "重新问",
+            "description": "智能分析页，控制用户问题气泡上的重新执行按钮。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 192,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_dataset_select": {
+            "label": "选择数据集",
+            "description": "智能分析页，控制底部输入区的数据集选择器。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 193,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_model_select": {
+            "label": "选择模型",
+            "description": "智能分析页，控制底部输入区的模型选择器。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 194,
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": False,
+        },
+        "smart_quick_ask": {
+            "label": "常用问题带入",
+            "description": "智能分析页，控制欢迎页常用问题点击带入。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 195,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_quick_refresh": {
+            "label": "刷新常用问题",
+            "description": "智能分析页，控制欢迎页换一批常用问题按钮。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 196,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
+        "smart_chart_auto_infer": {
+            "label": "自动推荐图表",
+            "description": "智能分析页，当后端报告未返回图表配置时，允许前端按结果字段兜底生成推荐图表。",
+            "category": "按钮 · 智能分析工作台",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "button",
+            "order": 197,
+            "enabled": True,
+            "roles": ["super_admin", "admin", "user"],
+            "experimental": False,
+        },
     },
 }
+
+
+_DATASET_ITEM_ACTIONS = {
+    "question": ("常见问题", 350),
+    "regression": ("回归题", 360),
+    "synonym": ("路由词", 370),
+    "lld": ("LLD", 380),
+    "dict": ("字段", 390),
+    "schema": ("DDL", 410),
+    "relation": ("表关联", 415),
+    "golden": ("训练实例", 420),
+    "prompt": ("提示词片段", 430),
+    "extcfg": ("扩展配置", 440),
+}
+
+_DATASET_ACTION_LABELS = {
+    "create": ("新增", "新增"),
+    "update": ("编辑", "编辑"),
+    "delete": ("删除", "删除"),
+}
+
+for _item_key, (_item_label, _base_order) in _DATASET_ITEM_ACTIONS.items():
+    for _offset, (_action_key, (_action_label, _action_desc)) in enumerate(_DATASET_ACTION_LABELS.items(), start=1):
+        DEFAULT_FEATURE_FLAGS["features"].setdefault(
+            f"dataset_{_item_key}_{_action_key}",
+            {
+                "label": f"{_action_label}{_item_label}",
+                "description": f"数据资产页，控制{_item_label}{_action_desc}按钮。",
+                "category": "按钮 · 数据资产管理",
+                "module": "dataset_management",
+                "module_label": "数据资产管理",
+                "kind": "button",
+                "order": _base_order + _offset,
+                "risk": "high" if _action_key == "delete" else "normal",
+                "enabled": True,
+                "roles": ["super_admin", "admin"],
+                "experimental": False,
+            },
+        )
+
+_DATASET_LEGACY_MAINTENANCE_KEYS = {
+    "dataset_question_edit",
+    "dataset_regression_edit",
+    "dataset_synonym_edit",
+    "dataset_lld_edit",
+    "dataset_dict_edit",
+    "dataset_schema_edit",
+    "dataset_relation_edit",
+    "dataset_golden_edit",
+    "dataset_prompt_edit",
+    "dataset_extcfg_edit",
+}
+_MANAGEMENT_LEGACY_KEYS = {
+    "employee_permission_edit",
+    "organization_tree_edit",
+}
+_FEISHU_ACTION_FEATURES = {
+    "feishu_sync_create": ("新建同步任务", "飞书同步页，控制新建同步任务按钮。", 711, ""),
+    "feishu_sync_update": ("编辑同步任务", "飞书同步页，控制编辑和保存同步任务。", 712, ""),
+    "feishu_sync_delete": ("删除同步任务", "飞书同步页，控制删除同步任务。", 713, "high"),
+    "feishu_sync_start": ("立即同步", "飞书同步页，控制立即同步和批量启动同步。", 721, ""),
+    "feishu_sync_pause": ("暂停同步任务", "飞书同步页，控制暂停同步任务。", 722, ""),
+    "feishu_sync_resume": ("恢复同步任务", "飞书同步页，控制恢复同步任务。", 723, ""),
+    "feishu_connection_test": ("测试飞书连接", "飞书同步页，控制测试连接按钮。", 731, ""),
+    "feishu_link_parse": ("解析飞书链接", "飞书同步页，控制飞书多维表格链接解析按钮。", 732, ""),
+    "feishu_schema_preview": ("预览飞书字段", "飞书同步页，控制字段元数据和样本预览按钮。", 733, ""),
+    "feishu_log_view": ("查看同步日志", "飞书同步页，控制查看和刷新同步日志。", 741, ""),
+}
+_FEISHU_LEGACY_KEYS = {
+    "feishu_sync_edit",
+    "feishu_sync_run",
+    "feishu_sync_test",
+}
+
+for _legacy_key in _DATASET_LEGACY_MAINTENANCE_KEYS:
+    DEFAULT_FEATURE_FLAGS["features"].pop(_legacy_key, None)
+for _legacy_key in _MANAGEMENT_LEGACY_KEYS:
+    DEFAULT_FEATURE_FLAGS["features"].pop(_legacy_key, None)
+for _legacy_key in _FEISHU_LEGACY_KEYS:
+    DEFAULT_FEATURE_FLAGS["features"].pop(_legacy_key, None)
+for _key, (_label, _description, _order, _risk) in _FEISHU_ACTION_FEATURES.items():
+    DEFAULT_FEATURE_FLAGS["features"].setdefault(
+        _key,
+        {
+            "label": _label,
+            "description": _description,
+            "category": "按钮 · 飞书数据同步",
+            "module": "feishu_sync",
+            "module_label": "飞书数据同步",
+            "kind": "button",
+            "order": _order,
+            "risk": _risk,
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": False,
+        },
+    )
+
+_BUSINESS_ADMIN_DEFAULT_FEATURES = {
+    "smart_ask_workspace",
+    "app_password_change",
+    "app_history_clear",
+    "app_history_delete",
+    "dataset_management",
+    "dataset_save",
+    "dataset_prompt_generate",
+    "dataset_dict_extract",
+    "dataset_source_table",
+    "dataset_sql_preview_run",
+    "dataset_sql_preview_copy",
+    "report_config",
+    "report_template_edit",
+    "report_fullscreen",
+    "chart_viewer",
+    "smart_new_chat",
+    "smart_send_question",
+    "smart_stop_run",
+    "smart_confirm_scope",
+    "smart_submit_note",
+    "smart_report_download",
+    "smart_sql_copy",
+    "smart_question_copy",
+    "smart_question_edit",
+    "smart_question_rerun",
+    "smart_dataset_select",
+    "smart_quick_ask",
+    "smart_quick_refresh",
+    "smart_chart_auto_infer",
+}
+_BUSINESS_ADMIN_DATASET_MAINTENANCE_PREFIXES = (
+    "dataset_question_",
+    "dataset_regression_",
+    "dataset_synonym_",
+    "dataset_lld_",
+    "dataset_dict_",
+    "dataset_schema_",
+    "dataset_relation_",
+    "dataset_golden_",
+    "dataset_prompt_",
+    "dataset_extcfg_",
+)
+for _feature_key, _feature in DEFAULT_FEATURE_FLAGS["features"].items():
+    if (
+        _feature_key in _BUSINESS_ADMIN_DEFAULT_FEATURES
+        or (
+            _feature_key.startswith(_BUSINESS_ADMIN_DATASET_MAINTENANCE_PREFIXES)
+            and not _feature_key.endswith("_delete")
+        )
+    ):
+        _feature.setdefault("roles", [])
+        if "business_admin" not in _feature["roles"]:
+            _feature["roles"].append("business_admin")
 
 
 def _now() -> str:
@@ -847,6 +1280,31 @@ def _merge_feature(default_feature: dict[str, Any], current: Any) -> dict[str, A
     return merged
 
 
+def _role_schema_version(data: dict[str, Any]) -> int:
+    try:
+        return int(data.get("role_schema_version") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def _migrate_builtin_role_matrix(result: dict[str, Any], data: dict[str, Any]) -> None:
+    if _role_schema_version(data) >= ROLE_SCHEMA_VERSION:
+        result["role_schema_version"] = ROLE_SCHEMA_VERSION
+        return
+    features = result.get("features") if isinstance(result.get("features"), dict) else {}
+    for key, default_feature in DEFAULT_FEATURE_FLAGS["features"].items():
+        if "business_admin" not in set(default_feature.get("roles") or []):
+            continue
+        feature = features.get(key)
+        if not isinstance(feature, dict):
+            continue
+        roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
+        if "business_admin" not in roles:
+            roles.append("business_admin")
+        feature["roles"] = _clean_roles(roles, default_feature.get("roles", []))
+    result["role_schema_version"] = ROLE_SCHEMA_VERSION
+
+
 def load_feature_flags() -> dict[str, Any]:
     data = read_json(FEATURE_FLAGS_FILE)
     if not isinstance(data, dict):
@@ -855,7 +1313,7 @@ def load_feature_flags() -> dict[str, Any]:
     current_features = data.get("features") if isinstance(data.get("features"), dict) else {}
     for key, default_feature in DEFAULT_FEATURE_FLAGS["features"].items():
         result["features"][key] = _merge_feature(default_feature, current_features.get(key))
-    legacy_keys = {"danger_delete_buttons", "runtime_import", "employee_delete"}
+    legacy_keys = {"danger_delete_buttons", "runtime_import"} | _DATASET_LEGACY_MAINTENANCE_KEYS | _MANAGEMENT_LEGACY_KEYS | _FEISHU_LEGACY_KEYS
     for key, feature in current_features.items():
         if key in legacy_keys:
             continue
@@ -872,6 +1330,7 @@ def load_feature_flags() -> dict[str, Any]:
                 feature,
             )
     result["updated_at"] = str(data.get("updated_at") or result.get("updated_at") or "")
+    _migrate_builtin_role_matrix(result, data)
     return result
 
 

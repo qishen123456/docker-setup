@@ -16,6 +16,10 @@ let historyScope = 'anonymous'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const MAX_HISTORY_ITEMS = 50
+const MAX_LOCAL_HISTORY_ITEMS = 20
+const MAX_LOCAL_ROWS = 80
+const MAX_LOCAL_MESSAGES = 8
+const MAX_LOCAL_STRING_LENGTH = 12000
 
 const normalizeScopePart = (value) => String(value || '')
   .trim()
@@ -72,9 +76,123 @@ const ensureLoaded = () => {
   if (!loaded) loadSmartAskHistory()
 }
 
+const isQuotaExceededError = (error) => (
+  error?.name === 'QuotaExceededError'
+  || error?.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+  || error?.code === 22
+  || error?.code === 1014
+)
+
+const compactString = (value, limit = MAX_LOCAL_STRING_LENGTH) => {
+  const text = String(value || '')
+  return text.length > limit ? `${text.slice(0, limit)}\n...` : text
+}
+
+const compactRows = (rows = []) => (
+  Array.isArray(rows) ? rows.slice(0, MAX_LOCAL_ROWS) : rows
+)
+
+const compactDatasetResult = (dataset = {}) => {
+  if (!dataset || typeof dataset !== 'object') return dataset
+  const next = { ...dataset }
+  if (Array.isArray(next.rows)) next.rows = compactRows(next.rows)
+  if (Array.isArray(next.tableRows)) next.tableRows = compactRows(next.tableRows)
+  if (Array.isArray(next.preview_rows)) next.preview_rows = compactRows(next.preview_rows)
+  if (Array.isArray(next.sample_rows)) next.sample_rows = compactRows(next.sample_rows)
+  if (typeof next.report === 'string') next.report = compactString(next.report)
+  if (typeof next.markdown === 'string') next.markdown = compactString(next.markdown)
+  if (next.report_spec && typeof next.report_spec === 'object') {
+    next.report_spec = compactNestedValue(next.report_spec, 0)
+  }
+  return next
+}
+
+const compactNestedValue = (value, depth = 0, key = '') => {
+  if (typeof value === 'string') return compactString(value, depth > 3 ? 4000 : MAX_LOCAL_STRING_LENGTH)
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    const limit = /rows|table|samples|messages/i.test(key) ? MAX_LOCAL_ROWS : 120
+    return value.slice(0, limit).map(item => compactNestedValue(item, depth + 1, key))
+  }
+  const next = {}
+  Object.entries(value).forEach(([childKey, childValue]) => {
+    if (/raw|debug|trace|prompt|token|reasoning/i.test(childKey) && typeof childValue === 'string') {
+      next[childKey] = compactString(childValue, 2000)
+      return
+    }
+    next[childKey] = compactNestedValue(childValue, depth + 1, childKey)
+  })
+  return next
+}
+
+const compactHistoryItemForLocal = (item = {}) => {
+  const next = clone(item)
+  const snapshot = next.reportSnapshot || {}
+  const result = snapshot.result || {}
+  if (Array.isArray(result.dataset_results)) {
+    result.dataset_results = result.dataset_results.map(compactDatasetResult)
+  }
+  if (Array.isArray(result.logs)) result.logs = []
+  if (typeof result.report === 'string') result.report = compactString(result.report)
+  if (typeof result.answer === 'string') result.answer = compactString(result.answer)
+  if (Array.isArray(snapshot.messages)) {
+    snapshot.messages = snapshot.messages
+      .slice(-MAX_LOCAL_MESSAGES)
+      .map((message) => ({
+        id: message?.id,
+        role: message?.role,
+        content: compactString(message?.content || '', 3000),
+        loading: false,
+        data: message?.role === 'ai' ? null : undefined,
+      }))
+  }
+  next.reportSnapshot = {
+    ...snapshot,
+    result,
+    localCompacted: true,
+  }
+  return next
+}
+
+const persistLocalItems = (items) => {
+  localStorage.setItem(getScopedHistoryKey(), JSON.stringify(items))
+}
+
 const persistSmartAskHistory = () => {
   if (typeof window === 'undefined') return
-  localStorage.setItem(getScopedHistoryKey(), JSON.stringify(historySessions.value))
+  let items = historySessions.value.slice(0, MAX_LOCAL_HISTORY_ITEMS).map(compactHistoryItemForLocal)
+  while (items.length > 0) {
+    try {
+      persistLocalItems(items)
+      return
+    } catch (error) {
+      if (!isQuotaExceededError(error)) {
+        console.warn('[smartAskHistory] failed to persist local history', error)
+        return
+      }
+      items = items.slice(0, Math.max(1, items.length - 1))
+      if (items.length === 1) {
+        items = items.map((item) => ({
+          ...item,
+          reportSnapshot: {
+            ...item.reportSnapshot,
+            messages: [],
+            result: {
+              ...(item.reportSnapshot?.result || {}),
+              dataset_results: [],
+              localCompacted: true,
+            },
+          },
+        }))
+        try {
+          persistLocalItems(items)
+        } catch {
+          try { localStorage.removeItem(getScopedHistoryKey()) } catch {}
+        }
+        return
+      }
+    }
+  }
 }
 
 const itemTime = (item) => {
@@ -182,12 +300,12 @@ export const upsertSmartAskHistory = (payload) => {
   ensureLoaded()
   const nextItem = normalizeHistoryItem(payload)
   if (!nextItem) return ''
+  pushHistoryToServer(nextItem)
   historySessions.value = [
     nextItem,
     ...historySessions.value.filter(item => item.id !== nextItem.id),
   ].slice(0, MAX_HISTORY_ITEMS)
   persistSmartAskHistory()
-  pushHistoryToServer(nextItem)
   return nextItem.id
 }
 

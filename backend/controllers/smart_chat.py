@@ -18,6 +18,7 @@ from four_agent_ask import four_agent_ask_service
 import dataset_report_config as drc
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
+from feature_flags import feature_available
 from system_log_store import log_event, request_snapshot
 from smartask_report_history_store import (
     clear_history as clear_report_history,
@@ -28,6 +29,18 @@ from smartask_report_history_store import (
 
 
 smart_chat_bp = Blueprint("smart_chat", __name__)
+
+
+def _require_feature(user: dict, key: str):
+    if feature_available(key, user or {}):
+        return None
+    return jsonify({"error": "当前账号没有使用该功能的权限。"}), 403
+
+
+def _require_any_feature(user: dict, keys: list[str]):
+    if any(feature_available(key, user or {}) for key in keys):
+        return None
+    return jsonify({"error": "当前账号没有使用该功能的权限。"}), 403
 
 
 @smart_chat_bp.route("/api/smart-chat/report-history", methods=["GET"])
@@ -54,6 +67,9 @@ def save_report_history():
 @smart_chat_bp.route("/api/smart-chat/report-history/<item_id>", methods=["DELETE"])
 def delete_report_history_item(item_id):
     user = get_current_user()
+    denied = _require_feature(user, "app_history_delete")
+    if denied:
+        return denied
     remove_report_history(user, item_id)
     return jsonify({"success": True})
 
@@ -61,6 +77,9 @@ def delete_report_history_item(item_id):
 @smart_chat_bp.route("/api/smart-chat/report-history", methods=["DELETE"])
 def clear_report_history_items():
     user = get_current_user()
+    denied = _require_feature(user, "app_history_clear")
+    if denied:
+        return denied
     clear_report_history(user)
     return jsonify({"success": True})
 
@@ -266,6 +285,9 @@ def _log_smart_chat_result(
 def smart_chat():
     started = time.time()
     user = get_current_user()
+    denied = _require_feature(user, "smart_send_question")
+    if denied:
+        return denied
     req_info = request_snapshot(request)
     try:
         _append_controller_debug("smart_chat.request.enter")
@@ -291,6 +313,10 @@ def smart_chat():
         if not question:
             _append_controller_debug("smart_chat.request.reject", reason="empty_question")
             return jsonify({"error": "Question cannot be empty."}), 400
+        if selected_dataset_ids is not None:
+            denied = _require_feature(user, "smart_dataset_select")
+            if denied:
+                return denied
         if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
             _append_controller_debug("smart_chat.request.reject", reason="selected_dataset_ids_not_list")
             return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
@@ -356,6 +382,9 @@ def smart_chat_stream():
     started = time.time()
     payload = request.get_json() or {}
     user = get_current_user()
+    denied = _require_feature(user, "smart_send_question")
+    if denied:
+        return denied
     req_info = request_snapshot(request)
     question = (payload.get("question") or "").strip()
     session_id = (payload.get("session_id") or "").strip()
@@ -365,6 +394,14 @@ def smart_chat_stream():
 
     if not question:
         return jsonify({"error": "Question cannot be empty."}), 400
+    if selected_dataset_ids is not None:
+        denied = _require_feature(user, "smart_dataset_select")
+        if denied:
+            return denied
+    if model_id is not None:
+        denied = _require_feature(user, "smart_model_select")
+        if denied:
+            return denied
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
     allowed_dataset_ids = _allowed_dataset_ids(user)
@@ -476,6 +513,9 @@ def smart_chat_stream():
 def confirm_by_boss():
     started = time.time()
     user = get_current_user()
+    denied = _require_any_feature(user, ["smart_confirm_scope", "smart_submit_note"])
+    if denied:
+        return denied
     req_info = request_snapshot(request)
     try:
         payload = request.get_json() or {}
@@ -537,6 +577,9 @@ def confirm_by_boss_stream():
     started = time.time()
     payload = request.get_json() or {}
     user = get_current_user()
+    denied = _require_any_feature(user, ["smart_confirm_scope", "smart_submit_note"])
+    if denied:
+        return denied
     req_info = request_snapshot(request)
     session_id = (payload.get("session_id") or "").strip()
     selected_option = (payload.get("selected_option") or "").strip()

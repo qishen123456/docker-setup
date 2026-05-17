@@ -8,9 +8,9 @@
       </div>
       <div class="head-actions">
         <el-button :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreateUser">新增</el-button>
-        <el-button :disabled="!selectedUserIds.length" @click="openBulkEdit">批量修改</el-button>
-        <el-button type="danger" plain :disabled="!selectedUserIds.length" @click="bulkDeleteUsers">删除</el-button>
+        <el-button v-if="isFeatureEnabled('employee_create')" type="primary" :icon="Plus" @click="openCreateUser">新增</el-button>
+        <el-button v-if="isFeatureEnabled('employee_bulk_update')" :disabled="!selectedUserIds.length" @click="openBulkEdit">批量修改</el-button>
+        <el-button v-if="isFeatureEnabled('employee_delete')" type="danger" plain :disabled="!selectedUserIds.length" @click="bulkDeleteUsers">删除</el-button>
       </div>
     </section>
 
@@ -18,6 +18,7 @@
       <el-input v-model.trim="phoneKeyword" clearable placeholder="按电话号码 / 姓名 / UnionID 搜索" />
       <el-select v-model="roleFilter" placeholder="角色" clearable>
         <el-option label="普通用户" value="user" />
+        <el-option label="业务管理员" value="business_admin" />
         <el-option label="管理员" value="admin" />
       </el-select>
       <el-select v-model="statusFilter" placeholder="状态">
@@ -54,6 +55,7 @@
               :model-value="row.enabled !== false"
               active-color="#1677ff"
               inactive-color="#cbd5e1"
+              :disabled="!isFeatureEnabled('employee_status_update')"
               @change="toggleUserEnabled(row)"
             />
           </template>
@@ -68,8 +70,8 @@
         </el-table-column>
         <el-table-column label="操作" width="112">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openEditUser(row)">编辑</el-button>
-            <el-button link type="danger" @click="deleteUser(row)">删除</el-button>
+            <el-button v-if="isFeatureEnabled('employee_update')" link type="primary" @click="openEditUser(row)">编辑</el-button>
+            <el-button v-if="isFeatureEnabled('employee_delete')" link type="danger" @click="deleteUser(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -92,6 +94,7 @@
         <el-form-item label="角色">
           <el-select v-model="userForm.role">
             <el-option label="普通用户" value="user" />
+            <el-option label="业务管理员" value="business_admin" />
             <el-option label="管理员" value="admin" />
           </el-select>
         </el-form-item>
@@ -146,8 +149,22 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="userDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveUserDialog">保存</el-button>
+        <div class="dialog-footer-actions">
+          <el-button
+            v-if="userDialog.mode === 'edit' && isFeatureEnabled('employee_password_reset')"
+            type="warning"
+            plain
+            :loading="passwordResetting"
+            @click="resetUserPassword"
+          >
+            重置密码
+          </el-button>
+          <span v-else></span>
+          <div class="dialog-footer-main">
+            <el-button @click="userDialog.visible = false">取消</el-button>
+            <el-button v-if="canSaveUserDialog" type="primary" :loading="saving" @click="saveUserDialog">保存</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -156,6 +173,7 @@
         <el-form-item label="角色">
           <el-select v-model="bulkForm.role" clearable placeholder="不修改角色">
             <el-option label="普通用户" value="user" />
+            <el-option label="业务管理员" value="business_admin" />
             <el-option label="管理员" value="admin" />
           </el-select>
         </el-form-item>
@@ -190,7 +208,7 @@
       </el-form>
       <template #footer>
         <el-button @click="bulkDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitBulkEdit">应用到 {{ selectedUserIds.length }} 人</el-button>
+        <el-button v-if="isFeatureEnabled('employee_bulk_update')" type="primary" :loading="saving" @click="submitBulkEdit">应用到 {{ selectedUserIds.length }} 人</el-button>
       </template>
     </el-dialog>
   </div>
@@ -204,11 +222,14 @@ import {
   bulkUpdateRbacUsers,
   createRbacUser,
   getRbacOverview,
+  resetRbacUserPassword,
   updateRbacUser,
 } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
 const loading = ref(false)
 const saving = ref(false)
+const passwordResetting = ref(false)
 const phoneKeyword = ref('')
 const roleFilter = ref('')
 const statusFilter = ref('all')
@@ -216,6 +237,7 @@ const users = ref([])
 const orgTrees = ref({ tree_types: [], nodes: [], trees: {} })
 const selectedUserIds = ref([])
 const bulkDialogVisible = ref(false)
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 
 const userDialog = reactive({ visible: false, mode: 'create' })
 const userForm = reactive({
@@ -263,12 +285,16 @@ const filteredUsers = computed(() => users.value.filter((user) => {
   const matchStatus = statusFilter.value === 'all' || (statusFilter.value === 'enabled' ? user.enabled : !user.enabled)
   return matchKeyword && matchRole && matchStatus
 }))
+const canSaveUserDialog = computed(() => isFeatureEnabled(
+  userDialog.mode === 'create' ? 'employee_create' : 'employee_update'
+))
 const mapTreeOptions = (items = []) => items.map(node => ({
   id: node.id,
   label: `${node.name}（${node.code}）`,
   children: mapTreeOptions(node.children || []),
 }))
-const roleLabel = (role) => ({ admin: '管理员', user: '普通用户', super_admin: '超级管理员' }[role] || role || '普通用户')
+const fixedRoleValues = ['admin', 'business_admin', 'user']
+const roleLabel = (role) => ({ admin: '管理员', business_admin: '业务管理员', user: '普通用户', super_admin: '超级管理员' }[role] || role || '普通用户')
 const uniqueList = (items = []) => Array.from(new Set((items || []).filter(Boolean)))
 const expandNodeIds = (ids = [], treeTypeId = '') => {
   const selected = new Set((ids || []).filter(id => nodeById.value.has(id)))
@@ -344,7 +370,7 @@ const resetUserForm = (user = {}) => {
     id: user.id || '',
     name: user.name || '',
     account: user.account || user.username || '',
-    role: user.role === 'admin' ? 'admin' : 'user',
+    role: fixedRoleValues.includes(user.role) ? user.role : 'user',
     organization_node_ids: clone(user.organization_node_ids) || [],
     organization_codes: clone(user.organization_codes) || [],
     union_id: user.union_id || '',
@@ -362,18 +388,21 @@ const resetUserForm = (user = {}) => {
 }
 
 const openCreateUser = () => {
+  if (!isFeatureEnabled('employee_create')) return
   resetUserForm()
   userDialog.mode = 'create'
   userDialog.visible = true
 }
 
 const openEditUser = (user) => {
+  if (!isFeatureEnabled('employee_update')) return
   resetUserForm(user)
   userDialog.mode = 'edit'
   userDialog.visible = true
 }
 
 const saveUserDialog = async () => {
+  if (!canSaveUserDialog.value) return
   if (!userForm.account.trim()) {
     ElMessage.warning('请填写电话')
     return
@@ -397,12 +426,37 @@ const saveUserDialog = async () => {
   }
 }
 
+const resetUserPassword = async () => {
+  if (!isFeatureEnabled('employee_password_reset')) return
+  if (!userForm.id || passwordResetting.value) return
+  const targetName = userForm.name || userForm.account || '该账号'
+  await ElMessageBox.confirm(
+    `确认将「${targetName}」的登录密码重置为默认密码 12345678？`,
+    '重置密码',
+    {
+      type: 'warning',
+      confirmButtonText: '确认重置',
+      cancelButtonText: '取消',
+    }
+  )
+  passwordResetting.value = true
+  try {
+    const res = await resetRbacUserPassword(userForm.id)
+    users.value = clone(res.users) || users.value
+    ElMessage.success(`密码已重置为 ${res.default_password || '12345678'}`)
+  } finally {
+    passwordResetting.value = false
+  }
+}
+
 const toggleUserEnabled = async (user) => {
+  if (!isFeatureEnabled('employee_status_update')) return
   const res = await updateRbacUser(user.id, { enabled: !user.enabled })
   users.value = clone(res.users) || users.value
 }
 
 const deleteUser = async (user) => {
+  if (!isFeatureEnabled('employee_delete')) return
   await ElMessageBox.confirm(`确认删除账号「${user.name || user.account}」？`, '删除账号', { type: 'warning' })
   const res = await bulkUpdateRbacUsers({ user_ids: [user.id], action: 'delete' })
   users.value = clone(res.users) || users.value
@@ -410,11 +464,13 @@ const deleteUser = async (user) => {
 }
 
 const openBulkEdit = () => {
+  if (!isFeatureEnabled('employee_bulk_update')) return
   Object.assign(bulkForm, { role: '', organization_node_ids: [], enabledMode: 'skip' })
   bulkDialogVisible.value = true
 }
 
 const submitBulkEdit = async () => {
+  if (!isFeatureEnabled('employee_bulk_update')) return
   if (!selectedUserIds.value.length) return
   saving.value = true
   try {
@@ -446,6 +502,7 @@ const submitBulkEdit = async () => {
 }
 
 const bulkDeleteUsers = async () => {
+  if (!isFeatureEnabled('employee_delete')) return
   if (!selectedUserIds.value.length) return
   await ElMessageBox.confirm(`确认删除 ${selectedUserIds.value.length} 个账号？`, '批量删除', { type: 'warning' })
   const res = await bulkUpdateRbacUsers({ user_ids: selectedUserIds.value, action: 'delete' })
@@ -454,7 +511,10 @@ const bulkDeleteUsers = async () => {
   ElMessage.success('批量删除已完成')
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadFeatureFlags()
+  loadAll()
+})
 </script>
 
 <style scoped>
@@ -578,6 +638,19 @@ onMounted(loadAll)
 :deep(.compact-user-dialog .el-dialog__footer) {
   padding: 10px 20px 16px;
   border-top: 1px solid #eef2f7;
+}
+
+.dialog-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dialog-footer-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .form-section-title {

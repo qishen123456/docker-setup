@@ -213,6 +213,32 @@ def _level_label(nodes: List[Dict[str, Any]], fallback: str) -> str:
     return " / ".join(values) if values else fallback
 
 
+def _requested_level_values(question: str, config: Dict[str, Any]) -> List[str]:
+    text = str(question or "")
+    values: List[str] = []
+    configured_values = [
+        str(value)
+        for level in (config.get("levels") or [])
+        for value in (level.get("values") or [])
+        if str(value or "").strip()
+    ]
+    common_values = ["事业部", "业务部", "分公司", "代表处", "业务代表", "业务员", "城市公司", "部门", "条线"]
+    for value in [*configured_values, *common_values]:
+        if value and value in text and value not in values:
+            values.append(value)
+    return values
+
+
+def _negative_ranking_requested(question: str) -> bool:
+    return bool(re.search(r"完成.*不好|不好|差|最差|最低|落后|承压|风险|低于|倒数|垫底|未完成|缺口", question or ""))
+
+
+def _rate_sort_value(node: Dict[str, Any], rate_metric: Optional[Dict[str, Any]]) -> float:
+    if not rate_metric:
+        return 0.0
+    return _row_sort_value(node.get("raw") or {}, rate_metric)
+
+
 def _detect_mode(question: str, focus_node: Optional[Dict[str, Any]], selected_count: int) -> str:
     return detect_report_scene(question, focus_node, selected_count).get("key", "detail")
 
@@ -500,6 +526,21 @@ def build_report_spec(
         max_depth = max([node.get("depth", 0) for node in parent_nodes] or [0])
         comparison_nodes = [node for node in parent_nodes if node.get("depth", 0) == max_depth]
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
+    requested_levels = _requested_level_values(question or "", config)
+    if requested_levels:
+        scoped_nodes = _descendants(focus_node) if focus_node else nodes
+        level_nodes = [
+            node for node in scoped_nodes
+            if node.get("name")
+            and (
+                node.get("levelValue") in requested_levels
+                or node.get("levelName") in requested_levels
+                or any(value and value in str(node.get("name") or "") for value in requested_levels)
+            )
+        ]
+        if level_nodes:
+            comparison_nodes = level_nodes
+    low_first = _negative_ranking_requested(question or "")
 
     scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes))
     mode = scene.get("key", "detail")
@@ -520,7 +561,7 @@ def build_report_spec(
     compare_rows = sorted(
         [chart_row(node) for node in comparison_nodes],
         key=lambda item: item.get(rate_metric.get("label") or rate_metric.get("column") or "达成率", 0) if rate_metric else 0,
-        reverse=True,
+        reverse=not low_first,
     )
     compare_columns = ["名称"] + [metric.get("label") or metric.get("column") or metric.get("key") for metric in chart_metrics]
 
@@ -630,10 +671,15 @@ def build_report_spec(
     thresholds = _effective_thresholds(config)
     ranked_comparison_nodes = sorted(
         comparison_nodes,
-        key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0,
+        key=lambda item: _rate_sort_value(item, rate_metric),
+        reverse=not low_first,
+    )
+    high_ranked_comparison_nodes = sorted(
+        comparison_nodes,
+        key=lambda item: _rate_sort_value(item, rate_metric),
         reverse=True,
     )
-    node_rank = {node.get("id"): index + 1 for index, node in enumerate(ranked_comparison_nodes)}
+    high_node_rank = {node.get("id"): index + 1 for index, node in enumerate(high_ranked_comparison_nodes)}
     comparison_groups = _dynamic_performance_groups(
         comparison_nodes,
         lambda item: _row_value(item.get("raw") or {}, rate_metric) if rate_metric else None,
@@ -767,7 +813,7 @@ def build_report_spec(
         else:
             highlight = f"{node_detail_label}达成率接近，暂无明显领先节点"
             risk_text = "暂无明显落后节点"
-        node_rank_value = node_rank.get(node.get("id"), 0)
+        node_rank_value = high_node_rank.get(node.get("id"), 0)
         node_rank_label = _rate_rank_label(node_rank_value)
         node_rank_suffix = f"（{node_rank_label}）" if node_rank_value else ""
         accordions.append({
@@ -893,6 +939,7 @@ def build_report_spec(
         "title": f"各{compare_label}达成率排序",
         "columns": compare_columns,
         "rows": compare_rows,
+        "lowFirst": low_first,
     } if compare_rows else None
 
     provenance_id = "p_sql_result_001"

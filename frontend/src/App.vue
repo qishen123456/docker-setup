@@ -92,7 +92,7 @@
                   全部 {{ historySessions.length }}
                 </button>
                 <button
-                  v-if="historyPreviewList.length && isFeatureEnabled('app_history_clear')"
+                  v-if="historyPreviewList.length && appFeatureAccess.app_history_clear"
                   class="sidebar-history-clear"
                   type="button"
                   @click="clearHistoryList"
@@ -119,7 +119,7 @@
                   <div class="history-item-time">{{ item.updatedAt }}</div>
                 </div>
                 <button
-                  v-if="isFeatureEnabled('app_history_delete')"
+                  v-if="appFeatureAccess.app_history_delete"
                   class="history-item-delete"
                   type="button"
                   aria-label="删除历史对话"
@@ -149,7 +149,7 @@
             <div class="history-drawer-title">{{ historySessions.length }} 条分析记录</div>
             <div class="history-drawer-desc">选择任意记录可恢复到分析工作台。</div>
           </div>
-          <button v-if="historySessions.length && isFeatureEnabled('app_history_clear')" class="history-drawer-clear" type="button" @click="clearHistoryList">
+          <button v-if="historySessions.length && appFeatureAccess.app_history_clear" class="history-drawer-clear" type="button" @click="clearHistoryList">
             清空全部
           </button>
         </div>
@@ -173,7 +173,7 @@
               </div>
             </div>
             <button
-              v-if="isFeatureEnabled('app_history_delete')"
+              v-if="appFeatureAccess.app_history_delete"
               class="history-item-delete"
               type="button"
               aria-label="删除历史对话"
@@ -217,14 +217,14 @@
             </button>
             <div v-if="userMenuVisible" class="auth-user-dropdown" @click.stop>
               <button
-                v-if="authRole === 'super_admin' && isFeatureEnabled('admin_console')"
+                v-if="authRole === 'super_admin' && appFeatureAccess.admin_console"
                 type="button"
                 @click="openAdminConsole"
               >
                 <strong>系统控制台</strong>
                 <span>功能开关与灰度发布</span>
               </button>
-              <button v-if="isFeatureEnabled('app_password_change')" type="button" @click="openPasswordDialog">
+              <button v-if="appFeatureAccess.app_password_change" type="button" @click="openPasswordDialog">
                 <strong>修改密码</strong>
                 <span>更新当前账号登录密码</span>
               </button>
@@ -347,6 +347,16 @@ const {
   loadFeatureFlags,
   clearFeatureFlags,
 } = useFeatureFlags()
+const appFeatureKeys = [
+  'app_history_clear',
+  'app_history_delete',
+  'admin_console',
+  'app_password_change',
+]
+const appFeatureAccess = computed(() => appFeatureKeys.reduce((map, key) => {
+  map[key] = isFeatureEnabled(key)
+  return map
+}, {}))
 const collapsed = ref(false)
 const backendOk = ref(false)
 const authUser = ref(null)
@@ -365,8 +375,9 @@ const historyDrawerVisible = ref(false)
 const userMenuVisible = ref(false)
 
 const roleRank = {
-  super_admin: 3,
-  admin: 2,
+  super_admin: 4,
+  admin: 3,
+  business_admin: 2,
   user: 1
 }
 
@@ -402,7 +413,7 @@ const isAuthCallbackRoute = computed(() => route.path === '/auth/callback')
 const isSmartAskRoute = computed(() => route.path === '/smart-ask')
 const showBackToConsole = computed(() => route.query?.from === 'admin-console' && route.path !== '/admin-console')
 const authRole = computed(() => authUser.value?.role || 'user')
-const authRoleLabel = computed(() => ({ super_admin: '超级管理员', admin: '管理员', user: '普通用户' }[authRole.value] || '普通用户'))
+const authRoleLabel = computed(() => ({ super_admin: '超级管理员', admin: '管理员', business_admin: '业务管理员', user: '普通用户' }[authRole.value] || '普通用户'))
 const canAccessRole = (minRole) => (roleRank[authRole.value] || 0) >= (roleRank[minRole] || 0)
 const isFeatureEnabled = (key) => {
   if (!key) return true
@@ -599,7 +610,7 @@ const adminConsoleFloatStyle = computed(() => ({
 
 const showAdminConsoleFloat = computed(() => (
   authRole.value === 'super_admin'
-  && isFeatureEnabled('admin_console')
+  && appFeatureAccess.value.admin_console
   && adminConsoleFloatVisible.value
 ))
 

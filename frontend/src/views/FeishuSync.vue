@@ -12,7 +12,7 @@
           <el-icon><RefreshRight /></el-icon>
           <span>刷新状态</span>
         </button>
-        <button v-if="isFeatureEnabled('feishu_sync_edit')" class="fs-btn fs-btn-primary" @click="openAdd">
+        <button v-if="isFeatureEnabled('feishu_sync_create')" class="fs-btn fs-btn-primary" @click="openAdd">
           <el-icon><Plus /></el-icon>
           <span>新建同步任务</span>
         </button>
@@ -34,8 +34,8 @@
       <div class="fs-board-head">
         <div>
           <div class="fs-board-kicker">OPERATIONS VIEW</div>
-          <h3>调度计划与统一日志</h3>
-          <p>集中查看所有任务的预计执行时间、最近状态和全局运行日志，异常任务不用再逐个点卡片排查。</p>
+          <h3>飞书同步运营视图</h3>
+          <p>集中管理同步任务、预计执行时间和全局运行日志，异常任务不用再逐个点卡片排查。</p>
         </div>
         <div class="fs-board-tags">
           <span>{{ nextRunSummary }}</span>
@@ -43,193 +43,220 @@
         </div>
       </div>
 
-      <div class="fs-ops-grid">
-        <section class="fs-ops-panel fs-schedule-panel">
-          <div class="fs-panel-title">
-            <div>
-              <strong>全局调度视图</strong>
-              <span>按预计执行时间排序，快速看哪些任务正在跑、等待跑或已暂停。</span>
-            </div>
-            <el-radio-group v-model="scheduleFilter" size="small">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="active">启用</el-radio-button>
-              <el-radio-button label="failed">异常</el-radio-button>
-            </el-radio-group>
-          </div>
-          <el-table :data="filteredScheduleRows" size="small" border class="fs-compact-table" max-height="360">
-            <el-table-column label="任务" min-width="190" show-overflow-tooltip>
-              <template #default="{ row }">
-                <strong>{{ row.name || '未命名同步任务' }}</strong>
-                <small>{{ row.target_table || '-' }}</small>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="98">
-              <template #default="{ row }">
-                <el-tag :type="getStatusType(row.last_sync_status)" effect="light">
-                  {{ getStatusText(row.last_sync_status) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="频率" width="94">
-              <template #default="{ row }">{{ formatFrequency(row.sync_frequency) }}</template>
-            </el-table-column>
-            <el-table-column label="最后同步" min-width="150">
-              <template #default="{ row }">{{ formatTime(row.last_sync_time) || '尚未同步' }}</template>
-            </el-table-column>
-            <el-table-column label="预计下次" min-width="150">
-              <template #default="{ row }">
-                <span :class="['fs-next-run', row.nextRunTone]">{{ row.nextRunText }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="156" fixed="right">
-              <template #default="{ row }">
-                <div class="fs-row-actions">
-                  <el-button link type="primary" size="small" @click="startSync(row)" :disabled="!row.is_active || row.last_sync_status === 'running'">同步</el-button>
-                  <el-button link size="small" @click="viewLogs(row)">日志</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </section>
-
-        <section class="fs-ops-panel fs-log-panel">
-          <div class="fs-panel-title">
-            <div>
-              <strong>统一运行日志</strong>
-              <span>按任务和结果筛选，失败记录会优先暴露出来。</span>
-            </div>
-            <div class="fs-log-actions">
-              <el-select v-model="logTaskFilter" size="small" placeholder="任务" clearable>
-                <el-option label="全部任务" value="" />
-                <el-option v-for="item in syncConfigs" :key="item.id" :label="item.name || `任务 ${item.id}`" :value="String(item.id)" />
-              </el-select>
-              <el-select v-model="logLevelFilter" size="small" placeholder="级别" clearable>
-                <el-option label="全部级别" value="" />
-                <el-option label="错误" value="ERROR" />
-                <el-option label="成功" value="SUCCESS" />
-                <el-option label="信息" value="INFO" />
-              </el-select>
-              <el-button size="small" @click="loadAllLogs" :loading="loadingAllLogs">刷新</el-button>
-              <el-popconfirm v-if="isFeatureEnabled('feishu_log_clear')" title="确认清空全部飞书同步日志？" @confirm="clearAllLogs">
-                <template #reference>
-                  <el-button size="small" type="danger" plain>清空</el-button>
-                </template>
-              </el-popconfirm>
-            </div>
-          </div>
-          <el-table :data="filteredAllLogs" size="small" border class="fs-compact-table" max-height="360">
-            <el-table-column label="时间" min-width="154">
-              <template #default="{ row }">{{ formatTime(row.timestamp) || row.timestamp }}</template>
-            </el-table-column>
-            <el-table-column label="任务" min-width="150" show-overflow-tooltip>
-              <template #default="{ row }">{{ taskNameById(row.config_id) }}</template>
-            </el-table-column>
-            <el-table-column label="级别" width="88">
-              <template #default="{ row }">
-                <el-tag :type="getLogLevelType(row.level)" effect="light">{{ getLogLevelText(row.level) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="内容" min-width="260" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.message || '-' }}</template>
-            </el-table-column>
-          </el-table>
-          <el-empty v-if="!filteredAllLogs.length" description="暂无匹配日志" :image-size="80" />
-        </section>
-      </div>
-    </section>
-
-    <section class="fs-board" v-loading="loading">
-      <div class="fs-board-head">
-        <div>
-          <div class="fs-board-kicker">SYNC TASKS</div>
-          <h3>同步任务编排</h3>
-          <p>卡片展示每条同步链路，重点看启停状态、落库表、频率和最后同步结果。</p>
-        </div>
-        <div class="fs-board-tags">
-          <span>{{ syncConfigs.length }} 个任务</span>
-          <span>{{ activeCount }} 个启用</span>
-        </div>
-      </div>
-
-      <div v-if="syncConfigs.length" class="fs-task-grid">
-        <article v-for="row in syncConfigs" :key="row.id" class="fs-task-card" :class="statusClass(row.last_sync_status)">
-          <div class="fs-task-top">
-            <div class="fs-task-title-group">
-              <span class="fs-task-status-dot"></span>
+      <el-tabs v-model="opsActiveTab" class="fs-ops-tabs">
+        <el-tab-pane name="schedule">
+          <template #label>
+            <span class="fs-tab-label">全局调度视图</span>
+          </template>
+          <section class="fs-ops-panel fs-schedule-panel">
+            <div class="fs-panel-title">
               <div>
-                <h4>{{ row.name || '未命名同步任务' }}</h4>
-                <p>{{ row.description || '暂无描述，建议补充业务口径和同步用途。' }}</p>
+                <strong>全局调度视图</strong>
+                <span>按预计执行时间排序，当前显示 {{ filteredScheduleRows.length }} / {{ scheduleRows.length }} 个任务。</span>
+              </div>
+              <div class="fs-schedule-actions">
+                <el-input v-model.trim="scheduleKeyword" size="small" placeholder="任务/表名" clearable />
+                <el-select v-model="scheduleFrequencyFilter" size="small" placeholder="频率" clearable>
+                  <el-option label="全部频率" value="" />
+                  <el-option
+                    v-for="item in scheduleFrequencyOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+                <el-radio-group v-model="scheduleFilter" size="small">
+                  <el-radio-button label="all">全部</el-radio-button>
+                  <el-radio-button label="active">启用</el-radio-button>
+                  <el-radio-button label="failed">异常</el-radio-button>
+                </el-radio-group>
               </div>
             </div>
-            <span class="fs-status-pill" :class="statusClass(row.last_sync_status)">
-              {{ getStatusText(row.last_sync_status) }}
-            </span>
-          </div>
+            <el-table :data="filteredScheduleRows" size="small" border class="fs-compact-table" max-height="420">
+              <el-table-column label="任务" min-width="190" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <strong>{{ row.name || '未命名同步任务' }}</strong>
+                  <small>{{ row.target_table || '-' }}</small>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="98">
+                <template #default="{ row }">
+                  <el-tag :type="getStatusType(row.last_sync_status)" effect="light">
+                    {{ getStatusText(row.last_sync_status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="频率" width="94">
+                <template #default="{ row }">{{ formatFrequency(row.sync_frequency) }}</template>
+              </el-table-column>
+              <el-table-column label="最后同步" min-width="150">
+                <template #default="{ row }">{{ formatTime(row.last_sync_time) || '尚未同步' }}</template>
+              </el-table-column>
+              <el-table-column label="预计下次" min-width="150">
+                <template #default="{ row }">
+                  <span :class="['fs-next-run', row.nextRunTone]">{{ row.nextRunText }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="156" fixed="right">
+                <template #default="{ row }">
+                  <div class="fs-row-actions">
+                    <el-button v-if="isFeatureEnabled('feishu_sync_start')" link type="primary" size="small" @click="startSync(row)" :disabled="!row.is_active || row.last_sync_status === 'running'">同步</el-button>
+                    <el-button v-if="isFeatureEnabled('feishu_log_view')" link size="small" @click="viewLogs(row)">日志</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+        </el-tab-pane>
 
-          <div class="fs-task-meta">
-            <div>
-              <span>目标表</span>
-              <strong>{{ row.target_table || '-' }}</strong>
+        <el-tab-pane name="logs">
+          <template #label>
+            <span class="fs-tab-label">统一运行日志</span>
+          </template>
+          <section class="fs-ops-panel fs-log-panel">
+            <div class="fs-panel-title">
+              <div>
+                <strong>统一运行日志</strong>
+                <span>按任务和结果筛选，失败记录会优先暴露出来。</span>
+              </div>
+              <div class="fs-log-actions">
+                <el-select v-model="logTaskFilter" size="small" placeholder="任务" clearable>
+                  <el-option label="全部任务" value="" />
+                  <el-option v-for="item in logTaskOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+                <el-select v-model="logLevelFilter" size="small" placeholder="级别" clearable>
+                  <el-option label="全部级别" value="" />
+                  <el-option label="错误" value="ERROR" />
+                  <el-option label="成功" value="SUCCESS" />
+                  <el-option label="信息" value="INFO" />
+                </el-select>
+                <el-button v-if="isFeatureEnabled('feishu_log_view')" size="small" @click="loadAllLogs" :loading="loadingAllLogs">刷新</el-button>
+                <el-popconfirm v-if="isFeatureEnabled('feishu_log_clear')" title="确认清空全部飞书同步日志？" @confirm="clearAllLogs">
+                  <template #reference>
+                    <el-button size="small" type="danger" plain>清空</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
-            <div>
-              <span>同步频率</span>
-              <strong>{{ formatFrequency(row.sync_frequency) }}</strong>
+            <el-table :data="filteredAllLogs" size="small" border class="fs-compact-table" max-height="420">
+              <el-table-column label="时间" min-width="154">
+                <template #default="{ row }">{{ formatTime(row.timestamp) || row.timestamp }}</template>
+              </el-table-column>
+              <el-table-column label="任务" min-width="150" show-overflow-tooltip>
+                <template #default="{ row }">{{ taskNameById(row.config_id) }}</template>
+              </el-table-column>
+              <el-table-column label="级别" width="88">
+                <template #default="{ row }">
+                  <el-tag :type="getLogLevelType(row.level)" effect="light">{{ getLogLevelText(row.level) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="内容" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.message || '-' }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="!filteredAllLogs.length" description="暂无匹配日志" :image-size="80" />
+          </section>
+        </el-tab-pane>
+
+        <el-tab-pane name="tasks">
+          <template #label>
+            <span class="fs-tab-label">同步任务编排</span>
+          </template>
+          <section class="fs-ops-panel fs-task-panel" v-loading="loading">
+            <div class="fs-board-head">
+              <div>
+                <div class="fs-board-kicker">SYNC TASKS</div>
+                <h3>同步任务编排</h3>
+                <p>卡片展示每条同步链路，重点看启停状态、落库表、频率和最后同步结果。</p>
+              </div>
+              <div class="fs-board-tags">
+                <span>{{ syncConfigs.length }} 个任务</span>
+                <span>{{ activeCount }} 个启用</span>
+              </div>
             </div>
-            <div>
-              <span>最后同步</span>
-              <strong>{{ formatTime(row.last_sync_time) || '尚未同步' }}</strong>
+
+            <div v-if="syncConfigs.length" class="fs-task-grid">
+              <article v-for="row in syncConfigs" :key="row.id" class="fs-task-card" :class="statusClass(row.last_sync_status)">
+                <div class="fs-task-top">
+                  <div class="fs-task-title-group">
+                    <span class="fs-task-status-dot"></span>
+                    <div>
+                      <h4>{{ row.name || '未命名同步任务' }}</h4>
+                      <p>{{ row.description || '暂无描述，建议补充业务口径和同步用途。' }}</p>
+                    </div>
+                  </div>
+                  <span class="fs-status-pill" :class="statusClass(row.last_sync_status)">
+                    {{ getStatusText(row.last_sync_status) }}
+                  </span>
+                </div>
+
+                <div class="fs-task-meta">
+                  <div>
+                    <span>目标表</span>
+                    <strong>{{ row.target_table || '-' }}</strong>
+                  </div>
+                  <div>
+                    <span>同步频率</span>
+                    <strong>{{ formatFrequency(row.sync_frequency) }}</strong>
+                  </div>
+                  <div>
+                    <span>最后同步</span>
+                    <strong>{{ formatTime(row.last_sync_time) || '尚未同步' }}</strong>
+                  </div>
+                </div>
+
+                <div class="fs-task-route">
+                  <span>飞书多维表格</span>
+                  <i></i>
+                  <span>本地数据表</span>
+                </div>
+
+                <div class="fs-task-actions">
+                  <button v-if="isFeatureEnabled('feishu_connection_test')" class="fs-action-btn" :disabled="testingId === row.id" @click="testConnection(row)">
+                    <el-icon><VideoPlay /></el-icon>
+                    <span>{{ testingId === row.id ? '测试中' : '测试' }}</span>
+                  </button>
+                  <button
+                    v-if="isFeatureEnabled('feishu_sync_start')"
+                    class="fs-action-btn fs-action-primary"
+                    :disabled="!row.is_active || row.last_sync_status === 'running'"
+                    @click="startSync(row)"
+                  >
+                    <el-icon><RefreshRight /></el-icon>
+                    <span>{{ row.last_sync_status === 'running' ? '同步中' : '同步' }}</span>
+                  </button>
+                  <button v-if="row.is_active && isFeatureEnabled('feishu_sync_pause')" class="fs-action-btn" :disabled="pausingId === row.id" @click="pauseSync(row)">
+                    <el-icon><VideoPause /></el-icon>
+                    <span>{{ pausingId === row.id ? '暂停中' : '暂停' }}</span>
+                  </button>
+                  <button v-else-if="isFeatureEnabled('feishu_sync_resume')" class="fs-action-btn" :disabled="resumingId === row.id" @click="resumeSync(row)">
+                    <el-icon><VideoPlay /></el-icon>
+                    <span>{{ resumingId === row.id ? '恢复中' : '恢复' }}</span>
+                  </button>
+                  <button v-if="isFeatureEnabled('feishu_log_view')" class="fs-action-btn" @click="viewLogs(row)">
+                    <el-icon><Document /></el-icon>
+                    <span>日志</span>
+                  </button>
+                  <button v-if="isFeatureEnabled('feishu_sync_update')" class="fs-action-btn" @click="openEdit(row)">
+                    <el-icon><Edit /></el-icon>
+                    <span>编辑</span>
+                  </button>
+                  <el-popconfirm v-if="isFeatureEnabled('feishu_sync_delete')" title="确认删除此同步配置？" @confirm="deleteConfig(row.id)">
+                    <template #reference>
+                      <button class="fs-action-btn fs-action-danger">
+                        <el-icon><Delete /></el-icon>
+                        <span>删除</span>
+                      </button>
+                    </template>
+                  </el-popconfirm>
+                </div>
+              </article>
             </div>
-          </div>
 
-          <div class="fs-task-route">
-            <span>飞书多维表格</span>
-            <i></i>
-            <span>本地数据表</span>
-          </div>
-
-          <div class="fs-task-actions">
-            <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn" :disabled="testingId === row.id" @click="testConnection(row)">
-              <el-icon><VideoPlay /></el-icon>
-              <span>{{ testingId === row.id ? '测试中' : '测试' }}</span>
-            </button>
-            <button
-              v-if="isFeatureEnabled('feishu_sync_run')"
-              class="fs-action-btn fs-action-primary"
-              :disabled="!row.is_active || row.last_sync_status === 'running'"
-              @click="startSync(row)"
-            >
-              <el-icon><RefreshRight /></el-icon>
-              <span>{{ row.last_sync_status === 'running' ? '同步中' : '同步' }}</span>
-            </button>
-            <button v-if="row.is_active && isFeatureEnabled('feishu_sync_run')" class="fs-action-btn" :disabled="pausingId === row.id" @click="pauseSync(row)">
-              <el-icon><VideoPause /></el-icon>
-              <span>{{ pausingId === row.id ? '暂停中' : '暂停' }}</span>
-            </button>
-            <button v-else-if="isFeatureEnabled('feishu_sync_run')" class="fs-action-btn" :disabled="resumingId === row.id" @click="resumeSync(row)">
-              <el-icon><VideoPlay /></el-icon>
-              <span>{{ resumingId === row.id ? '恢复中' : '恢复' }}</span>
-            </button>
-            <button class="fs-action-btn" @click="viewLogs(row)">
-              <el-icon><Document /></el-icon>
-              <span>日志</span>
-            </button>
-            <button v-if="isFeatureEnabled('feishu_sync_edit')" class="fs-action-btn" @click="openEdit(row)">
-              <el-icon><Edit /></el-icon>
-              <span>编辑</span>
-            </button>
-            <el-popconfirm v-if="isFeatureEnabled('feishu_sync_edit')" title="确认删除此同步配置？" @confirm="deleteConfig(row.id)">
-              <template #reference>
-                <button class="fs-action-btn fs-action-danger">
-                  <el-icon><Delete /></el-icon>
-                  <span>删除</span>
-                </button>
-              </template>
-            </el-popconfirm>
-          </div>
-        </article>
-      </div>
-
-      <el-empty v-else description="还没有同步任务，先新建一条飞书到本地表的同步链路。" />
+            <el-empty v-else description="还没有同步任务，先新建一条飞书到本地表的同步链路。" />
+          </section>
+        </el-tab-pane>
+      </el-tabs>
     </section>
 
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑同步配置' : '添加同步配置'" width="880px" @close="resetForm">
@@ -245,7 +272,7 @@
             clearable
             @change="parseFeishuLink"
           />
-          <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn fs-action-primary" :disabled="parsingUrl || !feishuUrlInput" @click.prevent="parseFeishuLink">
+          <button v-if="isFeatureEnabled('feishu_link_parse')" class="fs-action-btn fs-action-primary" :disabled="parsingUrl || !feishuUrlInput" @click.prevent="parseFeishuLink">
             {{ parsingUrl ? '解析中' : '解析链接' }}
           </button>
         </div>
@@ -327,7 +354,7 @@
             <strong>字段结构检测</strong>
             <span>同步前自动检查 PG 目标表是否存在，以及飞书字段相对历史落库字段的变化。</span>
           </div>
-          <button v-if="isFeatureEnabled('feishu_sync_test')" class="fs-action-btn fs-action-primary" :disabled="schemaLoading" @click.prevent="previewSchema">
+          <button v-if="isFeatureEnabled('feishu_schema_preview')" class="fs-action-btn fs-action-primary" :disabled="schemaLoading" @click.prevent="previewSchema">
             {{ schemaLoading ? '检测中' : '检测字段与建表方案' }}
           </button>
         </div>
@@ -416,7 +443,7 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-if="isFeatureEnabled('feishu_sync_edit')" type="primary" :loading="saving" @click="submitForm">保存</el-button>
+        <el-button v-if="isFeatureEnabled(isEdit ? 'feishu_sync_update' : 'feishu_sync_create')" type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
 
@@ -425,7 +452,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center">
           <span>日志查看 - {{ currentConfig?.name || '' }}</span>
           <div>
-            <el-button size="small" @click="refreshLogs" :loading="loadingLogs">刷新</el-button>
+            <el-button v-if="isFeatureEnabled('feishu_log_view')" size="small" @click="refreshLogs" :loading="loadingLogs">刷新</el-button>
             <el-popconfirm v-if="isFeatureEnabled('feishu_log_clear')" title="确认清空日志？" @confirm="clearLogs">
               <template #reference>
                 <el-button size="small" type="danger">清空</el-button>
@@ -492,7 +519,10 @@ const logs = ref([])
 const loadingLogs = ref(false)
 const allLogs = ref([])
 const loadingAllLogs = ref(false)
+const opsActiveTab = ref('schedule')
 const scheduleFilter = ref('all')
+const scheduleKeyword = ref('')
+const scheduleFrequencyFilter = ref('')
 const logTaskFilter = ref('')
 const logLevelFilter = ref('')
 
@@ -504,6 +534,23 @@ const runningCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_
 const failedCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_status === 'failed').length)
 const successCount = computed(() => syncConfigs.value.filter((c) => c.last_sync_status === 'success').length)
 const taskNameMap = computed(() => new Map(syncConfigs.value.map((item) => [String(item.id), item.name || `任务 ${item.id}`])))
+const logTaskOptions = computed(() => {
+  const options = syncConfigs.value.map((item) => ({
+    label: item.name || `任务 ${item.id}`,
+    value: String(item.id)
+  }))
+  const seen = new Set(options.map((item) => item.value))
+  allLogs.value.forEach((item) => {
+    const value = String(item.config_id ?? '')
+    if (!value || seen.has(value)) return
+    seen.add(value)
+    options.push({
+      label: taskNameById(value),
+      value
+    })
+  })
+  return options
+})
 const schemaFieldRows = computed(() => schemaPreview.value?.field_rows || [])
 const hasSchemaDiff = computed(() => (
   Boolean(schemaPreview.value)
@@ -520,10 +567,28 @@ const scheduleRows = computed(() => syncConfigs.value.map((item) => ({
   if (!b.nextRunAt) return -1
   return a.nextRunAt - b.nextRunAt
 }))
+const scheduleFrequencyOptions = computed(() => {
+  const values = Array.from(new Set(scheduleRows.value.map((row) => Number(row.sync_frequency || 0)).filter(Boolean)))
+  return values.sort((a, b) => a - b).map((value) => ({
+    value: String(value),
+    label: formatFrequency(value)
+  }))
+})
 const filteredScheduleRows = computed(() => scheduleRows.value.filter((row) => {
-  if (scheduleFilter.value === 'active') return row.is_active
-  if (scheduleFilter.value === 'failed') return row.last_sync_status === 'failed'
-  return true
+  const keyword = scheduleKeyword.value.trim().toLowerCase()
+  const matchStatus = scheduleFilter.value === 'active'
+    ? row.is_active
+    : scheduleFilter.value === 'failed'
+      ? row.last_sync_status === 'failed'
+      : true
+  const matchKeyword = !keyword || [
+    row.name,
+    row.target_table,
+    row.app_token,
+    row.table_id
+  ].some((value) => String(value || '').toLowerCase().includes(keyword))
+  const matchFrequency = !scheduleFrequencyFilter.value || String(row.sync_frequency || '') === String(scheduleFrequencyFilter.value)
+  return matchStatus && matchKeyword && matchFrequency
 }))
 const filteredAllLogs = computed(() => allLogs.value.filter((item) => {
   const matchTask = !logTaskFilter.value || String(item.config_id) === String(logTaskFilter.value)
@@ -650,6 +715,7 @@ const normalizeTargetTable = (value) => {
 const suggestTargetTable = (tableId) => normalizeTargetTable(`feishu_${tableId || Date.now()}`)
 
 const openAdd = () => {
+  if (!isFeatureEnabled('feishu_sync_create')) return
   isEdit.value = false
   const reusable = syncConfigs.value.find(item => item.app_id && item.app_secret) || {}
   form.value = {
@@ -663,6 +729,7 @@ const openAdd = () => {
 }
 
 const openEdit = (row) => {
+  if (!isFeatureEnabled('feishu_sync_update')) return
   isEdit.value = true
   form.value = { ...defaultForm(), ...row }
   feishuUrlInput.value = ''
@@ -676,6 +743,7 @@ const resetForm = () => {
 }
 
 const parseFeishuLink = async () => {
+  if (!isFeatureEnabled('feishu_link_parse')) return
   const url = feishuUrlInput.value?.trim()
   if (!url) return
   parsingUrl.value = true
@@ -701,6 +769,7 @@ const parseFeishuLink = async () => {
 }
 
 const previewSchema = async () => {
+  if (!isFeatureEnabled('feishu_schema_preview')) return
   if (!form.value.target_table && form.value.table_id) {
     form.value.target_table = suggestTargetTable(form.value.table_id)
   }
@@ -731,6 +800,7 @@ const previewSchema = async () => {
 }
 
 const submitForm = async () => {
+  if (!isFeatureEnabled(isEdit.value ? 'feishu_sync_update' : 'feishu_sync_create')) return
   if (!formRef.value) return
   await formRef.value.validate()
   saving.value = true
@@ -752,6 +822,7 @@ const submitForm = async () => {
 }
 
 const deleteConfig = async (id) => {
+  if (!isFeatureEnabled('feishu_sync_delete')) return
   try {
     await deleteFeishuSyncConfig(id)
     ElMessage.success('删除成功')
@@ -762,6 +833,7 @@ const deleteConfig = async (id) => {
 }
 
 const testConnection = async (row) => {
+  if (!isFeatureEnabled('feishu_connection_test')) return
   testingId.value = row.id
   try {
     const result = await testFeishuConnection({
@@ -782,6 +854,7 @@ const testConnection = async (row) => {
 }
 
 const startSync = async (row) => {
+  if (!isFeatureEnabled('feishu_sync_start')) return
   try {
     await startFeishuSync(row.id)
     ElMessage.success(`已启动同步：${row.name}`)
@@ -792,6 +865,7 @@ const startSync = async (row) => {
 }
 
 const pauseSync = async (row) => {
+  if (!isFeatureEnabled('feishu_sync_pause')) return
   pausingId.value = row.id
   try {
     await pauseFeishuSync(row.id)
@@ -805,6 +879,7 @@ const pauseSync = async (row) => {
 }
 
 const resumeSync = async (row) => {
+  if (!isFeatureEnabled('feishu_sync_resume')) return
   resumingId.value = row.id
   try {
     await resumeFeishuSync(row.id)
@@ -818,12 +893,14 @@ const resumeSync = async (row) => {
 }
 
 const viewLogs = async (row) => {
+  if (!isFeatureEnabled('feishu_log_view')) return
   currentConfig.value = row
   logDialogVisible.value = true
   await loadLogs()
 }
 
 const loadLogs = async () => {
+  if (!isFeatureEnabled('feishu_log_view')) return
   if (!currentConfig.value) return
   loadingLogs.value = true
   try {
@@ -838,6 +915,7 @@ const loadLogs = async () => {
 }
 
 const refreshLogs = async () => {
+  if (!isFeatureEnabled('feishu_log_view')) return
   await loadLogs()
 }
 
@@ -926,7 +1004,11 @@ const getLogLevelText = (level) => {
   return text || '-'
 }
 
-const taskNameById = (id) => taskNameMap.value.get(String(id)) || `任务 ${id || '-'}`
+const taskNameById = (id) => {
+  const value = String(id ?? '')
+  if (!value || value === '0') return '连接测试/预览'
+  return taskNameMap.value.get(value) || `未知任务 ${value}`
+}
 
 const getBaselineText = (source) => {
   if (source === 'schema_registry') return '历史快照'
@@ -1141,14 +1223,6 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.fs-board {
-  padding: 24px;
-  border-radius: 28px;
-  border: 1px solid rgba(15, 72, 84, 0.1);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 24px 60px rgba(15, 72, 84, 0.08);
-}
-
 .fs-board-head {
   display: flex;
   align-items: flex-start;
@@ -1192,10 +1266,34 @@ onUnmounted(() => {
   box-shadow: 0 18px 48px rgba(15, 72, 84, 0.07);
 }
 
-.fs-ops-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr);
-  gap: 14px;
+.fs-ops-tabs {
+  margin-top: 4px;
+}
+
+.fs-ops-tabs :deep(.el-tabs__header) {
+  margin: 0 0 12px;
+}
+
+.fs-ops-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: rgba(15, 72, 84, 0.08);
+}
+
+.fs-ops-tabs :deep(.el-tabs__item) {
+  height: 34px;
+  padding: 0 18px;
+  color: #667085;
+  font-weight: 800;
+}
+
+.fs-ops-tabs :deep(.el-tabs__item.is-active) {
+  color: #0f766e;
+}
+
+.fs-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .fs-ops-panel {
@@ -1226,6 +1324,22 @@ onUnmounted(() => {
   color: #667085;
   font-size: 12px;
   line-height: 1.55;
+}
+
+.fs-schedule-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fs-schedule-actions .el-input {
+  width: 160px;
+}
+
+.fs-schedule-actions .el-select {
+  width: 126px;
 }
 
 .fs-log-actions {
@@ -1278,6 +1392,14 @@ onUnmounted(() => {
 .fs-next-run.is-waiting {
   color: #0f766e;
   font-weight: 800;
+}
+
+.fs-task-panel .fs-board-head {
+  margin-bottom: 16px;
+}
+
+.fs-task-panel .fs-board-head h3 {
+  font-size: 18px;
 }
 
 .fs-task-grid {
@@ -1650,10 +1772,6 @@ onUnmounted(() => {
   .fs-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .fs-ops-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
@@ -1668,12 +1786,27 @@ onUnmounted(() => {
   }
 
   .fs-stat-grid,
-  .fs-ops-grid,
   .fs-task-grid,
   .fs-task-meta,
   .fs-schema-summary,
   .fs-field-diff-grid {
     grid-template-columns: 1fr;
+  }
+
+  .fs-panel-title {
+    flex-direction: column;
+  }
+
+  .fs-schedule-actions,
+  .fs-log-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .fs-schedule-actions .el-input,
+  .fs-schedule-actions .el-select,
+  .fs-log-actions .el-select {
+    width: 100%;
   }
 
   .fs-url-row,

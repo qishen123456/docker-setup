@@ -1,9 +1,9 @@
 <template>
   <div class="sa-composer">
     <div class="sa-composer-inner">
-      <div class="sa-composer-top">
+      <div v-if="allowDatasetSelect || allowModelSelect" class="sa-composer-top">
         <div class="sa-composer-selectors">
-          <div class="sa-composer-dataset-bar">
+          <div v-if="allowDatasetSelect" class="sa-composer-dataset-bar">
             <div class="sa-composer-label-block">
               <div class="sa-composer-label-row">
                 <div class="sa-composer-label">选择数据集</div>
@@ -59,7 +59,7 @@
             </el-select>
           </div>
 
-          <div class="sa-composer-model-bar">
+          <div v-if="allowModelSelect" class="sa-composer-model-bar">
             <div class="sa-composer-label-block">
               <div class="sa-composer-label-row">
                 <div class="sa-composer-label">AI 模型</div>
@@ -178,6 +178,14 @@ const props = defineProps({
     default: true
   },
   allowStop: {
+    type: Boolean,
+    default: true
+  },
+  allowDatasetSelect: {
+    type: Boolean,
+    default: true
+  },
+  allowModelSelect: {
     type: Boolean,
     default: true
   }

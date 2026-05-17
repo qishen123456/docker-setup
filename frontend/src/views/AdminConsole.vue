@@ -58,7 +58,7 @@
             <p>角色只控制功能板块；数据集按组织树和组织节点控制可见范围，员工在账号页选择组织节点后自动生效。</p>
           </div>
         </div>
-        <el-table :data="dataPermissionRows" border stripe class="data-permission-table">
+        <el-table :data="dataPermissionDisplayRows" border stripe class="data-permission-table">
           <el-table-column label="数据集" min-width="190">
             <template #default="{ row }">
               <strong>{{ row.dataset_name }}</strong>
@@ -73,26 +73,26 @@
           <el-table-column label="组织树" min-width="220">
             <template #default="{ row }">
               <div class="dataset-scope-tags">
-                <el-tag v-for="item in dataRuleTreeLabels(row.rule)" :key="item" size="small">{{ item }}</el-tag>
-                <span v-if="!dataRuleTreeLabels(row.rule).length" class="muted-text">未绑定</span>
+                <el-tag v-for="item in row._display.treeLabels" :key="item" size="small">{{ item }}</el-tag>
+                <span v-if="!row._display.treeLabels.length" class="muted-text">未绑定</span>
               </div>
             </template>
           </el-table-column>
           <el-table-column label="授权组织" min-width="260">
             <template #default="{ row }">
               <div class="dataset-scope-tags">
-                <el-tag v-for="item in dataRuleOrgLabels(row.rule).slice(0, 4)" :key="item" size="small" type="success">{{ item }}</el-tag>
-                <el-tag v-if="dataRuleOrgLabels(row.rule).length > 4" size="small">+{{ dataRuleOrgLabels(row.rule).length - 4 }}</el-tag>
-                <span v-if="!dataRuleOrgLabels(row.rule).length" class="muted-text">未选择</span>
+                <el-tag v-for="item in row._display.orgLabels.slice(0, 4)" :key="item" size="small" type="success">{{ item }}</el-tag>
+                <el-tag v-if="row._display.orgLabels.length > 4" size="small">+{{ row._display.orgLabels.length - 4 }}</el-tag>
+                <span v-if="!row._display.orgLabels.length" class="muted-text">未选择</span>
               </div>
             </template>
           </el-table-column>
           <el-table-column label="命中员工" width="118">
             <template #default="{ row }">
-              <div class="scope-summary">
-                <strong>{{ scopedEmployeeCount(row.rule) }}</strong>
+              <button class="scope-summary scope-summary-button" type="button" @click="openScopedEmployeePreview(row)">
+                <strong>{{ row._display.scopedEmployeeCount }}</strong>
                 <span>人</span>
-              </div>
+              </button>
             </template>
           </el-table-column>
           <el-table-column label="备注" min-width="150" show-overflow-tooltip>
@@ -179,37 +179,49 @@
             </div>
           </button>
 
-          <div v-show="isModuleOpen(group.module)" class="matrix-table compact">
-            <div class="matrix-row matrix-head">
-              <div class="feature-col">功能项</div>
-              <label v-for="role in roles" :key="role.value" class="role-head" :class="{ checked: isRoleAllChecked(group.items, role.value) }">
-                <input type="checkbox" :checked="isRoleAllChecked(group.items, role.value)" @change="toggleRoleAll(group.items, role.value, $event.target.checked)" />
-                <span class="check-box"></span>
-                <span class="role-name">{{ role.label }}</span>
-                <small>全选</small>
-              </label>
-            </div>
-            <div v-for="item in group.items" :key="item.key" class="matrix-row" :class="{ 'is-risk': item.risk === 'high' }">
-              <div class="feature-col">
-                <strong>{{ item.label }}</strong>
-                <b v-if="item.risk === 'high'">高风险</b>
-                <small>{{ item.description }}</small>
+          <div v-show="isModuleOpen(group.module)" class="module-permission-body">
+            <section v-for="section in group.sections" :key="section.key" class="permission-section">
+              <div class="permission-section-head">
+                <div>
+                  <span>{{ section.label }}</span>
+                  <small>{{ section.description }}</small>
+                </div>
+                <em>{{ section.enabledCount }}/{{ section.items.length }} 开放</em>
               </div>
-              <label
-                v-for="role in roles"
-                :key="role.value"
-                class="permission-check"
-                :class="{ checked: hasRole(item, role.value), disabled: isFixedPermission(item, role.value) }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="hasRole(item, role.value)"
-                  :disabled="isFixedPermission(item, role.value)"
-                  @change="setRole(item, role.value, $event.target.checked)"
-                />
-                <span class="check-box"></span>
-              </label>
-            </div>
+              <div class="matrix-table compact">
+                <div class="matrix-row matrix-head">
+                  <div class="feature-col">功能项</div>
+                  <label v-for="role in roles" :key="role.value" class="role-head" :class="{ checked: isRoleAllChecked(section.items, role.value) }">
+                    <input type="checkbox" :checked="isRoleAllChecked(section.items, role.value)" @change="toggleRoleAll(section.items, role.value, $event.target.checked)" />
+                    <span class="check-box"></span>
+                    <span class="role-name">{{ role.label }}</span>
+                    <small>全选</small>
+                  </label>
+                </div>
+                <div v-for="item in section.items" :key="item.key" class="matrix-row" :class="{ 'is-risk': item.risk === 'high' }">
+                  <div class="feature-col">
+                    <span class="feature-tag">{{ item.subgroupLabel || section.label }}</span>
+                    <strong>{{ item.label }}</strong>
+                    <b v-if="item.risk === 'high'">高风险</b>
+                    <small>{{ item.description }}</small>
+                  </div>
+                  <label
+                    v-for="role in roles"
+                    :key="role.value"
+                    class="permission-check"
+                    :class="{ checked: hasRole(item, role.value), disabled: isFixedPermission(item, role.value) }"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="hasRole(item, role.value)"
+                      :disabled="isFixedPermission(item, role.value)"
+                      @change="setRole(item, role.value, $event.target.checked)"
+                    />
+                    <span class="check-box"></span>
+                  </label>
+                </div>
+              </div>
+            </section>
           </div>
         </section>
       </section>
@@ -368,6 +380,27 @@
 
     </section>
 
+    <div v-if="activeConsoleTab === 'permissions' || activeConsoleTab === 'data'" class="console-floating-save">
+      <el-button
+        v-if="activeConsoleTab === 'permissions'"
+        type="primary"
+        :loading="saving"
+        :disabled="!featureList.length"
+        @click="handleSave"
+      >
+        保存配置
+      </el-button>
+      <el-button
+        v-else
+        type="primary"
+        :loading="dataPermissionSaving"
+        :disabled="!dataPermissionRows.length"
+        @click="saveDataPermissionRules"
+      >
+        保存数据集权限
+      </el-button>
+    </div>
+
     <el-dialog v-model="dataRuleDialog.visible" title="编辑数据集权限" width="720px" destroy-on-close>
       <el-form v-if="dataRuleForm" label-position="top" class="data-rule-form">
         <div class="data-rule-dataset">
@@ -429,6 +462,60 @@
         <el-button type="primary" @click="applyDataRuleEditor">应用</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="scopedEmployeeDrawer.visible" size="680px" title="命中员工明细" destroy-on-close>
+      <div v-if="scopedEmployeeDrawer.row" class="scoped-employee-panel">
+        <section class="scoped-employee-head">
+          <div>
+            <span>数据集</span>
+            <strong>{{ scopedEmployeeDrawer.row.dataset_name }}</strong>
+            <small>{{ scopedEmployeeDrawer.row.business_domain || scopedEmployeeDrawer.row.dataset_code }}</small>
+          </div>
+          <div>
+            <span>权限模式</span>
+            <strong>{{ dataModeLabel(scopedEmployeeDrawer.row.rule.mode) }}</strong>
+            <small>{{ scopedEmployeeCount(scopedEmployeeDrawer.row.rule) }} 人命中</small>
+          </div>
+        </section>
+        <div class="scoped-employee-filter">
+          <el-input
+            v-model="scopedEmployeeDrawer.keyword"
+            clearable
+            placeholder="搜索姓名、账号、部门、岗位或组织"
+          />
+        </div>
+        <el-table :data="filteredScopedEmployees" border stripe class="scoped-employee-table" max-height="520">
+          <el-table-column label="员工" min-width="150">
+            <template #default="{ row }">
+              <strong>{{ row.name || row.account || row.id }}</strong>
+              <small>{{ row.account || row.mobile || row.email || '-' }}</small>
+            </template>
+          </el-table-column>
+          <el-table-column label="角色" width="112">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ roleLabel(row.role) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="部门 / 岗位" min-width="160">
+            <template #default="{ row }">
+              <strong>{{ row.department || '-' }}</strong>
+              <small>{{ row.position || '-' }}</small>
+            </template>
+          </el-table-column>
+          <el-table-column label="命中组织" min-width="220">
+            <template #default="{ row }">
+              <div class="dataset-scope-tags">
+                <el-tag v-for="item in row.match_labels.slice(0, 3)" :key="item" size="small" type="success">{{ item }}</el-tag>
+                <el-tag v-if="row.match_labels.length > 3" size="small">+{{ row.match_labels.length - 3 }}</el-tag>
+                <span v-if="!row.match_labels.length" class="muted-text">{{ row.match_reason }}</span>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!filteredScopedEmployees.length" description="暂无命中员工" :image-size="72" />
+        <p class="scoped-employee-note">超级管理员拥有系统全量访问，不计入组织树命中名单。</p>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -450,6 +537,7 @@ import {
 const roles = [
   { value: 'super_admin', label: '超管' },
   { value: 'admin', label: '管理员' },
+  { value: 'business_admin', label: '业务管理员' },
   { value: 'user', label: '普通用户' }
 ]
 const roleOrder = roles.map((item) => item.value)
@@ -468,6 +556,7 @@ const dataPermissionSaving = ref(false)
 const dataPermissionRows = ref([])
 const dataRuleDialog = ref({ visible: false })
 const dataRuleForm = ref(null)
+const scopedEmployeeDrawer = ref({ visible: false, row: null, keyword: '' })
 const dataPermissionEmployees = ref([])
 const dataPermissionOrganizationTrees = ref({ tree_types: [], nodes: [], trees: {} })
 const logs = ref([])
@@ -536,6 +625,32 @@ const enabledDataPermissionEmployees = computed(() => dataPermissionEmployees.va
 const dataPermissionTreeTypes = computed(() => dataPermissionOrganizationTrees.value?.tree_types || [])
 const employeesWithOrgCount = computed(() => dataPermissionEmployees.value.filter((item) => (item.organization_node_ids || []).length > 0).length)
 const dataPermissionNodeById = computed(() => new Map((dataPermissionOrganizationTrees.value?.nodes || []).map((node) => [node.id, node])))
+const expandedNodeIdsCache = computed(() => {
+  const nodes = dataPermissionOrganizationTrees.value?.nodes || []
+  const nodeById = dataPermissionNodeById.value
+  const cache = new Map()
+  return (ids = [], treeTypeId = '') => {
+    const selectedIds = (ids || []).filter(id => nodeById.has(id)).sort()
+    const key = `${treeTypeId || '*'}::${selectedIds.join('|')}`
+    if (cache.has(key)) return cache.get(key)
+    const selected = new Set(selectedIds)
+    if (!selected.size && !treeTypeId) {
+      cache.set(key, [])
+      return cache.get(key)
+    }
+    const result = []
+    nodes.forEach((node) => {
+      if (treeTypeId && node.tree_type_id !== treeTypeId) return
+      const pathIds = Array.isArray(node.path_ids) ? node.path_ids : [node.id]
+      if ((selected.size && (selected.has(node.id) || pathIds.some(id => selected.has(id)))) || (!selected.size && treeTypeId)) {
+        result.push(node.id)
+      }
+    })
+    const unique = uniqueList(result)
+    cache.set(key, unique)
+    return unique
+  }
+})
 const moduleInfoMap = computed(() => {
   const map = new Map()
   for (const item of navigationItems.value) {
@@ -554,6 +669,56 @@ const moduleInfoMap = computed(() => {
   })
   return map
 })
+
+const permissionSectionRules = [
+  { key: 'dataset-main', label: '数据集主操作', description: '创建、保存、删除、生成和补齐数据集。', match: /^dataset_(create|save|delete|prompt_generate|autofill)$/ },
+  { key: 'dataset-question', label: '常见问题', description: '数据集常见问题的新增、编辑、删除。', match: /^dataset_question_/ },
+  { key: 'dataset-regression', label: '标准题集', description: '回归题和标准问题维护。', match: /^dataset_regression_/ },
+  { key: 'dataset-synonym', label: '路由词/别名', description: '路由词和业务别名维护。', match: /^dataset_synonym_/ },
+  { key: 'dataset-lld', label: 'LLD 文档', description: 'LLD 文档新增、编辑、删除。', match: /^dataset_lld_/ },
+  { key: 'dataset-dict', label: '数据字典', description: '字段字典维护和 DDL 提取字段。', match: /^dataset_dict_/ },
+  { key: 'dataset-schema', label: 'DDL + 表关联', description: 'DDL、表结构、表关联和来源表导入。', match: /^dataset_(schema|relation|source_table)/ },
+  { key: 'dataset-golden', label: 'Golden SQL', description: '训练实例和 Golden SQL 样例维护。', match: /^dataset_golden_/ },
+  { key: 'dataset-prompt', label: 'Agent 提示片段', description: 'Agent 提示词片段维护。', match: /^dataset_prompt_(create|update|delete)$/ },
+  { key: 'dataset-sql', label: 'SQL 测试', description: 'SQL 测试执行和结果复制。', match: /^dataset_sql_preview_/ },
+  { key: 'dataset-extcfg', label: '飞书/外部配置', description: '数据集外部配置维护。', match: /^dataset_extcfg_/ },
+  { key: 'employee-account', label: '账号维护', description: '新增、编辑、启停、批量修改和删除账号。', match: /^employee_(create|update|status_update|bulk_update|delete)$/ },
+  { key: 'employee-security', label: '账号安全', description: '密码重置等敏感账号操作。', match: /^employee_password_/ },
+  { key: 'org-tree-type', label: '组织树类型', description: '组织树类型新增、编辑和删除。', match: /^organization_tree_type_/ },
+  { key: 'org-tree-node', label: '组织节点', description: '组织节点新增、编辑和删除。', match: /^organization_tree_node_/ },
+  { key: 'org-tree-import', label: '组织树导入', description: '导入预检和确认导入。', match: /^organization_tree_import_/ },
+  { key: 'feishu-task', label: '同步任务', description: '同步任务新建、编辑和删除。', match: /^feishu_sync_(create|update|delete)$/ },
+  { key: 'feishu-run', label: '同步执行', description: '立即同步、暂停和恢复。', match: /^feishu_sync_(start|pause|resume)$/ },
+  { key: 'feishu-test', label: '测试与预览', description: '连接测试、链接解析和字段预览。', match: /^feishu_(connection_test|link_parse|schema_preview)$/ },
+  { key: 'feishu-log', label: '同步日志', description: '查看、刷新和清空同步日志。', match: /^feishu_log_/ },
+]
+
+const sectionForFeature = (item) => {
+  const matched = permissionSectionRules.find(rule => rule.match.test(item.key))
+  if (matched) return matched
+  return {
+    key: item.category || item.module || 'other',
+    label: item.category ? item.category.replace(/^按钮 · /, '') : (item.module_label || '其他功能'),
+    description: item.module_label ? `${item.module_label}中的其他按钮。` : '未归入特定区域的按钮。'
+  }
+}
+
+const buildPermissionSections = (items = []) => {
+  const grouped = new Map()
+  items.forEach((item) => {
+    const section = sectionForFeature(item)
+    item.subgroupLabel = section.label
+    if (!grouped.has(section.key)) {
+      grouped.set(section.key, { ...section, items: [] })
+    }
+    grouped.get(section.key).items.push(item)
+  })
+  return Array.from(grouped.values()).map(section => ({
+    ...section,
+    items: section.items.sort((a, b) => a.order - b.order),
+    enabledCount: section.items.filter(item => item.enabled).length
+  }))
+}
 
 const buttonGroups = computed(() => {
   const grouped = new Map()
@@ -574,6 +739,7 @@ const buttonGroups = computed(() => {
         scopeLabel: info.scopeLabel || '页面模块',
         order: Number(info.order || Math.min(...group.items.map((item) => item.order || 999))),
         items: group.items.sort((a, b) => a.order - b.order),
+        sections: buildPermissionSections(group.items),
         enabledCount: group.items.filter((item) => item.enabled).length,
         riskCount: group.items.filter((item) => item.risk === 'high').length
       }
@@ -693,6 +859,7 @@ const dataRuleOrgLabels = (rule = {}) => (rule.organization_node_ids || [])
   .map(id => dataPermissionNodeById.value.get(id))
   .filter(Boolean)
   .map(node => `${node.name}（${node.code}）`)
+const roleLabel = (role) => roles.find(item => item.value === role)?.label || role || '普通用户'
 const dataModeLabel = (mode) => ({ public: '公开', org_tree: '组织树', disabled: '停用', restricted: '组织树' }[mode] || '公开')
 const dataModeTagType = (mode) => ({ public: 'success', org_tree: 'primary', disabled: 'danger', restricted: 'primary' }[mode] || 'info')
 const datasetOrganizationOptions = (treeTypeIds = []) => {
@@ -709,17 +876,7 @@ const datasetOrganizationOptions = (treeTypeIds = []) => {
   })
 }
 const expandDataPermissionNodeIds = (ids = [], treeTypeId = '') => {
-  const selected = new Set((ids || []).filter(id => dataPermissionNodeById.value.has(id)))
-  if (!selected.size && !treeTypeId) return []
-  const result = []
-  ;(dataPermissionOrganizationTrees.value?.nodes || []).forEach((node) => {
-    if (treeTypeId && node.tree_type_id !== treeTypeId) return
-    const pathIds = Array.isArray(node.path_ids) ? node.path_ids : [node.id]
-    if ((selected.size && (selected.has(node.id) || pathIds.some(id => selected.has(id)))) || (!selected.size && treeTypeId)) {
-      result.push(node.id)
-    }
-  })
-  return uniqueList(result)
+  return expandedNodeIdsCache.value(ids, treeTypeId)
 }
 const organizationCodesFromDataNodeIds = (ids = [], treeTypeId = '') => expandDataPermissionNodeIds(ids, treeTypeId)
   .map(id => dataPermissionNodeById.value.get(id)?.code)
@@ -861,13 +1018,154 @@ const employeeOptionLabel = (item) => {
   return parts.join(' / ')
 }
 
-const scopedEmployeeCount = (rule) => {
-  if (!selectedTreeTypeIds(rule).length || !(rule?.organization_node_ids || []).length) return 0
-  const ruleNodeIds = new Set(expandDataPermissionNodeIds(rule.organization_node_ids))
-  return enabledDataPermissionEmployees.value.filter((employee) => (
-    expandDataPermissionNodeIds(employee.organization_node_ids || []).some(nodeId => ruleNodeIds.has(nodeId))
-  )).length
+const nodeDisplayLabel = (nodeId) => {
+  const node = dataPermissionNodeById.value.get(nodeId)
+  if (!node) return ''
+  return `${node.name}（${node.code}）`
 }
+
+const employeeOrgLabels = (employee = {}) => uniqueList(
+  expandDataPermissionNodeIds(employee.organization_node_ids || [])
+    .map(nodeDisplayLabel)
+    .filter(Boolean)
+)
+
+const buildScopedEmployeeMatcher = (rule = {}) => {
+  const mode = rule?.mode || 'public'
+  if (mode === 'disabled') return () => null
+  if (mode === 'public') {
+    return (employee = {}) => {
+      if (employee?.enabled === false || employee?.role === 'super_admin') return null
+      return {
+        match_reason: '公开数据集',
+        match_labels: employeeOrgLabels(employee),
+      }
+    }
+  }
+
+  const treeTypeIds = selectedTreeTypeIds(rule)
+  if (!treeTypeIds.length || !(rule?.organization_node_ids || []).length) return () => null
+  const ruleScopes = treeTypeIds
+    .map((treeTypeId) => ({
+      treeTypeId,
+      nodeIds: new Set(expandDataPermissionNodeIds(rule.organization_node_ids, treeTypeId)),
+    }))
+    .filter(item => item.nodeIds.size)
+  if (!ruleScopes.length) return () => null
+
+  return (employee = {}) => {
+    if (employee?.enabled === false || employee?.role === 'super_admin') return null
+    const matchedNodeIds = []
+    ruleScopes.forEach(({ treeTypeId, nodeIds }) => {
+      expandDataPermissionNodeIds(employee.organization_node_ids || [], treeTypeId).forEach((nodeId) => {
+        if (nodeIds.has(nodeId)) matchedNodeIds.push(nodeId)
+      })
+    })
+    const matchLabels = uniqueList(matchedNodeIds.map(nodeDisplayLabel).filter(Boolean))
+    if (!matchLabels.length) return null
+    return {
+      match_reason: '组织树命中',
+      match_labels: matchLabels,
+    }
+  }
+}
+
+const scopedEmployeeMatch = (employee, rule = {}) => {
+  if (employee?.enabled === false) return null
+  if (employee?.role === 'super_admin') return null
+  const mode = rule?.mode || 'public'
+  if (mode === 'disabled') return null
+  if (mode === 'public') {
+    return {
+      match_reason: '公开数据集',
+      match_labels: employeeOrgLabels(employee),
+    }
+  }
+  const treeTypeIds = selectedTreeTypeIds(rule)
+  if (!treeTypeIds.length || !(rule?.organization_node_ids || []).length) return null
+  const matchedNodeIds = []
+  treeTypeIds.forEach((treeTypeId) => {
+    const ruleNodeIds = new Set(expandDataPermissionNodeIds(rule.organization_node_ids, treeTypeId))
+    if (!ruleNodeIds.size) return
+    expandDataPermissionNodeIds(employee.organization_node_ids || [], treeTypeId).forEach((nodeId) => {
+      if (ruleNodeIds.has(nodeId)) matchedNodeIds.push(nodeId)
+    })
+  })
+  const matchLabels = uniqueList(matchedNodeIds.map(nodeDisplayLabel).filter(Boolean))
+  if (!matchLabels.length) return null
+  return {
+    match_reason: '组织树命中',
+    match_labels: matchLabels,
+  }
+}
+
+const computeScopedEmployeesForRule = (rule) => {
+  const matchEmployee = buildScopedEmployeeMatcher(rule)
+  return enabledDataPermissionEmployees.value
+    .map((employee) => {
+      const match = matchEmployee(employee)
+      return match ? { ...employee, ...match } : null
+    })
+    .filter(Boolean)
+}
+
+const scopedEmployeesByDatasetId = computed(() => {
+  const map = new Map()
+  dataPermissionRows.value.forEach((row) => {
+    const datasetId = String(row?.id || row?.rule?.dataset_id || '')
+    if (!datasetId) return
+    map.set(datasetId, computeScopedEmployeesForRule(row.rule))
+  })
+  return map
+})
+
+const scopedEmployeesForRule = (rule) => {
+  const datasetId = String(rule?.dataset_id || '')
+  return scopedEmployeesByDatasetId.value.get(datasetId) || computeScopedEmployeesForRule(rule)
+}
+
+const scopedEmployeeCount = (rule) => scopedEmployeesForRule(rule).length
+
+const dataPermissionDisplayRows = computed(() => dataPermissionRows.value.map((row) => {
+  const datasetId = String(row?.id || row?.rule?.dataset_id || '')
+  const scopedEmployees = scopedEmployeesByDatasetId.value.get(datasetId) || []
+  return {
+    ...row,
+    _display: {
+      treeLabels: dataRuleTreeLabels(row.rule),
+      orgLabels: dataRuleOrgLabels(row.rule),
+      scopedEmployeeCount: scopedEmployees.length,
+    },
+  }
+}))
+
+const openScopedEmployeePreview = (row) => {
+  scopedEmployeeDrawer.value = {
+    visible: true,
+    row,
+    keyword: '',
+  }
+}
+
+const scopedEmployeesInDrawer = computed(() => scopedEmployeeDrawer.value.row
+  ? scopedEmployeesForRule(scopedEmployeeDrawer.value.row.rule)
+  : []
+)
+
+const filteredScopedEmployees = computed(() => {
+  const keyword = String(scopedEmployeeDrawer.value.keyword || '').trim().toLowerCase()
+  if (!keyword) return scopedEmployeesInDrawer.value
+  return scopedEmployeesInDrawer.value.filter((employee) => [
+    employee.name,
+    employee.account,
+    employee.mobile,
+    employee.email,
+    employee.department,
+    employee.position,
+    roleLabel(employee.role),
+    ...(employee.match_labels || []),
+  ].some(value => String(value || '').toLowerCase().includes(keyword)))
+})
 
 const syncAdminFloatState = () => {
   adminFloatEnabled.value = sessionStorage.getItem(ADMIN_CONSOLE_FLOAT_HIDDEN_KEY) === '0'
@@ -1208,6 +1506,26 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+.console-floating-save {
+  position: fixed;
+  right: 34px;
+  bottom: 28px;
+  z-index: 30;
+  padding: 8px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.console-floating-save :deep(.el-button) {
+  min-width: 118px;
+  height: 38px;
+  border-radius: 999px;
+  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.22);
+}
+
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1311,12 +1629,14 @@ onMounted(() => {
 
 .matrix-table {
   padding: 10px 14px 14px;
+  overflow-x: auto;
 }
 
 .matrix-row {
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) 112px 112px 112px;
+  grid-template-columns: minmax(320px, 1fr) repeat(4, minmax(122px, 138px));
   align-items: center;
+  min-width: 760px;
   min-height: 48px;
   border-bottom: 1px solid #eef2f7;
 }
@@ -1380,11 +1700,13 @@ onMounted(() => {
   font-weight: 800;
   cursor: pointer;
   position: relative;
+  white-space: nowrap;
 }
 
 .role-name {
-  min-width: 34px;
+  min-width: 0;
   text-align: left;
+  white-space: nowrap;
 }
 
 .role-head small {
@@ -1393,6 +1715,7 @@ onMounted(() => {
   color: #64748b;
   background: #eef2f7;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .role-head.checked small {
@@ -1502,6 +1825,70 @@ onMounted(() => {
 
 .module-card.is-open .module-card-head::before {
   transform: rotate(45deg);
+}
+
+.module-permission-body {
+  padding: 12px;
+}
+
+.permission-section {
+  border: 1px solid #edf2f7;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.permission-section + .permission-section {
+  margin-top: 12px;
+}
+
+.permission-section-head {
+  min-height: 48px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.permission-section-head span {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.permission-section-head small {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.permission-section-head em {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eafaf6;
+  color: #0f766e;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.feature-tag {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 8px 3px 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: middle;
 }
 
 .module-head-copy {
@@ -1777,7 +2164,8 @@ onMounted(() => {
 }
 
 .matrix-row {
-  grid-template-columns: minmax(360px, 1fr) 136px 136px 136px;
+  grid-template-columns: minmax(340px, 1fr) repeat(4, minmax(128px, 144px));
+  min-width: 852px;
   min-height: 50px;
 }
 
@@ -1808,7 +2196,7 @@ onMounted(() => {
 
 .role-head {
   width: fit-content;
-  min-width: 96px;
+  min-width: 108px;
   height: 28px;
   margin: 0 auto;
   padding: 0 8px;
@@ -1849,15 +2237,78 @@ onMounted(() => {
 }
 
 .scope-summary {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 8px;
   color: #64748b;
 }
 
+.scope-summary-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scope-summary-button:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .scope-summary strong {
   color: #0f766e;
   font-size: 18px;
+}
+
+.scoped-employee-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scoped-employee-head {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scoped-employee-head div {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.scoped-employee-head span,
+.scoped-employee-head small,
+.scoped-employee-table small {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.scoped-employee-head strong,
+.scoped-employee-table strong {
+  display: block;
+  color: #0f172a;
+}
+
+.scoped-employee-filter {
+  max-width: 360px;
+}
+
+.scoped-employee-table small {
+  margin-top: 3px;
+}
+
+.scoped-employee-table :deep(.el-table__cell) {
+  vertical-align: top;
+}
+
+.scoped-employee-note {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
 }
 
 @media (max-width: 900px) {
@@ -1883,7 +2334,13 @@ onMounted(() => {
   }
 
   .matrix-row {
-    grid-template-columns: minmax(220px, 1fr) 86px 86px 86px;
+    grid-template-columns: minmax(220px, 1fr) repeat(4, 112px);
+    min-width: 668px;
+  }
+
+  .console-floating-save {
+    right: 16px;
+    bottom: 16px;
   }
 }
 </style>

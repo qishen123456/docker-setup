@@ -7,7 +7,7 @@
             <div class="header-row">
               <div class="panel-title">数据集列表</div>
               <div class="header-actions compact-actions">
-                <el-button v-if="isFeatureEnabled('dataset_autofill')" plain size="small" @click="openPromptDatasetDialog">提示词生成</el-button>
+                <el-button v-if="isFeatureEnabled('dataset_prompt_generate')" plain size="small" @click="openPromptDatasetDialog">提示词生成</el-button>
                 <el-button v-if="isFeatureEnabled('dataset_create')" type="primary" size="small" @click="createDataset">新建</el-button>
               </div>
             </div>
@@ -65,7 +65,7 @@
               <div class="header-actions">
                 <el-button v-if="isFeatureEnabled('dataset_autofill')" plain :disabled="!selectedDatasetId || !selectedCanEdit" @click="autofillSelectedDataset">智能补齐</el-button>
                 <el-button v-if="isFeatureEnabled('dataset_delete')" type="danger" plain @click="removeDataset" :disabled="!selectedCanDelete">删除</el-button>
-                <el-button v-if="isFeatureEnabled('dataset_save')" type="primary" :disabled="!isDirty || !selectedCanEdit" @click="saveFull">保存书架内容</el-button>
+                <el-button v-if="canSaveShelfContent" type="primary" :disabled="!isDirty || !canSaveShelfContent" @click="saveFull">保存书架内容</el-button>
               </div>
             </div>
           </template>
@@ -156,21 +156,21 @@
             <el-tabs v-else v-model="activeTab">
               <!-- 常见问题 -->
               <el-tab-pane label="常见问题" name="common_questions">
-                <div v-if="canUseDatasetFeature('dataset_question_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('question', -1)">新增常见问题</el-button></div>
+                <div v-if="canUseDatasetAction('question', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('question', -1)">新增常见问题</el-button></div>
                 <el-table :data="full.common_questions" border size="small">
                   <el-table-column label="问题" min-width="300"><template #default="{ row }">{{ row.question_text || '(空)' }}</template></el-table-column>
                   <el-table-column label="排序" width="80"><template #default="{ row }">{{ row.sort_order }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_question_edit')" link type="primary" @click="openItemEditor('question', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_question_edit')" link type="danger" @click="full.common_questions.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('question', 'update')" link type="primary" @click="openItemEditor('question', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('question', 'delete')" link type="danger" @click="full.common_questions.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
 
               <el-tab-pane label="标准题集" name="regression_cases">
-                <div v-if="canUseDatasetFeature('dataset_regression_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('regression', -1)">新增回归题</el-button></div>
+                <div v-if="canUseDatasetAction('regression', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('regression', -1)">新增回归题</el-button></div>
                 <el-table :data="full.regression_cases" border size="small">
                   <el-table-column label="类型" width="110"><template #default="{ row }">{{ row.case_type }}</template></el-table-column>
                   <el-table-column label="问题" min-width="260"><template #default="{ row }">{{ row.question_text || '(空)' }}</template></el-table-column>
@@ -178,8 +178,8 @@
                   <el-table-column label="执行预期" width="120"><template #default="{ row }">{{ row.expected_intent || '-' }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_regression_edit')" link type="primary" @click="openItemEditor('regression', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_regression_edit')" link type="danger" @click="full.regression_cases.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('regression', 'update')" link type="primary" @click="openItemEditor('regression', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('regression', 'delete')" link type="danger" @click="full.regression_cases.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -187,15 +187,15 @@
 
               <!-- 路由词/别名 -->
               <el-tab-pane label="路由词/别名" name="synonyms">
-                <div v-if="canUseDatasetFeature('dataset_synonym_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('synonym', -1)">新增路由词</el-button></div>
+                <div v-if="canUseDatasetAction('synonym', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('synonym', -1)">新增路由词</el-button></div>
                 <el-table :data="full.synonyms" border size="small">
                   <el-table-column label="同义词" min-width="180"><template #default="{ row }">{{ row.synonym }}</template></el-table-column>
                   <el-table-column label="归一词" min-width="180"><template #default="{ row }">{{ row.normalized_synonym }}</template></el-table-column>
                   <el-table-column label="权重" width="80"><template #default="{ row }">{{ row.weight }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_synonym_edit')" link type="primary" @click="openItemEditor('synonym', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_synonym_edit')" link type="danger" @click="full.synonyms.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('synonym', 'update')" link type="primary" @click="openItemEditor('synonym', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('synonym', 'delete')" link type="danger" @click="full.synonyms.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -203,15 +203,15 @@
 
               <!-- LLD 文档 -->
               <el-tab-pane label="LLD 文档" name="lld">
-                <div v-if="canUseDatasetFeature('dataset_lld_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('lld', -1)">新增 LLD</el-button></div>
+                <div v-if="canUseDatasetAction('lld', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('lld', -1)">新增 LLD</el-button></div>
                 <el-table :data="full.lld_documents" border size="small">
                   <el-table-column label="版本" width="80"><template #default="{ row }">v{{ row.version }}</template></el-table-column>
                   <el-table-column label="标题" min-width="200"><template #default="{ row }">{{ row.title || '(未命名)' }}</template></el-table-column>
                   <el-table-column label="内容预览" min-width="300"><template #default="{ row }"><div class="text-preview">{{ (row.content || '').slice(0, 80) || '(空)' }}</div></template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_lld_edit')" link type="primary" @click="openItemEditor('lld', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_lld_edit')" link type="danger" @click="full.lld_documents.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('lld', 'update')" link type="primary" @click="openItemEditor('lld', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('lld', 'delete')" link type="danger" @click="full.lld_documents.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -220,7 +220,7 @@
               <!-- 数据字典 -->
               <el-tab-pane label="数据字典" name="dictionary">
                 <div class="toolbar">
-                  <el-button v-if="canUseDatasetFeature('dataset_dict_edit')" size="small" @click="openItemEditor('dict', -1)">新增字段</el-button>
+                  <el-button v-if="canUseDatasetAction('dict', 'create')" size="small" @click="openItemEditor('dict', -1)">新增字段</el-button>
                   <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="success" @click="extractDictFromDDL">从 DDL 提取字段</el-button>
                 </div>
                 <el-table :data="full.data_dictionary" border size="small">
@@ -230,8 +230,8 @@
                   <el-table-column label="语义名" min-width="140"><template #default="{ row }">{{ row.semantic_name || '-' }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_dict_edit')" link type="primary" @click="openItemEditor('dict', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_dict_edit')" link type="danger" @click="full.data_dictionary.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('dict', 'update')" link type="primary" @click="openItemEditor('dict', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('dict', 'delete')" link type="danger" @click="full.data_dictionary.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -241,8 +241,8 @@
               <el-tab-pane label="DDL + 表关联" name="schema">
                 <div class="toolbar">
                   <el-button v-if="canUseDatasetFeature('dataset_source_table')" size="small" @click="openSourceTableDialog">从数据源拉表</el-button>
-                  <el-button v-if="canUseDatasetFeature('dataset_schema_edit')" size="small" @click="addSchema">新增DDL</el-button>
-                  <el-button v-if="canUseDatasetFeature('dataset_relation_edit')" size="small" @click="openItemEditor('relation', -1)">新增关联</el-button>
+                  <el-button v-if="canUseDatasetFeature('dataset_schema_create')" size="small" @click="addSchema">新增DDL</el-button>
+                  <el-button v-if="canUseDatasetAction('relation', 'create')" size="small" @click="openItemEditor('relation', -1)">新增关联</el-button>
                 </div>
                 <div class="section-title">表清单和 DDL</div>
                 <el-table :data="full.schema_definition" border size="small">
@@ -251,8 +251,8 @@
                   <el-table-column label="DDL 预览" min-width="300"><template #default="{ row }"><div class="ddl-preview-line">{{ ddlPreview(row.ddl_sql) }}</div></template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ row, $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_schema_edit')" link type="primary" @click="openSchemaEditor(row, $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_schema_edit')" link type="danger" @click="removeSchema($index)">删除</el-button>
+                      <el-button v-if="canUseDatasetFeature('dataset_schema_update')" link type="primary" @click="openSchemaEditor(row, $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetFeature('dataset_schema_delete')" link type="danger" @click="removeSchema($index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -265,8 +265,8 @@
                   <el-table-column label="类型" width="100"><template #default="{ row }">{{ row.relation_type }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_relation_edit')" link type="primary" @click="openItemEditor('relation', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_relation_edit')" link type="danger" @click="full.table_relations.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('relation', 'update')" link type="primary" @click="openItemEditor('relation', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('relation', 'delete')" link type="danger" @click="full.table_relations.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -274,7 +274,7 @@
 
               <!-- Golden SQL -->
               <el-tab-pane label="Golden SQL" name="golden">
-                <div v-if="canUseDatasetFeature('dataset_golden_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('golden', -1)">新增训练实例</el-button></div>
+                <div v-if="canUseDatasetAction('golden', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('golden', -1)">新增训练实例</el-button></div>
                 <el-table :data="full.golden_sql_samples" border size="small">
                   <el-table-column label="Intent" width="100"><template #default="{ row }">{{ row.intent_type }}</template></el-table-column>
                   <el-table-column label="问题" min-width="260"><template #default="{ row }">{{ row.question || '(空)' }}</template></el-table-column>
@@ -282,8 +282,8 @@
                   <el-table-column label="分数" width="70"><template #default="{ row }">{{ row.quality_score }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_golden_edit')" link type="primary" @click="openItemEditor('golden', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_golden_edit')" link type="danger" @click="full.golden_sql_samples.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('golden', 'update')" link type="primary" @click="openItemEditor('golden', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('golden', 'delete')" link type="danger" @click="full.golden_sql_samples.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -291,15 +291,15 @@
 
               <!-- Agent 提示片段 -->
               <el-tab-pane label="Agent 提示片段" name="prompts">
-                <div v-if="canUseDatasetFeature('dataset_prompt_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('prompt', -1)">新增片段</el-button></div>
+                <div v-if="canUseDatasetAction('prompt', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('prompt', -1)">新增片段</el-button></div>
                 <el-table :data="full.agent_prompts" border size="small">
                   <el-table-column label="Agent" width="90"><template #default="{ row }">Agent{{ row.agent_no }}</template></el-table-column>
                   <el-table-column label="Key" width="150"><template #default="{ row }">{{ row.prompt_key }}</template></el-table-column>
                   <el-table-column label="内容预览" min-width="300"><template #default="{ row }"><div class="text-preview">{{ (row.prompt_content || '').slice(0, 120) || '(空)' }}</div></template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_prompt_edit')" link type="primary" @click="openItemEditor('prompt', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_prompt_edit')" link type="danger" @click="full.agent_prompts.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('prompt', 'update')" link type="primary" @click="openItemEditor('prompt', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('prompt', 'delete')" link type="danger" @click="full.agent_prompts.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -316,9 +316,9 @@
                     <div class="sql-test-actions">
                       <span class="muted-text">最多行数</span>
                       <el-input-number v-model="sqlPreviewLimit" :min="1" :max="10000" :step="100" size="small" controls-position="right" />
-                      <el-button size="small" type="primary" :loading="sqlPreviewLoading" @click="runSqlPreview">执行 SQL</el-button>
-                      <el-button size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('tsv')">复制表格</el-button>
-                      <el-button size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('json')">复制 JSON</el-button>
+                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_run')" size="small" type="primary" :loading="sqlPreviewLoading" @click="runSqlPreview">执行 SQL</el-button>
+                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_copy')" size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('tsv')">复制表格</el-button>
+                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_copy')" size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('json')">复制 JSON</el-button>
                     </div>
                   </div>
                   <el-input
@@ -349,15 +349,15 @@
 
               <!-- 外部配置 -->
               <el-tab-pane label="飞书/外部配置" name="external">
-                <div v-if="canUseDatasetFeature('dataset_extcfg_edit')" class="toolbar"><el-button size="small" @click="openItemEditor('extcfg', -1)">新增配置</el-button></div>
+                <div v-if="canUseDatasetAction('extcfg', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('extcfg', -1)">新增配置</el-button></div>
                 <el-table :data="full.external_configs" border size="small">
                   <el-table-column label="类型" width="140"><template #default="{ row }">{{ row.config_type }}</template></el-table-column>
                   <el-table-column label="Key" width="200"><template #default="{ row }">{{ row.config_key }}</template></el-table-column>
                   <el-table-column label="配置预览" min-width="300"><template #default="{ row }"><div class="text-preview">{{ jsonString(row.config_value).slice(0, 100) }}</div></template></el-table-column>
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetFeature('dataset_extcfg_edit')" link type="primary" @click="openItemEditor('extcfg', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_extcfg_edit')" link type="danger" @click="full.external_configs.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('extcfg', 'update')" link type="primary" @click="openItemEditor('extcfg', $index)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('extcfg', 'delete')" link type="danger" @click="full.external_configs.splice($index, 1); markDirty()">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -612,7 +612,7 @@
           </div>
           <div class="header-actions">
             <el-button @click="schemaEditorVisible = false">关闭</el-button>
-            <el-button v-if="canUseDatasetFeature('dataset_schema_edit')" type="primary" @click="saveSchemaEditor">保存 DDL</el-button>
+            <el-button v-if="canUseDatasetFeature('dataset_schema_update')" type="primary" @click="saveSchemaEditor">保存 DDL</el-button>
           </div>
         </div>
         <el-form label-width="110px" class="schema-editor-form">
@@ -708,22 +708,29 @@ const full = reactive({
 const selectedDataset = computed(() => datasets.value.find(item => Number(item.id) === Number(selectedDatasetId.value)) || null)
 const selectedCanEdit = computed(() => Boolean(selectedDataset.value?.can_edit))
 const selectedCanDelete = computed(() => Boolean(selectedDataset.value?.can_delete))
+const selectedDatasetScopeHit = computed(() => Boolean(selectedDataset.value?.dataset_scope_hit || selectedCanEdit.value))
 const selectedDatasetReadonly = computed(() => Boolean(selectedDataset.value?.dataset_readonly || (selectedDatasetId.value && !selectedCanEdit.value)))
+const datasetItemActionFeatureKeys = [
+  'dataset_question_create', 'dataset_question_update', 'dataset_question_delete',
+  'dataset_regression_create', 'dataset_regression_update', 'dataset_regression_delete',
+  'dataset_synonym_create', 'dataset_synonym_update', 'dataset_synonym_delete',
+  'dataset_lld_create', 'dataset_lld_update', 'dataset_lld_delete',
+  'dataset_dict_create', 'dataset_dict_update', 'dataset_dict_delete',
+  'dataset_schema_create', 'dataset_schema_update', 'dataset_schema_delete',
+  'dataset_relation_create', 'dataset_relation_update', 'dataset_relation_delete',
+  'dataset_golden_create', 'dataset_golden_update', 'dataset_golden_delete',
+  'dataset_prompt_create', 'dataset_prompt_update', 'dataset_prompt_delete',
+  'dataset_extcfg_create', 'dataset_extcfg_update', 'dataset_extcfg_delete',
+]
 const datasetShelfFeatureKeys = [
   'dataset_save',
+  'dataset_prompt_generate',
   'dataset_autofill',
-  'dataset_question_edit',
-  'dataset_regression_edit',
-  'dataset_synonym_edit',
-  'dataset_lld_edit',
-  'dataset_dict_edit',
   'dataset_dict_extract',
   'dataset_source_table',
-  'dataset_schema_edit',
-  'dataset_relation_edit',
-  'dataset_golden_edit',
-  'dataset_prompt_edit',
-  'dataset_extcfg_edit',
+  'dataset_sql_preview_run',
+  'dataset_sql_preview_copy',
+  ...datasetItemActionFeatureKeys,
 ]
 const canViewDatasetShelfDetails = computed(() => Boolean(
   selectedCanEdit.value || datasetShelfFeatureKeys.some(key => isFeatureEnabled(key))
@@ -734,6 +741,33 @@ const readonlyAlertTitle = computed(() => (
     : '当前账号仅可查看数据集基础信息，书架维护内容已隐藏。'
 ))
 const canUseDatasetFeature = (key) => Boolean(selectedCanEdit.value && isFeatureEnabled(key))
+const datasetItemActionFeatureMap = {
+  question: { create: 'dataset_question_create', update: 'dataset_question_update', delete: 'dataset_question_delete' },
+  regression: { create: 'dataset_regression_create', update: 'dataset_regression_update', delete: 'dataset_regression_delete' },
+  synonym: { create: 'dataset_synonym_create', update: 'dataset_synonym_update', delete: 'dataset_synonym_delete' },
+  lld: { create: 'dataset_lld_create', update: 'dataset_lld_update', delete: 'dataset_lld_delete' },
+  dict: { create: 'dataset_dict_create', update: 'dataset_dict_update', delete: 'dataset_dict_delete' },
+  relation: { create: 'dataset_relation_create', update: 'dataset_relation_update', delete: 'dataset_relation_delete' },
+  golden: { create: 'dataset_golden_create', update: 'dataset_golden_update', delete: 'dataset_golden_delete' },
+  prompt: { create: 'dataset_prompt_create', update: 'dataset_prompt_update', delete: 'dataset_prompt_delete' },
+  extcfg: { create: 'dataset_extcfg_create', update: 'dataset_extcfg_update', delete: 'dataset_extcfg_delete' },
+}
+const datasetActionFeatureKey = (type, action) => datasetItemActionFeatureMap[type]?.[action] || ''
+const canUseDatasetAction = (type, action) => {
+  const key = datasetActionFeatureKey(type, action)
+  if (type === 'question') {
+    return Boolean(selectedDatasetScopeHit.value && isFeatureEnabled(key))
+  }
+  return canUseDatasetFeature(key)
+}
+const canModifyCommonQuestions = computed(() => selectedDatasetScopeHit.value && (
+  isFeatureEnabled('dataset_question_create')
+  || isFeatureEnabled('dataset_question_update')
+  || isFeatureEnabled('dataset_question_delete')
+))
+const canSaveShelfContent = computed(() => selectedDatasetScopeHit.value && (
+  isFeatureEnabled('dataset_save') || canModifyCommonQuestions.value
+))
 const warnReadonly = () => {
   ElMessage.warning(selectedDatasetReadonly.value ? '当前数据集未命中你的员工组织范围，仅可查看。' : '当前账号没有该数据集的编辑权限。')
 }
@@ -743,7 +777,7 @@ const ensureSelectedCanEdit = () => {
   return false
 }
 const markDirty = () => {
-  if (!selectedCanEdit.value) return
+  if (!canSaveShelfContent.value) return
   isDirty.value = true
 }
 const qualityAlertType = computed(() => {
@@ -1435,21 +1469,13 @@ const itemEditorTitle = computed(() => {
   const prefix = itemEditorIndex.value === -1 ? '新增' : '编辑'
   return (EDITOR_TITLES[itemEditorType.value] || '编辑').replace('编辑', prefix)
 })
-const itemEditorFeatureMap = {
-  question: 'dataset_question_edit',
-  regression: 'dataset_regression_edit',
-  synonym: 'dataset_synonym_edit',
-  lld: 'dataset_lld_edit',
-  dict: 'dataset_dict_edit',
-  relation: 'dataset_relation_edit',
-  golden: 'dataset_golden_edit',
-  prompt: 'dataset_prompt_edit',
-  extcfg: 'dataset_extcfg_edit'
-}
-const canSaveItemEditor = computed(() => canUseDatasetFeature(itemEditorFeatureMap[itemEditorType.value]))
+const canSaveItemEditor = computed(() => canUseDatasetAction(
+  itemEditorType.value,
+  itemEditorIndex.value === -1 ? 'create' : 'update'
+))
 
 const openItemEditor = (type, index) => {
-  if (!canUseDatasetFeature(itemEditorFeatureMap[type])) {
+  if (!canUseDatasetAction(type, index === -1 ? 'create' : 'update')) {
     warnReadonly()
     return
   }
@@ -1557,11 +1583,18 @@ const removeDataset = async () => {
 
 const saveFull = async () => {
   if (!selectedDatasetId.value) return
-  if (!selectedCanEdit.value) { warnReadonly(); return false }
-  const payload = {}
-  FULL_COLLECTION_KEYS.forEach(key => { payload[key] = full[key] })
+  if (!canSaveShelfContent.value) { warnReadonly(); return false }
+  const hasFullSave = canUseDatasetFeature('dataset_save')
+  const payload = hasFullSave
+    ? {}
+    : { __partial: true, common_questions: full.common_questions }
+  if (hasFullSave) {
+    FULL_COLLECTION_KEYS.forEach(key => { payload[key] = full[key] })
+  }
   try {
-    await updateBookshelfDataset(selectedDatasetId.value, { ...datasetForm })
+    if (hasFullSave) {
+      await updateBookshelfDataset(selectedDatasetId.value, { ...datasetForm })
+    }
     await saveBookshelfDatasetFull(selectedDatasetId.value, payload)
     ElMessage.success('书架内容已保存'); isDirty.value = false
     await loadDatasets()
@@ -1601,6 +1634,7 @@ const resetPromptDatasetForm = () => {
 }
 
 const openPromptDatasetDialog = () => {
+  if (!isFeatureEnabled('dataset_prompt_generate')) return
   resetPromptDatasetForm()
   promptDatasetVisible.value = true
 }
@@ -1710,6 +1744,7 @@ const buildGeneratedFullPayload = (generatedPayload, sourceId = null) => {
 }
 
 const generateDatasetFromPrompt = async () => {
+  if (!isFeatureEnabled('dataset_prompt_generate')) return
   const docText = String(promptDatasetForm.doc_text || '').trim()
   if (docText.length < 80) {
     ElMessage.warning('请粘贴更完整的提示词、DDL、字段字典或业务口径，至少 80 字。')
@@ -1835,14 +1870,14 @@ const schemaEditorVisible = ref(false); const schemaEditorIndex = ref(-1)
 const schemaEditor = reactive({ table_name: '', ddl_sql: '', description: '', source_id: null })
 const resetSchemaEditor = () => { schemaEditor.table_name = ''; schemaEditor.ddl_sql = ''; schemaEditor.description = ''; schemaEditor.source_id = null }
 const openSchemaEditor = (row = null, index = -1) => {
-  if (!canUseDatasetFeature('dataset_schema_edit')) { warnReadonly(); return }
+  if (!canUseDatasetFeature(index === -1 ? 'dataset_schema_create' : 'dataset_schema_update')) { warnReadonly(); return }
   schemaEditorIndex.value = index
   if (row) { schemaEditor.table_name = row.table_name || ''; schemaEditor.ddl_sql = row.ddl_sql || ''; schemaEditor.description = row.description || ''; schemaEditor.source_id = row.source_id || null }
   else resetSchemaEditor()
   schemaEditorVisible.value = true
 }
 const saveSchemaEditor = () => {
-  if (!canUseDatasetFeature('dataset_schema_edit')) { warnReadonly(); return }
+  if (!canUseDatasetFeature(schemaEditorIndex.value === -1 ? 'dataset_schema_create' : 'dataset_schema_update')) { warnReadonly(); return }
   if (!schemaEditor.table_name.trim()) { ElMessage.warning('请填写表名'); return }
   const item = { table_name: schemaEditor.table_name.trim(), ddl_sql: schemaEditor.ddl_sql || '', description: schemaEditor.description || '', source_id: schemaEditor.source_id || null }
   if (schemaEditorIndex.value >= 0) full.schema_definition[schemaEditorIndex.value] = item
@@ -1850,7 +1885,7 @@ const saveSchemaEditor = () => {
   schemaEditorVisible.value = false; resetSchemaEditor(); markDirty()
 }
 const removeSchema = (i) => {
-  if (!canUseDatasetFeature('dataset_schema_edit')) { warnReadonly(); return }
+  if (!canUseDatasetFeature('dataset_schema_delete')) { warnReadonly(); return }
   full.schema_definition.splice(i, 1); markDirty()
 }
 const addSchema = () => openSchemaEditor()
@@ -1871,6 +1906,7 @@ const formatPreviewCell = (value) => {
 }
 const runSqlPreview = async () => {
   if (!selectedDatasetId.value) return
+  if (!canUseDatasetFeature('dataset_sql_preview_run')) { warnReadonly(); return }
   if (!String(sqlPreviewText.value || '').trim()) {
     ElMessage.warning('请先输入要测试的 SQL。')
     return
@@ -1905,6 +1941,7 @@ const copyText = async (text) => {
   document.body.removeChild(textarea)
 }
 const copySqlPreview = async (format = 'tsv') => {
+  if (!canUseDatasetFeature('dataset_sql_preview_copy')) { warnReadonly(); return }
   if (!sqlPreviewRows.value.length) return
   const text = format === 'json'
     ? JSON.stringify(sqlPreviewRows.value, null, 2)

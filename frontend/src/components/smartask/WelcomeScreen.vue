@@ -14,7 +14,7 @@
           <div class="sa-quick-title">常用问题</div>
           <div class="sa-quick-tip">点击问题将带入所属数据集口径，你可以修改后再发送。</div>
         </div>
-        <button class="sa-quick-refresh" :disabled="commonQuestionsLoading" @click="$emit('refresh-questions')">
+        <button v-if="allowRefreshQuestions" class="sa-quick-refresh" :disabled="commonQuestionsLoading" @click="$emit('refresh-questions')">
           <span class="sa-quick-refresh-icon" :class="{ 'is-loading': commonQuestionsLoading }">↻</span>
           <span>{{ commonQuestionsLoading ? '刷新中' : '换一批' }}</span>
         </button>
@@ -24,6 +24,7 @@
           v-for="(q, i) in commonQuestions" 
           :key="q.id || `${q.dataset_id || 'auto'}-${q.question_text || q}-${i}`" 
           class="sa-quick-btn"
+          :disabled="!allowQuickAsk"
           @click="$emit('quick-ask', q)"
         >
           <span class="sa-quick-dataset">{{ q.dataset_tag || q.dataset_name || '自动' }}</span>
@@ -52,6 +53,14 @@ const props = defineProps({
   commonQuestionsLoading: {
     type: Boolean,
     default: false
+  },
+  allowQuickAsk: {
+    type: Boolean,
+    default: true
+  },
+  allowRefreshQuestions: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -221,6 +230,12 @@ onMounted(() => {
   border-color: rgba(22, 93, 255, 0.22);
   color: #165dff;
   transform: translateY(-1px);
+}
+
+.sa-quick-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
 }
 
 .sa-quick-dataset {

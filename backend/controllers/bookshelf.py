@@ -51,6 +51,17 @@ def _can_modify_dataset(dataset_id: int, feature_key: str = "dataset_save") -> b
     return bool(feature_available(feature_key, user) and dataset_scope_hit_for_user(user, dataset_id))
 
 
+def _can_modify_common_questions(user: Dict[str, Any], dataset_id: int) -> bool:
+    if user.get("role") == "super_admin":
+        return True
+    if not dataset_scope_hit_for_user(user, dataset_id):
+        return False
+    return any(
+        feature_available(key, user)
+        for key in ("dataset_question_create", "dataset_question_update", "dataset_question_delete")
+    )
+
+
 def _require_dataset_modify(dataset_id: int, feature_key: str = "dataset_save"):
     if _can_modify_dataset(dataset_id, feature_key):
         return None
@@ -667,7 +678,7 @@ def generate_bookshelf_dataset_from_prompt():
     started_at = time.time()
     try:
         user = get_current_user()
-        if user.get("role") != "super_admin" and not feature_available("dataset_autofill", user):
+        if user.get("role") != "super_admin" and not feature_available("dataset_prompt_generate", user):
             return jsonify({"error": "当前账号没有提示词生成数据集权限。"}), 403
         payload = request.get_json() or {}
         doc_text = str(payload.get("doc_text") or "").strip()
@@ -1033,6 +1044,9 @@ def get_bookshelf_dataset_full(dataset_id: int):
 def preview_bookshelf_dataset_sql(dataset_id: int):
     try:
         repo.ensure_schema()
+        user = get_current_user()
+        if user.get("role") != "super_admin" and not feature_available("dataset_sql_preview_run", user):
+            return jsonify({"error": "当前账号没有执行 SQL 测试权限。"}), 403
         payload = request.get_json() or {}
         sql_text = str(payload.get("sql") or "").strip()
         try:
@@ -1058,7 +1072,7 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
             dataset = cur.fetchone()
         if not dataset:
             return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
-        if not dataset_access_summary(get_current_user(), dataset_id)["can_view"]:
+        if not dataset_access_summary(user, dataset_id)["can_view"]:
             return jsonify({"error": "当前账号没有访问该数据集的权限"}), 403
         if dataset.get("source_id") is None:
             return jsonify({"error": "当前数据集未绑定数据源，无法测试 SQL。"}), 400
@@ -1091,12 +1105,16 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/full", methods=["PUT"])
 def save_bookshelf_dataset_full(dataset_id: int):
     try:
-        error = _require_dataset_modify(dataset_id, "dataset_save")
-        if error:
-            return error
-        repo.ensure_schema()
+        user = get_current_user()
         payload = request.get_json() or {}
-        validation_errors = _validate_full_payload(payload)
+        has_full_save = _can_modify_dataset(dataset_id, "dataset_save")
+        payload_keys = {key for key in payload.keys() if not str(key).startswith("__")}
+        common_questions_only = payload_keys.issubset({"common_questions"})
+        partial_common_questions = not has_full_save and common_questions_only and _can_modify_common_questions(user, dataset_id)
+        if not has_full_save and not partial_common_questions:
+            return jsonify({"error": "当前账号没有该数据集的编辑权限，或未命中员工组织范围。"}), 403
+        repo.ensure_schema()
+        validation_errors = [] if partial_common_questions else _validate_full_payload(payload)
         if validation_errors:
             return jsonify({"error": "dataset validation failed", "details": validation_errors}), 400
         synonyms = payload.get("synonyms") or []
@@ -1118,199 +1136,234 @@ def save_bookshelf_dataset_full(dataset_id: int):
                 return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
 
             # Keep import idempotent for repeated clicks.
-            cur.execute(
-                "DELETE FROM bs_golden_sql_samples WHERE dataset_id = %s AND created_by = 'legacy-import';",
-                (dataset_id,),
-            )
-            cur.execute(
-                "DELETE FROM bs_agent_prompt_fragments WHERE dataset_id = %s AND created_by = 'legacy-import';",
-                (dataset_id,),
-            )
-            cur.execute(
-                """
-                DELETE FROM bs_dataset_external_configs
-                WHERE dataset_id = %s
-                  AND (config_key LIKE 'legacy_sync_%%' OR config_key LIKE 'legacy_ai_model_%%');
-                """,
-                (dataset_id,),
-            )
-
-            cur.execute("DELETE FROM bs_dataset_synonyms WHERE dataset_id = %s;", (dataset_id,))
-            for item in synonyms:
-                synonym = (item.get("synonym") or "").strip()
-                if not synonym:
-                    continue
-                normalized = _normalize_synonym(item.get("normalized_synonym") or synonym)
-                weight = int(item.get("weight") or 1)
+            if not partial_common_questions:
+                cur.execute(
+                    "DELETE FROM bs_golden_sql_samples WHERE dataset_id = %s AND created_by = 'legacy-import';",
+                    (dataset_id,),
+                )
+                cur.execute(
+                    "DELETE FROM bs_agent_prompt_fragments WHERE dataset_id = %s AND created_by = 'legacy-import';",
+                    (dataset_id,),
+                )
                 cur.execute(
                     """
-                    INSERT INTO bs_dataset_synonyms(dataset_id, synonym, normalized_synonym, weight)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (dataset_id, normalized_synonym)
-                    DO UPDATE SET synonym = EXCLUDED.synonym, weight = EXCLUDED.weight;
+                    DELETE FROM bs_dataset_external_configs
+                    WHERE dataset_id = %s
+                      AND (config_key LIKE 'legacy_sync_%%' OR config_key LIKE 'legacy_ai_model_%%');
                     """,
-                    (dataset_id, synonym, normalized, weight),
+                    (dataset_id,),
                 )
 
-            cur.execute("DELETE FROM bs_lld_documents WHERE dataset_id = %s;", (dataset_id,))
-            for idx, item in enumerate(lld_documents, start=1):
-                content = (item.get("content") or "").strip()
-                if not content:
-                    continue
-                version = int(item.get("version") or idx)
-                title = (item.get("title") or f"LLD v{version}").strip()
-                redline_rules = _parse_json_like(item.get("redline_rules"), [])
-                cur.execute(
-                    """
-                    INSERT INTO bs_lld_documents(dataset_id, version, title, content, redline_rules, is_active, created_by)
-                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, 'ui')
-                    ON CONFLICT (dataset_id, version)
-                    DO UPDATE SET
-                        title = EXCLUDED.title,
-                        content = EXCLUDED.content,
-                        redline_rules = EXCLUDED.redline_rules,
-                        is_active = EXCLUDED.is_active,
-                        updated_at = NOW();
-                    """,
-                    (dataset_id, version, title, content, json_dump(redline_rules), bool(item.get("is_active", True))),
-                )
-
-            cur.execute("DELETE FROM bs_data_dictionary_items WHERE dataset_id = %s;", (dataset_id,))
-            for item in data_dictionary:
-                table_name = (item.get("table_name") or "").strip()
-                column_name = (item.get("column_name") or "").strip()
-                semantic_name = (item.get("semantic_name") or "").strip()
-                if not table_name or not column_name or not semantic_name:
-                    continue
-                cur.execute(
-                    """
-                    INSERT INTO bs_data_dictionary_items(
-                        dataset_id, table_name, column_name, jsonb_key, semantic_name,
-                        data_type, enum_mapping, extraction_rule, is_active
+                cur.execute("DELETE FROM bs_dataset_synonyms WHERE dataset_id = %s;", (dataset_id,))
+                for item in synonyms:
+                    synonym = (item.get("synonym") or "").strip()
+                    if not synonym:
+                        continue
+                    normalized = _normalize_synonym(item.get("normalized_synonym") or synonym)
+                    weight = int(item.get("weight") or 1)
+                    cur.execute(
+                        """
+                        INSERT INTO bs_dataset_synonyms(dataset_id, synonym, normalized_synonym, weight)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (dataset_id, normalized_synonym)
+                        DO UPDATE SET synonym = EXCLUDED.synonym, weight = EXCLUDED.weight;
+                        """,
+                        (dataset_id, synonym, normalized, weight),
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s);
-                    """,
-                    (
-                        dataset_id,
-                        table_name,
-                        column_name,
-                        (item.get("jsonb_key") or "").strip() or None,
-                        semantic_name,
-                        (item.get("data_type") or "text").strip(),
-                        json_dump(_parse_json_like(item.get("enum_mapping"), {})),
-                        (item.get("extraction_rule") or "").strip(),
-                        bool(item.get("is_active", True)),
-                    ),
-                )
 
-            cur.execute("DELETE FROM bs_schema_definitions WHERE dataset_id = %s;", (dataset_id,))
-            for item in schema_definition:
-                table_name = (item.get("table_name") or "").strip()
-                ddl_sql = (item.get("ddl_sql") or "").strip()
-                if not table_name or not ddl_sql:
-                    continue
-                source_id = item.get("source_id")
-                cur.execute(
-                    """
-                    INSERT INTO bs_schema_definitions(dataset_id, table_name, ddl_sql, description, is_active, source_id)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (dataset_id, table_name)
-                    DO UPDATE SET
-                        ddl_sql = EXCLUDED.ddl_sql,
-                        description = EXCLUDED.description,
-                        source_id = EXCLUDED.source_id,
-                        is_active = EXCLUDED.is_active,
-                        updated_at = NOW();
-                    """,
-                    (
-                        dataset_id,
-                        table_name,
-                        ddl_sql,
-                        (item.get("description") or "").strip(),
-                        bool(item.get("is_active", True)),
-                        _optional_int(source_id),
-                    ),
-                )
-
-            cur.execute("DELETE FROM bs_table_relations WHERE dataset_id = %s;", (dataset_id,))
-            for item in table_relations:
-                left_table = (item.get("left_table") or "").strip()
-                left_key = (item.get("left_key") or "").strip()
-                right_table = (item.get("right_table") or "").strip()
-                right_key = (item.get("right_key") or "").strip()
-                if not left_table or not left_key or not right_table or not right_key:
-                    continue
-                cur.execute(
-                    """
-                    INSERT INTO bs_table_relations(
-                        dataset_id, left_table, left_key, right_table, right_key,
-                        relation_type, description, is_active
+                cur.execute("DELETE FROM bs_lld_documents WHERE dataset_id = %s;", (dataset_id,))
+                for idx, item in enumerate(lld_documents, start=1):
+                    content = (item.get("content") or "").strip()
+                    if not content:
+                        continue
+                    version = int(item.get("version") or idx)
+                    title = (item.get("title") or f"LLD v{version}").strip()
+                    redline_rules = _parse_json_like(item.get("redline_rules"), [])
+                    cur.execute(
+                        """
+                        INSERT INTO bs_lld_documents(dataset_id, version, title, content, redline_rules, is_active, created_by)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, 'ui')
+                        ON CONFLICT (dataset_id, version)
+                        DO UPDATE SET
+                            title = EXCLUDED.title,
+                            content = EXCLUDED.content,
+                            redline_rules = EXCLUDED.redline_rules,
+                            is_active = EXCLUDED.is_active,
+                            updated_at = NOW();
+                        """,
+                        (dataset_id, version, title, content, json_dump(redline_rules), bool(item.get("is_active", True))),
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                    """,
-                    (
-                        dataset_id,
-                        left_table,
-                        left_key,
-                        right_table,
-                        right_key,
-                        (item.get("relation_type") or "inner").strip(),
-                        (item.get("description") or "").strip(),
-                        bool(item.get("is_active", True)),
-                    ),
-                )
 
-            cur.execute("DELETE FROM bs_golden_sql_samples WHERE dataset_id = %s;", (dataset_id,))
-            for item in golden_sql_samples:
-                question = (item.get("question") or "").strip()
-                sql_text = (item.get("sql_text") or "").strip()
-                if not question or not sql_text:
-                    continue
+                cur.execute("DELETE FROM bs_data_dictionary_items WHERE dataset_id = %s;", (dataset_id,))
+                for item in data_dictionary:
+                    table_name = (item.get("table_name") or "").strip()
+                    column_name = (item.get("column_name") or "").strip()
+                    semantic_name = (item.get("semantic_name") or "").strip()
+                    if not table_name or not column_name or not semantic_name:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_data_dictionary_items(
+                            dataset_id, table_name, column_name, jsonb_key, semantic_name,
+                            data_type, enum_mapping, extraction_rule, is_active
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s);
+                        """,
+                        (
+                            dataset_id,
+                            table_name,
+                            column_name,
+                            (item.get("jsonb_key") or "").strip() or None,
+                            semantic_name,
+                            (item.get("data_type") or "text").strip(),
+                            json_dump(_parse_json_like(item.get("enum_mapping"), {})),
+                            (item.get("extraction_rule") or "").strip(),
+                            bool(item.get("is_active", True)),
+                        ),
+                    )
+
+                cur.execute("DELETE FROM bs_schema_definitions WHERE dataset_id = %s;", (dataset_id,))
+                for item in schema_definition:
+                    table_name = (item.get("table_name") or "").strip()
+                    ddl_sql = (item.get("ddl_sql") or "").strip()
+                    if not table_name or not ddl_sql:
+                        continue
+                    source_id = item.get("source_id")
+                    cur.execute(
+                        """
+                        INSERT INTO bs_schema_definitions(dataset_id, table_name, ddl_sql, description, is_active, source_id)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (dataset_id, table_name)
+                        DO UPDATE SET
+                            ddl_sql = EXCLUDED.ddl_sql,
+                            description = EXCLUDED.description,
+                            source_id = EXCLUDED.source_id,
+                            is_active = EXCLUDED.is_active,
+                            updated_at = NOW();
+                        """,
+                        (
+                            dataset_id,
+                            table_name,
+                            ddl_sql,
+                            (item.get("description") or "").strip(),
+                            bool(item.get("is_active", True)),
+                            _optional_int(source_id),
+                        ),
+                    )
+
+                cur.execute("DELETE FROM bs_table_relations WHERE dataset_id = %s;", (dataset_id,))
+                for item in table_relations:
+                    left_table = (item.get("left_table") or "").strip()
+                    left_key = (item.get("left_key") or "").strip()
+                    right_table = (item.get("right_table") or "").strip()
+                    right_key = (item.get("right_key") or "").strip()
+                    if not left_table or not left_key or not right_table or not right_key:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_table_relations(
+                            dataset_id, left_table, left_key, right_table, right_key,
+                            relation_type, description, is_active
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            dataset_id,
+                            left_table,
+                            left_key,
+                            right_table,
+                            right_key,
+                            (item.get("relation_type") or "inner").strip(),
+                            (item.get("description") or "").strip(),
+                            bool(item.get("is_active", True)),
+                        ),
+                    )
+
+                cur.execute("DELETE FROM bs_golden_sql_samples WHERE dataset_id = %s;", (dataset_id,))
+                for item in golden_sql_samples:
+                    question = (item.get("question") or "").strip()
+                    sql_text = (item.get("sql_text") or "").strip()
+                    if not question or not sql_text:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_golden_sql_samples(
+                            dataset_id, intent_type, question, sql_text, tags, quality_score, is_active, created_by
+                        )
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, 'ui');
+                        """,
+                        (
+                            dataset_id,
+                            (item.get("intent_type") or "detail").strip(),
+                            question,
+                            sql_text,
+                            json_dump(_parse_json_like(item.get("tags"), [])),
+                            int(item.get("quality_score") or 80),
+                            bool(item.get("is_active", True)),
+                        ),
+                    )
+
+                cur.execute("DELETE FROM bs_agent_prompt_fragments WHERE dataset_id = %s;", (dataset_id,))
+                for item in agent_prompts:
+                    agent_no = int(item.get("agent_no") or 0)
+                    prompt_content = (item.get("prompt_content") or "").strip()
+                    if agent_no not in (1, 2, 3, 4) or not prompt_content:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_agent_prompt_fragments(
+                            dataset_id, agent_no, prompt_key, prompt_content, is_active, created_by
+                        )
+                        VALUES (%s, %s, %s, %s, %s, 'ui')
+                        ON CONFLICT (dataset_id, agent_no, prompt_key)
+                        DO UPDATE SET
+                            prompt_content = EXCLUDED.prompt_content,
+                            is_active = EXCLUDED.is_active,
+                            updated_at = NOW();
+                        """,
+                        (
+                            dataset_id,
+                            agent_no,
+                            (item.get("prompt_key") or "default").strip(),
+                            prompt_content,
+                            bool(item.get("is_active", True)),
+                        ),
+                    )
+
+            if partial_common_questions:
+                can_create_question = feature_available("dataset_question_create", user)
+                can_update_question = feature_available("dataset_question_update", user)
+                can_delete_question = feature_available("dataset_question_delete", user)
                 cur.execute(
                     """
-                    INSERT INTO bs_golden_sql_samples(
-                        dataset_id, intent_type, question, sql_text, tags, quality_score, is_active, created_by
-                    )
-                    VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, 'ui');
+                    SELECT id, question_text, sort_order, is_active
+                    FROM bs_common_questions
+                    WHERE dataset_id = %s;
                     """,
-                    (
-                        dataset_id,
-                        (item.get("intent_type") or "detail").strip(),
-                        question,
-                        sql_text,
-                        json_dump(_parse_json_like(item.get("tags"), [])),
-                        int(item.get("quality_score") or 80),
-                        bool(item.get("is_active", True)),
-                    ),
+                    (dataset_id,),
                 )
-
-            cur.execute("DELETE FROM bs_agent_prompt_fragments WHERE dataset_id = %s;", (dataset_id,))
-            for item in agent_prompts:
-                agent_no = int(item.get("agent_no") or 0)
-                prompt_content = (item.get("prompt_content") or "").strip()
-                if agent_no not in (1, 2, 3, 4) or not prompt_content:
-                    continue
-                cur.execute(
-                    """
-                    INSERT INTO bs_agent_prompt_fragments(
-                        dataset_id, agent_no, prompt_key, prompt_content, is_active, created_by
-                    )
-                    VALUES (%s, %s, %s, %s, %s, 'ui')
-                    ON CONFLICT (dataset_id, agent_no, prompt_key)
-                    DO UPDATE SET
-                        prompt_content = EXCLUDED.prompt_content,
-                        is_active = EXCLUDED.is_active,
-                        updated_at = NOW();
-                    """,
-                    (
-                        dataset_id,
-                        agent_no,
-                        (item.get("prompt_key") or "default").strip(),
-                        prompt_content,
-                        bool(item.get("is_active", True)),
-                    ),
-                )
-
+                existing_questions = {int(row["id"]): dict(row) for row in cur.fetchall()}
+                incoming_existing_ids = set()
+                for item in common_questions:
+                    raw_id = item.get("id")
+                    try:
+                        question_id = int(raw_id) if raw_id is not None else 0
+                    except (TypeError, ValueError):
+                        question_id = 0
+                    if question_id and question_id in existing_questions:
+                        incoming_existing_ids.add(question_id)
+                        existing = existing_questions[question_id]
+                        changed = (
+                            str(item.get("question_text") or "").strip() != str(existing.get("question_text") or "").strip()
+                            or int(item.get("sort_order") or 0) != int(existing.get("sort_order") or 0)
+                            or bool(item.get("is_active", True)) != bool(existing.get("is_active", True))
+                        )
+                        if changed and not can_update_question:
+                            return jsonify({"error": "当前账号没有编辑常见问题权限"}), 403
+                    elif str(item.get("question_text") or "").strip() and not can_create_question:
+                        return jsonify({"error": "当前账号没有新增常见问题权限"}), 403
+                if set(existing_questions.keys()) - incoming_existing_ids and not can_delete_question:
+                    return jsonify({"error": "当前账号没有删除常见问题权限"}), 403
             cur.execute("DELETE FROM bs_common_questions WHERE dataset_id = %s;", (dataset_id,))
             for idx, item in enumerate(common_questions, start=1):
                 question_text = (item.get("question_text") or "").strip()
@@ -1329,60 +1382,61 @@ def save_bookshelf_dataset_full(dataset_id: int):
                     ),
                 )
 
-            cur.execute("DELETE FROM bs_dataset_external_configs WHERE dataset_id = %s;", (dataset_id,))
-            for item in external_configs:
-                config_type = (item.get("config_type") or "").strip()
-                config_key = (item.get("config_key") or "").strip()
-                config_value = _parse_json_like(item.get("config_value"), {})
-                if not config_type or not config_key:
-                    continue
-                cur.execute(
-                    """
-                    INSERT INTO bs_dataset_external_configs(
-                        dataset_id, config_type, config_key, config_value, is_active
+            if not partial_common_questions:
+                cur.execute("DELETE FROM bs_dataset_external_configs WHERE dataset_id = %s;", (dataset_id,))
+                for item in external_configs:
+                    config_type = (item.get("config_type") or "").strip()
+                    config_key = (item.get("config_key") or "").strip()
+                    config_value = _parse_json_like(item.get("config_value"), {})
+                    if not config_type or not config_key:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_dataset_external_configs(
+                            dataset_id, config_type, config_key, config_value, is_active
+                        )
+                        VALUES (%s, %s, %s, %s::jsonb, %s)
+                        ON CONFLICT (dataset_id, config_type, config_key)
+                        DO UPDATE SET
+                            config_value = EXCLUDED.config_value,
+                            is_active = EXCLUDED.is_active,
+                            updated_at = NOW();
+                        """,
+                        (
+                            dataset_id,
+                            config_type,
+                            config_key,
+                            json_dump(config_value),
+                            bool(item.get("is_active", True)),
+                        ),
                     )
-                    VALUES (%s, %s, %s, %s::jsonb, %s)
-                    ON CONFLICT (dataset_id, config_type, config_key)
-                    DO UPDATE SET
-                        config_value = EXCLUDED.config_value,
-                        is_active = EXCLUDED.is_active,
-                        updated_at = NOW();
-                    """,
-                    (
-                        dataset_id,
-                        config_type,
-                        config_key,
-                        json_dump(config_value),
-                        bool(item.get("is_active", True)),
-                    ),
-                )
 
-            cur.execute("DELETE FROM bs_regression_cases WHERE dataset_id = %s;", (dataset_id,))
-            for idx, item in enumerate(regression_cases, start=1):
-                question_text = (item.get("question_text") or "").strip()
-                if not question_text:
-                    continue
-                cur.execute(
-                    """
-                    INSERT INTO bs_regression_cases(
-                        dataset_id, case_type, question_text, expected_focus, expected_intent, sort_order, is_active
+                cur.execute("DELETE FROM bs_regression_cases WHERE dataset_id = %s;", (dataset_id,))
+                for idx, item in enumerate(regression_cases, start=1):
+                    question_text = (item.get("question_text") or "").strip()
+                    if not question_text:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO bs_regression_cases(
+                            dataset_id, case_type, question_text, expected_focus, expected_intent, sort_order, is_active
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            dataset_id,
+                            (item.get("case_type") or "summary").strip(),
+                            question_text,
+                            (item.get("expected_focus") or "").strip(),
+                            (item.get("expected_intent") or "generate_sql").strip(),
+                            int(item.get("sort_order") or idx * 10),
+                            bool(item.get("is_active", True)),
+                        ),
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                    """,
-                    (
-                        dataset_id,
-                        (item.get("case_type") or "summary").strip(),
-                        question_text,
-                        (item.get("expected_focus") or "").strip(),
-                        (item.get("expected_intent") or "generate_sql").strip(),
-                        int(item.get("sort_order") or idx * 10),
-                        bool(item.get("is_active", True)),
-                    ),
-                )
 
             cur.execute("UPDATE bs_datasets SET updated_at = NOW() WHERE id = %s;", (dataset_id,))
 
-        if isinstance(report_config, dict) and report_config:
+        if not partial_common_questions and isinstance(report_config, dict) and report_config:
             report_config_store.upsert_config(dataset_id, report_config)
 
         return jsonify({"message": "bookshelf content saved", "dataset_id": dataset_id})
@@ -1414,6 +1468,18 @@ def list_common_questions():
         user = get_current_user()
         if dataset_id and not dataset_access_summary(user, dataset_id)["can_view"]:
             return jsonify({"common_questions": []})
+        allowed_dataset_ids = []
+        if not dataset_id:
+            with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT id FROM bs_datasets WHERE is_active = TRUE ORDER BY updated_at DESC, id DESC;")
+                dataset_rows = [dict(row) for row in cur.fetchall()]
+            allowed_dataset_ids = [
+                int(row["id"])
+                for row in filter_dataset_rows_for_user(dataset_rows, user)
+                if row.get("id")
+            ]
+            if not allowed_dataset_ids:
+                return jsonify({"common_questions": [], "questions": [], "mode": "random_batch" if random_batch else "list"})
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             _ensure_optional_tables(cur)
             if dataset_id:
@@ -1452,13 +1518,13 @@ def list_common_questions():
                     JOIN bs_datasets d ON d.id = q.dataset_id
                     WHERE q.is_active = TRUE
                       AND d.is_active = TRUE
+                      AND q.dataset_id = ANY(%s::int[])
                     ORDER BY q.updated_at DESC, q.sort_order ASC, q.id ASC
-                    LIMIT 80;
-                    """
+                    LIMIT 200;
+                    """,
+                    (allowed_dataset_ids,),
                 )
             rows = [dict(row) for row in cur.fetchall()]
-            if not dataset_id:
-                rows = filter_dataset_rows_for_user(rows, user)
             shaped_rows = [_shape_common_question(row) for row in rows]
             if random_batch and not dataset_id:
                 shaped_rows = [_shape_common_question(row) for row in _pick_random_common_questions(rows, batch_size)]

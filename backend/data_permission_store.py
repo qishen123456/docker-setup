@@ -316,8 +316,6 @@ def dataset_visible_for_user(user: Dict[str, Any], dataset_id: int, permissions:
     user = user if isinstance(user, dict) else {}
     if user.get("role") == "super_admin":
         return True
-    if user.get("role") == "admin":
-        return True
     return dataset_scope_hit_for_user(user, dataset_id, permissions)
 
 
@@ -325,17 +323,15 @@ def dataset_access_summary(user: Dict[str, Any], dataset_id: int, permissions: O
     user = user if isinstance(user, dict) else {}
     scope_hit = dataset_scope_hit_for_user(user, dataset_id, permissions)
     is_super = user.get("role") == "super_admin"
-    is_admin = user.get("role") == "admin"
-    can_view = is_super or is_admin or scope_hit
+    can_view = is_super or scope_hit
     return {
         "can_view": can_view,
         "dataset_scope_hit": scope_hit,
-        "dataset_readonly": bool(can_view and is_admin and not scope_hit),
+        "dataset_readonly": False,
         "dataset_access": "manage" if is_super else "view" if can_view else "none",
         "dataset_access_reason": (
             "super_admin" if is_super else
             "scope_matched" if scope_hit else
-            "admin_readonly" if is_admin else
             "no_scope"
         ),
     }

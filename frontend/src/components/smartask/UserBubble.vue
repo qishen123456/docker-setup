@@ -2,13 +2,13 @@
   <div class="sa-user-message">
     <div class="sa-user-main">
       <div class="sa-user-bubble">{{ content }}</div>
-      <div class="sa-user-actions" aria-label="问题操作">
-        <el-tooltip content="复制" placement="bottom" :show-after="180">
+      <div v-if="allowCopy || allowEdit || allowRerun" class="sa-user-actions" aria-label="问题操作">
+        <el-tooltip v-if="allowCopy" content="复制" placement="bottom" :show-after="180">
           <button class="sa-user-action" type="button" aria-label="复制问题" @click="$emit('copy')">
             <el-icon><DocumentCopy /></el-icon>
           </button>
         </el-tooltip>
-        <el-tooltip content="修改" placement="bottom" :show-after="180">
+        <el-tooltip v-if="allowEdit" content="修改" placement="bottom" :show-after="180">
           <button
             class="sa-user-action"
             type="button"
@@ -19,7 +19,7 @@
             <el-icon><Edit /></el-icon>
           </button>
         </el-tooltip>
-        <el-tooltip content="重新问" placement="bottom" :show-after="180">
+        <el-tooltip v-if="allowRerun" content="重新问" placement="bottom" :show-after="180">
           <button
             class="sa-user-action"
             type="button"
@@ -51,6 +51,18 @@ defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  allowCopy: {
+    type: Boolean,
+    default: true
+  },
+  allowEdit: {
+    type: Boolean,
+    default: true
+  },
+  allowRerun: {
+    type: Boolean,
+    default: true
   }
 })
 

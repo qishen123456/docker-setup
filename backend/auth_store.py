@@ -22,6 +22,7 @@ TOKEN_TTL_DAYS = int(os.getenv("SMARTASK_AUTH_TOKEN_TTL_DAYS", "7") or 7)
 ROLE_LABELS = {
     "super_admin": "超级管理员",
     "admin": "管理员",
+    "business_admin": "业务管理员",
     "user": "普通用户",
 }
 

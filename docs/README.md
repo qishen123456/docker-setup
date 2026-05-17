@@ -39,7 +39,7 @@ git push gitee docker-setup --force
 推送下方四行代码，第三行改个名字即可
 git status
 git add .
-git commit -m "chore: update smartask LIn d"
+git commit -m "chore: update smartask LIn 5"
 git push -u gitee docker-setup
 
 
@@ -69,3 +69,8 @@ iptables -L -n | grep 8080 || true
 SMARTASK_FRONTEND_PORT=8888
 BACKEND_URL=http://47.107.96.192:8888
 FRONTEND_URL=http://47.107.96.192:8888
+
+
+git stash push --include-untracked -m "manual-before-update"
+git pull --ff-only
+bash update.sh

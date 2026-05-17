@@ -4,6 +4,9 @@
       "dataset_id": 3,
       "mode": "org_tree",
       "tree_type_id": "tree_e89e7f9d372f",
+      "tree_type_ids": [
+        "tree_e89e7f9d372f"
+      ],
       "organization_node_ids": [
         "node_af7d8386f636",
         "node_6ad79f42450f",
@@ -42,6 +45,9 @@
       "dataset_id": 11,
       "mode": "org_tree",
       "tree_type_id": "tree_e89e7f9d372f",
+      "tree_type_ids": [
+        "tree_e89e7f9d372f"
+      ],
       "organization_node_ids": [
         "node_c80ff5606cd5",
         "node_47b422121cad",
@@ -74,14 +80,10 @@
         "aa34g4b218a28bgf",
         "egcc258a8d9c811f"
       ],
-      "allowed_roles": [
-        "user"
-      ],
+      "allowed_roles": [],
       "allowed_departments": [],
       "allowed_positions": [],
-      "allowed_employee_ids": [
-        "emp_1778135664319_d72d234c1435c8"
-      ],
+      "allowed_employee_ids": [],
       "allowed_union_ids": [],
       "scope": {
         "organization_field": "组织编码",

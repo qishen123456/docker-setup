@@ -264,9 +264,9 @@ const snapshot = () => ({
   question: state.question,
   selectedDatasetId: state.selectedDatasetId,
   status: state.status,
-  result: state.result,
+  result: null,
   error: state.error,
-  logs: state.logs,
+  logs: [],
   startedAt: state.startedAt,
   updatedAt: state.updatedAt,
   currentSessionId: state.currentSessionId,
@@ -274,7 +274,11 @@ const snapshot = () => ({
 })
 
 const persist = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot()))
+  } catch {
+    // This cache is only for lightweight input restore; never block ask flow.
+  }
 }
 
 const hydrate = () => {

@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request
 from auth_store import get_current_user
 from bookshelf_repository import BookshelfRepository
 from config_manager import read_json, write_json
-from feature_flags import load_feature_flags
+from feature_flags import feature_available, load_feature_flags
 from organization_tree_store import overview as organization_tree_overview
 from rbac_store import (
     BUILTIN_ROLE_IDS,
@@ -38,6 +38,15 @@ def _require_super_admin():
     user = get_current_user()
     if user.get("role") != "super_admin":
         return None, (jsonify({"success": False, "error": "只有超级管理员可以维护 RBAC 权限"}), 403)
+    return user, None
+
+
+def _require_feature(key: str, error_text: str):
+    user, error = _require_super_admin()
+    if error:
+        return user, error
+    if not feature_available(key, user):
+        return user, (jsonify({"success": False, "error": error_text}), 403)
     return user, None
 
 
@@ -84,7 +93,7 @@ def _public_employee(item: Dict[str, Any], index: int = 0) -> Dict[str, Any]:
     account = _as_text(item.get("account") or item.get("username"))
     employee_id = _as_text(item.get("id")) or f"employee_{index + 1}"
     role = _as_text(item.get("role")) or "user"
-    if role not in {"admin", "user", "super_admin"}:
+    if role not in {"admin", "business_admin", "user", "super_admin"}:
         role = "user"
     return {
         "id": employee_id,
@@ -374,7 +383,7 @@ def delete_group(group_id: str):
 
 @rbac_bp.route("/api/admin/rbac/users", methods=["POST"])
 def create_user_assignment():
-    user, error = _require_super_admin()
+    user, error = _require_feature("employee_create", "当前账号没有新增员工权限")
     if error:
         return error
     payload = request.get_json() or {}
@@ -386,7 +395,7 @@ def create_user_assignment():
     if any(_as_text(item.get("account") or item.get("username")).lower() == account.lower() for item in employees):
         return jsonify({"success": False, "error": "账号已存在"}), 400
     role = _as_text(payload.get("role")) or "user"
-    if role not in {"admin", "user"}:
+    if role not in {"admin", "business_admin", "user"}:
         role = "user"
     employee = {
         "id": _as_text(payload.get("id")) or f"employee_{int(time.time() * 1000)}",
@@ -430,10 +439,11 @@ def create_user_assignment():
 
 @rbac_bp.route("/api/admin/rbac/users/<user_id>", methods=["PUT"])
 def update_user_assignment(user_id: str):
-    user, error = _require_super_admin()
+    payload = request.get_json() or {}
+    feature_key = "employee_status_update" if set(payload.keys()).issubset({"enabled"}) else "employee_update"
+    user, error = _require_feature(feature_key, "当前账号没有编辑员工权限")
     if error:
         return error
-    payload = request.get_json() or {}
     employees = _load_employees()
     changed = False
     for index, employee in enumerate(employees):
@@ -444,7 +454,7 @@ def update_user_assignment(user_id: str):
             return jsonify({"success": False, "error": "超管不可被修改、停用"}), 400
         if "enabled" in payload:
             employee["enabled"] = bool(payload.get("enabled"))
-        if "role" in payload and _as_text(payload.get("role")) in {"admin", "user"}:
+        if "role" in payload and _as_text(payload.get("role")) in {"admin", "business_admin", "user"}:
             employee["role"] = _as_text(payload.get("role"))
         if "role_ids" in payload:
             employee["role_ids"] = _as_list(payload.get("role_ids"))
@@ -465,7 +475,7 @@ def update_user_assignment(user_id: str):
 
 @rbac_bp.route("/api/admin/rbac/users/<user_id>/reset-password", methods=["POST"])
 def reset_user_password(user_id: str):
-    user, error = _require_super_admin()
+    user, error = _require_feature("employee_password_reset", "当前账号没有重置密码权限")
     if error:
         return error
     payload = request.get_json() or {}
@@ -492,12 +502,18 @@ def reset_user_password(user_id: str):
 
 @rbac_bp.route("/api/admin/rbac/users/bulk", methods=["POST"])
 def bulk_user_assignment():
-    user, error = _require_super_admin()
+    payload = request.get_json() or {}
+    action = _as_text(payload.get("action"))
+    feature_key = (
+        "employee_delete" if action == "delete" else
+        "employee_status_update" if action == "set_enabled" else
+        "employee_password_reset" if action == "reset_password" else
+        "employee_bulk_update"
+    )
+    user, error = _require_feature(feature_key, "当前账号没有执行该批量操作的权限")
     if error:
         return error
-    payload = request.get_json() or {}
     user_ids = set(_as_list(payload.get("user_ids")))
-    action = _as_text(payload.get("action"))
     role_ids = _as_list(payload.get("role_ids"))
     password = _as_text(payload.get("password")) or DEFAULT_EMPLOYEE_PASSWORD
     if action == "reset_password" and len(password) < 8:
@@ -517,7 +533,7 @@ def bulk_user_assignment():
             current.difference_update(role_ids)
         elif action == "set_role":
             next_role = _as_text(payload.get("role"))
-            if next_role in {"admin", "user"}:
+            if next_role in {"admin", "business_admin", "user"}:
                 employee["role"] = next_role
         elif action == "set_organizations":
             employee["organization_node_ids"] = _as_list(payload.get("organization_node_ids"))

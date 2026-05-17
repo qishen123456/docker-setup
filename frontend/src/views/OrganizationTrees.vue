@@ -8,8 +8,8 @@
       </div>
       <div class="hero-actions">
         <el-button :icon="Refresh" @click="loadData">刷新</el-button>
-        <el-button @click="openImportDialog">合并/替换导入</el-button>
-        <el-button type="primary" :icon="Plus" @click="startCreateType">新增组织树</el-button>
+        <el-button v-if="isFeatureEnabled('organization_tree_import_preview')" @click="openImportDialog">合并/替换导入</el-button>
+        <el-button v-if="isFeatureEnabled('organization_tree_type_create')" type="primary" :icon="Plus" @click="startCreateType">新增组织树</el-button>
       </div>
     </section>
 
@@ -66,9 +66,9 @@
               <p>{{ selectedType.description || '未填写说明' }}</p>
             </div>
             <div class="detail-actions">
-              <el-button :icon="Edit" @click="startEditType">编辑类型</el-button>
-              <el-button :icon="Plus" type="primary" @click="startCreateNode()">新增根节点</el-button>
-              <el-button :icon="Delete" type="danger" plain @click="removeType">删除类型</el-button>
+              <el-button v-if="isFeatureEnabled('organization_tree_type_update')" :icon="Edit" @click="startEditType">编辑类型</el-button>
+              <el-button v-if="isFeatureEnabled('organization_tree_node_create')" :icon="Plus" type="primary" @click="startCreateNode()">新增根节点</el-button>
+              <el-button v-if="isFeatureEnabled('organization_tree_type_delete')" :icon="Delete" type="danger" plain @click="removeType">删除类型</el-button>
             </div>
           </div>
 
@@ -125,9 +125,9 @@
                   </div>
                 </dl>
                 <div class="node-actions">
-                  <el-button type="primary" :icon="Plus" @click="startCreateNode(selectedNode)">新增下级</el-button>
-                  <el-button :icon="Edit" @click="startEditNode(selectedNode)">编辑节点</el-button>
-                  <el-button type="danger" plain :icon="Delete" @click="removeNode(selectedNode)">删除节点</el-button>
+                  <el-button v-if="isFeatureEnabled('organization_tree_node_create')" type="primary" :icon="Plus" @click="startCreateNode(selectedNode)">新增下级</el-button>
+                  <el-button v-if="isFeatureEnabled('organization_tree_node_update')" :icon="Edit" @click="startEditNode(selectedNode)">编辑节点</el-button>
+                  <el-button v-if="isFeatureEnabled('organization_tree_node_delete')" type="danger" plain :icon="Delete" @click="removeNode(selectedNode)">删除节点</el-button>
                 </div>
               </template>
               <el-empty v-else description="从左侧树中选择节点，或新增根节点" />
@@ -158,7 +158,7 @@
       </el-form>
       <template #footer>
         <el-button @click="typeDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveType">保存</el-button>
+        <el-button v-if="canSaveTypeDialog" type="primary" :loading="saving" @click="saveType">保存</el-button>
       </template>
     </el-dialog>
 
@@ -193,7 +193,7 @@
       </el-form>
       <template #footer>
         <el-button @click="nodeDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveNode">保存</el-button>
+        <el-button v-if="canSaveNodeDialog" type="primary" :loading="saving" @click="saveNode">保存</el-button>
       </template>
     </el-dialog>
 
@@ -237,7 +237,7 @@
               <h3>变化预览</h3>
               <p>先预检，确认后才会写入组织树。</p>
             </div>
-            <el-button type="primary" plain :loading="importPreviewing" @click="previewImport">预检导入</el-button>
+            <el-button v-if="isFeatureEnabled('organization_tree_import_preview')" type="primary" plain :loading="importPreviewing" @click="previewImport">预检导入</el-button>
           </div>
 
           <template v-if="importPreview">
@@ -286,7 +286,7 @@
       </div>
       <template #footer>
         <el-button @click="importDialog.visible = false">取消</el-button>
-        <el-button type="primary" :disabled="!importPreview?.can_apply" :loading="importApplying" @click="applyImport">确认导入</el-button>
+        <el-button v-if="isFeatureEnabled('organization_tree_import_apply')" type="primary" :disabled="!importPreview?.can_apply" :loading="importApplying" @click="applyImport">确认导入</el-button>
       </template>
     </el-dialog>
   </div>
@@ -307,7 +307,9 @@ import {
   updateOrganizationTreeNode,
   updateOrganizationTreeType,
 } from '../api/index.js'
+import { useFeatureFlags } from '../state/featureFlags.js'
 
+const { isFeatureEnabled, loadFeatureFlags } = useFeatureFlags()
 const treeTypes = ref([])
 const nodes = ref([])
 const trees = ref({})
@@ -351,6 +353,12 @@ const selectedType = computed(() => treeTypes.value.find(item => item.id === sel
 const currentTreeNodes = computed(() => trees.value[selectedTypeId.value] || [])
 const enabledTypeCount = computed(() => treeTypes.value.filter(item => item.enabled).length)
 const maxDepth = computed(() => Math.max(0, ...treeTypes.value.map(item => Number(item.max_depth || 0))))
+const canSaveTypeDialog = computed(() => isFeatureEnabled(
+  typeDialog.mode === 'create' ? 'organization_tree_type_create' : 'organization_tree_type_update'
+))
+const canSaveNodeDialog = computed(() => isFeatureEnabled(
+  nodeDialog.mode === 'create' ? 'organization_tree_node_create' : 'organization_tree_node_update'
+))
 const nodeParentOptions = computed(() => {
   if (!nodeForm.id) return currentTreeNodes.value
   const stripSelf = (items = []) => items
@@ -413,12 +421,14 @@ const selectNode = (node) => {
 }
 
 const startCreateType = () => {
+  if (!isFeatureEnabled('organization_tree_type_create')) return
   resetTypeForm()
   typeDialog.mode = 'create'
   typeDialog.visible = true
 }
 
 const startEditType = () => {
+  if (!isFeatureEnabled('organization_tree_type_update')) return
   if (!selectedType.value) return
   resetTypeForm(selectedType.value)
   typeDialog.mode = 'edit'
@@ -426,6 +436,7 @@ const startEditType = () => {
 }
 
 const saveType = async () => {
+  if (!canSaveTypeDialog.value) return
   if (!typeForm.name.trim() || !typeForm.code.trim()) {
     ElMessage.warning('请填写组织树名称和编码')
     return
@@ -446,6 +457,7 @@ const saveType = async () => {
 }
 
 const removeType = async () => {
+  if (!isFeatureEnabled('organization_tree_type_delete')) return
   if (!selectedType.value) return
   await ElMessageBox.confirm(`确认删除组织树「${selectedType.value.name}」？`, '删除组织树', { type: 'warning' })
   const res = await deleteOrganizationTreeType(selectedType.value.id)
@@ -454,6 +466,7 @@ const removeType = async () => {
 }
 
 const startCreateNode = (parent = null) => {
+  if (!isFeatureEnabled('organization_tree_node_create')) return
   if (!selectedTypeId.value) return
   resetNodeForm({ tree_type_id: selectedTypeId.value, parent_id: parent?.id || '' })
   nodeDialog.mode = 'create'
@@ -461,12 +474,14 @@ const startCreateNode = (parent = null) => {
 }
 
 const startEditNode = (node) => {
+  if (!isFeatureEnabled('organization_tree_node_update')) return
   resetNodeForm(node)
   nodeDialog.mode = 'edit'
   nodeDialog.visible = true
 }
 
 const saveNode = async () => {
+  if (!canSaveNodeDialog.value) return
   if (!nodeForm.name.trim() || !nodeForm.code.trim()) {
     ElMessage.warning('请填写节点名称和编码')
     return
@@ -487,6 +502,7 @@ const saveNode = async () => {
 }
 
 const removeNode = async (node) => {
+  if (!isFeatureEnabled('organization_tree_node_delete')) return
   await ElMessageBox.confirm(`确认删除节点「${node.name}」？`, '删除组织节点', { type: 'warning' })
   const res = await deleteOrganizationTreeNode(node.id)
   applyOverview(res)
@@ -507,6 +523,7 @@ const importPayload = () => ({
 })
 
 const openImportDialog = () => {
+  if (!isFeatureEnabled('organization_tree_import_preview')) return
   Object.assign(importForm, {
     mode: 'merge',
     tree_type_id: selectedTypeId.value || '',
@@ -519,6 +536,7 @@ const openImportDialog = () => {
 }
 
 const previewImport = async () => {
+  if (!isFeatureEnabled('organization_tree_import_preview')) return
   if (!importForm.text.trim()) {
     ElMessage.warning('请先粘贴 Excel 表格内容')
     return
@@ -532,6 +550,7 @@ const previewImport = async () => {
 }
 
 const applyImport = async () => {
+  if (!isFeatureEnabled('organization_tree_import_apply')) return
   if (!importPreview.value?.can_apply) return
   await ElMessageBox.confirm(
     `${importForm.mode === 'replace' ? '替换导入会删除目标组织树中未出现在表格里的节点。' : '合并导入会保留目标组织树中未出现在表格里的节点。'}确认继续吗？`,
@@ -553,7 +572,10 @@ const applyImport = async () => {
 const changeLabel = (action) => ({ create: '新增', update: '更新', delete: '删除' }[action] || '不变')
 const changeTagType = (action) => ({ create: 'success', update: 'warning', delete: 'danger' }[action] || 'info')
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadFeatureFlags()
+  await loadData()
+})
 </script>
 
 <style scoped>

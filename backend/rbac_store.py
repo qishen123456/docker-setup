@@ -12,7 +12,7 @@ from config_manager import read_json, resolve_read_path, write_json
 RBAC_FILE = "rbac_permissions.json"
 RESOURCE_LEVELS = {"none": 0, "view": 1, "edit": 2, "manage": 3}
 LEVEL_LABELS = {"none": "无权限", "view": "查看", "edit": "编辑", "manage": "管理/授权"}
-BUILTIN_ROLE_IDS = {"super_admin", "admin", "user"}
+BUILTIN_ROLE_IDS = {"super_admin", "admin", "business_admin", "user"}
 
 
 def _now() -> str:
@@ -114,6 +114,16 @@ def builtin_roles(feature_flags: Optional[Any] = None) -> List[Dict[str, Any]]:
             "builtin": True,
             "locked": True,
             "function_permissions": _role_default_functions(source_flags, "admin"),
+            "resource_permissions": {},
+        },
+        {
+            "id": "business_admin",
+            "name": "业务管理员",
+            "code": "business_admin",
+            "description": "内置业务管理员角色，默认可维护业务数据资产，数据范围受组织树约束。",
+            "builtin": True,
+            "locked": True,
+            "function_permissions": _role_default_functions(source_flags, "business_admin"),
             "resource_permissions": {},
         },
         {
@@ -298,7 +308,7 @@ def effective_role_sources(user: Dict[str, Any], employee: Optional[Dict[str, An
 
     legacy_role = _as_text((employee or {}).get("role") or (user or {}).get("role"))
     if legacy_role in role_map:
-        sources.append({"role_id": legacy_role, "source_type": "legacy", "source_id": "", "source_name": "固定三级角色"})
+        sources.append({"role_id": legacy_role, "source_type": "legacy", "source_id": "", "source_name": "固定角色"})
 
     for role_id in _as_list((employee or {}).get("role_ids")):
         if role_id in role_map:
