@@ -1051,14 +1051,6 @@ class FourAgentAskService:
         preferred_override = bool(route.get("preferred_dataset_override"))
         rule_based_sql = self._build_rule_based_sql(question, route, context)
 
-        if rule_based_sql:
-            return {
-                "mode": "rule_based",
-                "sql": rule_based_sql,
-                "sample_id": None,
-                "sample_score": 0,
-            }
-
         if route.get("decision") == "direct_execute" and top_sample_sql:
             return {
                 "mode": "sample_direct",
@@ -1088,6 +1080,14 @@ class FourAgentAskService:
                 "sql": top_sample_sql,
                 "sample_id": top_sample.get("id"),
                 "sample_score": top_sample_score,
+            }
+
+        if rule_based_sql:
+            return {
+                "mode": "rule_based",
+                "sql": rule_based_sql,
+                "sample_id": None,
+                "sample_score": 0,
             }
 
         return {
@@ -2667,7 +2667,11 @@ LIMIT 10000
             and re.search(r"(?:代表处|分公司|业务部)", normalized_question)
             and any(token in normalized_question for token in ["下面", "下级", "业务代表", "业务员", "人员", "的人", "明细", "咋样", "怎么样"])
         )
-        if rule_based_sql and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule or force_descendant_scope_rule):
+        if (
+            rule_based_sql
+            and not seed_sql
+            and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule or force_descendant_scope_rule)
+        ):
             self._append_trace(
                 trace,
                 "agent2.sql_generate.grouped_rule" if force_grouped_ranking else (
@@ -3285,13 +3289,42 @@ Agent3 复核结果：
             agent2_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(2, []))
             agent3_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(3, []))
 
-            rule_override_sql = self._build_rule_based_sql(route.get("refined_query", question), route, context)
-            if route.get("decision") == "direct_execute" and (route.get("matched_sample_sql") or rule_override_sql):
-                sql_text = rule_override_sql or route.get("matched_sample_sql")
-                steps.append({"title": "Agent1 高匹配直执行", "duration": 0, "status": "success"})
+            sql_strategy = self._select_sql_strategy(route.get("refined_query", question), route, context)
+            if sql_strategy.get("mode") == "sample_direct" and sql_strategy.get("sql"):
+                sql_text = str(sql_strategy.get("sql") or "").strip()
+                self._append_trace(
+                    trace,
+                    "agent2.sql_generate.golden_direct",
+                    "info",
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_meta.get("dataset_name"),
+                    sample_id=sql_strategy.get("sample_id"),
+                    sample_score=sql_strategy.get("sample_score"),
+                    sql=self._truncate_text(sql_text, 12000),
+                )
+                steps.append({"title": "Golden SQL 高匹配直执行", "duration": 0, "status": "success"})
+            elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql"):
+                sql_text = str(sql_strategy.get("sql") or "").strip()
+                self._append_trace(
+                    trace,
+                    "agent2.sql_generate.rule_based",
+                    "info",
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_meta.get("dataset_name"),
+                    sql=self._truncate_text(sql_text, 12000),
+                )
+                steps.append({"title": "规则 SQL 兜底生成", "duration": 0, "status": "success"})
             else:
                 step_started = time.time()
-                agent2_result = self._agent2_generate_sql(route.get("refined_query", question), route, context, agent2_prompt, trace=trace)
+                agent2_result = self._agent2_generate_sql(
+                    route.get("refined_query", question),
+                    route,
+                    context,
+                    agent2_prompt,
+                    seed_sql=sql_strategy.get("sql") if sql_strategy.get("mode") == "sample_template" else "",
+                    seed_sample_id=sql_strategy.get("sample_id") if sql_strategy.get("mode") == "sample_template" else None,
+                    trace=trace,
+                )
                 sql_text = (agent2_result.get("sql") or "").strip()
                 self._append_trace(
                     trace,
@@ -3301,6 +3334,7 @@ Agent3 复核结果：
                     dataset_name=dataset_meta.get("dataset_name"),
                     sql=self._truncate_text(sql_text, 12000),
                     notes=agent2_result.get("notes", ""),
+                    sql_strategy=sql_strategy,
                 )
                 if not sql_text:
                     steps.append(

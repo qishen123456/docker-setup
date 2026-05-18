@@ -335,12 +335,118 @@ validate_secret_master_key() {
   fail "检测到 enc:v1 密文，但缺少主密钥。请把 config/.secret_master_key 放回服务器，或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE 后再更新。"
 }
 
+validate_runtime_secret_decryption() {
+  local pybin
+  if ! has_encrypted_runtime_secret; then
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    pybin="python3"
+  elif command -v python >/dev/null 2>&1; then
+    pybin="python"
+  else
+    warn "未找到宿主机 Python，无法提前校验 enc:v1 密文是否可解密；将继续由容器启动时校验。"
+    return 0
+  fi
+
+  "$pybin" <<'PY' || fail "检测到 enc:v1 密文，但当前主密钥无法解密。请恢复原 config/.secret_master_key，或用当前主密钥重新加密 .env/config 中的密文。"
+import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path.cwd()
+
+
+def parse_env(path: Path):
+    values = {}
+    if not path.exists():
+        return values
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'").strip('"')
+        if key:
+            values[key] = value
+    return values
+
+
+env_values = parse_env(ROOT / ".env")
+for key in ("SMARTASK_SECRET_MASTER_KEY", "SMARTASK_SECRET_KEY_FILE"):
+    if env_values.get(key):
+        os.environ[key] = env_values[key]
+
+sys.path.insert(0, str(ROOT / "backend"))
+from secret_codec import decrypt_secret_value, is_encrypted_secret  # noqa: E402
+
+targets = []
+for key, value in env_values.items():
+    if is_encrypted_secret(value):
+        targets.append((f".env:{key}", value))
+
+
+def collect_json_secrets(node, label: str) -> None:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            collect_json_secrets(value, f"{label}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            collect_json_secrets(value, f"{label}[{index}]")
+    elif isinstance(node, str) and is_encrypted_secret(node):
+        targets.append((label, node))
+
+
+config_dir = ROOT / "config"
+if config_dir.exists():
+    for path in sorted(config_dir.glob("*.json")):
+        try:
+            collect_json_secrets(json.loads(path.read_text(encoding="utf-8")), f"config/{path.name}")
+        except Exception:
+            continue
+
+failed = []
+for label, value in targets:
+    try:
+        decrypt_secret_value(value)
+    except Exception as exc:
+        failed.append(f"{label}: {exc}")
+
+if failed:
+    print("以下密文无法用当前主密钥解开：", file=sys.stderr)
+    for item in failed[:20]:
+        print(f"  - {item}", file=sys.stderr)
+    if len(failed) > 20:
+        print(f"  ... 还有 {len(failed) - 20} 项", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"  [OK] enc:v1 密文解密校验通过，共 {len(targets)} 项")
+PY
+}
+
+validate_postgres_password_hint() {
+  local db_password postgres_password db_host
+  db_host="$(read_env SMARTASK_DB_HOST "postgres")"
+  db_password="$(read_env SMARTASK_DB_PASSWORD "")"
+  postgres_password="$(read_env SMARTASK_POSTGRES_PASSWORD "")"
+
+  if [[ "$db_host" == "postgres" && "$db_password" == enc:v1:* && -z "$postgres_password" ]]; then
+    warn "SMARTASK_DB_PASSWORD 是 enc:v1 密文，但 compose 自带的 Postgres 不能解密。"
+    warn "如果本次是首次建库、清空过数据库卷，或日志里出现 password authentication failed，请在 .env 增加 SMARTASK_POSTGRES_PASSWORD=数据库明文密码。"
+  fi
+}
+
 command -v git >/dev/null 2>&1 || fail "未找到 git 命令"
 command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
 docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
 docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
 [[ -f .env ]] || fail "缺少 .env，请先放好生产配置"
 validate_secret_master_key
+validate_runtime_secret_decryption
+validate_postgres_password_hint
 
 if [[ "$SKIP_BACKUP" -eq 0 ]]; then
   info "更新前备份"

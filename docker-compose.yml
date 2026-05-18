@@ -6,7 +6,9 @@ services:
     environment:
       POSTGRES_DB: ${SMARTASK_DB_DATABASE:-postgres}
       POSTGRES_USER: ${SMARTASK_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${SMARTASK_DB_PASSWORD:-postgres}
+      # Postgres entrypoint cannot decrypt enc:v1 secrets. Keep this value
+      # plain and aligned with the decrypted SMARTASK_DB_PASSWORD.
+      POSTGRES_PASSWORD: ${SMARTASK_POSTGRES_PASSWORD:-${SMARTASK_DB_PASSWORD:-postgres}}
       TZ: Asia/Shanghai
     ports:
       - "${SMARTASK_DOCKER_PG_PORT:-5433}:5432"

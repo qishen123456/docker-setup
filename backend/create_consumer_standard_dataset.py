@@ -653,7 +653,7 @@ def resolve_source_id(cur, explicit_source_id: int = 0) -> int:
         """
         SELECT source_id
         FROM bs_datasets
-        WHERE (dataset_name LIKE '%消费者%' OR dataset_code ILIKE '%consumer%')
+        WHERE (dataset_name LIKE '%%消费者%%' OR dataset_code ILIKE '%%consumer%%')
           AND source_id IS NOT NULL
         ORDER BY CASE WHEN dataset_code = %s THEN 0 ELSE 1 END, updated_at DESC
         LIMIT 1;

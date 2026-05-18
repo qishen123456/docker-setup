@@ -263,12 +263,12 @@ class BookshelfRepository:
             ]
             sample_tokens = self._tokenize(" ".join(text_parts))
             overlap = len(tokens.intersection(sample_tokens))
-            exact_hit = 1 if (question or "").strip().lower() == str(sample.get("question") or "").strip().lower() else 0
+            exact_hit = 1 if self._normalize_question_key(question) == self._normalize_question_key(sample.get("question")) else 0
             quality = int(sample.get("quality_score") or 0) // 10
             sql_bonus = self._score_sql_shape(question, sample.get("sql_text") or "")
             coverage = len(sample_tokens) or 1
             overlap_ratio = int((overlap / coverage) * 20)
-            return overlap * 12 + overlap_ratio + quality + sql_bonus + exact_hit * 20
+            return overlap * 12 + overlap_ratio + quality + sql_bonus + exact_hit * 50
 
         ranked = sorted(samples, key=score, reverse=True)
         selected = []
@@ -284,6 +284,10 @@ class BookshelfRepository:
         return {item for item in parts if item.strip()}
 
     @staticmethod
+    def _normalize_question_key(text: Any) -> str:
+        return re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(text or "").lower())
+
+    @staticmethod
     def _score_sql_shape(question: str, sql_text: str) -> int:
         text = f"{question or ''} {(sql_text or '').lower()}"
         score = 0
@@ -291,7 +295,7 @@ class BookshelfRepository:
             score += 8
         if re.search(r"(占比|分布|构成|比例)", question or "") and re.search(r"(group\s+by|count\s*\(|sum\s*\()", sql_text or "", re.IGNORECASE):
             score += 8
-        if re.search(r"(top|排名|前\d+|最高|最低)", question or "", re.IGNORECASE) and re.search(r"(order\s+by|limit|top\s+\d+)", sql_text or "", re.IGNORECASE):
+        if re.search(r"(top|排名|前\d+|最高|最低|最好|最差|最佳|完成好|完成最好)", question or "", re.IGNORECASE) and re.search(r"(order\s+by|limit|top\s+\d+|row_number|rank\s*\()", sql_text or "", re.IGNORECASE):
             score += 8
         if re.search(r"(明细|列表|记录)", question or "") and re.search(r"select\s+.+from", sql_text or "", re.IGNORECASE):
             score += 4
