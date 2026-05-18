@@ -9,7 +9,7 @@
 2. 已安装 **Git**（任何版本均可）。
 3. 准备好配置来源：要么使用仓库里的 `.env.example` 复制出 `.env` 并手工填写，要么由项目管理员直接提供可用的 `.env`。
 
-> 说明：`.env` 中含 `AI_API_KEY`、数据库密码、飞书 AppSecret 等敏感信息，按规范不进 Git 仓库。
+> 说明：`.env` 中含 `AI_API_KEY`、数据库密码、飞书 AppSecret 等敏感信息，按规范不进 Git 仓库。如果管理员提供的是带 `enc:v1:` 的加密 `.env`，必须同时提供同一套 `config/.secret_master_key`；宝塔 / Linux 首次部署不需要额外配置 `SMARTASK_SECRET_MASTER_KEY`，默认会读取项目目录下的 `config/.secret_master_key`。
 
 ---
 
@@ -43,6 +43,15 @@ Copy-Item .env.example .env
 git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
 cd smartask
 .\deploy.ps1 -RunTests
+```
+
+宝塔 / Linux 首次部署：
+
+```bash
+git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+cd smartask
+# 放入 .env；如果 .env 里有 enc:v1 密文，也要放入 config/.secret_master_key
+bash deploy.sh --run-tests
 ```
 
 完成后浏览器访问：
@@ -84,6 +93,15 @@ cd smartask
 .\update.ps1 -NoPull -RunTests
 ```
 
+宝塔 / Linux 服务器使用：
+
+```bash
+bash update.sh
+bash update.sh --run-tests
+bash update.sh --no-build
+bash update.sh --no-pull --run-tests
+```
+
 默认等价于：更新前备份 → `git pull --ff-only` → `docker compose config` → `docker compose up -d --build` → 健康检查。加 `-RunTests` 会在 backend 容器内运行 `scripts/integration_test.py`，即使用户机没有安装 Python 也可以测试。
 
 说明：
@@ -92,6 +110,7 @@ cd smartask
 - `-NoPull` 适合离线更新包场景，不从 Gitee 拉代码。
 - `-NoBuild` 只重启已有镜像，不重新构建。
 - 更新脚本默认会先调用 `backup.ps1` 备份，保护用户机已有数据。
+- Linux `update.sh` 会在启动容器前检查加密配置：如果 `.env` 或 `config/*.json` 中出现 `enc:v1:`，必须存在 `config/.secret_master_key`，或配置 `SMARTASK_SECRET_MASTER_KEY` / `SMARTASK_SECRET_KEY_FILE`，否则会停止更新，避免容器启动后无法解密。
 
 ---
 

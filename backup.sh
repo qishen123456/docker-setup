@@ -25,6 +25,7 @@ SmartAsk Linux 备份脚本
 
 说明：
   备份 config、.env、当前 Git commit、docker compose 状态，并默认导出 PostgreSQL SQL dump。
+  如果存在 config/.secret_master_key，会随 config.tar.gz 一起备份；请按生产密钥保存。
 EOF
       exit 0
       ;;
@@ -97,6 +98,7 @@ Project: $SCRIPT_DIR
 
 Contents:
 - config.tar.gz
+- config/.secret_master_key is included inside config.tar.gz when present
 - logs.tar.gz
 - backend_logs.tar.gz
 - .env

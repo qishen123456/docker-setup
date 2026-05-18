@@ -90,6 +90,7 @@ LOCAL_STASH_CREATED=0
 LOCAL_STASH_NOTE=""
 RUNTIME_CONFIG_BACKUP_DIR=""
 RUNTIME_CONFIG_FILES=(
+  ".secret_master_key"
   "app_config.json"
   "datasources.json"
   "ai_settings.json"
@@ -291,11 +292,55 @@ read_env() {
   echo "${value:-$default}"
 }
 
+has_encrypted_runtime_secret() {
+  if [[ -f .env ]] && grep -q "enc:v1:" .env; then
+    return 0
+  fi
+  if [[ -d config ]] && grep -Rqs "enc:v1:" config --include='*.json'; then
+    return 0
+  fi
+  return 1
+}
+
+validate_secret_master_key() {
+  local inline_key key_file
+  if ! has_encrypted_runtime_secret; then
+    return 0
+  fi
+
+  inline_key="$(read_env SMARTASK_SECRET_MASTER_KEY "")"
+  if [[ -n "$inline_key" ]]; then
+    warn "检测到 enc:v1 密文，并将使用 .env 中的 SMARTASK_SECRET_MASTER_KEY 解密。生产环境更建议使用 config/.secret_master_key 或 Docker Secret。"
+    return 0
+  fi
+
+  key_file="$(read_env SMARTASK_SECRET_KEY_FILE "")"
+  if [[ -n "$key_file" ]]; then
+    if [[ -f "$key_file" ]]; then
+      echo "  [OK] 检测到密文主密钥文件: $key_file"
+      return 0
+    fi
+    if [[ "$key_file" == /* ]]; then
+      warn "SMARTASK_SECRET_KEY_FILE=$key_file 是容器内绝对路径，宿主机无法直接校验；请确认 docker compose 已挂载该 Secret。"
+      return 0
+    fi
+    fail "检测到 enc:v1 密文，但 SMARTASK_SECRET_KEY_FILE 指向的文件不存在: $key_file"
+  fi
+
+  if [[ -f config/.secret_master_key ]]; then
+    echo "  [OK] 检测到密文主密钥文件: config/.secret_master_key"
+    return 0
+  fi
+
+  fail "检测到 enc:v1 密文，但缺少主密钥。请把 config/.secret_master_key 放回服务器，或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE 后再更新。"
+}
+
 command -v git >/dev/null 2>&1 || fail "未找到 git 命令"
 command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
 docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
 docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
 [[ -f .env ]] || fail "缺少 .env，请先放好生产配置"
+validate_secret_master_key
 
 if [[ "$SKIP_BACKUP" -eq 0 ]]; then
   info "更新前备份"

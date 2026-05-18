@@ -62,6 +62,8 @@ SmartAsk Linux 一键部署脚本
 
 说明：
   默认不会改写宿主机 /etc/apt 源。确需改写时再设置 SMARTASK_CONFIGURE_APT_MIRROR=1。
+  如果 .env 或 config/*.json 使用 enc:v1 密文，需同时提供 config/.secret_master_key，
+  或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE。
 EOF
       exit 0
       ;;
@@ -119,6 +121,49 @@ require_env() {
   if [[ "$key" == "SMARTASK_ADMIN_PASSWORD" && "$lower" =~ ^(admin123456|123456|password)$ ]]; then
     fail ".env 中 $key 不能使用弱密码，请先填写强密码"
   fi
+}
+
+has_encrypted_runtime_secret() {
+  if [[ -f .env ]] && grep -q "enc:v1:" .env; then
+    return 0
+  fi
+  if [[ -d config ]] && grep -Rqs "enc:v1:" config --include='*.json'; then
+    return 0
+  fi
+  return 1
+}
+
+validate_secret_master_key() {
+  local inline_key key_file
+  if ! has_encrypted_runtime_secret; then
+    return 0
+  fi
+
+  inline_key="$(read_env SMARTASK_SECRET_MASTER_KEY "")"
+  if [[ -n "$inline_key" ]]; then
+    warn "检测到 enc:v1 密文，并将使用 .env 中的 SMARTASK_SECRET_MASTER_KEY 解密。生产环境更建议使用 config/.secret_master_key 或 Docker Secret。"
+    return 0
+  fi
+
+  key_file="$(read_env SMARTASK_SECRET_KEY_FILE "")"
+  if [[ -n "$key_file" ]]; then
+    if [[ -f "$key_file" ]]; then
+      ok "检测到密文主密钥文件: $key_file"
+      return 0
+    fi
+    if [[ "$key_file" == /* ]]; then
+      warn "SMARTASK_SECRET_KEY_FILE=$key_file 是容器内绝对路径，宿主机无法直接校验；请确认 docker compose 已挂载该 Secret。"
+      return 0
+    fi
+    fail "检测到 enc:v1 密文，但 SMARTASK_SECRET_KEY_FILE 指向的文件不存在: $key_file"
+  fi
+
+  if [[ -f config/.secret_master_key ]]; then
+    ok "检测到密文主密钥文件: config/.secret_master_key"
+    return 0
+  fi
+
+  fail "检测到 enc:v1 密文，但缺少主密钥。首次部署加密 .env 时，请同时把生成密文那台机器上的 config/.secret_master_key 放到服务器；或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE。"
 }
 
 is_root() {
@@ -450,6 +495,7 @@ docker info >/dev/null 2>&1 || fail "Docker 镜像源配置后 Docker 不可用�
 ok "镜像源检查完成"
 
 info "3/8 检查 .env"
+mkdir -p config backups backend/logs backend/imports
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
     cp .env.example .env
@@ -462,8 +508,7 @@ require_env "SMARTASK_SECRET_KEY"
 require_env "SMARTASK_AI_API_KEY"
 require_env "SMARTASK_ADMIN_PASSWORD"
 ok ".env 已存在且关键项不是占位符"
-
-mkdir -p config backups backend/logs backend/imports
+validate_secret_master_key
 
 FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"
 BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
