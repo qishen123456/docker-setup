@@ -166,6 +166,7 @@
                     <div
                       v-if="shouldShowResultChain(msg)"
                       class="sa-result-chain"
+                      :ref="el => setResultChainRef(msg.id, el)"
                     >
                     <ResultDigestCard
                       v-if="getReport(msg) || getPrimaryDataset(msg)"
@@ -1175,6 +1176,7 @@ const panelRef = ref(null)
 const sideReportRef = ref(null)
 const sideReportHeadRef = ref(null)
 const chartDialogRef = ref(null)
+const resultChainRefs = new Map()
 const thinkingOpen = reactive({})
 const logOpen = reactive({})
 const timelineVersion = ref(0)
@@ -1198,6 +1200,7 @@ let elapsed = ref(0)
 let timerInst = null
 let chatScrollTimer = null
 let panelScrollTimer = null
+let reportTopScrollTimers = []
 const pendingQuickDataset = ref(null)
 
 const isRunning = computed(() => session.state.status === 'running')
@@ -2918,6 +2921,11 @@ const togglePanel = () => {
 }
 const toggleThinking = (id) => { thinkingOpen[id] = !thinkingOpen[id] }
 const toggleLog = (i) => { logOpen[i] = !logOpen[i] }
+const setResultChainRef = (id, el) => {
+  if (!id) return
+  if (el) resultChainRefs.set(id, el)
+  else resultChainRefs.delete(id)
+}
 const openDetailPanel = (msg = null) => {
   if (msg?.data && !msg.data.error && !msg.data.requires_confirmation) {
     detailReportResult.value = JSON.parse(JSON.stringify(msg.data))
@@ -3152,7 +3160,7 @@ const syncCompletedResultMessage = () => {
   msg.data = JSON.parse(JSON.stringify(result))
   thinkingOpen[msg.id] = false
   stopTimer()
-  scheduleChatScroll(48, 'smooth')
+  scheduleChatReportTop(48, 'smooth')
 }
 
 const shouldShowLiveFeed = (msg) => {
@@ -3397,7 +3405,8 @@ const rerunQuestion = async (msg) => {
       aiMsg.loading = false
     }
     thinkingOpen[aid] = false
-    scheduleChatScroll(48, 'smooth')
+    if (res && !res?.requires_confirmation && !res?.error) scheduleChatReportTop(48, 'smooth')
+    else scheduleChatScroll(48, 'smooth')
   } catch (err) {
     if (isAbortLikeInteractionError(err)) {
       aiMsg.loading = false
@@ -3454,7 +3463,8 @@ const handleSend = async () => {
     }
     query.value = ''
     thinkingOpen[aid] = false
-    scheduleChatScroll(48, 'smooth')
+    if (res && !res?.requires_confirmation && !res?.error) scheduleChatReportTop(48, 'smooth')
+    else scheduleChatScroll(48, 'smooth')
   } catch (err) {
     if (isAbortLikeInteractionError(err)) {
       aiMsg.loading = false
@@ -3762,7 +3772,8 @@ const doConfirm = async (opt, msg) => {
     }
     if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
-    scheduleChatScroll(36, 'smooth')
+    if (!res?.requires_confirmation && !res?.error) scheduleChatReportTop(36, 'smooth')
+    else scheduleChatScroll(36, 'smooth')
   } catch (error) {
     if (isAbortLikeInteractionError(error)) {
       if (msg) {
@@ -3796,11 +3807,23 @@ const scrollChat = (behavior = 'smooth') => nextTick(() => {
   }
 })
 
-const forceScrollChatToBottom = (behavior = 'auto') => {
-  ;[0, 60, 180, 360].forEach((delay) => {
-    window.setTimeout(() => scrollChat(behavior), delay)
-  })
-}
+const scrollChatToReportTop = (behavior = 'auto') => nextTick(() => {
+  const container = chatBodyRef.value
+  if (!container) return
+  const latestId = latestAiMessage.value?.id
+  const allResultChains = Array.from(container.querySelectorAll('.sa-result-chain'))
+  const target = (latestId && resultChainRefs.get(latestId))
+    || allResultChains[allResultChains.length - 1]
+  if (!target) {
+    scrollChat(behavior)
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const top = container.scrollTop + targetRect.top - containerRect.top - 12
+  container.scrollTo({ top: Math.max(0, top), behavior })
+})
+
 const isPanelNearBottom = () => {
   const el = panelRef.value
   if (!el) return true
@@ -3843,6 +3866,21 @@ const scheduleChatScroll = (delay = 40, behavior = 'smooth') => {
   chatScrollTimer = window.setTimeout(() => {
     scrollChat(behavior)
   }, delay)
+}
+
+const clearReportTopScrollTimers = () => {
+  reportTopScrollTimers.forEach(timer => clearTimeout(timer))
+  reportTopScrollTimers = []
+}
+
+const scheduleChatReportTop = (delay = 40, behavior = 'auto') => {
+  if (chatScrollTimer) clearTimeout(chatScrollTimer)
+  clearReportTopScrollTimers()
+  ;[delay, delay + 90, delay + 240].forEach((timeout) => {
+    reportTopScrollTimers.push(window.setTimeout(() => {
+      scrollChatToReportTop(behavior)
+    }, timeout))
+  })
 }
 
 const schedulePanelScroll = (delay = 150, behavior = 'auto', force = false) => {
@@ -4288,7 +4326,7 @@ watch(() => session.state.status, (s) => {
   syncCompletedResultMessage()
   if (s === 'completed') {
     nextTick(() => {
-      forceScrollChatToBottom('auto')
+      scheduleChatReportTop(0, 'auto')
       if (hasSideReport.value) scrollPanelToReportTop()
     })
   }
@@ -4306,7 +4344,7 @@ watch(() => session.state.result, () => {
 watch(() => hasSideReport.value, (ready) => {
   if (ready && session.state.status === 'completed') {
     scrollPanelToReportTop()
-    forceScrollChatToBottom('auto')
+    scheduleChatReportTop(0, 'auto')
   }
 }, { flush: 'post' })
 
@@ -4422,6 +4460,7 @@ onDeactivated(() => {
   // keep-alive 停用时的轻量清理（不销毁组件状态）
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   if (panelScrollTimer) clearTimeout(panelScrollTimer)
+  clearReportTopScrollTimers()
 })
 
 onUnmounted(() => {
@@ -4429,6 +4468,7 @@ onUnmounted(() => {
   stopTimer()
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   if (panelScrollTimer) clearTimeout(panelScrollTimer)
+  clearReportTopScrollTimers()
   if (activePrintFrame?.parentNode) {
     activePrintFrame.parentNode.removeChild(activePrintFrame)
     activePrintFrame = null
