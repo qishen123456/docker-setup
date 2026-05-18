@@ -19,7 +19,7 @@
       <article class="metric-card">
         <span>配置文件</span>
         <strong>{{ summaryStats.configCount }}</strong>
-        <small>包含权限和问数历史；不含登录 token 与 local 私有配置</small>
+        <small>包含员工、组织树、数据集权限和问数历史；不含登录 token 与 local 私有配置</small>
       </article>
       <article class="metric-card">
         <span>启用数据集</span>
@@ -32,6 +32,11 @@
         <small>字段字典、Golden SQL、提示词等</small>
       </article>
       <article class="metric-card">
+        <span>权限资源</span>
+        <strong>{{ permissionStats.enabledEmployees }}</strong>
+        <small>{{ permissionResourceText }}</small>
+      </article>
+      <article class="metric-card">
         <span>系统日志</span>
         <strong>{{ summaryStats.systemLogRows }}</strong>
         <small>{{ logFileSummaryText }}</small>
@@ -40,6 +45,29 @@
         <span>最近备份</span>
         <strong>{{ backups.length }}</strong>
         <small>导入前会自动生成回滚包</small>
+      </article>
+    </section>
+
+    <section class="permission-grid">
+      <article class="permission-card">
+        <span>员工账号</span>
+        <strong>{{ permissionStats.enabledEmployees }} / {{ permissionStats.employees }}</strong>
+        <small>{{ permissionStats.adminEmployees }} 个管理员或业务管理员</small>
+      </article>
+      <article class="permission-card">
+        <span>组织树</span>
+        <strong>{{ permissionStats.enabledOrganizationNodes }} / {{ permissionStats.organizationNodes }}</strong>
+        <small>{{ permissionStats.organizationTreeTypes }} 个组织树类型</small>
+      </article>
+      <article class="permission-card">
+        <span>数据集权限</span>
+        <strong>{{ permissionStats.dataPermissionRules }}</strong>
+        <small>{{ permissionStats.orgTreeDataPermissionRules }} 条按组织树控制</small>
+      </article>
+      <article class="permission-card">
+        <span>功能权限 RBAC</span>
+        <strong>{{ permissionStats.rbacRoles }}</strong>
+        <small>{{ permissionStats.rbacGroups }} 个权限组/分组</small>
       </article>
     </section>
 
@@ -116,7 +144,10 @@
             <el-tag type="success" v-else>保留已有配置</el-tag>
           </div>
           <el-table :data="configPlan" size="small" max-height="180">
-            <el-table-column prop="file" label="配置文件" />
+            <el-table-column label="配置资源" min-width="180">
+              <template #default="{ row }">{{ configFileLabel(row.file) }}</template>
+            </el-table-column>
+            <el-table-column prop="file" label="文件" min-width="210" />
             <el-table-column prop="action" label="动作" width="140">
               <template #default="{ row }">{{ actionLabel(row.action) }}</template>
             </el-table-column>
@@ -222,6 +253,24 @@ const datasetCount = computed(() => (
   summary.value?.dataset_counts?.active ?? summary.value?.table_counts?.bs_datasets ?? 0
 ))
 const inactiveDatasetCount = computed(() => Number(summary.value?.dataset_counts?.inactive || 0))
+const permissionStats = computed(() => {
+  const counts = summary.value?.permission_counts || {}
+  return {
+    employees: Number(counts.employees || 0),
+    enabledEmployees: Number(counts.enabled_employees || 0),
+    adminEmployees: Number(counts.admin_employees || 0),
+    organizationTreeTypes: Number(counts.organization_tree_types || 0),
+    organizationNodes: Number(counts.organization_nodes || 0),
+    enabledOrganizationNodes: Number(counts.enabled_organization_nodes || 0),
+    dataPermissionRules: Number(counts.data_permission_rules || 0),
+    orgTreeDataPermissionRules: Number(counts.org_tree_data_permission_rules || 0),
+    rbacRoles: Number(counts.rbac_roles || 0),
+    rbacGroups: Number(counts.rbac_groups || 0),
+  }
+})
+const permissionResourceText = computed(() => (
+  `${permissionStats.value.dataPermissionRules} 条数据集权限，${permissionStats.value.enabledOrganizationNodes} 个组织节点`
+))
 const configPlan = computed(() => previewResult.value?.config_plan || [])
 const tablePlan = computed(() => {
   const plan = previewResult.value?.table_plan || {}
@@ -337,13 +386,34 @@ const actionLabel = (action) => ({
   skip_existing: '跳过已有',
 }[action] || action)
 
+const configFileLabel = (file) => ({
+  'datasources.json': '数据源配置',
+  'ai_settings.json': '模型服务配置',
+  'feishu_sync.json': '飞书同步配置',
+  'sql_prompts.json': 'SQL 提示词',
+  'app_config.json': '应用配置',
+  'employee_permissions.json': '员工权限',
+  'data_permissions.json': '数据集权限',
+  'rbac_permissions.json': '功能权限/RBAC',
+  'organization_trees.json': '组织树',
+  'feature_flags.json': '功能开关',
+  'query_history.json': '问数历史',
+  'smartask_report_history.json': '问数报告历史',
+}[file] || file)
+
 const tableLabel = (table) => ({
   system_event_logs: '系统事件日志',
   bs_datasets: '数据集',
+  bs_dataset_synonyms: '数据集同义词',
   bs_common_questions: '常见问题',
   bs_golden_sql_samples: 'Golden SQL',
   bs_agent_prompt_fragments: 'Agent 提示词',
   bs_data_dictionary_items: '字段字典',
+  bs_schema_definitions: 'Schema 定义',
+  bs_lld_documents: 'LLD 文档',
+  bs_table_relations: '表关系',
+  bs_regression_cases: '回归用例',
+  bs_dataset_external_configs: '数据集外部配置',
   bs_dataset_report_config: '报告模板',
 }[table] || table)
 
@@ -403,6 +473,7 @@ onMounted(() => {
 .hero-copy,
 .panel-title p,
 .metric-card small,
+.permission-card small,
 .upload-zone p {
   color: #64748b;
   line-height: 1.7;
@@ -417,7 +488,7 @@ onMounted(() => {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
   margin: 18px 0;
 }
@@ -426,16 +497,36 @@ onMounted(() => {
   padding: 20px;
 }
 
-.metric-card span {
+.metric-card span,
+.permission-card span {
   color: #64748b;
   font-weight: 700;
 }
 
-.metric-card strong {
+.metric-card strong,
+.permission-card strong {
   display: block;
   margin: 10px 0 4px;
   color: #1d4ed8;
   font-size: 30px;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: -2px 0 18px;
+}
+
+.permission-card {
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.permission-card strong {
+  font-size: 24px;
 }
 
 .workbench {
@@ -525,6 +616,10 @@ onMounted(() => {
   }
 
   .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .permission-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

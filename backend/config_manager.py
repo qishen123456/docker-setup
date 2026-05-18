@@ -14,6 +14,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+from secret_codec import decrypt_secret_value, encrypt_secret_value, is_encrypted_secret
 
 # 配置目录：backend/ 同级的 config/ 文件夹
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -67,6 +68,13 @@ def _env_text(name: str, default: str = '') -> str:
     return str(value).strip()
 
 
+def _env_secret(name: str, default: str = '') -> str:
+    value = _env_text(name, '')
+    if not value:
+        return default
+    return decrypt_secret_value(value)
+
+
 def _env_int(name: str, default: int) -> int:
     raw = _env_text(name, '')
     if not raw:
@@ -92,16 +100,18 @@ def _has_any_env(*names: str) -> bool:
 # 工具函数：Base64 混淆（密码、API Key 存储用）
 # ─────────────────────────────────────────────────────────
 def encode_secret(text: str) -> str:
-    """对敏感字符串进行 Base64 混淆"""
+    """Encrypt a sensitive string for JSON config storage."""
     if not text:
         return ''
-    return base64.b64encode(text.encode('utf-8')).decode('utf-8')
+    return encrypt_secret_value(text)
 
 
 def decode_secret(encoded: str) -> str:
-    """解码 Base64 混淆的字符串"""
+    """Decode encrypted secrets and legacy Base64-obfuscated strings."""
     if not encoded:
         return ''
+    if is_encrypted_secret(encoded):
+        return decrypt_secret_value(encoded)
     try:
         return base64.b64decode(encoded.encode('utf-8')).decode('utf-8')
     except Exception:
@@ -274,7 +284,7 @@ def _apply_env_datasource_overrides(databases: list) -> list:
         "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     })
 
-    env_password = _env_text('SMARTASK_DB_PASSWORD', '')
+    env_password = _env_secret('SMARTASK_DB_PASSWORD', '')
     if env_password:
         target['password_b64'] = encode_secret(env_password)
 
@@ -316,7 +326,7 @@ def _apply_env_ai_model_overrides(models: list) -> list:
         result = [_build_default_ai_model()]
 
     target = next((item for item in result if item.get('is_default')), None) or result[0]
-    env_api_key = _env_text('SMARTASK_AI_API_KEY', '')
+    env_api_key = _env_secret('SMARTASK_AI_API_KEY', '')
     env_label = _env_text('SMARTASK_AI_LABEL', '')
     env_provider = _env_text('SMARTASK_AI_PROVIDER', '')
     env_model = _env_text('SMARTASK_AI_MODEL', '')
@@ -402,7 +412,7 @@ def apply_env_feishu_overrides(config: dict) -> dict:
         "name": _env_text('SMARTASK_FEISHU_LABEL', target.get('name', '飞书同步配置')),
         "description": _env_text('SMARTASK_FEISHU_DESCRIPTION', target.get('description', '')),
         "app_id": _env_text('SMARTASK_FEISHU_APP_ID', target.get('app_id', '')),
-        "app_secret": _env_text('SMARTASK_FEISHU_APP_SECRET', target.get('app_secret', '')),
+        "app_secret": _env_secret('SMARTASK_FEISHU_APP_SECRET', target.get('app_secret', '')),
         "base_id": _env_text('SMARTASK_FEISHU_BASE_ID', target.get('base_id', '')),
         "table_id": _env_text('SMARTASK_FEISHU_TABLE_ID', target.get('table_id', '')),
         "view_id": _env_text('SMARTASK_FEISHU_VIEW_ID', target.get('view_id', '')),
@@ -422,7 +432,7 @@ def get_app_config() -> dict:
     config = read_json('app_config.json') or deepcopy(DEFAULT_APP_CONFIG)
     config['port'] = _env_int('SMARTASK_BACKEND_PORT', int(config.get('port', DEFAULT_APP_CONFIG['port'])))
     config['debug'] = _env_bool('SMARTASK_DEBUG', bool(config.get('debug', DEFAULT_APP_CONFIG['debug'])))
-    config['secret_key'] = _env_text('SMARTASK_SECRET_KEY', str(config.get('secret_key', DEFAULT_APP_CONFIG['secret_key'])))
+    config['secret_key'] = _env_secret('SMARTASK_SECRET_KEY', str(config.get('secret_key', DEFAULT_APP_CONFIG['secret_key'])))
     config['chroma_path'] = _env_text('SMARTASK_CHROMA_PATH', str(config.get('chroma_path', DEFAULT_APP_CONFIG['chroma_path'])))
     config['app_name'] = _env_text('SMARTASK_APP_NAME', str(config.get('app_name', DEFAULT_APP_CONFIG['app_name'])))
     config['version'] = _env_text('SMARTASK_APP_VERSION', str(config.get('version', DEFAULT_APP_CONFIG['version'])))

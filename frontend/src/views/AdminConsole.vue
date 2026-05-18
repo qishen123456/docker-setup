@@ -663,7 +663,14 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="scopedEmployeeDrawer.visible" size="680px" title="命中员工明细" destroy-on-close>
+    <el-dialog
+      v-model="scopedEmployeeDrawer.visible"
+      width="820px"
+      top="7vh"
+      title="命中员工明细"
+      class="scoped-employee-dialog"
+      destroy-on-close
+    >
       <div v-if="scopedEmployeeDrawer.row" class="scoped-employee-panel">
         <section class="scoped-employee-head">
           <div>
@@ -684,7 +691,7 @@
             placeholder="搜索姓名、账号、部门、岗位或组织"
           />
         </div>
-        <el-table :data="filteredScopedEmployees" border stripe class="scoped-employee-table" max-height="520">
+        <el-table :data="filteredScopedEmployees" border stripe class="scoped-employee-table" max-height="430">
           <el-table-column label="员工" min-width="150">
             <template #default="{ row }">
               <strong>{{ row.name || row.account || row.id }}</strong>
@@ -705,8 +712,8 @@
           <el-table-column label="命中组织" min-width="220">
             <template #default="{ row }">
               <div class="dataset-scope-tags">
-                <el-tag v-for="item in row.match_labels.slice(0, 3)" :key="item" size="small" type="success">{{ item }}</el-tag>
-                <el-tag v-if="row.match_labels.length > 3" size="small">+{{ row.match_labels.length - 3 }}</el-tag>
+                <el-tag v-for="item in row.match_labels.slice(0, 2)" :key="item" size="small" type="success" :title="item">{{ item }}</el-tag>
+                <el-tag v-if="row.match_labels.length > 2" size="small" :title="row.match_labels.slice(2).join('、')">+{{ row.match_labels.length - 2 }}</el-tag>
                 <span v-if="!row.match_labels.length" class="muted-text">{{ row.match_reason }}</span>
               </div>
             </template>
@@ -715,7 +722,7 @@
         <el-empty v-if="!filteredScopedEmployees.length" description="暂无命中员工" :image-size="72" />
         <p class="scoped-employee-note">超级管理员拥有系统全量访问，不计入组织树命中名单。</p>
       </div>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
@@ -1287,6 +1294,27 @@ const employeeOrgLabels = (employee = {}) => uniqueList(
     .filter(Boolean)
 )
 
+const employeeMatchedOrgLabels = (employee = {}, ruleScopes = []) => {
+  const directNodeIds = uniqueList(employee.organization_node_ids || [])
+  const directMatches = []
+  directNodeIds.forEach((nodeId) => {
+    const matchesRule = ruleScopes.some(({ treeTypeId, nodeIds }) => (
+      expandDataPermissionNodeIds([nodeId], treeTypeId).some(expandedId => nodeIds.has(expandedId))
+    ))
+    if (matchesRule) directMatches.push(nodeId)
+  })
+  const labels = uniqueList(directMatches.map(nodeDisplayLabel).filter(Boolean))
+  if (labels.length) return labels
+
+  const matchedNodeIds = []
+  ruleScopes.forEach(({ treeTypeId, nodeIds }) => {
+    expandDataPermissionNodeIds(directNodeIds, treeTypeId).forEach((nodeId) => {
+      if (nodeIds.has(nodeId)) matchedNodeIds.push(nodeId)
+    })
+  })
+  return uniqueList(matchedNodeIds.map(nodeDisplayLabel).filter(Boolean))
+}
+
 const buildScopedEmployeeMatcher = (rule = {}) => {
   const mode = rule?.mode || 'public'
   if (mode === 'disabled') return () => null
@@ -1312,13 +1340,7 @@ const buildScopedEmployeeMatcher = (rule = {}) => {
 
   return (employee = {}) => {
     if (employee?.enabled === false || employee?.role === 'super_admin') return null
-    const matchedNodeIds = []
-    ruleScopes.forEach(({ treeTypeId, nodeIds }) => {
-      expandDataPermissionNodeIds(employee.organization_node_ids || [], treeTypeId).forEach((nodeId) => {
-        if (nodeIds.has(nodeId)) matchedNodeIds.push(nodeId)
-      })
-    })
-    const matchLabels = uniqueList(matchedNodeIds.map(nodeDisplayLabel).filter(Boolean))
+    const matchLabels = employeeMatchedOrgLabels(employee, ruleScopes)
     if (!matchLabels.length) return null
     return {
       match_reason: '组织树命中',
@@ -1340,15 +1362,13 @@ const scopedEmployeeMatch = (employee, rule = {}) => {
   }
   const treeTypeIds = selectedTreeTypeIds(rule)
   if (!treeTypeIds.length || !(rule?.organization_node_ids || []).length) return null
-  const matchedNodeIds = []
-  treeTypeIds.forEach((treeTypeId) => {
-    const ruleNodeIds = new Set(expandDataPermissionNodeIds(rule.organization_node_ids, treeTypeId))
-    if (!ruleNodeIds.size) return
-    expandDataPermissionNodeIds(employee.organization_node_ids || [], treeTypeId).forEach((nodeId) => {
-      if (ruleNodeIds.has(nodeId)) matchedNodeIds.push(nodeId)
-    })
-  })
-  const matchLabels = uniqueList(matchedNodeIds.map(nodeDisplayLabel).filter(Boolean))
+  const ruleScopes = treeTypeIds
+    .map((treeTypeId) => ({
+      treeTypeId,
+      nodeIds: new Set(expandDataPermissionNodeIds(rule.organization_node_ids, treeTypeId)),
+    }))
+    .filter(item => item.nodeIds.size)
+  const matchLabels = employeeMatchedOrgLabels(employee, ruleScopes)
   if (!matchLabels.length) return null
   return {
     match_reason: '组织树命中',
@@ -2938,6 +2958,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
+}
+
+.scoped-employee-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+  max-height: calc(86vh - 72px);
+  overflow: auto;
 }
 
 .scoped-employee-head {
@@ -2968,7 +2995,7 @@ onMounted(() => {
 }
 
 .scoped-employee-filter {
-  max-width: 360px;
+  max-width: 420px;
 }
 
 .scoped-employee-table small {
@@ -2977,6 +3004,16 @@ onMounted(() => {
 
 .scoped-employee-table :deep(.el-table__cell) {
   vertical-align: top;
+}
+
+.scoped-employee-table .dataset-scope-tags {
+  gap: 5px;
+}
+
+.scoped-employee-table .dataset-scope-tags .el-tag {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .scoped-employee-note {

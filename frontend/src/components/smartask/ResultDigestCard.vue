@@ -5,7 +5,7 @@
         <div class="sa-boss-answer-kicker">经营分析报告</div>
         <h3 class="sa-boss-answer-title">{{ questionLabel }}</h3>
       </div>
-      <button class="sa-boss-answer-link" @click="$emit('viewDetails')">查看详情</button>
+      <button v-if="showDetailsButton" class="sa-boss-answer-link" @click="$emit('viewDetails')">查看详情</button>
     </div>
 
     <div class="sa-core-section">
@@ -152,6 +152,10 @@ const props = defineProps({
   route: {
     type: Object,
     default: null,
+  },
+  showDetailsButton: {
+    type: Boolean,
+    default: true,
   },
 })
 

@@ -41,6 +41,21 @@ RUNTIME_CONFIG_FILES = [
     "smartask_report_history.json",
 ]
 
+CONFIG_FILE_LABELS = {
+    "datasources.json": "数据源配置",
+    "ai_settings.json": "模型服务配置",
+    "feishu_sync.json": "飞书同步配置",
+    "sql_prompts.json": "SQL 提示词",
+    "app_config.json": "应用配置",
+    "employee_permissions.json": "员工权限",
+    "data_permissions.json": "数据集权限",
+    "rbac_permissions.json": "功能权限/RBAC",
+    "organization_trees.json": "组织树",
+    "feature_flags.json": "功能开关",
+    "query_history.json": "问数历史",
+    "smartask_report_history.json": "问数报告历史",
+}
+
 EXCLUDED_CONFIG_FILES = {
     "auth_tokens.json",
     "datasources.local.json",
@@ -166,6 +181,96 @@ def _byte_size(text: Any) -> int:
     if not isinstance(text, str) or not text:
         return 0
     return len(text.encode("utf-8"))
+
+
+def _json_size(payload: Any) -> int:
+    try:
+        return _byte_size(json.dumps(payload, ensure_ascii=False, default=_json_default))
+    except Exception:
+        return 0
+
+
+def _runtime_config_summary(configs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    details: List[Dict[str, Any]] = []
+    for filename in RUNTIME_CONFIG_FILES:
+        if filename not in configs:
+            continue
+        payload = configs.get(filename)
+        count = 1
+        description = "配置已包含"
+        if isinstance(payload, dict):
+            if filename == "employee_permissions.json":
+                employees = payload.get("employees") if isinstance(payload.get("employees"), list) else []
+                enabled = sum(1 for item in employees if isinstance(item, dict) and item.get("enabled") is not False)
+                count = len(employees)
+                description = f"{enabled} 个启用员工"
+            elif filename == "organization_trees.json":
+                tree_types = payload.get("tree_types") if isinstance(payload.get("tree_types"), list) else []
+                nodes = payload.get("nodes") if isinstance(payload.get("nodes"), list) else []
+                enabled_nodes = sum(1 for item in nodes if isinstance(item, dict) and item.get("enabled") is not False)
+                count = len(nodes)
+                description = f"{len(tree_types)} 个树类型，{enabled_nodes} 个启用节点"
+            elif filename == "data_permissions.json":
+                rules = payload.get("rules") if isinstance(payload.get("rules"), dict) else {}
+                org_tree_rules = sum(1 for item in rules.values() if isinstance(item, dict) and item.get("mode") == "org_tree")
+                count = len(rules)
+                description = f"{org_tree_rules} 条组织树规则"
+            elif filename == "rbac_permissions.json":
+                roles = payload.get("roles") if isinstance(payload.get("roles"), list) else []
+                groups = payload.get("groups") if isinstance(payload.get("groups"), list) else []
+                count = len(roles)
+                description = f"{len(roles)} 个角色，{len(groups)} 个权限组"
+            elif filename == "feature_flags.json":
+                features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
+                count = len(features)
+                description = "功能显示/操作开关"
+            elif filename in {"query_history.json", "smartask_report_history.json"}:
+                count = len(payload)
+                description = "按用户隔离的历史记录"
+            else:
+                count = len(payload)
+        elif isinstance(payload, list):
+            count = len(payload)
+        details.append(
+            {
+                "file": filename,
+                "label": CONFIG_FILE_LABELS.get(filename, filename),
+                "count": count,
+                "description": description,
+                "size": _json_size(payload),
+            }
+        )
+    return details
+
+
+def _permission_resource_counts(configs: Dict[str, Any]) -> Dict[str, Any]:
+    employees_payload = configs.get("employee_permissions.json") or {}
+    employees = employees_payload.get("employees") if isinstance(employees_payload, dict) else []
+    employees = employees if isinstance(employees, list) else []
+
+    org_payload = configs.get("organization_trees.json") or {}
+    tree_types = org_payload.get("tree_types") if isinstance(org_payload, dict) and isinstance(org_payload.get("tree_types"), list) else []
+    org_nodes = org_payload.get("nodes") if isinstance(org_payload, dict) and isinstance(org_payload.get("nodes"), list) else []
+
+    data_payload = configs.get("data_permissions.json") or {}
+    data_rules = data_payload.get("rules") if isinstance(data_payload, dict) and isinstance(data_payload.get("rules"), dict) else {}
+
+    rbac_payload = configs.get("rbac_permissions.json") or {}
+    roles = rbac_payload.get("roles") if isinstance(rbac_payload, dict) and isinstance(rbac_payload.get("roles"), list) else []
+    groups = rbac_payload.get("groups") if isinstance(rbac_payload, dict) and isinstance(rbac_payload.get("groups"), list) else []
+
+    return {
+        "employees": len(employees),
+        "enabled_employees": sum(1 for item in employees if isinstance(item, dict) and item.get("enabled") is not False),
+        "admin_employees": sum(1 for item in employees if isinstance(item, dict) and item.get("role") in {"admin", "business_admin"}),
+        "organization_tree_types": len(tree_types),
+        "organization_nodes": len(org_nodes),
+        "enabled_organization_nodes": sum(1 for item in org_nodes if isinstance(item, dict) and item.get("enabled") is not False),
+        "data_permission_rules": len(data_rules),
+        "org_tree_data_permission_rules": sum(1 for item in data_rules.values() if isinstance(item, dict) and item.get("mode") == "org_tree"),
+        "rbac_roles": len(roles),
+        "rbac_groups": len(groups),
+    }
 
 
 def _merge_log_text(existing: str, incoming: str) -> str:
@@ -386,6 +491,8 @@ def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
         "version": bundle.get("version"),
         "exported_at": bundle.get("exported_at"),
         "config_counts": {name: 1 for name in configs.keys()},
+        "config_details": _runtime_config_summary(configs),
+        "permission_counts": _permission_resource_counts(configs),
         "table_counts": {name: len(rows or []) for name, rows in tables.items()},
         "dataset_counts": {
             "active": active_dataset_count,

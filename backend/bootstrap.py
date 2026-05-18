@@ -37,6 +37,13 @@ try:
 except Exception:
     pass
 
+from secret_codec import decrypt_secret_value
+
+
+def _env_value(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    return decrypt_secret_value(value) if value else default
+
 
 MIGRATIONS = [
     "20260330_bookshelf_schema.sql",
@@ -67,11 +74,11 @@ def _datasource_kwargs() -> dict:
         ds = {}
 
     return dict(
-        host=ds.get("host") or os.getenv("SMARTASK_DB_HOST", "postgres"),
-        port=int(ds.get("port") or os.getenv("SMARTASK_DB_PORT", "5432") or 5432),
-        database=ds.get("database_name") or os.getenv("SMARTASK_DB_DATABASE", "postgres"),
-        user=ds.get("username") or os.getenv("SMARTASK_DB_USERNAME", "postgres"),
-        password=ds.get("password") or os.getenv("SMARTASK_DB_PASSWORD", "postgres"),
+        host=ds.get("host") or _env_value("SMARTASK_DB_HOST", "postgres"),
+        port=int(ds.get("port") or _env_value("SMARTASK_DB_PORT", "5432") or 5432),
+        database=ds.get("database_name") or _env_value("SMARTASK_DB_DATABASE", "postgres"),
+        user=ds.get("username") or _env_value("SMARTASK_DB_USERNAME", "postgres"),
+        password=ds.get("password") or _env_value("SMARTASK_DB_PASSWORD", "postgres"),
         connect_timeout=8,
     )
 

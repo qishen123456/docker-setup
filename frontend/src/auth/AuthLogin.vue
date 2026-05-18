@@ -28,7 +28,7 @@
       <form class="login-form" @submit.prevent="submitAdmin">
         <label>
           <span>登录账号</span>
-          <input v-model.trim="form.username" type="text" autocomplete="username" placeholder="admin" />
+          <input v-model.trim="form.username" type="text" autocomplete="username" placeholder="18576614568" />
         </label>
         <label>
           <span>登录密码</span>
@@ -58,7 +58,7 @@ import { getFeishuLoginUrl, passwordLogin, setAuthToken } from '../api/index.js'
 const emit = defineEmits(['authenticated'])
 
 const form = ref({
-  username: 'admin',
+  username: '18576614568',
   password: ''
 })
 const adminLoading = ref(false)

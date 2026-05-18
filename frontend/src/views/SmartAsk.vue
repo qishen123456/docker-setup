@@ -175,6 +175,7 @@
                       :dataset="getPrimaryDataset(msg)"
                       :datasets="getDatasets(msg)"
                       :route="msg.data?.route || null"
+                      :show-details-button="featureAccess.smart_report_details"
                       @view-details="openDetailPanel(msg)"
                     />
 
@@ -1128,6 +1129,7 @@ const smartFeatureKeys = [
   'smart_confirm_scope',
   'smart_submit_note',
   'chart_viewer',
+  'smart_report_details',
   'smart_send_question',
   'smart_stop_run',
   'smart_dataset_select',

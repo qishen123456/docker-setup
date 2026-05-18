@@ -36,6 +36,7 @@ def _make_console_safe():
 _make_console_safe()
 
 from config_manager import get_app_config, init_default_configs
+from secret_codec import decrypt_secret_value
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
 from controllers.auth import auth_bp
@@ -63,7 +64,7 @@ BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", 
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
-app.secret_key = str(APP_CONFIG.get("secret_key") or os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026"))
+app.secret_key = str(APP_CONFIG.get("secret_key") or decrypt_secret_value(os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026")))
 
 CORS_ORIGINS = [
     "http://localhost:5173",

@@ -62,6 +62,7 @@ backend/chroma_db_source_*/
 # Secrets (only ignore known single-file secrets; do NOT ignore /config folder)
 config.json
 secrets.json
+config/.secret_master_key
 config/*.local.json
 config/ai_settings.json
 config/datasources.json

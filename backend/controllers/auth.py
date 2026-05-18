@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, redirect, request, session
 
 from config_manager import read_json, write_json
 from auth_store import create_session_token, get_current_user, revoke_token
+from secret_codec import decrypt_secret_value
 from system_log_store import log_event, request_snapshot
 
 
@@ -44,7 +45,7 @@ def _env(*names: str, default: str = "") -> str:
     for name in names:
         value = os.getenv(name)
         if value:
-            return str(value).strip()
+            return decrypt_secret_value(str(value).strip())
     return default
 
 
