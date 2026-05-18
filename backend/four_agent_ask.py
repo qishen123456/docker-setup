@@ -25,6 +25,7 @@ from dataset_dimension_profiles import find_group_matches, get_dataset_profile, 
 import dataset_report_config as report_config_store
 from report_spec_builder import build_report_spec
 from memory import ShortTermMemoryStore
+from organization_route_resolver import OrganizationRouteResolver
 
 
 def _extract_json_block(text: str) -> str:
@@ -51,6 +52,7 @@ class FourAgentAskService:
         self._pending_ttl_seconds = 30 * 60
         self.short_term_memory = ShortTermMemoryStore(max_rounds=8)
         self.disambiguation_arbiter = DisambiguationArbiter()
+        self.organization_route_resolver = OrganizationRouteResolver()
         self._trace_file_path = os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl")
         self._trace_logger = self._build_trace_logger()
         self._load_llm()
@@ -1605,6 +1607,40 @@ class FourAgentAskService:
         return names
 
     @staticmethod
+    def _route_entity_resolution(route: Dict[str, Any]) -> Dict[str, Any]:
+        members = []
+        for name in route.get("resolved_members") or route.get("resolved_entities_preview") or []:
+            value = str(name or "").strip()
+            if value and value not in members:
+                members.append(value)
+        for mention in route.get("organization_mentions") or []:
+            if not isinstance(mention, dict):
+                continue
+            value = str(mention.get("node_name") or "").strip()
+            if value and value not in members:
+                members.append(value)
+        if not members:
+            return {}
+        scope_mode = str(route.get("scope_mode") or "").strip().lower()
+        if scope_mode not in {"single", "compare", "aggregate", "ranking"}:
+            scope_mode = "compare" if len(members) > 1 else "single"
+        return {
+            "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else scope_mode),
+            "scope_mode": scope_mode,
+            "entities": [
+                {
+                    "dimension_name": "组织树节点",
+                    "members": members,
+                    "matched_phrase": "、".join(members),
+                    "source": "organization_tree_route",
+                }
+            ],
+            "all_members": members,
+            "confidence": 1.0,
+            "source": "organization_tree_route",
+        }
+
+    @staticmethod
     def _tokenize(text: str) -> set:
         parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
         return {item for item in parts if item.strip()}
@@ -1955,8 +1991,10 @@ class FourAgentAskService:
         trace: Optional[Dict[str, Any]] = None,
         conversation_context: Optional[List[Dict[str, Any]]] = None,
         allowed_dataset_ids: Optional[List[int]] = None,
+        current_question: Optional[str] = None,
     ) -> Dict[str, Any]:
-        catalog = self.repository.get_agent1_catalog()
+        full_catalog = self.repository.get_agent1_catalog()
+        catalog = full_catalog
         if allowed_dataset_ids is not None:
             allowed = {int(item) for item in allowed_dataset_ids}
             catalog = [item for item in catalog if int(item.get("id") or 0) in allowed]
@@ -1968,6 +2006,45 @@ class FourAgentAskService:
                 "requires_confirmation": False,
                 "decision": "generate_sql",
             }
+
+        org_source_question = current_question or question
+        org_route_all = self.organization_route_resolver.resolve(org_source_question, full_catalog)
+        org_route = self.organization_route_resolver.resolve(
+            org_source_question,
+            catalog,
+            allowed_dataset_ids=allowed_dataset_ids,
+        )
+        if org_route_all and not org_route:
+            self._append_trace(
+                trace,
+                "agent1.organization_tree_route_denied",
+                "warning",
+                current_question=org_source_question,
+                allowed_dataset_ids=allowed_dataset_ids or [],
+                organization_mentions=org_route_all.get("organization_mentions") or [],
+            )
+            return {
+                "dataset_ids": [],
+                "intent": "confirm",
+                "refined_query": org_route_all.get("refined_query") or question,
+                "requires_confirmation": False,
+                "decision": "permission_denied",
+                "match_score": 0,
+                "route_margin": 0,
+                "candidate_dataset_ids": org_route_all.get("candidate_dataset_ids") or [],
+                "arbiter_reason": "organization_tree_dataset_not_allowed",
+                "organization_mentions": org_route_all.get("organization_mentions") or [],
+            }
+        if org_route:
+            self._append_trace(
+                trace,
+                "agent1.organization_tree_route",
+                "info",
+                route=org_route,
+                current_question=current_question or question,
+                effective_question=question,
+            )
+            return org_route
 
         candidate_contexts: List[Tuple[Dict[str, Any], Dict[str, Any], int]] = []
         for dataset in catalog:
@@ -3259,7 +3336,7 @@ Agent3 复核结果：
             report_config_source = "dataset_config" if saved_report_config else "default"
             report_config = saved_report_config or report_config_store.get_default_config()
             context["report_config"] = report_config
-            context["resolved_entities"] = self._resolve_question_entities(
+            context["resolved_entities"] = self._route_entity_resolution(route) or self._resolve_question_entities(
                 route.get("refined_query", question),
                 context,
                 trace=trace,
@@ -3756,6 +3833,7 @@ Agent3 复核结果：
                     trace=trace,
                     conversation_context=memory_history,
                     allowed_dataset_ids=allowed_dataset_ids,
+                    current_question=question,
                 )
                 self._append_trace(trace, "agent1.route_result", "info", route=route)
             steps.append(

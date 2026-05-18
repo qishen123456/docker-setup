@@ -114,6 +114,7 @@ cleanup.ps1
 .gitignore.new
 test.db
 提示词.md
+迭代文档/
 
 # ---------------------------
 # Root-level legacy scripts (one-time dev utilities, not part of app)
