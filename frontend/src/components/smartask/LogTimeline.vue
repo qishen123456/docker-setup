@@ -113,6 +113,10 @@ const statusLabel = (status) => ({
   warning: '待确认'
 }[status] || status)
 
+const isCanceledLog = (log = {}) => /取消|停止|request-aborted|aborted|canceled|cancelled/i.test(
+  `${log?.key || ''} ${log?.title || ''} ${log?.summary || ''}`,
+)
+
 const getNodeKey = (log, index) => log?.key || `${log?.title || 'node'}-${index}`
 
 const detailLines = (log) => {
@@ -214,7 +218,7 @@ const nodeDurationLabel = (log) => {
 }
 
 const nodeStatusText = (log) => {
-  const base = statusLabel(log?.status)
+  const base = isCanceledLog(log) ? '已取消' : statusLabel(log?.status)
   const duration = nodeDurationLabel(log)
   if (!duration || log?.status === 'pending') return base
   return `${base} ${duration}`

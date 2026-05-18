@@ -124,6 +124,48 @@ def _permission_denied_response(user: dict, requested_dataset_ids, allowed_datas
     }), 403
 
 
+def _mark_request_event_logged() -> None:
+    try:
+        request._smartask_event_logged = True
+    except Exception:
+        pass
+
+
+def _log_smart_chat_rejection(
+    *,
+    event_prefix: str,
+    title: str,
+    error_message: str,
+    question: str,
+    started: float,
+    user: dict,
+    request_info: dict,
+    status_code: int = 400,
+    details: dict | None = None,
+) -> None:
+    duration_ms = int((time.time() - started) * 1000)
+    log_event(
+        category="error",
+        event_type=f"{event_prefix}_rejected",
+        level="error" if status_code >= 500 else "warning",
+        title=title or "智能问数请求被拒绝",
+        user=user,
+        request_info=request_info,
+        status_code=status_code,
+        duration_ms=duration_ms,
+        question=question or "",
+        error_message=error_message or "",
+        details={
+            "event_name": title or "智能问数请求被拒绝",
+            "what_happened": error_message or "问数请求在进入执行链路前被拒绝。",
+            "suggested_action": "检查问题内容、功能权限、数据集权限或确认会话是否过期。",
+            "code_hint": "backend/controllers/smart_chat.py；backend/four_agent_ask.py；frontend/src/views/SmartAsk.vue。",
+            **(details or {}),
+        },
+    )
+    _mark_request_event_logged()
+
+
 def _append_controller_debug(event: str, **payload):
     log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
     os.makedirs(log_dir, exist_ok=True)
@@ -288,6 +330,13 @@ def _extract_token_usage(result: dict, trace_events: list | None = None) -> dict
     }
 
 
+def _trace_id_from_events(trace_events: list | None = None) -> str:
+    for payload in trace_events or []:
+        if isinstance(payload, dict) and payload.get("trace_id"):
+            return str(payload.get("trace_id") or "")
+    return ""
+
+
 def _compact_dataset_results(result: dict) -> list:
     compact = []
     for item in result.get("dataset_results") or []:
@@ -339,6 +388,7 @@ def _log_smart_chat_result(
         title = "智能问数结果"
 
     token_usage = _extract_token_usage(result, trace_events or [])
+    trace_id = result.get("trace_id") or _trace_id_from_events(trace_events or [])
 
     log_event(
         category=category,
@@ -356,9 +406,13 @@ def _log_smart_chat_result(
         confidence=result.get("confidence") or {},
         error_message=result.get("error") or "",
         details={
+            "trace_id": trace_id,
             "effective_question": result.get("effective_question") or "",
             "route": result.get("route") or {},
             "data_source": result.get("data_source") or "",
+            "diagnostics": result.get("diagnostics") or {},
+            "original_error": result.get("original_error") or "",
+            "diagnostic": bool(result.get("diagnostic")),
             "row_count": result.get("row_count"),
             "columns": result.get("columns") or [],
             "rows_preview": (result.get("rows") or [])[:20],
@@ -377,13 +431,24 @@ def _log_smart_chat_result(
 def smart_chat():
     started = time.time()
     user = get_current_user()
+    req_info = request_snapshot(request)
+    payload = request.get_json(silent=True) or {}
     denied = _require_feature(user, "smart_send_question")
     if denied:
+        _log_smart_chat_rejection(
+            event_prefix="smart_chat",
+            title="智能问数权限不足",
+            error_message="当前账号没有发送智能问数的权限。",
+            question=(payload.get("question") or "").strip(),
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={"feature_key": "smart_send_question"},
+        )
         return denied
-    req_info = request_snapshot(request)
     try:
         _append_controller_debug("smart_chat.request.enter")
-        payload = request.get_json() or {}
         _append_controller_debug("smart_chat.request.payload", payload=payload)
         _append_controller_debug(
             "smart_chat.service.meta",
@@ -404,17 +469,63 @@ def smart_chat():
         selected_dataset_ids = payload.get("selected_dataset_ids")
         if not question:
             _append_controller_debug("smart_chat.request.reject", reason="empty_question")
+            _log_smart_chat_rejection(
+                event_prefix="smart_chat",
+                title="智能问数问题为空",
+                error_message="Question cannot be empty.",
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=400,
+            )
             return jsonify({"error": "Question cannot be empty."}), 400
         if selected_dataset_ids is not None:
             denied = _require_feature(user, "smart_dataset_select")
             if denied:
+                _log_smart_chat_rejection(
+                    event_prefix="smart_chat",
+                    title="智能问数数据集选择权限不足",
+                    error_message="当前账号没有选择智能问数数据集的权限。",
+                    question=question,
+                    started=started,
+                    user=user,
+                    request_info=req_info,
+                    status_code=403,
+                    details={"feature_key": "smart_dataset_select", "selected_dataset_ids": selected_dataset_ids},
+                )
                 return denied
         if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
             _append_controller_debug("smart_chat.request.reject", reason="selected_dataset_ids_not_list")
+            _log_smart_chat_rejection(
+                event_prefix="smart_chat",
+                title="智能问数参数错误",
+                error_message="selected_dataset_ids must be a list when provided.",
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=400,
+                details={"selected_dataset_ids": selected_dataset_ids},
+            )
             return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
         allowed_dataset_ids = _allowed_dataset_ids(user)
         selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
         if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+            _log_smart_chat_rejection(
+                event_prefix="smart_chat",
+                title="智能问数数据集权限不足",
+                error_message="当前账号没有访问所选数据集的权限。",
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=403,
+                details={
+                    "requested_dataset_ids": payload.get("selected_dataset_ids") or [],
+                    "allowed_dataset_ids": allowed_dataset_ids,
+                },
+            )
             return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
         _append_controller_debug(
@@ -474,10 +585,21 @@ def smart_chat_stream():
     started = time.time()
     payload = request.get_json() or {}
     user = get_current_user()
+    req_info = request_snapshot(request)
     denied = _require_feature(user, "smart_send_question")
     if denied:
+        _log_smart_chat_rejection(
+            event_prefix="smart_chat_stream",
+            title="智能问数权限不足",
+            error_message="当前账号没有发送智能问数的权限。",
+            question=(payload.get("question") or "").strip(),
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={"feature_key": "smart_send_question"},
+        )
         return denied
-    req_info = request_snapshot(request)
     question = (payload.get("question") or "").strip()
     session_id = (payload.get("session_id") or "").strip()
     conversation_history = payload.get("conversation_history")
@@ -485,20 +607,77 @@ def smart_chat_stream():
     model_id = payload.get("model_id")  # None = AUTO (use default)
 
     if not question:
+        _log_smart_chat_rejection(
+            event_prefix="smart_chat_stream",
+            title="智能问数问题为空",
+            error_message="Question cannot be empty.",
+            question=question,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=400,
+        )
         return jsonify({"error": "Question cannot be empty."}), 400
     if selected_dataset_ids is not None:
         denied = _require_feature(user, "smart_dataset_select")
         if denied:
+            _log_smart_chat_rejection(
+                event_prefix="smart_chat_stream",
+                title="智能问数数据集选择权限不足",
+                error_message="当前账号没有选择智能问数数据集的权限。",
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=403,
+                details={"feature_key": "smart_dataset_select", "selected_dataset_ids": selected_dataset_ids},
+            )
             return denied
     if model_id is not None:
         denied = _require_feature(user, "smart_model_select")
         if denied:
+            _log_smart_chat_rejection(
+                event_prefix="smart_chat_stream",
+                title="智能问数模型选择权限不足",
+                error_message="当前账号没有选择智能问数模型的权限。",
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=403,
+                details={"feature_key": "smart_model_select", "model_id": model_id},
+            )
             return denied
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
+        _log_smart_chat_rejection(
+            event_prefix="smart_chat_stream",
+            title="智能问数参数错误",
+            error_message="selected_dataset_ids must be a list when provided.",
+            question=question,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=400,
+            details={"selected_dataset_ids": selected_dataset_ids},
+        )
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
     allowed_dataset_ids = _allowed_dataset_ids(user)
     selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
     if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+        _log_smart_chat_rejection(
+            event_prefix="smart_chat_stream",
+            title="智能问数数据集权限不足",
+            error_message="当前账号没有访问所选数据集的权限。",
+            question=question,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={
+                "requested_dataset_ids": payload.get("selected_dataset_ids") or [],
+                "allowed_dataset_ids": allowed_dataset_ids,
+            },
+        )
         return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
     # Normalize model_id
@@ -605,25 +784,72 @@ def smart_chat_stream():
 def confirm_by_boss():
     started = time.time()
     user = get_current_user()
+    req_info = request_snapshot(request)
+    payload = request.get_json(silent=True) or {}
     denied = _require_any_feature(user, ["smart_confirm_scope", "smart_submit_note"])
     if denied:
+        _log_smart_chat_rejection(
+            event_prefix="boss_confirm",
+            title="问数确认权限不足",
+            error_message="当前账号没有提交问数确认口径的权限。",
+            question=(payload.get("selected_option") or payload.get("session_id") or "").strip(),
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={"feature_keys": ["smart_confirm_scope", "smart_submit_note"]},
+        )
         return denied
-    req_info = request_snapshot(request)
     try:
-        payload = request.get_json() or {}
         session_id = (payload.get("session_id") or "").strip()
         selected_option = (payload.get("selected_option") or "").strip()
         option_id = (payload.get("option_id") or "").strip()
         selected_dataset_ids = payload.get("selected_dataset_ids")
 
         if not session_id:
+            _log_smart_chat_rejection(
+                event_prefix="boss_confirm",
+                title="问数确认缺少会话",
+                error_message="session_id is required.",
+                question=selected_option,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=400,
+                details={"option_id": option_id, "selected_dataset_ids": selected_dataset_ids},
+            )
             return jsonify({"error": "session_id is required."}), 400
 
         if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
+            _log_smart_chat_rejection(
+                event_prefix="boss_confirm",
+                title="问数确认参数错误",
+                error_message="selected_dataset_ids must be a list when provided.",
+                question=selected_option or session_id,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=400,
+                details={"selected_dataset_ids": selected_dataset_ids},
+            )
             return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
         allowed_dataset_ids = _allowed_dataset_ids(user)
         selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
         if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+            _log_smart_chat_rejection(
+                event_prefix="boss_confirm",
+                title="问数确认数据集权限不足",
+                error_message="当前账号没有访问所选数据集的权限。",
+                question=selected_option or session_id,
+                started=started,
+                user=user,
+                request_info=req_info,
+                status_code=403,
+                details={
+                    "requested_dataset_ids": payload.get("selected_dataset_ids") or [],
+                    "allowed_dataset_ids": allowed_dataset_ids,
+                },
+            )
             return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
         result = four_agent_ask_service.confirm_by_boss(
@@ -669,22 +895,69 @@ def confirm_by_boss_stream():
     started = time.time()
     payload = request.get_json() or {}
     user = get_current_user()
+    req_info = request_snapshot(request)
     denied = _require_any_feature(user, ["smart_confirm_scope", "smart_submit_note"])
     if denied:
+        _log_smart_chat_rejection(
+            event_prefix="boss_confirm_stream",
+            title="问数确认权限不足",
+            error_message="当前账号没有提交问数确认口径的权限。",
+            question=(payload.get("selected_option") or payload.get("session_id") or "").strip(),
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={"feature_keys": ["smart_confirm_scope", "smart_submit_note"]},
+        )
         return denied
-    req_info = request_snapshot(request)
     session_id = (payload.get("session_id") or "").strip()
     selected_option = (payload.get("selected_option") or "").strip()
     option_id = (payload.get("option_id") or "").strip()
     selected_dataset_ids = payload.get("selected_dataset_ids")
 
     if not session_id:
+        _log_smart_chat_rejection(
+            event_prefix="boss_confirm_stream",
+            title="问数确认缺少会话",
+            error_message="session_id is required.",
+            question=selected_option,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=400,
+            details={"option_id": option_id, "selected_dataset_ids": selected_dataset_ids},
+        )
         return jsonify({"error": "session_id is required."}), 400
     if selected_dataset_ids is not None and not isinstance(selected_dataset_ids, list):
+        _log_smart_chat_rejection(
+            event_prefix="boss_confirm_stream",
+            title="问数确认参数错误",
+            error_message="selected_dataset_ids must be a list when provided.",
+            question=selected_option or session_id,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=400,
+            details={"selected_dataset_ids": selected_dataset_ids},
+        )
         return jsonify({"error": "selected_dataset_ids must be a list when provided."}), 400
     allowed_dataset_ids = _allowed_dataset_ids(user)
     selected_dataset_ids = _filter_requested_dataset_ids(user, selected_dataset_ids)
     if payload.get("selected_dataset_ids") is not None and not selected_dataset_ids:
+        _log_smart_chat_rejection(
+            event_prefix="boss_confirm_stream",
+            title="问数确认数据集权限不足",
+            error_message="当前账号没有访问所选数据集的权限。",
+            question=selected_option or session_id,
+            started=started,
+            user=user,
+            request_info=req_info,
+            status_code=403,
+            details={
+                "requested_dataset_ids": payload.get("selected_dataset_ids") or [],
+                "allowed_dataset_ids": allowed_dataset_ids,
+            },
+        )
         return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
     def event_stream():

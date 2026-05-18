@@ -63,7 +63,7 @@
                     <LiveExecutionFeed
                       v-if="shouldShowLiveFeed(msg)"
                       :logs="session.state.logs"
-                      :mode="msg.loading ? 'live' : 'completed'"
+                      :mode="getLiveFeedMode(msg)"
                       :max-items="6"
                       :elapsed-label="getMessageElapsedLabel(msg)"
                     />
@@ -221,7 +221,14 @@
                       </div>
                     </div>
 
-                    <!-- 错误卡-->
+                    <!-- 状态提示卡-->
+                    </div>
+                    <div v-if="msg.data?.aborted" class="sa-card sa-cancel-card">
+                      <span class="sa-cancel-icon" aria-hidden="true">!</span>
+                      <div>
+                        <div class="sa-cancel-title">已取消本轮问数</div>
+                        <div class="sa-cancel-desc">你已手动取消，执行流程已停止，不会继续生成 SQL 或报告。</div>
+                      </div>
                     </div>
                     <div v-if="msg.data?.error" class="sa-card sa-error-card">
                       <span>❌</span>
@@ -1203,6 +1210,7 @@ const statusBarText = computed(() => {
   const m = {
     running: session.state.logs.slice(-1)[0]?.title || '任务执行中',
     completed: '本轮问数已完成',
+    canceled: '本轮问数已取消',
     error: '当前任务执行异常',
     waiting_confirmation: '等待确认统计口径'
   }
@@ -1373,6 +1381,7 @@ const detailPanelState = computed(() => {
     idle: '待命',
     running: '执行中',
     completed: '已完成',
+    canceled: '已取消',
     error: '异常',
     waiting_confirmation: '待确认',
   }
@@ -1385,6 +1394,9 @@ const detailPanelDesc = computed(() => {
   }
   if (session.state.status === 'completed') {
     return '本轮问数已经完成，可以继续查看执行细节、结果数据和完整报告。'
+  }
+  if (session.state.status === 'canceled') {
+    return '你已手动取消本轮问数，执行链路已停止。'
   }
   if (session.state.status === 'waiting_confirmation') {
     return '当前任务等待确认统计口径，确认后会继续后续执行步骤。'
@@ -3147,10 +3159,17 @@ const shouldShowLiveFeed = (msg) => {
   if (msg?.loading) return true
   if (!session.state.logs.length) return false
   if (msg?.data?.requires_confirmation) return false
+  if (msg?.data?.aborted) return isLatestAiMessage(msg) || isCurrentSessionMessage(msg)
   return Boolean(
     isCurrentSessionMessage(msg) ||
-    (isLatestAiMessage(msg) && ['completed', 'error'].includes(session.state.status))
+    (isLatestAiMessage(msg) && ['completed', 'canceled', 'error'].includes(session.state.status))
   )
+}
+
+const getLiveFeedMode = (msg) => {
+  if (msg?.data?.aborted || session.state.status === 'canceled') return 'canceled'
+  if (msg?.loading) return 'live'
+  return 'completed'
 }
 
 const shouldShowThinkingCard = (msg) => {
@@ -3245,6 +3264,14 @@ const formatElapsedLabel = (seconds) => {
   const remain = totalSeconds % 60
   if (minutes <= 0) return `${remain}s`
   return `${minutes}m ${remain}s`
+}
+
+const isAbortLikeInteractionError = (error) => {
+  const text = `${error?.name || ''} ${error?.code || ''} ${error?.message || ''}`
+  return Boolean(
+    error?.isUserAbort ||
+    /AbortError|CanceledError|ERR_CANCELED|aborted|cancelled|canceled|BodyStreamBuffer/i.test(text)
+  )
 }
 
 const getMessageElapsedLabel = (msg) => {
@@ -3372,6 +3399,13 @@ const rerunQuestion = async (msg) => {
     thinkingOpen[aid] = false
     scheduleChatScroll(48, 'smooth')
   } catch (err) {
+    if (isAbortLikeInteractionError(err)) {
+      aiMsg.loading = false
+      aiMsg.data = { aborted: true, question: text }
+      thinkingOpen[aid] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
       aiMsg.loading = false
       thinkingOpen[aid] = false
@@ -3422,6 +3456,13 @@ const handleSend = async () => {
     thinkingOpen[aid] = false
     scheduleChatScroll(48, 'smooth')
   } catch (err) {
+    if (isAbortLikeInteractionError(err)) {
+      aiMsg.loading = false
+      aiMsg.data = { aborted: true, question: text }
+      thinkingOpen[aid] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
       aiMsg.loading = false
       thinkingOpen[aid] = false
@@ -3440,6 +3481,16 @@ const handleSend = async () => {
 const handleStop = () => {
   if (!canUseFeature('smart_stop_run')) return
   session.stopAsk()
+  const msg = latestAiMessage.value
+  if (msg?.role === 'ai' && msg.loading) {
+    msg.loading = false
+    msg.data = {
+      ...(msg.data || {}),
+      aborted: true,
+      question: session.state.question || query.value.trim(),
+    }
+    thinkingOpen[msg.id] = false
+  }
   stopTimer()
   ElMessage.warning('已停止执行')
 }
@@ -3696,6 +3747,15 @@ const doConfirm = async (opt, msg) => {
       originalQuestion: msg?.data?.question || session.state.question,
     })
     const last = [...messages].reverse().find(m => m.role === 'ai')
+    if (!res) {
+      if (last) {
+        last.loading = false
+        last.data = { aborted: true, question: session.state.question }
+      }
+      if (msg?.id) confirmationSubmitting[msg.id] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     if (last) {
       last.loading = false
       last.data = res
@@ -3704,6 +3764,15 @@ const doConfirm = async (opt, msg) => {
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
     scheduleChatScroll(36, 'smooth')
   } catch (error) {
+    if (isAbortLikeInteractionError(error)) {
+      if (msg) {
+        msg.loading = false
+        msg.data = { aborted: true, question: session.state.question }
+      }
+      if (msg?.id) confirmationSubmitting[msg.id] = false
+      scheduleChatScroll(36, 'smooth')
+      return
+    }
     if (msg) {
       msg.loading = false
       if (originalData?.requires_confirmation) {
@@ -4927,17 +4996,55 @@ onUnmounted(() => {
   color: #4e5969;
 }
 
-/* 错误区 */
-.sa-error-card {
+/* 状态提示区 */
+.sa-error-card,
+.sa-cancel-card {
   display: flex;
   gap: 8px;
   align-items: center;
   padding: 12px 16px;
+  border-radius: 14px;
+  max-width: 760px;
+}
+
+.sa-error-card {
   background: #fff5f5;
   border: 1px solid #ffccc7;
   color: var(--error);
-  border-radius: 14px;
-  max-width: 760px;
+}
+
+.sa-cancel-card {
+  align-items: flex-start;
+  background: #fffaf0;
+  border: 1px solid #ffd591;
+  color: #ad6800;
+}
+
+.sa-cancel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #ffe7ba;
+  color: #ad6800;
+  font-size: 12px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.sa-cancel-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sa-cancel-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #996500;
 }
 
 /* 状态栏 */
@@ -5067,6 +5174,10 @@ onUnmounted(() => {
 .sa-panel-state.completed {
   background: #e8ffea;
   color: #00b42a;
+}
+.sa-panel-state.canceled {
+  background: #fff7e8;
+  color: #d46b08;
 }
 .sa-panel-state.error {
   background: #fff1f0;

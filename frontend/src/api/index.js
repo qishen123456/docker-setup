@@ -177,18 +177,40 @@ export const sendSmartChat = (question, signal, selectedDatasetIds, modelId, ses
     conversation_history: conversationHistory || undefined,
   }, { signal })
 
+const isAbortLikeError = (error, signal) => {
+  const text = `${error?.name || ''} ${error?.code || ''} ${error?.message || ''}`
+  return Boolean(
+    signal?.aborted ||
+    /AbortError|CanceledError|ERR_CANCELED|aborted|cancelled|canceled|BodyStreamBuffer/i.test(text)
+  )
+}
+
+const createUserAbortError = () => {
+  const error = new Error('用户已取消本轮问数')
+  error.name = 'AbortError'
+  error.code = 'ERR_CANCELED'
+  error.isUserAbort = true
+  return error
+}
+
 const sendSseRequest = async (url, body, signal, onEvent) => {
   const token = getAuthToken()
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...(token ? { 'X-Auth-Token': token } : {}),
-    },
-    body: JSON.stringify(body),
-    signal,
-  })
+  let response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(token ? { 'X-Auth-Token': token } : {}),
+      },
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch (error) {
+    if (isAbortLikeError(error, signal)) throw createUserAbortError()
+    throw error
+  }
 
   if (!response.ok) {
     let message = `请求失败 (${response.status})`
@@ -245,11 +267,16 @@ const sendSseRequest = async (url, body, signal, onEvent) => {
     })
   }
 
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    emitBufferedFrames()
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      emitBufferedFrames()
+    }
+  } catch (error) {
+    if (isAbortLikeError(error, signal)) throw createUserAbortError()
+    throw error
   }
 
   buffer += decoder.decode()

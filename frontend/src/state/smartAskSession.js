@@ -1538,6 +1538,66 @@ const settleRealtimeTimeline = () => {
   return true
 }
 
+const isUserAbortError = (error) => {
+  const text = `${error?.name || ''} ${error?.code || ''} ${error?.message || ''}`
+  return Boolean(
+    error?.isUserAbort ||
+    /AbortError|CanceledError|ERR_CANCELED|aborted|cancelled|canceled|BodyStreamBuffer/i.test(text)
+  )
+}
+
+const settleUserCanceledTimeline = () => {
+  stopPhaseTimer()
+  lastHeartbeatLineAt = 0
+
+  const canceledAt = Date.now()
+  state.logs = state.logs
+    .filter(log => log?.key !== 'request-error')
+    .map((log) => {
+      if (log?.status !== 'running') return log
+      const startedAtMs = Number(log?.startedAtMs)
+      const duration = Number.isFinite(startedAtMs)
+        ? Math.max(Number(log?.duration || 0), canceledAt - startedAtMs)
+        : log?.duration
+      return createTimelineEvent({
+        ...log,
+        status: 'warning',
+        summary: '用户已取消，本节点已停止。',
+        detail: '用户已取消本轮问数，当前节点不会继续执行。',
+        detailLines: uniqueLines([
+          ...(Array.isArray(log?.detailLines) ? log.detailLines : []),
+          '已收到取消指令，当前节点已停止。',
+        ]),
+        liveThoughtLines: [],
+        pulseText: '',
+        streamText: '',
+        duration,
+        elapsedLabel: formatDuration(duration),
+        durationLabel: formatDuration(duration),
+        time: nowText(),
+      })
+    })
+
+  appendLog({
+    key: 'request-aborted',
+    title: '用户已取消问数',
+    kind: 'system',
+    toolType: 'default',
+    summary: '你已手动取消本轮问数。',
+    detail: '本轮问数已停止，不会继续生成 SQL、查询结果或报告。',
+    detailLines: [
+      '已收到取消指令。',
+      '本轮问数已停止，不会继续生成 SQL、查询结果或报告。',
+      '如需重新分析，可以调整问题后再次发送。',
+    ],
+    status: 'warning',
+  })
+  state.status = 'canceled'
+  state.error = ''
+  state.updatedAt = new Date().toISOString()
+  persist()
+}
+
 const finalizeFromResult = (data) => {
   stopPhaseTimer()
   lastHeartbeatLineAt = 0
@@ -1688,22 +1748,10 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
   } catch (error) {
     if (currentRunToken !== runToken) return null
     stopPhaseTimer()
-    const aborted = error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED'
+    const aborted = isUserAbortError(error)
 
     if (aborted) {
-      state.status = 'idle'
-      state.error = ''
-      appendLog({
-        key: 'request-aborted',
-        title: '任务已停止',
-        kind: 'system',
-        toolType: 'default',
-        summary: '当前问数任务已由你手动停止。',
-        detailLines: ['已收到停止指令。', '当前任务不会继续后续执行。'],
-        status: 'warning',
-      })
-      state.logs = state.logs.filter((item) => item.key !== 'request-error')
-      persist()
+      settleUserCanceledTimeline()
       activeAbortController = null
       return null
     }
@@ -1783,6 +1831,10 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
   } catch (error) {
     if (currentRunToken !== runToken) return null
     activeAbortController = null
+    if (isUserAbortError(error)) {
+      settleUserCanceledTimeline()
+      return null
+    }
     const errorMessage = String(error?.response?.data?.error || error?.message || '').trim()
     if (/Confirmation session not found or expired/i.test(errorMessage)) {
       appendLog({
@@ -1844,6 +1896,10 @@ const resetSession = () => {
 const stopAsk = () => {
   if (activeAbortController) {
     activeAbortController.abort()
+    activeAbortController = null
+    settleUserCanceledTimeline()
+  } else if (state.status === 'running') {
+    settleUserCanceledTimeline()
   } else {
     resetSession()
   }

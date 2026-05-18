@@ -1,8 +1,8 @@
 <template>
   <section v-if="displaySteps.length" class="sa-lite-flow">
     <div class="sa-lite-head">
-      <span class="sa-lite-badge">{{ mode === 'completed' ? '执行完成' : '实时执行' }}</span>
-      <span class="sa-lite-title">{{ mode === 'completed' ? '本轮流程已完成' : '正在按流程推进' }}</span>
+      <span class="sa-lite-badge">{{ headBadge }}</span>
+      <span class="sa-lite-title">{{ headTitle }}</span>
       <span v-if="feedElapsedLabel" class="sa-lite-elapsed">{{ feedElapsedLabel }}</span>
     </div>
 
@@ -93,11 +93,24 @@ const formatDuration = (duration) => {
 }
 
 const feedElapsedLabel = computed(() => {
+  if (props.mode === 'canceled') return props.elapsedLabel || ''
   const starts = (props.logs || [])
     .map(log => Number(log?.startedAtMs))
     .filter(value => Number.isFinite(value) && value > 0)
   if (starts.length > 0) return formatDuration(clockNow.value - Math.min(...starts))
   return props.elapsedLabel || ''
+})
+
+const headBadge = computed(() => {
+  if (props.mode === 'completed') return '执行完成'
+  if (props.mode === 'canceled') return '已取消'
+  return '实时执行'
+})
+
+const headTitle = computed(() => {
+  if (props.mode === 'completed') return '本轮流程已完成'
+  if (props.mode === 'canceled') return '本轮问数已取消'
+  return '正在按流程推进'
 })
 
 const stageMeta = {
@@ -150,10 +163,18 @@ const stageMeta = {
     running: '整理中',
     description: '整理指标、图表和分析结论。',
   },
+  cancel: {
+    order: 99,
+    title: '取消问数',
+    done: '已取消',
+    running: '取消中',
+    description: '用户已手动取消，本轮问数流程已停止。',
+  },
 }
 
 const classifyStage = (log = {}) => {
   const text = `${log?.key || ''} ${log?.title || ''} ${log?.summary || ''} ${log?.kind || ''} ${log?.toolType || ''}`
+  if (/取消|停止|request-aborted|aborted|canceled|cancelled/i.test(text)) return 'cancel'
   if (/确认|confirmation|boss-confirm/i.test(text)) return 'confirm'
   if (/执行\s*SQL|SQL\s*执行|查询执行|execute/i.test(text)) return 'execute'
   if (/校验|复核|review|agent3/i.test(text)) return 'review'
@@ -237,7 +258,7 @@ const compactSteps = computed(() => {
       stateText: status === 'running'
         ? meta.running
         : status === 'warning'
-          ? '待确认'
+          ? (stage === 'cancel' ? '已取消' : '待确认')
           : status === 'error'
             ? '异常'
             : meta.done,

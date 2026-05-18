@@ -167,6 +167,8 @@ def _record_access_log(response):
     try:
         duration_ms = int((time.time() - getattr(request, "_smartask_started_at", time.time())) * 1000)
         status_code = int(response.status_code or 0)
+        if status_code >= 400 and getattr(request, "_smartask_event_logged", False):
+            return response
         if status_code >= 400:
             category = "error"
             level = "error" if status_code >= 500 else "warning"

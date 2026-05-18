@@ -140,7 +140,7 @@
               <span class="card-kicker">错误问题</span>
               <h2>需要排查的异常</h2>
             </div>
-            <el-button link type="primary" @click="openLogsFromDashboard({ category: 'error', level: 'error' })">全部日志</el-button>
+                <el-button link type="primary" @click="openLogsFromDashboard({ category: 'error' })">全部日志</el-button>
           </header>
           <el-table :data="recentErrorLogs" border stripe class="dashboard-table" empty-text="暂无错误日志">
             <el-table-column label="时间" width="150">
@@ -1642,7 +1642,7 @@ const dashboardUserRankPanels = computed(() => [
     tone: 'danger',
     rows: topUsersByErrors.value,
     emptyText: '暂无错误用户',
-    filter: { category: 'error', level: 'error' },
+    filter: { category: 'error' },
   },
   {
     key: 'low_confidence',
@@ -1688,7 +1688,7 @@ const dashboardCards = computed(() => [
     value: formatNumber(logStats.value.range_errors || logStats.value.today_errors || 0),
     hint: `${dashboardRangeLabel.value}，点击查看错误日志`,
     tone: 'danger',
-    filter: { category: 'error', level: 'error' },
+    filter: { category: 'error' },
   },
   {
     key: 'range_low_confidence',
