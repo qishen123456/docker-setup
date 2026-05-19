@@ -12,6 +12,7 @@ Files captured (existing only, missing files are simply skipped):
     config/rbac_permissions.json
     config/organization_trees.json
     config/feature_flags.json
+    config/ask_flow.json
     config/query_history.json
     config/smartask_report_history.json
 
@@ -48,6 +49,7 @@ CAPTURED_FILES = [
     "rbac_permissions.json",
     "organization_trees.json",
     "feature_flags.json",
+    "ask_flow.json",
     "query_history.json",
     "smartask_report_history.json",
 ]

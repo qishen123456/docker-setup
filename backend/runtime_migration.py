@@ -37,6 +37,7 @@ RUNTIME_CONFIG_FILES = [
     "rbac_permissions.json",
     "organization_trees.json",
     "feature_flags.json",
+    "ask_flow.json",
     "query_history.json",
     "smartask_report_history.json",
 ]
@@ -52,6 +53,7 @@ CONFIG_FILE_LABELS = {
     "rbac_permissions.json": "功能权限/RBAC",
     "organization_trees.json": "组织树",
     "feature_flags.json": "功能开关",
+    "ask_flow.json": "问数流程配置",
     "query_history.json": "问数历史",
     "smartask_report_history.json": "问数报告历史",
 }
@@ -224,6 +226,9 @@ def _runtime_config_summary(configs: Dict[str, Any]) -> List[Dict[str, Any]]:
                 features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
                 count = len(features)
                 description = "功能显示/操作开关"
+            elif filename == "ask_flow.json":
+                count = 1
+                description = "问数流程编排与界面展示配置"
             elif filename in {"query_history.json", "smartask_report_history.json"}:
                 count = len(payload)
                 description = "按用户隔离的历史记录"
