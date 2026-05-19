@@ -677,6 +677,8 @@ class FourAgentAskService:
             return layered
 
         if row_count <= 0:
+            route = self._safe_dict(context.get("route"))
+            route_confidence = self._build_route_confidence(route) if route else {}
             lines = [
                 "## 业绩分析报告",
                 "",
@@ -686,6 +688,11 @@ class FourAgentAskService:
                 "### 问题诊断",
                 "• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。",
             ]
+            if route_confidence:
+                lines.append(
+                    f"• **痛点：** 数据集口径 -> 当前命中“{dataset_name}”，路由把握为{route_confidence.get('label')}，"
+                    "若问题中的组织属于其他事业部，请切换数据源后重试。"
+                )
             if review_summary:
                 lines.append(f"• **痛点：** SQL复核 -> {review_summary} -> SQL 语法通过不代表业务过滤条件一定命中数据。")
             if error_message:
@@ -694,6 +701,7 @@ class FourAgentAskService:
                 [
                     "",
                     "### 改进建议",
+                    "• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。",
                     "• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。",
                     "• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
                 ]
@@ -1204,6 +1212,12 @@ class FourAgentAskService:
 
         if route.get("requires_confirmation"):
             summary = "当前命中仍存在不确定性，已暂停并等待确认统计口径。"
+        elif route.get("arbiter_reason") == "profile_scope_resolved":
+            summary = "当前问题中的组织简称或合称已命中数据集画像，系统按画像映射的数据集执行。"
+        elif route.get("arbiter_reason") == "explicit_dataset_alias":
+            summary = "当前问题直接命中了数据集名称、业务域或已维护同义词。"
+        elif route.get("arbiter_reason") == "organization_tree_name_resolved":
+            summary = "当前问题命中了组织树节点，系统按该节点绑定的数据集执行。"
         elif score < 70:
             summary = "当前更像相似命中，系统不会把它当作确定命中直接下结论。"
         elif candidate_count > 1:
@@ -1221,6 +1235,7 @@ class FourAgentAskService:
             "candidate_count": candidate_count,
             "match_score": int(route.get("match_score") or 0),
             "route_margin": route_margin,
+            "reason": route.get("arbiter_reason") or "",
         }
 
     def _select_sql_strategy(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1918,6 +1933,11 @@ class FourAgentAskService:
             for term in business_terms:
                 if term and term in normalized_question:
                     score = max(score, 90)
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if profile:
+            resolved_scope = resolve_member_mentions(question, profile)
+            if resolved_scope.get("all_members"):
+                score = max(score, 96 if len(resolved_scope.get("all_members") or []) > 1 else 92)
         return score
 
     def _compute_dataset_match(self, question: str, dataset: Dict[str, Any], context: Dict[str, Any]) -> int:
@@ -3781,9 +3801,12 @@ LLD：
 你现在是一个智能数据分析报告生成引擎。生成报告时必须遵循以下全局标准：
 1. 动态布局：先识别意图。对比查询使用“核心结论 -> 关键指标对标 -> 层级差异核心看点 -> 落地建议”的对称结构；单体查询使用“核心 KPI -> 层级分布 -> 细分明细”的纵向结构；列表或排名查询突出名次、差距和相对领先/相对承压节点。
 2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用“万”；100万-1亿取整“万”；1亿以上保留2位小数“亿”。不得随意生成金额格式。
-3. 视觉引导：不要套用固定阈值或固定 TopN。根据本次结果的样本数量和达成率分布动态识别“表现较好”和“相对承压”；两组对象不得重复。只有 1 个可比对象时不做横向好坏对比，只描述该对象自身情况。
-4. 分析文本：严禁重复主语和长篇段落。单体分析采用“核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议”的结构；多组织对比必须明确“谁领先、差多少、谁向谁学、改什么”。
-5. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
+3. 问题优先：核心结论第一句话必须直接回答用户原问题。用户问“哪个分公司/业务部/代表处最好、最高、最低、最差”时，先回答目标管理层级的对象名称，再给达成率、总任务、实际开单、任务缺口；下级城市公司/代表处只能作为后续支撑，不能抢在目标层级结论前面。
+4. 模板优先：排名/TopN 展示必须遵循报告配置 intentPolicies.ranking.defaultTopN 或本轮 queryIntent.top_n；不要固定写 Top3。
+5. 风险提示：如果最优对象达成率仍低于 60%，核心结论必须提示“低于60%红线”或等价风险表述，避免只说相对最好。
+6. 视觉引导：根据本次结果的样本数量和达成率分布动态识别“表现较好”和“相对承压”；两组对象不得重复。只有 1 个可比对象时不做横向好坏对比，只描述该对象自身情况。
+7. 分析文本：严禁重复主语和长篇段落。单体分析采用“核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议”的结构；多组织对比必须明确“谁领先、差多少、谁向谁学、改什么”。
+8. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
 """.strip()
         system_prompt = f"{system_prompt}\n\n{global_report_standard}"
         prompt_groups = self._safe_dict(context.get("agent_prompts"))
@@ -3810,6 +3833,9 @@ Agent3 复核结果：
 
 报告配置（结构由系统决定，Agent4 只补洞察和建议）：
 {self._build_report_config_prompt(context)}
+
+本轮查询意图：
+{json.dumps(context.get("query_intent") or {}, ensure_ascii=False)}
 """
         try:
             return self._chat(
@@ -3919,6 +3945,7 @@ Agent3 复核结果：
             saved_report_config = report_config_store.get_config(int(dataset_id))
             report_config_source = "dataset_config" if saved_report_config else "default"
             report_config = dict(saved_report_config or report_config_store.get_default_config())
+            context["route"] = route
             context["report_config"] = report_config
             context["resolved_entities"] = self._route_entity_resolution(route) or self._resolve_question_entities(
                 route.get("refined_query", question),

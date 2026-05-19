@@ -1688,8 +1688,8 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')
     }
-    const autoDatasetIds = selectedIds.length ? selectedIds : getUniqueConfirmationDatasetIds(finalPayload)
-    if (isDatasetOnlyConfirmation(finalPayload, autoDatasetIds)) {
+    const autoDatasetIds = selectedIds.length ? selectedIds : []
+    if (selectedIds.length && isDatasetOnlyConfirmation(finalPayload, autoDatasetIds)) {
       const option = pickDatasetConfirmationOption(finalPayload, autoDatasetIds)
       appendLog({
         key: 'dataset-confirmation-auto-bypass',

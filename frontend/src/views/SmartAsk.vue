@@ -361,6 +361,9 @@
                       {{ badge.label }}：{{ badge.value }}
                     </span>
                   </div>
+                  <div v-if="routeDecisionDetail" class="sa-route-decision">
+                    {{ routeDecisionDetail }}
+                  </div>
                 </div>
 
                 <section
@@ -1425,6 +1428,29 @@ const sideConfidenceBadges = computed(() => {
   return [routeMeta, resultMeta].filter(item => item?.score > 0)
 })
 
+const routeDecisionDetail = computed(() => {
+  const result = activeReportResult.value || {}
+  const route = result.route || {}
+  const summary = String(result.confidence?.route?.summary || '').trim()
+  const reason = String(result.confidence?.route?.reason || route.arbiter_reason || '').trim()
+  const reasonLabel = {
+    profile_scope_resolved: '组织画像命中',
+    explicit_dataset_alias: '同义词命中',
+    organization_tree_name_resolved: '组织树命中',
+    top_candidate_score_clear: '候选分数领先',
+    high_confidence: '高置信语义匹配',
+    low_similarity_requires_boss_confirm: '相似命中待确认',
+  }[reason] || ''
+  const ids = Array.isArray(route.dataset_ids) ? route.dataset_ids : []
+  const names = ids.map(id => datasetNameMap.value.get(Number(id)) || `数据集 ${id}`).filter(Boolean)
+  if (!summary && !reasonLabel && !names.length) return ''
+  return [
+    names.length ? `自动路由：${names.join('、')}` : '',
+    reasonLabel ? `依据：${reasonLabel}` : '',
+    summary,
+  ].filter(Boolean).join('；')
+})
+
 const detailPanelState = computed(() => {
   const m = {
     idle: '待命',
@@ -1485,6 +1511,12 @@ const formatDisplayValue = (value) => {
 const formatValueByColumn = (value, column = '') => {
   if (isAmountColumn(column)) return formatAmount(value)
   return formatDisplayValue(value)
+}
+
+const formatBusinessValueByColumn = (value, column = '') => {
+  const rawText = String(value ?? '').trim()
+  if (rawText && /[万亿%]/.test(rawText)) return rawText
+  return formatValueByColumn(value, column)
 }
 
 const getLabelColumn = (dataset) => {
@@ -1673,6 +1705,22 @@ const isNegativeRankingQuestion = (questionText = getQuestionText()) => (
 const isRateRankingQuestion = (questionText = getQuestionText()) => (
   /达成率|完成率|完成|进度|不好|最低|最差|排名|排行|承压|风险/.test(questionText || '')
 )
+
+const getRankingPolicy = (config = {}) => (
+  config?.intentPolicies?.ranking && typeof config.intentPolicies.ranking === 'object'
+    ? config.intentPolicies.ranking
+    : {}
+)
+
+const getConfiguredTopN = (report = null) => {
+  const config = report?.dataset ? getDatasetReportConfig(report.dataset) : getDefaultReportTreeConfig()
+  const intentTopN = toNumber(report?.dataset?.report_spec?.debug?.query_intent?.top_n)
+  const policy = getRankingPolicy(config)
+  const defaultTopN = toNumber(policy.defaultTopN) ?? 3
+  const maxTopN = toNumber(policy.maxTopN) ?? 20
+  const value = intentTopN ?? defaultTopN
+  return Math.max(1, Math.min(maxTopN, value))
+}
 
 const sortNodesForQuestion = (nodes = [], rateMetric = null) => {
   const lowFirst = isNegativeRankingQuestion()
@@ -2633,6 +2681,61 @@ const buildRankMetricTable = (items = [], title = '对象') => {
   ].join('\n')
 }
 
+const getQuestionTargetLevel = (questionText = getQuestionText()) => {
+  const hit = requestedLevelTokens.find(token => token && questionText.includes(token))
+  return hit || ''
+}
+
+const getDirectAnswerFromRows = (report) => {
+  const dataset = report?.dataset
+  const rows = Array.isArray(dataset?.rows) ? dataset.rows : []
+  if (!rows.length) return null
+  const questionText = getQuestionText()
+  const targetLevel = getQuestionTargetLevel(questionText)
+  if (!targetLevel) return null
+  const columns = dataset?.columns || Object.keys(rows[0] || {})
+  const levelColumn = findColumn(columns, column => /层级|级别|level/i.test(column))
+  const nameColumn = findColumn(columns, column => /节点名称|名称|分公司|城市公司|组织/i.test(column)) || columns[0]
+  const rateColumn = findColumn(columns, column => isRateColumn(column)) || '达成率'
+  const taskColumn = findColumn(columns, column => /总任务|任务金额|目标/i.test(column) && !/剩余|缺口|差额/i.test(column))
+  const actualColumn = findColumn(columns, column => /年度开单|开单|完成|实际|销售/i.test(column))
+  const remainColumn = findColumn(columns, column => /剩余|缺口|差额|remain/i.test(column))
+  const candidates = rows
+    .filter(row => {
+      const levelText = String(row?.[levelColumn] || '')
+      const nameText = String(row?.[nameColumn] || '')
+      return levelText.includes(targetLevel) || nameText.includes(targetLevel)
+    })
+    .map(row => ({
+      name: row?.[nameColumn] || row?.节点名称 || row?.名称 || '-',
+      level: targetLevel,
+      rate: toNumber(row?.[rateColumn]),
+      rateLabel: rateColumn ? formatBusinessValueByColumn(row?.[rateColumn], rateColumn) : '-',
+      task: toNumber(row?.[taskColumn]),
+      taskLabel: taskColumn ? formatBusinessValueByColumn(row?.[taskColumn], taskColumn) : '-',
+      actual: toNumber(row?.[actualColumn]),
+      actualLabel: actualColumn ? formatBusinessValueByColumn(row?.[actualColumn], actualColumn) : '-',
+      remain: toNumber(row?.[remainColumn]),
+      remainLabel: remainColumn ? formatBusinessValueByColumn(row?.[remainColumn], remainColumn) : '-',
+    }))
+    .filter(item => item.name && item.rate !== null)
+  if (!candidates.length) return null
+  const lowFirst = isNegativeRankingQuestion(questionText)
+  const winner = [...candidates].sort((left, right) => (
+    lowFirst ? (left.rate || 0) - (right.rate || 0) : (right.rate || 0) - (left.rate || 0)
+  ))[0]
+  const metricText = /线下/.test(questionText) ? '线下业务' : '当前口径'
+  const directionText = lowFirst ? '完成最弱' : '完成最好'
+  const riskText = winner.rate !== null && winner.rate < 60
+    ? `但达成率低于60%红线，仍需关注任务缺口和后续转化。`
+    : '当前未触发60%红线。'
+  return {
+    ...winner,
+    targetLevel,
+    sentence: `${metricText}${directionText}的${targetLevel}是${winner.name}，达成率${winner.rateLabel}，总任务${winner.taskLabel}，实际开单${winner.actualLabel}，任务缺口${winner.remainLabel}；${riskText}`,
+  }
+}
+
 const getRateDistribution = (items = []) => {
   const source = items.filter(item => item?.rate !== null && item?.rate !== undefined)
   const total = source.length || 0
@@ -2695,8 +2798,10 @@ const buildBusinessNarrativeSections = (report) => {
   const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
   const best = ranked[0] || offices[0]
   const worst = ranked[ranked.length - 1] || offices[offices.length - 1]
-  const top3 = ranked.slice(0, 3)
-  const bottom3 = [...ranked].reverse().slice(0, 3)
+  const configuredTopN = getConfiguredTopN(report)
+  const topItems = ranked.slice(0, configuredTopN)
+  const bottomItems = [...ranked].reverse().slice(0, configuredTopN)
+  const directAnswer = getDirectAnswerFromRows(report)
   const diff = best?.rate !== null && worst?.rate !== null
     ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
     : ''
@@ -2710,11 +2815,11 @@ const buildBusinessNarrativeSections = (report) => {
   const distributionText = buildRateDistributionText(offices)
   const trendText = getTrendProgressText(report)
   const topBottomTable = [
-    'Top3：',
-    buildRankMetricTable(top3, report.compareLevelLabel || '对象'),
+    `Top${configuredTopN}：`,
+    buildRankMetricTable(topItems, report.compareLevelLabel || '对象'),
     '',
-    '末3：',
-    buildRankMetricTable(bottom3, report.compareLevelLabel || '对象'),
+    `末${configuredTopN}：`,
+    buildRankMetricTable(bottomItems, report.compareLevelLabel || '对象'),
   ].filter(Boolean).join('\n\n')
 
   if (report.isSingleFocus) {
@@ -2725,8 +2830,8 @@ const buildBusinessNarrativeSections = (report) => {
     const tableRows = offices.length <= 6
       ? offices
       : [
-          ...ranked.slice(0, 3),
-          ...ranked.slice(-2),
+          ...ranked.slice(0, configuredTopN),
+          ...ranked.slice(-Math.min(2, configuredTopN)),
         ].filter((item, index, list) => item && list.findIndex(row => row.name === item.name) === index)
     const comparisonRows = tableRows.map((office) => {
       const diffValue = office.rate !== null && toNumber(overallRate) !== null ? (office.rate - toNumber(overallRate)) : null
@@ -2746,7 +2851,9 @@ const buildBusinessNarrativeSections = (report) => {
       {
         title: `一、${focusName}核心结论`,
         body: [
-          `1. 当前进度：${getSingleOrgConclusion(report)}`,
+          directAnswer
+            ? `1. ${directAnswer.sentence}`
+            : `1. 当前进度：${getSingleOrgConclusion(report)}`,
           rankContext.diff
             ? `2. 头尾差异：${rankContext.best.name}达成率${rankContext.best.rateLabel}领跑，${rankContext.worst.name}达成率${rankContext.worst.rateLabel}承压，首尾差距${rankContext.diff}个百分点。`
             : report.summary,
@@ -2763,7 +2870,7 @@ const buildBusinessNarrativeSections = (report) => {
         ].filter(Boolean).join('\n\n'),
       },
       {
-        title: `三、${counts.directLabel}Top3/末3对比`,
+        title: `三、${counts.directLabel}Top${configuredTopN}/末${configuredTopN}对比`,
         body: topBottomTable,
       },
       {
@@ -2788,10 +2895,12 @@ const buildBusinessNarrativeSections = (report) => {
     {
       title: '一、核心结论',
       body: [
-        diff
+        directAnswer
+          ? `1. ${directAnswer.sentence}`
+          : diff
           ? `1. 当前对比覆盖${visibleNames}，${best.name}达成率${best.rateLabel}领先，${worst.name}达成率${worst.rateLabel}承压，首尾差${diff}个百分点。`
           : `1. ${report.summary}`,
-        `2. 头部/尾部差异：Top3为${top3.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}；末3为${bottom3.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}。`,
+        `2. 头部/尾部差异：Top${configuredTopN}为${topItems.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}；末${configuredTopN}为${bottomItems.map(item => `${item.name}(${item.rateLabel})`).join('、') || '暂无'}。`,
         `3. 核心风险信号：${riskText}；${distributionText}。`,
       ].join('\n'),
     },
@@ -2804,7 +2913,7 @@ const buildBusinessNarrativeSections = (report) => {
       ].join('\n\n'),
     },
     {
-      title: `三、${report.compareLevelLabel}Top3/末3对比`,
+      title: `三、${report.compareLevelLabel}Top${configuredTopN}/末${configuredTopN}对比`,
       body: topBottomTable,
     },
     {
@@ -2818,7 +2927,7 @@ const buildBusinessNarrativeSections = (report) => {
     {
       title: '五、动作落地',
       body: [
-        `标杆经验推广：由${best.name}沉淀关键动作，覆盖${bottom3.map(item => item.name).join('、') || '低达成节点'}，两周内完成打法复盘和任务拆解。`,
+        `标杆经验推广：由${directAnswer?.name || best.name}沉淀关键动作，覆盖${bottomItems.map(item => item.name).join('、') || '低达成节点'}，两周内完成打法复盘和任务拆解。`,
         `压力节点帮扶：围绕${worst.name}下钻${report.detailLevelLabel}，责任方为业务负责人+经营分析；输出项目阶段、客户转化、缺口金额三类问题清单。`,
         `整体优化：按达成率分布配置资源，低于20%节点进入周度专项，20%-40%节点做过程纠偏，高于40%节点提炼可复制打法。`,
       ].join('\n'),
@@ -3977,6 +4086,11 @@ const startTimer = () => {
 
 const compactQuestionText = (value) => String(value || '').replace(/\s+/g, '').toLowerCase()
 
+const isConsumerDatasetMeta = (dataset = {}) => {
+  const text = compactQuestionText(`${dataset.dataset_code || ''}${dataset.dataset_name || ''}${dataset.business_domain || ''}${dataset.description || ''}`)
+  return text.includes('consumer') || text.includes('消费者') || text.includes('消费事业部')
+}
+
 const datasetAliasScore = (text, dataset) => {
   const question = compactQuestionText(text)
   if (!question || !dataset) return 0
@@ -3996,6 +4110,12 @@ const datasetAliasScore = (text, dataset) => {
       if (prefix.length >= 2 && question.includes(prefix)) score = Math.max(score, 90)
     })
   })
+  if (isConsumerDatasetMeta(dataset)) {
+    const consumerBranchAliases = ['粤桂琼分公司', '粤桂琼', '山东分公司']
+    if (consumerBranchAliases.some(alias => question.includes(compactQuestionText(alias)))) {
+      score = Math.max(score, 94)
+    }
+  }
   return score
 }
 
@@ -5800,6 +5920,17 @@ onUnmounted(() => {
   background: #fff7e8;
   border-color: rgba(255, 125, 0, 0.16);
   color: #ff7d00;
+}
+
+.sa-route-decision {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 93, 255, 0.12);
+  background: rgba(240, 245, 255, 0.72);
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .sa-route-review-note {

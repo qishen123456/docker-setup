@@ -118,5 +118,134 @@
         "child_dimensions": []
       }
     ]
+  },
+  "consumer_business_standard_v1": {
+    "dataset_name": "消费者事业部任务达成分析（标准版）",
+    "business_domain": "消费者事业部年度任务达成与业务线分析",
+    "dataset_aliases": [
+      "消费者事业部",
+      "消费者事业",
+      "消费事业部",
+      "消费者业绩",
+      "消费者任务"
+    ],
+    "root_nodes": [
+      "消费者事业部"
+    ],
+    "default_drill_depth": 2,
+    "max_drill_depth": 3,
+    "levels": [
+      {
+        "dimension_name": "事业部",
+        "aliases": [
+          "事业部",
+          "消费者事业部",
+          "消费事业部"
+        ],
+        "members": [
+          "消费者事业部"
+        ],
+        "child_dimensions": [
+          "分公司",
+          "城市公司"
+        ]
+      },
+      {
+        "dimension_name": "分公司",
+        "aliases": [
+          "分公司",
+          "区域分公司"
+        ],
+        "members": [
+          "粤桂琼分公司",
+          "山东分公司",
+          "华南分公司"
+        ],
+        "child_dimensions": [
+          "城市公司"
+        ],
+        "groups": [
+          {
+            "group_name": "粤桂琼与山东分公司",
+            "aliases": [
+              "粤桂琼和山东",
+              "粤桂琼与山东",
+              "粤桂琼分公司和山东分公司",
+              "粤桂琼分公司与山东分公司"
+            ],
+            "members": [
+              "粤桂琼分公司",
+              "山东分公司"
+            ],
+            "description": "消费者事业部下属分公司对比口径。"
+          }
+        ]
+      },
+      {
+        "dimension_name": "城市公司",
+        "aliases": [
+          "城市公司",
+          "城市"
+        ],
+        "child_dimensions": []
+      }
+    ]
+  },
+  "public_feishu_tbl_xioafeizhe_609826": {
+    "dataset_name": "消费者事业部任务达成分析",
+    "business_domain": "消费者事业部年度任务达成与业务线分析",
+    "dataset_aliases": [
+      "消费者事业部",
+      "消费者事业",
+      "消费事业部",
+      "消费者业绩",
+      "消费者任务"
+    ],
+    "root_nodes": [
+      "消费者事业部"
+    ],
+    "default_drill_depth": 2,
+    "max_drill_depth": 3,
+    "levels": [
+      {
+        "dimension_name": "分公司",
+        "aliases": [
+          "分公司",
+          "区域分公司"
+        ],
+        "members": [
+          "粤桂琼分公司",
+          "山东分公司",
+          "华南分公司"
+        ],
+        "child_dimensions": [
+          "城市公司"
+        ],
+        "groups": [
+          {
+            "group_name": "粤桂琼与山东分公司",
+            "aliases": [
+              "粤桂琼和山东",
+              "粤桂琼与山东",
+              "粤桂琼分公司和山东分公司",
+              "粤桂琼分公司与山东分公司"
+            ],
+            "members": [
+              "粤桂琼分公司",
+              "山东分公司"
+            ],
+            "description": "消费者事业部下属分公司对比口径。"
+          }
+        ]
+      },
+      {
+        "dimension_name": "城市公司",
+        "aliases": [
+          "城市公司",
+          "城市"
+        ],
+        "child_dimensions": []
+      }
+    ]
   }
 }
