@@ -45,6 +45,20 @@ FEISHU_FIELD_TYPE_LABELS = {
     1003: "自动编号",
 }
 
+FEISHU_PERSON_FIELD_TYPE_CODES = {11, 1001, 1002}
+FEISHU_PERSON_FIELD_NAME_HINTS = (
+    "业务代表",
+    "任务维护人",
+    "创建人",
+    "总任务承接人",
+    "维护人",
+    "承接人",
+    "负责人",
+    "责任人",
+    "跟进人",
+    "人员",
+)
+
 class FeishuSyncService:
     """飞书同步服务"""
     
@@ -94,6 +108,98 @@ class FeishuSyncService:
             "type": self._field_type_label(field_type),
             "is_primary": bool(item.get("is_primary")),
         }
+
+    def _is_person_field_name(self, field_name: str) -> bool:
+        name = str(field_name or "").strip()
+        if not name:
+            return False
+        return any(token in name for token in FEISHU_PERSON_FIELD_NAME_HINTS)
+
+    def _person_field_names(self, field_items: Optional[List[Dict]]) -> set:
+        names = set()
+        for item in field_items or []:
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            try:
+                type_code = int(item.get("type_code"))
+            except Exception:
+                type_code = None
+            if type_code in FEISHU_PERSON_FIELD_TYPE_CODES or self._is_person_field_name(name):
+                names.add(name)
+        return names
+
+    def _extract_person_name(self, item) -> str:
+        if item is None:
+            return ""
+        if isinstance(item, str):
+            text = item.strip()
+            if not text:
+                return ""
+            if text[0] in "[{":
+                try:
+                    return self._normalize_person_value(json.loads(text))
+                except Exception:
+                    return text
+            return text
+        if isinstance(item, dict):
+            for key in ("name", "zh_name", "display_name", "en_name", "nickname", "text"):
+                value = item.get(key)
+                if value is not None and str(value).strip():
+                    return str(value).strip()
+            return ""
+        return str(item).strip()
+
+    def _normalize_person_value(self, value) -> str:
+        """把飞书人员字段统一转成纯人名文本。"""
+        if value is None or value == "":
+            return ""
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return ""
+            if text[0] in "[{":
+                try:
+                    return self._normalize_person_value(json.loads(text))
+                except Exception:
+                    return text
+            return text
+        if isinstance(value, list):
+            names = []
+            for item in value:
+                name = self._extract_person_name(item)
+                if name:
+                    names.append(name)
+            return "、".join(names)
+        if isinstance(value, dict):
+            return self._extract_person_name(value)
+        return str(value).strip()
+
+    def _normalize_record_fields_for_storage(self, fields: Dict, person_field_names: set) -> Dict:
+        if not isinstance(fields, dict):
+            return {}
+        normalized = {}
+        for key, value in fields.items():
+            field_name = str(key)
+            if field_name in person_field_names or self._is_person_field_name(field_name):
+                normalized[field_name] = self._normalize_person_value(value)
+            else:
+                normalized[field_name] = value
+        return normalized
+
+    def _normalize_records_for_storage(self, records: List[Dict], field_items: Optional[List[Dict]] = None) -> List[Dict]:
+        person_field_names = self._person_field_names(field_items)
+        normalized_records = []
+        for record in records or []:
+            if not isinstance(record, dict):
+                continue
+            normalized_record = dict(record)
+            normalized_record["fields"] = self._normalize_record_fields_for_storage(
+                record.get("fields") or {},
+                person_field_names,
+            )
+            normalized_records.append(normalized_record)
+        return normalized_records
 
     def _format_feishu_api_error(self, data: Dict) -> str:
         code = data.get("code", "")
@@ -633,7 +739,11 @@ class FeishuSyncService:
             # 批量插入/更新数据
             if records_to_sync:
                 sync_time = datetime.now()
-                for record in records_to_sync:
+                normalized_records = self._normalize_records_for_storage(
+                    records_to_sync,
+                    config.get("_field_items") or [],
+                )
+                for record in normalized_records:
                     record_id = record.get('record_id', '')
                     # 使用UPSERT操作
                     upsert_sql = sql.SQL("""
@@ -648,7 +758,7 @@ class FeishuSyncService:
                     cursor.execute(upsert_sql, (record_id, Json(record.get('fields', {})), sync_time, sync_time, sync_time))
                 
                 conn.commit()
-                print(f"成功同步{len(records_to_sync)}条记录到{table_name}")
+                print(f"成功同步{len(normalized_records)}条记录到{table_name}")
             
             return True
             
