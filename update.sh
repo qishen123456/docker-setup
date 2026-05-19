@@ -335,18 +335,36 @@ validate_secret_master_key() {
   fail "检测到 enc:v1 密文，但缺少主密钥。请把 config/.secret_master_key 放回服务器，或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE 后再更新。"
 }
 
+find_secret_check_python() {
+  local candidate version
+  for candidate in python3 python; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    if "$candidate" <<'PY' >/dev/null 2>&1
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 7) else 1)
+PY
+    then
+      echo "$candidate"
+      return 0
+    fi
+    version="$("$candidate" <<'PY' 2>/dev/null || true
+import sys
+print(".".join(str(item) for item in sys.version_info[:3]))
+PY
+)"
+    warn "宿主机 ${candidate} 版本 ${version:-unknown} 过低，无法导入新版加密模块做提前校验。" >&2
+  done
+  return 1
+}
+
 validate_runtime_secret_decryption() {
   local pybin
   if ! has_encrypted_runtime_secret; then
     return 0
   fi
 
-  if command -v python3 >/dev/null 2>&1; then
-    pybin="python3"
-  elif command -v python >/dev/null 2>&1; then
-    pybin="python"
-  else
-    warn "未找到宿主机 Python，无法提前校验 enc:v1 密文是否可解密；将继续由容器启动时校验。"
+  if ! pybin="$(find_secret_check_python)"; then
+    warn "未找到 Python 3.7+，跳过宿主机 enc:v1 提前解密校验；将继续由 Docker 容器启动时校验。"
     return 0
   fi
 
