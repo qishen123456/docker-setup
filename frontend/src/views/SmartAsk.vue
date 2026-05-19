@@ -80,7 +80,12 @@
 
                     <!-- 确认口径卡-->
                     <div v-if="shouldShowResultHandoff(msg)" class="sa-flow-handoff">
-                      <div class="sa-flow-handoff-kicker">执行已完成</div>
+                      <div class="sa-flow-handoff-top">
+                        <div class="sa-flow-handoff-kicker">执行已完成</div>
+                        <span v-if="getAskFlowLabel(msg)" class="sa-flow-badge" :class="getAskFlowClass(msg)">
+                          {{ getAskFlowLabel(msg) }}
+                        </span>
+                      </div>
                       <div class="sa-flow-handoff-title">正在整理结果摘要与报告内容</div>
                       <div class="sa-flow-handoff-desc">
                         执行轨迹已经沉淀完成，下面将继续承接结果摘要、报告内容和附件产物。                      </div>
@@ -176,6 +181,9 @@
                       :dataset="getPrimaryDataset(msg)"
                       :datasets="getDatasets(msg)"
                       :route="msg.data?.route || null"
+                      :flow-label="getAskFlowLabel(msg)"
+                      :flow-class="getAskFlowClass(msg)"
+                      :flow-hint="getAskFlowHint(msg)"
                       :show-details-button="featureAccess.smart_report_details"
                       @view-details="openDetailPanel(msg)"
                     />
@@ -247,6 +255,10 @@
               <div class="sa-status-left">
                 <span class="sa-status-dot"></span>
                 <span class="sa-status-text">{{ statusBarText }}</span>
+                <span v-if="activeAskFlowLabel" class="sa-status-flow-badge" :class="activeAskFlowClass">
+                  {{ activeAskFlowLabel }}
+                </span>
+                <span v-if="activeAskFlowLabel" class="sa-status-flow-hint">{{ activeAskFlowHint }}</span>
               </div>
               <div class="sa-status-right">
                 <span v-if="isRunning" class="sa-timer">{{ elapsed }}s</span>
@@ -330,6 +342,10 @@
                   <div ref="sideReportHeadRef" class="sa-side-report-titlebar">
                     <div>
                       <h3 class="sa-side-report-title">业绩分析报告</h3>
+                      <div v-if="activeAskFlowLabel" class="sa-side-flow-line">
+                        <span :class="['sa-flow-badge', activeAskFlowClass]">{{ activeAskFlowLabel }}</span>
+                        <small>{{ activeAskFlowHint }}</small>
+                      </div>
                     </div>
                     <button v-if="featureAccess.report_fullscreen" class="sa-primary-btn sa-side-fullscreen-btn" @click="openFullScreenReport">
                       <span class="sa-btn-label">全屏报告</span>
@@ -1222,6 +1238,32 @@ const statusBarText = computed(() => {
 })
 
 const activeReportResult = computed(() => detailReportResult.value || session.state.result || null)
+
+const activeAskFlowMeta = computed(() => {
+  const meta = activeReportResult.value?.ask_flow || activeReportResult.value?.diagnostics?.ask_flow || null
+  return meta && typeof meta === 'object' ? meta : null
+})
+
+const activeAskFlowLabel = computed(() => {
+  const flow = String(activeAskFlowMeta.value?.flow || '').toLowerCase()
+  if (flow === 'advanced') return '进阶流程'
+  if (flow === 'basic') return '基础流程'
+  return ''
+})
+
+const activeAskFlowClass = computed(() => String(activeAskFlowMeta.value?.flow || '').toLowerCase() === 'advanced' ? 'is-advanced' : 'is-basic')
+
+const activeAskFlowHint = computed(() => {
+  const reason = String(activeAskFlowMeta.value?.reason || '')
+  const map = {
+    basic_selected: '当前问数由基础流程执行',
+    advanced_selected: '当前问数由进阶流程执行',
+    advanced_disabled: '进阶未启用，已回落基础流程',
+    advanced_role_denied: '当前角色未进入进阶灰度',
+    advanced_error_fallback: '进阶异常，已回退基础流程',
+  }
+  return map[reason] || '当前问数流程'
+})
 
 const latestDatasets = computed(() => (
   Array.isArray(activeReportResult.value?.dataset_results) ? activeReportResult.value.dataset_results : []
@@ -3300,6 +3342,35 @@ const getMessageElapsedLabel = (msg) => {
   return ''
 }
 
+const getAskFlowMeta = (msg) => {
+  const meta = msg?.data?.ask_flow || msg?.data?.diagnostics?.ask_flow || null
+  return meta && typeof meta === 'object' ? meta : null
+}
+
+const getAskFlowLabel = (msg) => {
+  const flow = String(getAskFlowMeta(msg)?.flow || '').toLowerCase()
+  if (flow === 'advanced') return '进阶流程'
+  if (flow === 'basic') return '基础流程'
+  return ''
+}
+
+const getAskFlowClass = (msg) => {
+  const flow = String(getAskFlowMeta(msg)?.flow || '').toLowerCase()
+  return flow === 'advanced' ? 'is-advanced' : 'is-basic'
+}
+
+const getAskFlowHint = (msg) => {
+  const reason = String(getAskFlowMeta(msg)?.reason || '')
+  const map = {
+    basic_selected: '由基础流程执行',
+    advanced_selected: '由进阶流程执行',
+    advanced_disabled: '进阶未启用，已回落基础流程',
+    advanced_role_denied: '当前角色未进入进阶灰度',
+    advanced_error_fallback: '进阶异常，已回退基础流程',
+  }
+  return map[reason] || ''
+}
+
 const getVisualPreviews = (msg) => {
   const cache = getMessageDerived(msg)
   if (cache && cache.visualPreviews !== undefined) return cache.visualPreviews
@@ -4842,6 +4913,30 @@ onUnmounted(() => {
   color: #165dff;
 }
 
+.sa-flow-handoff-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sa-flow-badge {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  background: #eef4ff;
+  color: #165dff;
+}
+
+.sa-flow-badge.is-advanced {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: #ecfdf5;
+  color: #059669;
+}
+
 .sa-flow-handoff-title {
   margin-top: 5px;
   font-size: 14px;
@@ -5170,6 +5265,29 @@ onUnmounted(() => {
   color: var(--text-body);
   font-weight: 500;
   line-height: 1.5;
+}
+.sa-status-flow-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+.sa-status-flow-badge.is-advanced {
+  border-color: rgba(0, 180, 42, 0.2);
+  background: #f3fff7;
+  color: #178a3b;
+}
+.sa-status-flow-hint {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .sa-status-right {
   display: flex;

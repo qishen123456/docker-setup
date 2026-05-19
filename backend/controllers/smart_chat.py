@@ -14,8 +14,9 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from ask_flow import ask_flow_controller
+from ask_flow.contracts import AskRequest, ConfirmRequest
 from datasource_router import router as legacy_router
-from four_agent_ask import four_agent_ask_service
 import dataset_report_config as drc
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
@@ -87,7 +88,7 @@ def clear_report_history_items():
 
 def _active_dataset_ids() -> list[int]:
     try:
-        return [int(item.get("id")) for item in four_agent_ask_service.repository.get_agent1_catalog() if item.get("id") is not None]
+        return [int(item.get("id")) for item in ask_flow_controller.active_service().repository.get_agent1_catalog() if item.get("id") is not None]
     except Exception:
         return []
 
@@ -450,19 +451,20 @@ def smart_chat():
     try:
         _append_controller_debug("smart_chat.request.enter")
         _append_controller_debug("smart_chat.request.payload", payload=payload)
+        service = ask_flow_controller.active_service()
         _append_controller_debug(
             "smart_chat.service.meta",
-            service_module=four_agent_ask_service.__class__.__module__,
-            service_file=inspect.getsourcefile(four_agent_ask_service.__class__),
+            controller=ask_flow_controller.__class__.__name__,
+            service_module=service.__class__.__module__,
+            service_file=inspect.getsourcefile(service.__class__),
         )
-        if hasattr(four_agent_ask_service, "_write_trace_line"):
-            four_agent_ask_service._write_trace_line(
-                {
-                    "type": "controller_probe",
-                    "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                    "question": payload.get("question", ""),
-                }
-            )
+        ask_flow_controller.write_controller_probe(
+            {
+                "type": "controller_probe",
+                "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "question": payload.get("question", ""),
+            }
+        )
         question = (payload.get("question") or "").strip()
         session_id = (payload.get("session_id") or "").strip()
         conversation_history = payload.get("conversation_history")
@@ -534,14 +536,15 @@ def smart_chat():
             selected_dataset_ids=selected_dataset_ids,
             allowed_dataset_ids=allowed_dataset_ids,
         )
-        result = four_agent_ask_service.ask(
-            question,
+        result = ask_flow_controller.ask(AskRequest(
+            question=question,
             preferred_dataset_ids=selected_dataset_ids,
             allowed_dataset_ids=allowed_dataset_ids,
             session_id=session_id,
             conversation_history=conversation_history if isinstance(conversation_history, list) else None,
             current_user=user,
-        )
+            requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
+        ))
         _append_controller_debug(
             "smart_chat.service.ask.done",
             has_error=bool(result.get("error")),
@@ -699,8 +702,8 @@ def smart_chat_stream():
 
         def run_ask() -> None:
             try:
-                result = four_agent_ask_service.ask(
-                    question,
+                result = ask_flow_controller.ask(AskRequest(
+                    question=question,
                     preferred_dataset_ids=selected_dataset_ids,
                     allowed_dataset_ids=allowed_dataset_ids,
                     live_callback=emit,
@@ -708,7 +711,8 @@ def smart_chat_stream():
                     session_id=session_id,
                     conversation_history=conversation_history if isinstance(conversation_history, list) else None,
                     current_user=user,
-                )
+                    requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
+                ))
                 result["total_duration"] = round(time.time() - started, 2)
                 # Attach report_config if dataset was identified
                 ds_id = result.get("dataset_id")
@@ -852,14 +856,15 @@ def confirm_by_boss():
             )
             return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
-        result = four_agent_ask_service.confirm_by_boss(
+        result = ask_flow_controller.confirm_by_boss(ConfirmRequest(
             session_id=session_id,
             selected_option=selected_option,
             selected_dataset_ids=selected_dataset_ids,
             allowed_dataset_ids=allowed_dataset_ids,
             option_id=option_id,
             current_user=user,
-        )
+            requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
+        ))
         result["total_duration"] = round(time.time() - started, 2)
         _log_smart_chat_result(
             result=result,
@@ -972,7 +977,7 @@ def confirm_by_boss_stream():
 
         def run_confirm() -> None:
             try:
-                result = four_agent_ask_service.confirm_by_boss(
+                result = ask_flow_controller.confirm_by_boss(ConfirmRequest(
                     session_id=session_id,
                     selected_option=selected_option,
                     selected_dataset_ids=selected_dataset_ids,
@@ -980,7 +985,8 @@ def confirm_by_boss_stream():
                     option_id=option_id,
                     live_callback=emit,
                     current_user=user,
-                )
+                    requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
+                ))
                 result["total_duration"] = round(time.time() - started, 2)
                 ds_id = result.get("dataset_id")
                 if ds_id:
@@ -1077,7 +1083,7 @@ def test_source_identification():
         if not question:
             return jsonify({"error": "Question cannot be empty."}), 400
 
-        route = four_agent_ask_service.route_with_agent1(question)
+        route = ask_flow_controller.route_with_agent1(question)
         return jsonify({"question": question, "route": route})
     except Exception as exc:
         return jsonify({"error": f"route test failed: {exc}"}), 500

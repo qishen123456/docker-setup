@@ -2,7 +2,11 @@
   <section v-if="dataset || report" class="sa-boss-answer">
     <div class="sa-boss-answer-head">
       <div class="sa-boss-answer-title-block">
-        <div class="sa-boss-answer-kicker">经营分析报告</div>
+        <div class="sa-boss-answer-kicker-row">
+          <span class="sa-boss-answer-kicker">经营分析报告</span>
+          <span v-if="flowLabel" class="sa-report-flow-badge" :class="flowClass">{{ flowLabel }}</span>
+          <small v-if="flowLabel && flowHint" class="sa-report-flow-hint">{{ flowHint }}</small>
+        </div>
         <h3 class="sa-boss-answer-title">{{ questionLabel }}</h3>
       </div>
       <button v-if="showDetailsButton" class="sa-boss-answer-link" @click="$emit('viewDetails')">查看详情</button>
@@ -160,6 +164,18 @@ const props = defineProps({
   showDetailsButton: {
     type: Boolean,
     default: true,
+  },
+  flowLabel: {
+    type: String,
+    default: '',
+  },
+  flowClass: {
+    type: String,
+    default: '',
+  },
+  flowHint: {
+    type: String,
+    default: '',
   },
 })
 
@@ -1351,12 +1367,46 @@ const actionItems = computed(() => {
   gap: 3px;
 }
 
+.sa-boss-answer-kicker-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 22px;
+}
+
 .sa-boss-answer-kicker,
 .sa-section-label {
   color: #165dff;
   font-size: 12px;
   line-height: 1.35;
   font-weight: 800;
+}
+
+.sa-report-flow-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sa-report-flow-badge.is-advanced {
+  border-color: rgba(0, 180, 42, 0.2);
+  background: #f3fff7;
+  color: #178a3b;
+}
+
+.sa-report-flow-hint {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .sa-boss-answer-title {

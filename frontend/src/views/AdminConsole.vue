@@ -13,6 +13,11 @@
           <el-button plain type="warning" :loading="resetting" @click="handleReset">恢复默认</el-button>
           <el-button type="primary" :loading="saving" @click="handleSave">保存配置</el-button>
         </template>
+        <template v-else-if="activeConsoleTab === 'ask-flow'">
+          <el-button plain :loading="askFlowLoading" @click="loadAskFlowConfig">刷新流程配置</el-button>
+          <el-button plain type="warning" :loading="askFlowResetting" @click="handleAskFlowReset">恢复默认</el-button>
+          <el-button type="primary" :loading="askFlowSaving" @click="handleAskFlowSave">保存流程配置</el-button>
+        </template>
         <template v-else-if="activeConsoleTab === 'data'">
           <el-button plain :loading="dataPermissionLoading" @click="loadDataPermissions">刷新数据集权限</el-button>
           <el-button type="primary" :loading="dataPermissionSaving" @click="saveDataPermissionRules">保存数据集权限</el-button>
@@ -27,6 +32,7 @@
     <section class="console-tabs">
       <button type="button" :class="{ active: activeConsoleTab === 'dashboard' }" @click="switchConsoleTab('dashboard')">管理看板</button>
       <button type="button" :class="{ active: activeConsoleTab === 'permissions' }" @click="switchConsoleTab('permissions')">功能权限控制</button>
+      <button type="button" :class="{ active: activeConsoleTab === 'ask-flow' }" @click="switchConsoleTab('ask-flow')">问数流程控制</button>
       <button type="button" :class="{ active: activeConsoleTab === 'fields' }" @click="switchConsoleTab('fields')">字段显示权限</button>
       <button type="button" :class="{ active: activeConsoleTab === 'data' }" @click="switchConsoleTab('data')">数据集权限控制</button>
       <button type="button" :class="{ active: activeConsoleTab === 'logs' }" @click="switchConsoleTab('logs')">日志管理</button>
@@ -159,6 +165,129 @@
             </el-table-column>
           </el-table>
         </article>
+      </section>
+    </template>
+
+    <template v-else-if="activeConsoleTab === 'ask-flow'">
+      <section class="ask-flow-panel" v-loading="askFlowLoading">
+        <section class="ask-flow-overview">
+          <div class="ask-flow-overview-copy">
+            <span class="card-kicker">问数流程控制</span>
+            <h2>{{ isAdvancedFlowSelected ? '当前默认使用进阶流程' : '当前默认使用基础流程' }}</h2>
+            <p>这里控制用户提问时默认进入哪套问数流程。基础流程保持现状，进阶流程用于后续 Skill、规划和工具能力灰度。</p>
+          </div>
+          <div class="ask-flow-overview-status">
+            <strong>{{ askFlowDecision.flow === 'advanced' ? '进阶流程' : '基础流程' }}</strong>
+            <span>{{ askFlowReasonText }}</span>
+            <el-tag :type="isAdvancedFlowSelected ? 'success' : 'info'" effect="light">
+              {{ isAdvancedFlowSelected ? '当前选择进阶' : '当前选择基础' }}
+            </el-tag>
+          </div>
+        </section>
+
+        <section class="flow-choice-shell">
+          <div class="flow-section-head">
+            <span>1</span>
+            <div>
+              <strong>选择默认问数流程</strong>
+              <small>这是最主要的配置。选中后点击保存即可生效。</small>
+            </div>
+          </div>
+          <div class="flow-choice-grid">
+            <button
+              type="button"
+              class="flow-choice-card"
+              :class="{ active: askFlowConfig.defaultFlow === 'basic' }"
+              @click="selectAskFlow('basic')"
+            >
+              <span class="flow-choice-tag">稳定</span>
+              <strong>基础流程</strong>
+              <small>沿用当前四 Agent 链式问数，适合日常经营问数。</small>
+              <i>{{ askFlowConfig.defaultFlow === 'basic' ? '当前使用' : '点击切换' }}</i>
+            </button>
+
+            <button
+              type="button"
+              class="flow-choice-card"
+              :class="{ active: askFlowConfig.defaultFlow === 'advanced' }"
+              @click="selectAskFlow('advanced')"
+            >
+              <span class="flow-choice-tag">升级</span>
+              <strong>进阶流程</strong>
+              <small>独立新流程入口。当前先镜像基础流程，后续逐步加入 Skill 和规划能力。</small>
+              <i>{{ askFlowConfig.defaultFlow === 'advanced' ? '当前使用' : '点击切换' }}</i>
+            </button>
+          </div>
+        </section>
+
+        <section class="ask-flow-card">
+          <div class="ask-flow-card-head">
+            <div>
+              <span class="card-kicker">保护策略</span>
+              <h3>进阶流程控制</h3>
+            </div>
+            <el-button text type="primary" @click="askFlowAdvancedOpen = !askFlowAdvancedOpen">
+              {{ askFlowAdvancedOpen ? '收起' : '展开设置' }}
+            </el-button>
+          </div>
+          <div v-if="askFlowAdvancedOpen" class="flow-settings-grid">
+            <label class="flow-setting-item">
+              <span>异常自动回退</span>
+              <small>进阶流程异常时自动切回基础流程。</small>
+              <el-switch v-model="askFlowConfig.fallbackToBasicOnError" />
+            </label>
+            <label class="flow-setting-item">
+              <span>问数界面显示流程标识</span>
+              <small>问数完成后显示“基础流程 / 进阶流程”。</small>
+              <el-switch v-model="askFlowConfig.attachMetadata" />
+            </label>
+            <div class="flow-setting-item is-wide">
+              <span>允许使用进阶流程的角色</span>
+              <small>默认建议只给超管；确认稳定后再扩大。</small>
+              <el-checkbox-group v-model="askFlowConfig.advancedRoles" class="flow-role-checks">
+                <el-checkbox v-for="role in roles" :key="role.value" :label="role.value">{{ role.label }}</el-checkbox>
+              </el-checkbox-group>
+            </div>
+          </div>
+          <div v-else class="flow-collapsed-summary">
+            <span>回退保护：{{ askFlowConfig.fallbackToBasicOnError ? '开启' : '关闭' }}</span>
+            <span>流程标识：{{ askFlowConfig.attachMetadata ? '显示' : '隐藏' }}</span>
+            <span>角色：{{ askFlowRoleSummary }}</span>
+          </div>
+        </section>
+
+        <section class="ask-flow-card">
+          <div class="ask-flow-card-head">
+            <div>
+              <span class="card-kicker">可选灰度</span>
+              <h3>按数据集指定流程</h3>
+            </div>
+            <el-button text type="primary" @click="askFlowDatasetOpen = !askFlowDatasetOpen">
+              {{ askFlowDatasetOpen ? '收起' : '展开灰度' }}
+            </el-button>
+          </div>
+          <div v-if="askFlowDatasetOpen" class="flow-dataset-policy">
+            <p>只在需要让某个数据集先试用进阶流程时配置。留空则全部跟随上面的默认流程。</p>
+            <div v-for="(row, index) in askFlowDatasetPolicyRows" :key="row.key" class="flow-dataset-row">
+              <el-input v-model="row.datasetId" placeholder="数据集 ID，例如 12" />
+              <el-select v-model="row.flow" placeholder="流程">
+                <el-option label="基础流程" value="basic" />
+                <el-option label="进阶流程" value="advanced" />
+              </el-select>
+              <el-button plain type="danger" @click="removeAskFlowDatasetPolicy(index)">删除</el-button>
+            </div>
+            <el-button plain type="primary" @click="addAskFlowDatasetPolicy">添加数据集灰度</el-button>
+          </div>
+          <div v-else class="flow-collapsed-summary">
+            <span>{{ askFlowDatasetPolicyRows.length ? `${askFlowDatasetPolicyRows.length} 个数据集单独指定` : '未单独指定数据集，全部跟随默认流程' }}</span>
+          </div>
+        </section>
+
+        <div class="ask-flow-actions">
+          <el-button plain :loading="askFlowLoading" @click="loadAskFlowConfig">刷新</el-button>
+          <el-button plain type="warning" :loading="askFlowResetting" @click="handleAskFlowReset">恢复默认</el-button>
+          <el-button type="primary" :loading="askFlowSaving" @click="handleAskFlowSave">保存流程配置</el-button>
+        </div>
       </section>
     </template>
 
@@ -733,12 +862,15 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   clearSystemLogs,
   getAdminFeatureFlags,
+  getAskFlowConfig,
   getDataPermissions,
   getSystemLogDetail,
   getSystemLogs,
   getSystemLogStats,
   resetAdminFeatureFlags,
+  resetAskFlowConfig,
   saveDataPermissions,
+  saveAskFlowConfig,
   saveAdminFeatureFlags,
 } from '../api/index.js'
 
@@ -755,7 +887,7 @@ const FEATURE_FLAGS_UPDATED_EVENT = 'smartask-feature-flags-updated'
 const ADMIN_CONSOLE_LAST_ROUTE_KEY = 'smartask_admin_console_last_route'
 const ADMIN_CONSOLE_FLOAT_HIDDEN_KEY = 'smartask_admin_console_float_hidden'
 const ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT = 'smartask-admin-console-float-toggle'
-const consoleTabs = ['dashboard', 'permissions', 'fields', 'data', 'logs']
+const consoleTabs = ['dashboard', 'permissions', 'ask-flow', 'fields', 'data', 'logs']
 
 const loading = ref(false)
 const saving = ref(false)
@@ -763,6 +895,21 @@ const resetting = ref(false)
 const features = ref({})
 const openModules = ref(['organization_tree_management', 'employee_permissions', 'runtime_migration'])
 const activeConsoleTab = ref('dashboard')
+const askFlowLoading = ref(false)
+const askFlowSaving = ref(false)
+const askFlowResetting = ref(false)
+const askFlowDecision = ref({})
+const askFlowAdvancedOpen = ref(false)
+const askFlowDatasetOpen = ref(false)
+const askFlowDatasetPolicyRows = ref([])
+const askFlowConfig = ref({
+  defaultFlow: 'basic',
+  advancedEnabled: false,
+  advancedRoles: ['super_admin'],
+  datasetPolicies: {},
+  fallbackToBasicOnError: true,
+  attachMetadata: false,
+})
 const dataPermissionLoading = ref(false)
 const dataPermissionSaving = ref(false)
 const dataPermissionRows = ref([])
@@ -827,11 +974,41 @@ const activeHero = computed(() => {
       description: '按数据集绑定组织树和组织节点，员工在账号页选择组织节点后自动获得对应数据范围。'
     }
   }
+  if (activeConsoleTab.value === 'ask-flow') {
+    return {
+      kicker: '问数流程控制',
+      description: '配置基础流程和进阶流程的入口、灰度角色和回退策略，确保升级版问数可控发布。'
+    }
+  }
   return {
     kicker: '功能权限控制',
     description: '按角色勾选左侧导航和页面按钮权限；数据范围不在这里配置。'
   }
 })
+
+const askFlowReasonText = computed(() => {
+  const reason = askFlowDecision.value?.reason || ''
+  const map = {
+    basic_selected: '当前选择基础流程。',
+    advanced_disabled: '进阶流程总开关关闭，已回落基础流程。',
+    advanced_role_denied: '当前角色不在进阶流程灰度范围内。',
+    advanced_selected: '当前会进入进阶流程。',
+    advanced_error_fallback: '进阶流程异常时已回退基础流程。'
+  }
+  return map[reason] || reason || '尚未加载流程判断。'
+})
+
+const isAdvancedFlowSelected = computed(() => askFlowConfig.value.defaultFlow === 'advanced')
+const askFlowRoleSummary = computed(() => {
+  const labels = (askFlowConfig.value.advancedRoles || [])
+    .map(role => roles.find(item => item.value === role)?.label || role)
+    .filter(Boolean)
+  return labels.length ? labels.join('、') : '未选择'
+})
+
+const selectAskFlow = (flow) => {
+  askFlowConfig.value.defaultFlow = flow === 'advanced' ? 'advanced' : 'basic'
+}
 
 const featureList = computed(() =>
   Object.entries(features.value || {})
@@ -1099,6 +1276,100 @@ const handleReset = async () => {
     showRequestError(error, '恢复默认权限失败')
   } finally {
     resetting.value = false
+  }
+}
+
+const applyAskFlowConfig = (config = {}, decision = {}) => {
+  const policies = config.datasetPolicies && typeof config.datasetPolicies === 'object' ? { ...config.datasetPolicies } : {}
+  askFlowConfig.value = {
+    defaultFlow: config.defaultFlow || 'basic',
+    advancedEnabled: Boolean(config.advancedEnabled),
+    advancedRoles: Array.isArray(config.advancedRoles) && config.advancedRoles.length ? [...config.advancedRoles] : ['super_admin'],
+    datasetPolicies: policies,
+    fallbackToBasicOnError: config.fallbackToBasicOnError !== false,
+    attachMetadata: config.attachMetadata !== false,
+  }
+  askFlowDecision.value = decision || {}
+  askFlowDatasetPolicyRows.value = Object.entries(policies).map(([datasetId, flow], index) => ({
+    key: `${datasetId}-${index}-${Date.now()}`,
+    datasetId,
+    flow: flow === 'advanced' ? 'advanced' : 'basic',
+  }))
+}
+
+const loadAskFlowConfig = async () => {
+  askFlowLoading.value = true
+  try {
+    const res = await getAskFlowConfig()
+    applyAskFlowConfig(res?.data?.config || {}, res?.data?.effectiveDecision || {})
+  } catch (error) {
+    showRequestError(error, '问数流程配置加载失败')
+  } finally {
+    askFlowLoading.value = false
+  }
+}
+
+const buildAskFlowPayload = () => {
+  const flow = askFlowConfig.value.defaultFlow === 'advanced' ? 'advanced' : 'basic'
+  const datasetPolicies = {}
+  for (const row of askFlowDatasetPolicyRows.value) {
+    const datasetId = String(row.datasetId || '').trim()
+    if (!datasetId) continue
+    if (!/^\d+$/.test(datasetId)) throw new Error(`数据集 ID 只能填写数字：${datasetId}`)
+    datasetPolicies[String(Number(datasetId))] = row.flow === 'advanced' ? 'advanced' : 'basic'
+  }
+  const hasAdvancedPolicy = Object.values(datasetPolicies).includes('advanced')
+  return {
+    defaultFlow: flow,
+    advancedEnabled: flow === 'advanced' || hasAdvancedPolicy,
+    advancedRoles: askFlowConfig.value.advancedRoles?.length ? askFlowConfig.value.advancedRoles : ['super_admin'],
+    datasetPolicies,
+    fallbackToBasicOnError: askFlowConfig.value.fallbackToBasicOnError !== false,
+    attachMetadata: askFlowConfig.value.attachMetadata !== false,
+  }
+}
+
+const addAskFlowDatasetPolicy = () => {
+  askFlowDatasetPolicyRows.value.push({
+    key: `new-${Date.now()}-${Math.random()}`,
+    datasetId: '',
+    flow: 'advanced',
+  })
+}
+
+const removeAskFlowDatasetPolicy = (index) => {
+  askFlowDatasetPolicyRows.value.splice(index, 1)
+}
+
+const handleAskFlowSave = async () => {
+  askFlowSaving.value = true
+  try {
+    const res = await saveAskFlowConfig(buildAskFlowPayload())
+    applyAskFlowConfig(res?.data?.config || {}, res?.data?.effectiveDecision || {})
+    ElMessage.success('问数流程配置已保存')
+  } catch (error) {
+    if (error instanceof Error && !error.response) ElMessage.error(error.message)
+    else showRequestError(error, '问数流程配置保存失败')
+  } finally {
+    askFlowSaving.value = false
+  }
+}
+
+const handleAskFlowReset = async () => {
+  await ElMessageBox.confirm('将恢复问数流程控制器默认配置：默认基础流程、关闭进阶流程。确认继续吗？', '恢复默认', {
+    type: 'warning',
+    confirmButtonText: '恢复默认',
+    cancelButtonText: '取消'
+  })
+  askFlowResetting.value = true
+  try {
+    const res = await resetAskFlowConfig()
+    applyAskFlowConfig(res?.data?.config || {}, res?.data?.effectiveDecision || {})
+    ElMessage.success('问数流程配置已恢复默认')
+  } catch (error) {
+    showRequestError(error, '问数流程配置恢复失败')
+  } finally {
+    askFlowResetting.value = false
   }
 }
 
@@ -1493,6 +1764,7 @@ const switchConsoleTab = async (tab) => {
   } : { tab }
   await syncAdminConsoleRoute(keepQuery)
   if (tab === 'dashboard') loadDashboardData()
+  else if (tab === 'ask-flow') loadAskFlowConfig()
   else if (tab === 'data') ensureDataPermissionsLoaded()
   else if (tab === 'logs') ensureLogsLoaded()
 }
@@ -1966,6 +2238,8 @@ onMounted(() => {
     loadLogData()
   } else if (activeConsoleTab.value === 'dashboard') {
     loadDashboardData()
+  } else if (activeConsoleTab.value === 'ask-flow') {
+    loadAskFlowConfig()
   }
   loadFlags()
 })
@@ -1979,6 +2253,207 @@ onMounted(() => {
   background:
     radial-gradient(circle at 8% 6%, rgba(24, 144, 255, 0.12), transparent 28%),
     linear-gradient(135deg, #f6f9ff 0%, #f4f7fb 54%, #edf4ff 100%);
+}
+
+.ask-flow-panel { display: flex; flex-direction: column; gap: 16px; }
+
+.ask-flow-overview {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(239,246,255,0.9));
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.07);
+}
+
+.ask-flow-overview-copy h2 { margin: 6px 0 8px; font-size: 24px; color: #0f172a; }
+.ask-flow-overview-copy p { margin: 0; max-width: 680px; color: #475569; line-height: 1.75; }
+
+.ask-flow-overview-status {
+  min-width: 220px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ask-flow-overview-status strong { display: block; font-size: 22px; color: #111827; }
+.ask-flow-overview-status span { display: block; margin: 8px 0 12px; color: #64748b; line-height: 1.6; }
+
+.flow-choice-shell,
+.ask-flow-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.045);
+}
+
+.flow-choice-shell { padding: 18px; }
+
+.flow-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.flow-section-head > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 800;
+}
+
+.flow-section-head strong { display: block; color: #111827; font-size: 17px; }
+.flow-section-head small { display: block; margin-top: 3px; color: #64748b; }
+
+.flow-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+.flow-choice-card {
+  position: relative;
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.flow-choice-card:hover {
+  border-color: #93c5fd;
+  background: #ffffff;
+}
+
+.flow-choice-card.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+.flow-choice-card strong { font-size: 22px; color: #0f172a; }
+.flow-choice-card small { color: #475569; line-height: 1.65; }
+.flow-choice-card i { margin-top: auto; font-style: normal; color: #2563eb; font-weight: 700; }
+
+.flow-choice-tag {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ask-flow-card {
+  padding: 18px;
+}
+
+.ask-flow-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ask-flow-card h3 { margin: 6px 0 0; font-size: 17px; color: #111827; }
+.ask-flow-card-head small { color: #94a3b8; line-height: 1.6; }
+
+.flow-muted { margin: 10px 0 0; color: #64748b; font-size: 13px; line-height: 1.7; }
+
+.flow-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.flow-setting-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.flow-setting-item > span { font-weight: 700; color: #111827; }
+.flow-setting-item > small { grid-column: 1 / 2; color: #64748b; line-height: 1.55; }
+.flow-setting-item :deep(.el-switch) { grid-row: 1 / 3; grid-column: 2; }
+.flow-setting-item.is-wide { grid-template-columns: 1fr; grid-column: 1 / -1; }
+.flow-setting-item.is-wide small { grid-column: auto; }
+
+.flow-role-checks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.flow-collapsed-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flow-collapsed-summary span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+}
+
+.flow-dataset-policy p {
+  margin: 0 0 12px;
+  color: #64748b;
+}
+
+.flow-dataset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ask-flow-actions {
+  position: sticky;
+  bottom: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.10);
+}
+
+@media (max-width: 1080px) {
+  .flow-choice-grid,
+  .flow-settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .ask-flow-overview {
+    flex-direction: column;
+  }
+  .flow-role-checks,
+  .flow-dataset-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .console-page > * {
