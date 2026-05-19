@@ -106,6 +106,12 @@ class AskFlowController:
     def _attach_metadata(result: Dict[str, Any], decision: FlowDecision, started: float) -> Dict[str, Any]:
         if not isinstance(result, dict):
             return result
+        if decision.config.get("attachMetadata") is False:
+            result.pop("ask_flow", None)
+            diagnostics = result.get("diagnostics")
+            if isinstance(diagnostics, dict):
+                diagnostics.pop("ask_flow", None)
+            return result
         metadata = {
             "flow": decision.flow,
             "reason": decision.reason,

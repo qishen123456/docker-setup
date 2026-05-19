@@ -1122,7 +1122,7 @@ import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted,
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
-import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
+import { getAskFlowConfig, getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
 import { useFeatureFlags } from '../state/featureFlags'
@@ -1241,8 +1241,10 @@ const statusBarText = computed(() => {
 })
 
 const activeReportResult = computed(() => detailReportResult.value || session.state.result || null)
+const showAskFlowBadge = ref(true)
 
 const activeAskFlowMeta = computed(() => {
+  if (!showAskFlowBadge.value) return null
   const meta = activeReportResult.value?.ask_flow || activeReportResult.value?.diagnostics?.ask_flow || null
   return meta && typeof meta === 'object' ? meta : null
 })
@@ -3452,6 +3454,7 @@ const getMessageElapsedLabel = (msg) => {
 }
 
 const getAskFlowMeta = (msg) => {
+  if (!showAskFlowBadge.value) return null
   const meta = msg?.data?.ask_flow || msg?.data?.diagnostics?.ask_flow || null
   return meta && typeof meta === 'object' ? meta : null
 }
@@ -4177,6 +4180,16 @@ const loadQuestions = async () => {
   }
 }
 
+const loadAskFlowDisplayConfig = async () => {
+  try {
+    const res = await getAskFlowConfig()
+    const config = res?.data?.config || res?.config || {}
+    showAskFlowBadge.value = config.attachMetadata !== false
+  } catch {
+    showAskFlowBadge.value = true
+  }
+}
+
 const handleDatasetChange = async () => {
   if (!canUseFeature('smart_dataset_select')) {
     datasetId.value = null
@@ -4647,6 +4660,7 @@ watch(canViewFullscreenReport, (allowed) => {
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadFeatureFlags()
+  await loadAskFlowDisplayConfig()
   loadHistory()
 
   // 从 sessionStorage 还原输入状态
@@ -4687,6 +4701,7 @@ onActivated(async () => {
     const modelRes = await getActiveAIModels()
     aiModels.value = modelRes.models || []
   } catch {}
+  await loadAskFlowDisplayConfig()
   loadHistory()
 })
 
