@@ -428,7 +428,7 @@ def agent_prompts() -> List[Dict[str, Any]]:
         {
             "agent_no": 3,
             "prompt_key": "consumer_standard_review",
-            "prompt_content": """复核消费者事业部 SQL 时重点检查：1）是否只读；2）是否真实使用 public.feishu_tbl_xioafeizhe；3）业务字段是否全部通过 fields JSONB 读取；4）是否错误引用不存在的物理列；5）是否输出条线、层级、节点名称、上级名称等报告标准列；6）金额是否统一万元、达成率是否为数字；7）是否混合不同层级做排名。若发现字段引用错误，请在 final_sql 中修正，不要只给文字建议。""",
+            "prompt_content": """复核消费者事业部 SQL 时重点检查：1）是否只读；2）是否真实使用 public.feishu_tbl_xioafeizhe；3）业务字段是否全部通过 fields JSONB 读取；4）是否错误引用不存在的物理列或 fields 字段；5）是否输出条线、层级、节点名称、上级名称等报告标准列；6）金额是否统一万元、达成率是否为数字；7）是否混合不同层级做排名。字段必须以数据字典为准，发现字段不存在时应阻断并说明原因，不要猜字段、不要自行替换成相似字段。""",
             "is_active": True,
         },
         {

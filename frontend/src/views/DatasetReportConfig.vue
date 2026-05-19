@@ -102,6 +102,87 @@
               </div>
 
               <div class="rc-card rc-card-wide">
+                <div class="rc-card-title">意图策略</div>
+                <div class="rc-card-body">
+                  <div class="rc-help-text">按数据集独立配置排名、TopN、最高/最低、目标层级和默认排序指标。问数时只读取当前数据集策略，不影响其他数据集。</div>
+                  <div class="rc-field-grid">
+                    <div class="rc-field">
+                      <label>排名意图</label>
+                      <el-switch
+                        v-model="rankingPolicy.enabled"
+                        size="small"
+                        active-text="启用"
+                        inactive-text="停用"
+                      />
+                    </div>
+                    <div class="rc-field">
+                      <label>默认方向</label>
+                      <el-select v-model="rankingPolicy.defaultDirection" size="small">
+                        <el-option label="从高到低" value="desc" />
+                        <el-option label="从低到高" value="asc" />
+                      </el-select>
+                    </div>
+                    <div class="rc-field">
+                      <label>默认 TopN</label>
+                      <el-input-number v-model="rankingPolicy.defaultTopN" size="small" :min="1" :max="50" controls-position="right" />
+                    </div>
+                    <div class="rc-field">
+                      <label>最大 TopN</label>
+                      <el-input-number v-model="rankingPolicy.maxTopN" size="small" :min="1" :max="200" controls-position="right" />
+                    </div>
+                    <div class="rc-field">
+                      <label>默认排序指标</label>
+                      <el-select v-model="rankingPolicy.defaultMetricKey" size="small" filterable allow-create default-first-option placeholder="选择指标 Key">
+                        <el-option v-for="metric in metricOptions" :key="metric.key" :label="metric.label" :value="metric.key" />
+                      </el-select>
+                    </div>
+                    <div class="rc-field">
+                      <label>输出模式</label>
+                      <el-select v-model="rankingPolicy.outputMode" size="small">
+                        <el-option label="只返回排名对象" value="topn_only" />
+                        <el-option label="返回排名与上下文" value="topn_with_context" />
+                      </el-select>
+                    </div>
+                  </div>
+                  <div class="rc-field-grid" style="margin-top:12px">
+                    <div class="rc-field">
+                      <label>排名触发词</label>
+                      <el-input v-model="rankingTriggersText" size="small" placeholder="排名,排行,Top,前,最高,最好" />
+                    </div>
+                    <div class="rc-field">
+                      <label>低位/倒序触发词</label>
+                      <el-input v-model="rankingNegativeTriggersText" size="small" placeholder="最低,最差,后,倒数,垫底" />
+                    </div>
+                  </div>
+                  <div class="rc-field" style="margin-top:12px">
+                    <label>目标层级别名</label>
+                    <el-input
+                      v-model="rankingAliasLinesText"
+                      type="textarea"
+                      :rows="4"
+                      size="small"
+                      placeholder="每行一个层级，例如：分公司=分公司,区域公司&#10;城市公司=城市公司,城市分公司"
+                    />
+                  </div>
+                  <el-collapse class="rc-advanced-config">
+                    <el-collapse-item title="高级 JSON" name="intent-json">
+                      <el-input
+                        v-model="intentPoliciesText"
+                        type="textarea"
+                        :rows="8"
+                        size="small"
+                        class="rc-json-editor"
+                        @blur="applyIntentPoliciesText"
+                      />
+                    </el-collapse-item>
+                  </el-collapse>
+                  <div class="rc-help-text rc-help-text-bottom">
+                    例如“消费者前三的分公司”会命中排名意图，目标层级取“分公司”，TopN 取 3，排序指标默认取上方选择的指标。
+                  </div>
+                </div>
+              </div>
+
+              <div class="rc-card rc-card-wide">
                 <div class="rc-card-title">
                   分析维度 / 管理链路
                   <el-button v-if="isFeatureEnabled('report_template_edit')" text type="primary" size="small" @click="addAnalysisDimension">+ 添加</el-button>
@@ -290,6 +371,7 @@ const datasets = ref([])
 const selectedDatasetId = ref(null)
 const activeTab = ref('visual')
 const jsonText = ref('')
+const intentPoliciesText = ref('{}')
 const hasConfig = ref(false)
 
 const configForm = ref({
@@ -299,13 +381,61 @@ const configForm = ref({
   levels: [], trackValues: {},
   businessContext: '', agentReportGuidance: '', sourceFields: {},
   sqlOutputContract: { requiredColumns: [], metricColumns: [], notes: [] },
-  analysisDimensions: []
+  analysisDimensions: [],
+  intentPolicies: {},
 })
+
+const defaultRankingPolicy = {
+  enabled: true,
+  triggers: ['排名', '排行', 'Top', '前', '后', '最高', '最低', '最好', '最差', '倒数', '垫底'],
+  defaultTopN: 3,
+  maxTopN: 20,
+  defaultMetricKey: 'rate',
+  defaultDirection: 'desc',
+  negativeTriggers: ['最低', '最差', '后', '倒数', '垫底', '落后'],
+  targetLevelAliases: {
+    分公司: ['分公司'],
+    代表处: ['代表处'],
+    业务部: ['业务部', '行业部'],
+    业务代表: ['业务代表', '业务员', '个人'],
+    城市公司: ['城市公司', '城市分公司'],
+  },
+  outputMode: 'topn_only',
+}
 
 const splitList = (value, delimiter = ',') => String(value || '')
   .split(delimiter)
   .map(item => item.trim())
   .filter(Boolean)
+
+const splitFlexibleList = (value) => String(value || '')
+  .split(/[,，、\n]+/)
+  .map(item => item.trim())
+  .filter(Boolean)
+
+const ensureRankingPolicy = () => {
+  if (!configForm.value.intentPolicies || typeof configForm.value.intentPolicies !== 'object') {
+    configForm.value.intentPolicies = {}
+  }
+  if (!configForm.value.intentPolicies.ranking || typeof configForm.value.intentPolicies.ranking !== 'object') {
+    configForm.value.intentPolicies.ranking = {}
+  }
+  const policy = configForm.value.intentPolicies.ranking
+  Object.entries(defaultRankingPolicy).forEach(([key, value]) => {
+    if (key === 'targetLevelAliases') return
+    if (policy[key] !== undefined) return
+    policy[key] = Array.isArray(value) ? [...value] : value
+  })
+  if (!policy.targetLevelAliases || typeof policy.targetLevelAliases !== 'object') {
+    policy.targetLevelAliases = {}
+  }
+  Object.entries(defaultRankingPolicy.targetLevelAliases).forEach(([level, aliases]) => {
+    if (!policy.targetLevelAliases[level]) {
+      policy.targetLevelAliases[level] = [...aliases]
+    }
+  })
+  return policy
+}
 
 const requiredColumnsText = computed({
   get: () => (configForm.value.sqlOutputContract?.requiredColumns || []).join(', '),
@@ -333,9 +463,61 @@ const selectedDatasetName = computed(() => {
   return ds ? (ds.dataset_name || ds.dataset_code || `数据集#${ds.id}`) : ''
 })
 
+const rankingPolicy = computed(() => ensureRankingPolicy())
+
+const metricOptions = computed(() => (configForm.value.metrics || [])
+  .filter(metric => metric && (metric.key || metric.label || metric.column))
+  .map(metric => ({
+    key: metric.key || metric.column || metric.label,
+    label: `${metric.label || metric.key || metric.column}${metric.column ? ` · ${metric.column}` : ''}`,
+  })))
+
+const rankingTriggersText = computed({
+  get: () => (ensureRankingPolicy().triggers || []).join(', '),
+  set: (value) => { ensureRankingPolicy().triggers = splitFlexibleList(value) },
+})
+
+const rankingNegativeTriggersText = computed({
+  get: () => (ensureRankingPolicy().negativeTriggers || []).join(', '),
+  set: (value) => { ensureRankingPolicy().negativeTriggers = splitFlexibleList(value) },
+})
+
+const rankingAliasLinesText = computed({
+  get: () => Object.entries(ensureRankingPolicy().targetLevelAliases || {})
+    .map(([level, aliases]) => `${level}=${(aliases || []).join(',')}`)
+    .join('\n'),
+  set: (value) => {
+    const aliases = {}
+    String(value || '').split('\n').forEach(line => {
+      const [level, aliasText = ''] = line.split('=')
+      const normalizedLevel = String(level || '').trim()
+      if (!normalizedLevel) return
+      aliases[normalizedLevel] = splitFlexibleList(aliasText || normalizedLevel)
+    })
+    ensureRankingPolicy().targetLevelAliases = aliases
+  },
+})
+
 const addMetric = () => configForm.value.metrics.push({ key: '', label: '', column: '', format: 'amount' })
 const addSignalRule = () => configForm.value.signalRules.push({ key: '', op: '>=', value: 0, tone: 'good', label: '' })
 const addAnalysisDimension = () => configForm.value.analysisDimensions.push({ key: '', label: '', path: [], sourceFields: [], purpose: '' })
+
+const syncIntentPoliciesText = () => {
+  ensureRankingPolicy()
+  intentPoliciesText.value = JSON.stringify(configForm.value.intentPolicies || {}, null, 2)
+}
+
+const applyIntentPoliciesText = () => {
+  try {
+    configForm.value.intentPolicies = JSON.parse(intentPoliciesText.value || '{}')
+    ensureRankingPolicy()
+    return true
+  } catch (e) {
+    ElMessage.error('意图策略 JSON 格式错误: ' + e.message)
+    syncIntentPoliciesText()
+    return false
+  }
+}
 
 const loadDatasets = async () => {
   try {
@@ -380,7 +562,9 @@ const loadConfig = async (dsId) => {
       sourceFields: cfg.sourceFields || {},
       sqlOutputContract: cfg.sqlOutputContract || { requiredColumns: [], metricColumns: [], notes: [] },
       analysisDimensions: cfg.analysisDimensions || [],
+      intentPolicies: cfg.intentPolicies || {},
     })
+    syncIntentPoliciesText()
     jsonText.value = JSON.stringify(configForm.value, null, 2)
   } finally { loading.value = false }
 }
@@ -390,6 +574,7 @@ const loadDefaultConfig = async () => {
     const r = await getDefaultReportConfig()
     const cfg = r.config || {}
     Object.assign(configForm.value, cfg)
+    syncIntentPoliciesText()
     jsonText.value = JSON.stringify(configForm.value, null, 2)
     ElMessage.success('已加载默认模板')
   } catch { ElMessage.error('加载默认模板失败') }
@@ -399,6 +584,7 @@ const parseJson = () => {
   try {
     const parsed = JSON.parse(jsonText.value)
     Object.assign(configForm.value, parsed)
+    syncIntentPoliciesText()
     ElMessage.success('JSON 已解析')
     activeTab.value = 'visual'
   } catch (e) { ElMessage.error('JSON 格式错误: ' + e.message) }
@@ -407,6 +593,9 @@ const parseJson = () => {
 const saveConfig = async () => {
   saving.value = true
   try {
+    ensureRankingPolicy()
+    syncIntentPoliciesText()
+    if (!applyIntentPoliciesText()) return
     await upsertReportConfig(selectedDatasetId.value, configForm.value)
     hasConfig.value = true
     // Update sidebar badge

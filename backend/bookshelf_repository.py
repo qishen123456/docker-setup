@@ -255,6 +255,16 @@ class BookshelfRepository:
         if not tokens:
             return samples[:top_k_samples]
 
+        def question_key(value: Any) -> str:
+            text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
+            text = re.sub(r"^(请问|帮我|帮忙|麻烦|查一下|看一下|查询|分析一下|我想知道)+", "", text)
+            text = re.sub(r"(呢|啊|呀|吗|么|吧)$", "", text)
+            text = text.replace("消费者事业部", "").replace("消费事业部", "").replace("消费者", "")
+            text = text.replace("商用事业部", "").replace("商用", "")
+            return text
+
+        query_key = question_key(question)
+
         def score(sample: Dict[str, Any]) -> int:
             text_parts = [
                 sample.get("question", ""),
@@ -263,12 +273,15 @@ class BookshelfRepository:
             ]
             sample_tokens = self._tokenize(" ".join(text_parts))
             overlap = len(tokens.intersection(sample_tokens))
+            sample_key = question_key(sample.get("question"))
             exact_hit = 1 if self._normalize_question_key(question) == self._normalize_question_key(sample.get("question")) else 0
+            normalized_hit = 1 if sample_key and query_key and sample_key == query_key else 0
+            contains_hit = 1 if sample_key and query_key and sample_key != query_key and (sample_key in query_key or query_key in sample_key) else 0
             quality = int(sample.get("quality_score") or 0) // 10
             sql_bonus = self._score_sql_shape(question, sample.get("sql_text") or "")
             coverage = len(sample_tokens) or 1
             overlap_ratio = int((overlap / coverage) * 20)
-            return overlap * 12 + overlap_ratio + quality + sql_bonus + exact_hit * 50
+            return overlap * 12 + overlap_ratio + quality + sql_bonus + exact_hit * 50 + normalized_hit * 90 + contains_hit * 60
 
         ranked = sorted(samples, key=score, reverse=True)
         selected = []

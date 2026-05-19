@@ -63,10 +63,10 @@
 
     <div v-if="secondaryDrillRows.length" class="sa-report-mini-section sa-drill-section">
       <div class="sa-section-title-line">
-        <div class="sa-section-label">四、二级拆解</div>
+        <div class="sa-section-label">{{ drillSectionLabel }}</div>
         <span>{{ secondaryDrillSummary }}</span>
       </div>
-      <div class="sa-drill-table" role="table" aria-label="二级经营拆解">
+      <div class="sa-drill-table" :class="{ 'is-person-ranking': isBusinessPersonRanking }" role="table" aria-label="二级经营拆解">
         <div class="sa-drill-row is-head" role="row">
           <span>节点</span>
           <span>任务 / 完成</span>
@@ -81,7 +81,7 @@
           <div v-for="(row, index) in group.rows" :key="`drill-${row.level}-${row.parent}-${row.name}-${index}`" class="sa-drill-row" role="row">
             <div class="sa-drill-node">
               <strong>{{ row.name }}</strong>
-              <span>{{ row.level || secondaryLevelLabel }}</span>
+              <span>{{ drillNodeMeta(row) }}</span>
             </div>
             <div class="sa-drill-number">
               <strong>{{ row.taskText || '-' }}</strong>
@@ -102,15 +102,19 @@
       </div>
     </div>
 
-    <div v-if="supportLines.length || actionItems.length" class="sa-report-mini-section sa-advice-section">
+    <div
+      v-if="supportLines.length || actionItems.length"
+      class="sa-report-mini-section sa-advice-section"
+      :class="{ 'is-single': !supportLines.length || !actionItems.length }"
+    >
       <div v-if="supportLines.length" class="sa-advice-block">
-        <div class="sa-section-label">{{ secondaryDrillRows.length ? '五、重点发现' : '四、重点发现' }}</div>
+        <div class="sa-section-label">{{ supportSectionLabel }}</div>
         <ol class="sa-advice-list">
           <li v-for="(line, index) in supportLines.slice(0, 3)" :key="`support-${index}`">{{ line }}</li>
         </ol>
       </div>
       <div v-if="actionItems.length" class="sa-advice-block">
-        <div class="sa-section-label">{{ secondaryDrillRows.length ? '六、建议动作' : '五、建议动作' }}</div>
+        <div class="sa-section-label">{{ actionSectionLabel }}</div>
         <ol class="sa-advice-list">
           <li v-for="(line, index) in actionItems" :key="`action-${index}`">{{ line }}</li>
         </ol>
@@ -224,11 +228,86 @@ const amountText = (value) => {
   return numeric.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
+const questionText = computed(() => cleanText(props.question || props.title))
+const chineseNumberMap = {
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+}
+const parseRankNumber = (value) => {
+  const text = cleanText(value)
+  if (!text) return 0
+  if (/^\d+$/.test(text)) return Number(text)
+  if (text === '十') return 10
+  if (text.includes('十')) {
+    const [left, right] = text.split('十')
+    return (chineseNumberMap[left] || (left ? 0 : 1)) * 10 + (chineseNumberMap[right] || 0)
+  }
+  return chineseNumberMap[text] || 0
+}
+const requestedRankLimit = computed(() => {
+  const text = questionText.value
+  const match = text.match(/(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)/)
+  const count = parseRankNumber(match?.[1])
+  if (count) return Math.max(1, Math.min(20, count))
+  if (/排名|排行|前|后/.test(text)) return 3
+  return 0
+})
+const isRankingQuestion = computed(() => Boolean(
+  requestedRankLimit.value || /排名|排行|最高|最低|最好|最差|倒数|垫底/.test(questionText.value),
+))
+const rankDirection = computed(() => (
+  /最低|最差|倒数|垫底|后/.test(questionText.value) ? 'asc' : 'desc'
+))
+const normalizeLevelHint = (value) => {
+  const text = cleanText(value)
+  if (!text || /^(对象|下一层级|明细层级|下级节点)$/.test(text)) return ''
+  if (text.includes('业务代表') || text.includes('业务员')) return '业务代表'
+  if (text.includes('代表处')) return '代表处'
+  if (text.includes('城市公司') || text.includes('城市分公司')) return '城市公司'
+  if (text.includes('分公司')) return '分公司'
+  if (text.includes('业务部')) return '业务部'
+  return ''
+}
+const explicitQuestionLevel = computed(() => {
+  const text = questionText.value
+  if (/业务代表|业务员/.test(text)) return '业务代表'
+  if (/代表处/.test(text)) return '代表处'
+  if (/城市公司|城市分公司/.test(text)) return '城市公司'
+  if (/业务部/.test(text)) return '业务部'
+  if (/分公司/.test(text)) return '分公司'
+  return ''
+})
+const specScope = computed(() => props.dataset?.report_spec?.scope || datasetList.value.find(item => item?.report_spec?.scope)?.report_spec?.scope || {})
+const specCompareLevel = computed(() => normalizeLevelHint(specScope.value?.compareLevelLabel))
+const specDetailLevel = computed(() => normalizeLevelHint(specScope.value?.detailLevelLabel))
+const digestCompareLevel = computed(() => explicitQuestionLevel.value || specCompareLevel.value)
+const isPeerLevelQuestion = computed(() => Boolean(
+  digestCompareLevel.value &&
+  !specScope.value?.focusNode &&
+  /各|全部|所有|每个|四个|多个|分别|对比|比较|排名|排行|业绩|情况|怎么样|完成|达成/.test(questionText.value),
+))
+const rowMatchesLevel = (row, level) => {
+  const target = normalizeLevelHint(level)
+  if (!target) return true
+  const name = cleanText(row?.name)
+  const nameLevel = normalizeLevelHint(name)
+  if (nameLevel && nameLevel !== target) return false
+  return row?.level === target || name.includes(target)
+}
+
 const specDigestRows = computed(() => {
   const accordions = Array.isArray(props.dataset?.report_spec?.accordions)
     ? props.dataset.report_spec.accordions
     : []
-  return accordions.map((item) => {
+  const rows = accordions.map((item) => {
     const kpis = Array.isArray(item?.kpis) ? item.kpis : []
     const findKpi = (matcher) => kpis.find(kpi => matcher.test(kpi?.label || '')) || null
     const task = findKpi(/总任务|任务金额|任务|目标/i)
@@ -250,12 +329,17 @@ const specDigestRows = computed(() => {
       remainText: remain?.value || '',
     }
   }).filter(item => item.name)
+  const level = digestCompareLevel.value
+  if (!level) return rows
+  const scoped = rows.filter(item => rowMatchesLevel(item, level))
+  return scoped.length >= 2 ? scoped : rows
 })
 
 const normalizedRows = computed(() => rows.value.map((row) => {
   const rowKeys = Object.keys(row || {})
   const nameKey = findColumn(row, [/节点名称/, /^name$/i, /名称/, /分公司|代表处|业务代表/])
-  const parentKey = findColumn(row, [/上级名称/, /parent/i, /分公司/])
+  const parentKey = findColumn(row, [/上级名称/, /上级组织/, /父级名称/, /父级节点/, /parent/i, /上级/, /父级/])
+  const pathKey = findColumn(row, [/组织路径/, /归属组织/, /组织归属/, /管理链路/, /路径/])
   const levelKey = findColumn(row, [/层级/, /^level$/i])
   const rateKey = findColumn(row, [/达成率/, /completion.*rate/i, /\brate\b/i])
   const taskKey = rowKeys.find(key => /总任务|任务金额|任务|目标/i.test(key) && !/剩余|缺口|差额|remain/i.test(key)) || ''
@@ -264,6 +348,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   return {
     name: cleanText(nameKey ? row[nameKey] : ''),
     parent: cleanText(parentKey ? row[parentKey] : ''),
+    path: cleanText(pathKey ? row[pathKey] : ''),
     level: cleanText(levelKey ? row[levelKey] : ''),
     rate: toNumber(rateKey ? row[rateKey] : null),
     rateText: rateText(row),
@@ -277,7 +362,6 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   }
 }).filter(item => item.name))
 
-const questionText = computed(() => cleanText(props.question || props.title))
 const isComparisonQuestion = computed(() => resolvedMemberNames.value.length >= 2 || /对比|比较|差异|哪个|谁更|分别|各自|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
 const asksLowest = computed(() => /最低|最差|不好|垫底|落后|风险/.test(questionText.value))
 const asksRepresentative = computed(() => /代表处/.test(questionText.value))
@@ -437,6 +521,10 @@ const managementLayerRows = computed(() => {
     const direct = normalizedRows.value.filter(item => item.parent === focusName && item.rate !== null)
     if (direct.length >= 2) return direct
   }
+  if (digestCompareLevel.value) {
+    const scoped = normalizedRows.value.filter(item => rowMatchesLevel(item, digestCompareLevel.value) && item.rate !== null)
+    if (scoped.length >= 2) return scoped
+  }
   const levelOrder = ['分公司', '业务部', '代表处', '城市公司']
   for (const level of levelOrder) {
     const byLevel = normalizedRows.value.filter(item => item.level === level && item.rate !== null)
@@ -450,13 +538,13 @@ const managementLayerRows = computed(() => {
 const topManagementRows = computed(() => (
   [...managementLayerRows.value]
     .sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
-    .slice(0, 3)
+    .slice(0, requestedRankLimit.value || 3)
 ))
 
 const bottomManagementRows = computed(() => (
   [...managementLayerRows.value]
     .sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity))
-    .slice(0, 3)
+    .slice(0, requestedRankLimit.value || 3)
 ))
 
 const rateDistribution = computed(() => {
@@ -480,9 +568,18 @@ const rateDistribution = computed(() => {
 const formatRankRows = (items = []) => (
   items
     .filter(Boolean)
-    .map(item => `${item.name}${item.rateText ? ` ${item.rateText}` : ''}${item.remainText ? `，缺口${item.remainText}` : ''}`)
+    .map(item => `${item.path || item.name}${item.rateText ? ` ${item.rateText}` : ''}${item.remainText ? `，缺口${item.remainText}` : ''}`)
     .join('；')
 )
+
+const sectionNoText = (value) => ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'][value] || String(value)
+
+const adviceStartIndex = computed(() => 4 + (secondaryDrillRows.value.length ? 1 : 0))
+const supportSectionLabel = computed(() => `${sectionNoText(adviceStartIndex.value)}、重点发现`)
+const actionSectionLabel = computed(() => {
+  const index = adviceStartIndex.value + (supportLines.value.length ? 1 : 0)
+  return `${sectionNoText(index)}、建议动作`
+})
 
 const rateGapText = computed(() => {
   const best = topManagementRows.value[0]
@@ -504,7 +601,12 @@ const levelSummary = computed(() => {
   return Array.from(counts.entries()).map(([level, count]) => `${level}${count}个`).join('、')
 })
 
-const riskRows = computed(() => normalizedRows.value.filter(item => item.rate !== null && item.rate < riskThreshold.value))
+const riskRows = computed(() => {
+  const scopedRows = digestCompareLevel.value
+    ? normalizedRows.value.filter(item => rowMatchesLevel(item, digestCompareLevel.value))
+    : normalizedRows.value
+  return scopedRows.filter(item => item.rate !== null && item.rate < riskThreshold.value)
+})
 
 const bestRow = computed(() => {
   const source = isComparisonDigest.value
@@ -587,12 +689,12 @@ const resolvedMemberNames = computed(() => {
 })
 
 const comparisonRows = computed(() => {
-  if (!isComparisonQuestion.value) return []
+  if (!isComparisonQuestion.value && !isPeerLevelQuestion.value) return []
   if (specDigestRows.value.length >= 2) return specDigestRows.value
   const resolvedSet = new Set(resolvedMemberNames.value)
   const targetLevel = resolvedMemberNames.value.length
     ? normalizedRows.value.find(item => resolvedSet.has(item.name))?.level
-    : ''
+    : digestCompareLevel.value
   const officeRows = normalizedRows.value.filter((item) => {
     if (targetLevel) return item.level === targetLevel
     return /分公司|业务部|代表处/.test(item.level) || /分公司|业务部|代表处/.test(item.name)
@@ -841,6 +943,7 @@ const comparisonDrillRows = computed(() => {
   if (comparisonDigestRows.value.length < 2) return []
   const parentNames = comparisonParentNames.value
   if (!parentNames.length) return []
+  const detailLevel = expectedDetailLevel.value
   return normalizedRows.value
     .map((item) => {
       const matchedParent = rowMatchedParentName(item, parentNames)
@@ -850,19 +953,45 @@ const comparisonDrillRows = computed(() => {
       item.rate !== null &&
       item.parent &&
       parentNames.some(parent => sameOrgName(item.parent, parent)) &&
-      !parentNames.some(parent => sameOrgName(item.name, parent))
+      !parentNames.some(parent => sameOrgName(item.name, parent)) &&
+      (!detailLevel || rowMatchesLevel(item, detailLevel))
     ))
 })
 
+const expectedDetailLevel = computed(() => {
+  const parentNames = comparisonParentNames.value
+  if (parentNames.length) {
+    const counts = new Map()
+    normalizedRows.value.forEach((item) => {
+      if (!item?.level || item.rate === null) return
+      if (!parentNames.some(parent => sameOrgName(item.parent, parent))) return
+      if (parentNames.some(parent => sameOrgName(item.name, parent))) return
+      counts.set(item.level, (counts.get(item.level) || 0) + 1)
+    })
+    const [level] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0] || []
+    if (level) return level
+  }
+  if (specDetailLevel.value && specDetailLevel.value !== digestCompareLevel.value) return specDetailLevel.value
+  if (digestCompareLevel.value === '分公司') {
+    return normalizedRows.value.some(item => item.level === '代表处') ? '代表处' : '城市公司'
+  }
+  if (digestCompareLevel.value === '业务部' || digestCompareLevel.value === '代表处') return '业务代表'
+  return ''
+})
+
 const secondaryDrillAllRows = computed(() => {
-  const source = comparisonDrillRows.value.length
+  const isComparisonScope = comparisonDigestRows.value.length >= 2
+  if (isComparisonScope && !comparisonDrillRows.value.length) return []
+  const source = isComparisonScope
     ? comparisonDrillRows.value
     : (focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value)
+  const detailLevel = isComparisonScope ? expectedDetailLevel.value : ''
   const unique = []
   const seen = new Set()
   source.forEach((item) => {
     const key = `${item?.level || ''}|${item?.parent || ''}|${item?.name || ''}`
     if (!item?.name || item.name === singleFocusName.value || seen.has(key)) return
+    if (detailLevel && !rowMatchesLevel(item, detailLevel)) return
     seen.add(key)
     unique.push(item)
   })
@@ -874,7 +1003,22 @@ const secondaryDrillAllRows = computed(() => {
   return rows
 })
 
-const secondaryDrillRows = computed(() => secondaryDrillAllRows.value)
+const secondaryDrillRows = computed(() => {
+  const rows = secondaryDrillAllRows.value
+  if (!isRankingQuestion.value) return rows
+  const limit = requestedRankLimit.value || 3
+  return [...rows]
+    .sort((left, right) => (
+      rankDirection.value === 'asc'
+        ? (left.rate ?? Infinity) - (right.rate ?? Infinity)
+        : (right.rate ?? -Infinity) - (left.rate ?? -Infinity)
+    ))
+    .slice(0, limit)
+})
+
+const drillSectionLabel = computed(() => (
+  isRankingQuestion.value ? '四、排名结果' : '四、二级拆解'
+))
 
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
@@ -898,13 +1042,39 @@ const secondaryDrillGroups = computed(() => {
     .filter(group => group.rows.length)
 })
 
-const secondaryLevelLabel = computed(() => (
-  secondaryDrillRows.value.find(item => item.level)?.level || '下级节点'
+const secondaryLevelLabel = computed(() => {
+  if (expectedDetailLevel.value) return expectedDetailLevel.value
+  const counts = new Map()
+  secondaryDrillRows.value.forEach((item) => {
+    if (item.level) counts.set(item.level, (counts.get(item.level) || 0) + 1)
+  })
+  const [level] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0] || []
+  return level || '下级节点'
+})
+
+const isBusinessPersonRanking = computed(() => (
+  isRankingQuestion.value && secondaryLevelLabel.value === '业务代表'
 ))
+
+const drillNodeMeta = (row) => {
+  const path = cleanText(row?.path)
+  if (path) return path
+  const level = cleanText(row?.level || secondaryLevelLabel.value)
+  const parent = cleanText(row?.parent)
+  if (parent && level === '业务代表') return `${level} · 上级：${parent}`
+  if (parent && isBusinessPersonRanking.value) return `上级：${parent}`
+  return level
+}
 
 const secondaryDrillSummary = computed(() => {
   const rows = secondaryDrillAllRows.value
   if (!rows.length) return ''
+  if (isRankingQuestion.value) {
+    const shown = secondaryDrillRows.value
+    const directionText = rankDirection.value === 'asc' ? '倒序' : '正序'
+    const names = shown.map(item => `${item.name}${item.rateText ? ` ${item.rateText}` : ''}`).join('、')
+    return `按达成率${directionText}取${shown.length}个${secondaryLevelLabel.value}${names ? `：${names}` : ''}`
+  }
   const ranked = rows.filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
   const best = ranked[0]
   const worst = ranked[ranked.length - 1]
@@ -1014,6 +1184,10 @@ const directAnswer = computed(() => {
   if (asksLowerNode.value && asksLowest.value && groupedWorstLines.value.length) {
     return `已按上级组织拆开看，不能把所有${lowerNodeLabel.value}直接混在一起比。`
   }
+  if (isRankingQuestion.value && secondaryDrillRows.value.length) {
+    const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+    return `本轮按达成率取${directionText}${secondaryDrillRows.value.length}个${secondaryLevelLabel.value}：${formatRankRows(secondaryDrillRows.value)}。`
+  }
   if (singleOrgConclusion.value) return singleOrgConclusion.value
   if (managementLayerRows.value.length >= 2) {
     const best = topManagementRows.value[0]
@@ -1045,9 +1219,39 @@ const supportLines = computed(() => {
     const sortedDetails = [...detailRows].filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
     const best = sortedDetails[0]
     const worst = sortedDetails[sortedDetails.length - 1]
-    return [
+    const detailFindings = [
       best ? `下钻亮点：${best.parent}下${best.name}达成率${best.rateText}` : '',
       worst ? `重点压力：${worst.parent}下${worst.name}达成率${worst.rateText}` : '',
+    ].filter(Boolean)
+    if (detailFindings.length) return detailFindings
+
+    const ranked = comparisonDigestRows.value
+      .filter(item => item.rate !== null)
+      .sort((a, b) => b.rate - a.rate)
+    const leader = ranked[0] || comparisonDigestRows.value[0]
+    const pressure = ranked[ranked.length - 1] || comparisonDigestRows.value[1]
+    const taskRows = comparisonDigestRows.value.filter(item => item.task !== null).sort((a, b) => b.task - a.task)
+    const remainRows = comparisonDigestRows.value.filter(item => item.remain !== null).sort((a, b) => b.remain - a.remain)
+    const lines = []
+    if (leader && pressure && leader.name !== pressure.name && leader.rate !== null && pressure.rate !== null) {
+      const diff = Math.abs(leader.rate - pressure.rate).toFixed(2).replace(/\.?0+$/, '')
+      lines.push(`达成率差距：${leader.name}${leader.rateText || ''}，${pressure.name}${pressure.rateText || ''}，相差${diff}个百分点。`)
+    }
+    if (taskRows.length >= 2) {
+      lines.push(`任务体量：${taskRows[0].name}任务${taskRows[0].taskText || amountText(taskRows[0].task)}，${taskRows[taskRows.length - 1].name}任务${taskRows[taskRows.length - 1].taskText || amountText(taskRows[taskRows.length - 1].task)}。`)
+    }
+    if (remainRows.length >= 2) {
+      lines.push(`缺口压力：${remainRows[0].name}缺口${remainRows[0].remainText || amountText(remainRows[0].remain)}，${remainRows[remainRows.length - 1].name}缺口${remainRows[remainRows.length - 1].remainText || amountText(remainRows[remainRows.length - 1].remain)}。`)
+    }
+    return lines.filter(Boolean)
+  }
+  if (isRankingQuestion.value && secondaryDrillRows.value.length) {
+    const names = formatRankRows(secondaryDrillRows.value)
+    return [
+      `排名结果：${names}。`,
+      secondaryDrillAllRows.value.length > secondaryDrillRows.value.length
+        ? `已从${secondaryDrillAllRows.value.length}个${secondaryLevelLabel.value}中按达成率筛出${secondaryDrillRows.value.length}个。`
+        : '',
     ].filter(Boolean)
   }
   if (groupedWorstLines.value.length) return groupedWorstLines.value
@@ -1343,6 +1547,10 @@ const actionItems = computed(() => {
   border-top: 1px solid rgba(29, 33, 41, 0.06);
 }
 
+.sa-drill-table.is-person-ranking .sa-drill-row {
+  grid-template-columns: minmax(220px, 1.55fr) minmax(120px, 0.9fr) minmax(90px, 0.62fr) minmax(170px, 1.15fr);
+}
+
 .sa-drill-row:first-child {
   border-top: 0;
 }
@@ -1525,6 +1733,10 @@ const actionItems = computed(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.sa-advice-section.is-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sa-advice-block {

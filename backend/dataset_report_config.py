@@ -136,6 +136,14 @@ def merge_with_default_config(config: dict | None) -> dict:
             **(default.get("sourceFields") or {}),
             **(config.get("sourceFields") or {}),
         }
+    if isinstance(default.get("intentPolicies"), dict) or isinstance(config.get("intentPolicies"), dict):
+        merged_policies = dict(default.get("intentPolicies") or {})
+        for policy_key, policy_value in (config.get("intentPolicies") or {}).items():
+            if isinstance(policy_value, dict) and isinstance(merged_policies.get(policy_key), dict):
+                merged_policies[policy_key] = {**merged_policies[policy_key], **policy_value}
+            else:
+                merged_policies[policy_key] = policy_value
+        merged["intentPolicies"] = merged_policies
     return merged
 
 
@@ -210,6 +218,25 @@ def get_default_config() -> dict:
             {"key": "rate", "op": ">=", "value": 10, "tone": "warn", "label": "中等"},
             {"key": "rate", "op": "<", "value": 10, "tone": "danger", "label": "风险"},
         ],
+        "intentPolicies": {
+            "ranking": {
+                "enabled": True,
+                "triggers": ["排名", "排行", "Top", "前", "后", "最高", "最低", "最好", "最差", "倒数", "垫底"],
+                "defaultTopN": 3,
+                "maxTopN": 20,
+                "defaultMetricKey": "rate",
+                "defaultDirection": "desc",
+                "negativeTriggers": ["最低", "最差", "后", "倒数", "垫底", "落后"],
+                "targetLevelAliases": {
+                    "分公司": ["分公司"],
+                    "代表处": ["代表处"],
+                    "业务部": ["业务部", "行业部"],
+                    "业务代表": ["业务代表", "业务员", "个人"],
+                    "城市公司": ["城市公司", "城市分公司"],
+                },
+                "outputMode": "topn_only",
+            }
+        },
         "sections": ["core", "group", "risk", "strategy"],
         "reportTitle": "业绩分析报告",
         "agentReportGuidance": "报告结构由 SQL 标准列、场景识别和动态树决定。分公司场景必须先横向比较分公司，再纵向下钻直接下级代表处；业务代表只作为代表处后的证据层，不直接替代代表处管理判断。Agent4 不维护组织树，只基于指标、风险节点、优秀节点和 analysisDimensions 输出核心结论、亮点分析、问题诊断和改进建议；金额使用统一格式化口径，完成率按绿/黄/红灯解释，多维图表按完成率降序。",

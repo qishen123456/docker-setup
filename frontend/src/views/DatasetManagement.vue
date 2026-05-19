@@ -222,6 +222,8 @@
                 <div class="toolbar">
                   <el-button v-if="canUseDatasetAction('dict', 'create')" size="small" @click="openItemEditor('dict', -1)">新增字段</el-button>
                   <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="success" @click="extractDictFromDDL">从 DDL 提取字段</el-button>
+                  <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="primary" :loading="pgDictLoading" @click="extractDictFromPg">从 PG 提取 fields</el-button>
+                  <el-button v-if="canUseDatasetAction('dict', 'delete')" size="small" type="danger" plain @click="clearDictionary">清空字段</el-button>
                 </div>
                 <el-table :data="full.data_dictionary" border size="small">
                   <el-table-column label="表名" min-width="160"><template #default="{ row }">{{ row.table_name }}</template></el-table-column>
@@ -641,7 +643,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
-  generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
+  extractBookshelfDictionaryFromPg, generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
   saveBookshelfDatasetFull, updateBookshelfDataset
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
@@ -665,6 +667,7 @@ const qualitySummary = ref(null)
 const sqlPreviewText = ref('')
 const sqlPreviewLimit = ref(100)
 const sqlPreviewLoading = ref(false)
+const pgDictLoading = ref(false)
 const sqlPreviewColumns = ref([])
 const sqlPreviewRows = ref([])
 const sqlPreviewMeta = ref(null)
@@ -1527,6 +1530,72 @@ const extractDictFromDDL = () => {
   })
   if (added > 0) { ElMessage.success(`已从 DDL 提取 ${added} 个新字段`); markDirty() }
   else ElMessage.info('DDL 中没有发现新的字段可提取，或字段已存在')
+}
+
+const mergeDictionaryItems = (items = []) => {
+  let added = 0
+  let updated = 0
+  items.forEach(item => {
+    const tableName = String(item.table_name || '').trim()
+    const columnName = String(item.column_name || '').trim()
+    const jsonbKey = String(item.jsonb_key || '').trim()
+    if (!tableName || !columnName) return
+    const key = `${tableName}|${columnName}|${jsonbKey}`
+    const index = full.data_dictionary.findIndex(d => `${d.table_name || ''}|${d.column_name || ''}|${d.jsonb_key || ''}` === key)
+    const next = {
+      table_name: tableName,
+      column_name: columnName,
+      jsonb_key: jsonbKey,
+      semantic_name: item.semantic_name || jsonbKey || columnName,
+      data_type: item.data_type || '字符串',
+      enum_mapping: item.enum_mapping || {},
+      extraction_rule: item.extraction_rule || '',
+      is_active: item.is_active !== false,
+    }
+    if (index >= 0) {
+      full.data_dictionary[index] = { ...full.data_dictionary[index], ...next }
+      updated++
+    } else {
+      full.data_dictionary.push(next)
+      added++
+    }
+  })
+  return { added, updated }
+}
+
+const extractDictFromPg = async () => {
+  if (!canUseDatasetFeature('dataset_dict_extract')) { warnReadonly(); return }
+  if (!selectedDatasetId.value) { ElMessage.warning('请先选择数据集'); return }
+  const schema = full.schema_definition.find(item => String(item.table_name || '').trim()) || {}
+  const tableName = String(schema.table_name || '').trim()
+  if (!tableName) { ElMessage.warning('请先在 DDL + 表关联中维护来源表，或先从数据源拉表'); return }
+  pgDictLoading.value = true
+  try {
+    const res = await extractBookshelfDictionaryFromPg(selectedDatasetId.value, {
+      source_id: datasetForm.source_id,
+      table_name: tableName,
+      jsonb_column: 'fields',
+      sample_limit: 5000,
+    })
+    const { added, updated } = mergeDictionaryItems(res.items || [])
+    if (added || updated) {
+      markDirty()
+      ElMessage.success(`已从 PostgreSQL 提取字段：新增 ${added} 条，更新 ${updated} 条，JSONB Key ${res.jsonb_key_count || 0} 个`)
+    } else {
+      ElMessage.info('PostgreSQL 未发现新的字段，或字段已是最新')
+    }
+  } finally {
+    pgDictLoading.value = false
+  }
+}
+
+const clearDictionary = async () => {
+  if (!canUseDatasetAction('dict', 'delete')) { warnReadonly(); return }
+  if (!full.data_dictionary.length) { ElMessage.info('当前数据字典已经是空的'); return }
+  await ElMessageBox.confirm('确认清空当前数据字典？清空后需要点击“保存书架内容”才会写入后端。', '清空数据字典', { type: 'warning' })
+  full.data_dictionary = []
+  markDirty()
+  ElMessage.success('已清空当前数据字典，请保存书架内容')
 }
 
 // ========== 数据加载/保存 ==========

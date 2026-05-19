@@ -1202,6 +1202,7 @@ let chatScrollTimer = null
 let panelScrollTimer = null
 let reportTopScrollTimers = []
 const pendingQuickDataset = ref(null)
+const isDatasetManuallySelected = ref(false)
 
 const isRunning = computed(() => session.state.status === 'running')
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
@@ -1267,6 +1268,7 @@ const isDatasetVisible = (id) => {
 const sanitizeDatasetSelection = () => {
   if (datasetId.value && !isDatasetVisible(datasetId.value)) {
     datasetId.value = null
+    isDatasetManuallySelected.value = false
   }
   if (session.state.selectedDatasetId && !isDatasetVisible(session.state.selectedDatasetId)) {
     session.state.selectedDatasetId = null
@@ -1277,7 +1279,9 @@ const sanitizeDatasetSelection = () => {
 }
 
 const currentDatasetLabel = computed(() => {
-  const bySelected = datasets.value.find(item => Number(item.id) === Number(datasetId.value))?.dataset_name
+  const bySelected = isDatasetManuallySelected.value
+    ? datasets.value.find(item => Number(item.id) === Number(datasetId.value))?.dataset_name
+    : ''
   const resultDatasetId = latestDataset.value?.dataset_id
   const canShowResultDataset = resultDatasetId === 'multi' || isDatasetVisible(resultDatasetId)
   const byResult = canShowResultDataset ? latestDataset.value?.dataset_name : ''
@@ -1294,7 +1298,7 @@ const reportSceneTemplate = computed(() => {
   if (specTemplate) return specTemplate
   const questionText = String(activeReportResult.value?.question || session.state.question || query.value || '')
   if (/对比|比较|哪个|谁更|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText)) return 'comparison'
-  if (/排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
+  if (/排名|排行|前\s*(?:\d+|[一二两三四五六七八九十]+)|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
   return 'detail'
 })
 
@@ -1445,7 +1449,8 @@ const getLabelColumn = (dataset) => {
   const columns = dataset?.columns || []
   const firstRow = dataset?.rows?.[0] || {}
   return (
-    columns.find(col => /日期|时间|城市|分公司|名称|水平|类型|标识/i.test(col)) ||
+    columns.find(col => /组织路径|归属组织|组织归属|管理链路|路径/i.test(col)) ||
+    columns.find(col => /日期|时间|城市|分公司|代表处|业务部|名称|水平|类型|标识/i.test(col)) ||
     columns.find(col => typeof firstRow[col] === 'string') ||
     columns[0]
   )
@@ -2389,12 +2394,14 @@ const buildReportTableBlocks = (datasets = []) => {
     .map((dataset, index) => {
       const labelColumn = getLabelColumn(dataset)
       const numericColumns = getNumericColumns(dataset)
+      const pathColumns = (dataset.columns || []).filter(column => /组织路径|归属组织|组织归属|管理链路|路径|上级名称|分公司|代表处|业务部/.test(column))
       const prioritizedColumns = [
         labelColumn,
+        ...pathColumns,
         ...numericColumns,
         ...(dataset.columns || []),
       ].filter(Boolean)
-      const columns = Array.from(new Set(prioritizedColumns)).slice(0, 5)
+      const columns = Array.from(new Set(prioritizedColumns)).slice(0, 6)
       const title = dataset.rows.length > 6
         ? `${dataset.dataset_name} 结果明细表`
         : `${dataset.dataset_name} 关键结果表`
@@ -3664,6 +3671,7 @@ const quickAsk = (item) => {
   if (!text) return
   const nextDatasetId = typeof item === 'string' ? null : Number(item?.dataset_id || 0)
   datasetId.value = null
+  isDatasetManuallySelected.value = false
   pendingQuickDataset.value = nextDatasetId ? { datasetId: nextDatasetId, question: text } : null
   query.value = text
   nextTick(() => {
@@ -3896,12 +3904,51 @@ const startTimer = () => {
   timerInst = setInterval(() => elapsed.value++, 1000)
 }
 
+const compactQuestionText = (value) => String(value || '').replace(/\s+/g, '').toLowerCase()
+
+const datasetAliasScore = (text, dataset) => {
+  const question = compactQuestionText(text)
+  if (!question || !dataset) return 0
+  const aliases = [
+    dataset.dataset_name,
+    dataset.business_domain,
+    ...(Array.isArray(dataset.synonyms) ? dataset.synonyms : []),
+  ].map(compactQuestionText).filter(Boolean)
+  let score = 0
+  const suffixes = ['事业部', '分公司', '业务部', '代表处', '数据集', '销售业绩分析', '业绩分析']
+  aliases.forEach((alias) => {
+    if (alias.length < 2 || ['业绩', '分析', '数据', '指标', '结果'].includes(alias)) return
+    if (question.includes(alias)) score = Math.max(score, 95)
+    suffixes.forEach((suffix) => {
+      if (!alias.includes(suffix)) return
+      const prefix = alias.split(suffix, 1)[0]
+      if (prefix.length >= 2 && question.includes(prefix)) score = Math.max(score, 90)
+    })
+  })
+  return score
+}
+
+const shouldReleaseSelectedDatasetForQuestion = (text, selectedId) => {
+  if (!selectedId) return false
+  const selected = datasets.value.find(item => Number(item.id) === Number(selectedId))
+  if (!selected) return false
+  const selectedScore = datasetAliasScore(text, selected)
+  const bestOther = datasets.value
+    .filter(item => Number(item.id) !== Number(selectedId))
+    .map(item => ({ dataset: item, score: datasetAliasScore(text, item) }))
+    .sort((left, right) => right.score - left.score)[0]
+  return Boolean(bestOther && bestOther.score >= 90 && bestOther.score >= selectedScore + 12)
+}
+
 const getDatasetInputForQuestion = (text) => {
   if (!canUseFeature('smart_dataset_select')) return null
-  if (datasetId.value) return datasetId.value
   const pending = pendingQuickDataset.value
   if (pending?.datasetId && String(pending.question || '').trim() === String(text || '').trim()) {
+    if (shouldReleaseSelectedDatasetForQuestion(text, pending.datasetId)) return null
     return pending.datasetId
+  }
+  if (datasetId.value && isDatasetManuallySelected.value) {
+    return datasetId.value
   }
   return null
 }
@@ -3942,9 +3989,11 @@ const loadQuestions = async () => {
 const handleDatasetChange = async () => {
   if (!canUseFeature('smart_dataset_select')) {
     datasetId.value = null
+    isDatasetManuallySelected.value = false
     clearPendingQuickDataset()
     return
   }
+  isDatasetManuallySelected.value = Boolean(datasetId.value)
   clearPendingQuickDataset()
   await loadQuestions()
 }
@@ -4387,6 +4436,8 @@ watch(() => pendingRestoreId.value, (historyId) => {
     return
   }
   restoreHistory(item)
+  datasetId.value = null
+  isDatasetManuallySelected.value = false
   clearRestoreRequest()
 }, { flush: 'post', immediate: true })
 
@@ -4410,7 +4461,6 @@ onMounted(async () => {
   // 从 sessionStorage 还原输入状态
   const cached = getSessionCache()
   if (cached.query) query.value = cached.query
-  if (cached.datasetId !== undefined) datasetId.value = cached.datasetId
   if (cached.modelId !== undefined) modelId.value = cached.modelId
 
   try {
@@ -4425,9 +4475,7 @@ onMounted(async () => {
     aiModels.value = modelRes.models || []
   } catch {}
 
-  if (session.state.selectedDatasetId && isDatasetVisible(session.state.selectedDatasetId)) {
-    datasetId.value = session.state.selectedDatasetId
-  } else if (session.state.selectedDatasetId) {
+  if (session.state.selectedDatasetId && !isDatasetVisible(session.state.selectedDatasetId)) {
     session.state.selectedDatasetId = null
   }
 
@@ -4452,8 +4500,8 @@ onActivated(async () => {
 })
 
 // 将关键输入状态持久化到 sessionStorage，页面跳转后还原
-watch([query, datasetId, modelId], ([q, d, m]) => {
-  setSessionCache({ query: q, datasetId: d, modelId: m })
+watch([query, datasetId, modelId, isDatasetManuallySelected], ([q, d, m, manual]) => {
+  setSessionCache({ query: q, datasetId: manual ? d : null, modelId: m })
 }, { flush: 'post' })
 
 onDeactivated(() => {

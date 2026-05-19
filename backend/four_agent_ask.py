@@ -5,6 +5,7 @@ import re
 import sys
 import time
 import traceback
+from difflib import get_close_matches
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
@@ -367,6 +368,107 @@ class FourAgentAskService:
             return default
 
     @staticmethod
+    def _parse_cn_int(value: Any, default: int = 0) -> int:
+        text = str(value or "").strip()
+        if not text:
+            return default
+        if text.isdigit():
+            return int(text)
+        digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+        if text == "十":
+            return 10
+        if "十" in text:
+            left, _, right = text.partition("十")
+            tens = digits.get(left, 1 if not left else 0)
+            ones = digits.get(right, 0)
+            return tens * 10 + ones if tens else default
+        return digits.get(text, default)
+
+    def _resolve_query_intent(self, question: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
+        policies = self._safe_dict(config.get("intentPolicies"))
+        ranking_policy = self._safe_dict(policies.get("ranking"))
+        text = str(question or "").replace("\n", " ").strip()
+        intent = {
+            "intent": "unknown",
+            "source": "report_config.intentPolicies",
+            "target_level": "",
+            "top_n": None,
+            "sort_metric_key": "",
+            "sort_metric_column": "",
+            "direction": "",
+            "output_mode": "",
+            "matched_triggers": [],
+        }
+        if not text or ranking_policy.get("enabled") is False:
+            return intent
+
+        triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]
+
+        def trigger_matched(item: str) -> bool:
+            if item in {"前", "后"}:
+                return bool(re.search(rf"{re.escape(item)}\s*(?:\d+|[一二两三四五六七八九十]+)", text))
+            if item.lower() == "top":
+                return bool(re.search(r"\btop\s*(?:\d+|[一二两三四五六七八九十]+)?", text, flags=re.I))
+            return item.lower() in text.lower()
+
+        matched_triggers = [item for item in triggers if item and trigger_matched(item)]
+        if not matched_triggers:
+            return intent
+
+        max_top_n = self._safe_int(ranking_policy.get("maxTopN"), 20)
+        default_top_n = self._safe_int(ranking_policy.get("defaultTopN"), 3)
+        rank_match = re.search(r"(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", text)
+        top_n = self._parse_cn_int(rank_match.group(1) if rank_match else "", default_top_n)
+        top_n = max(1, min(max_top_n, top_n))
+
+        negative_triggers = [str(item) for item in (ranking_policy.get("negativeTriggers") or []) if str(item).strip()]
+        direction = "asc" if any(item in text for item in negative_triggers) else str(ranking_policy.get("defaultDirection") or "desc")
+        if direction not in {"asc", "desc"}:
+            direction = "desc"
+
+        target_level = ""
+        aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
+        for level, level_aliases in aliases.items():
+            candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
+            if any(candidate and candidate in text for candidate in candidates):
+                target_level = str(level)
+                break
+        if not target_level:
+            for dimension in config.get("analysisDimensions") or []:
+                for level in dimension.get("path") or []:
+                    if level and str(level) in text:
+                        target_level = str(level)
+                        break
+                if target_level:
+                    break
+
+        metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
+        metric = next(
+            (
+                item for item in metrics
+                if any(str(item.get(key) or "") and str(item.get(key) or "") in text for key in ("key", "label", "column"))
+            ),
+            None,
+        )
+        if not metric:
+            default_metric_key = str(ranking_policy.get("defaultMetricKey") or "")
+            metric = next((item for item in metrics if str(item.get("key") or "") == default_metric_key), None)
+        metric = metric or {}
+
+        intent.update({
+            "intent": "ranking",
+            "target_level": target_level,
+            "top_n": top_n,
+            "sort_metric_key": metric.get("key") or "",
+            "sort_metric_column": metric.get("column") or metric.get("label") or "",
+            "direction": direction,
+            "output_mode": ranking_policy.get("outputMode") or "topn_only",
+            "matched_triggers": matched_triggers,
+        })
+        return intent
+
+    @staticmethod
     def _normalize_prompt_items(items: Any) -> List[Dict[str, Any]]:
         return [item for item in (items or []) if isinstance(item, dict)]
 
@@ -384,6 +486,84 @@ class FourAgentAskService:
         ]
         padded = f" {normalized} "
         return not any(token in padded for token in blocked)
+
+    def _dataset_field_validation(self, sql_text: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        dictionary = context.get("data_dictionary") or []
+        schema_definitions = context.get("schema_definition") or []
+        allowed_jsonb_keys = {
+            str(item.get("jsonb_key") or "").strip()
+            for item in dictionary
+            if str(item.get("jsonb_key") or "").strip()
+        }
+        allowed_tables = set()
+        for item in dictionary:
+            table_name = str(item.get("table_name") or "").strip()
+            if table_name:
+                allowed_tables.add(table_name.lower())
+                allowed_tables.add(table_name.split(".")[-1].lower())
+        for item in schema_definitions:
+            table_name = str(item.get("table_name") or "").strip()
+            if table_name:
+                allowed_tables.add(table_name.lower())
+                allowed_tables.add(table_name.split(".")[-1].lower())
+
+        risks: List[str] = []
+        fixes: List[str] = []
+        used_jsonb_keys = sorted(set(re.findall(r"\bfields\s*(?:->>|->)\s*'([^']+)'", str(sql_text or ""))))
+        if allowed_jsonb_keys:
+            missing_keys = [key for key in used_jsonb_keys if key not in allowed_jsonb_keys]
+            for key in missing_keys:
+                suggestions = get_close_matches(key, sorted(allowed_jsonb_keys), n=3, cutoff=0.45)
+                suffix = f"，可用相近字段：{'、'.join(suggestions)}" if suggestions else ""
+                risks.append(f"SQL 引用了字段字典不存在的 JSONB 字段：{key}{suffix}")
+            if missing_keys:
+                fixes.append("请按数据集字段字典修改 fields ->> '字段名' / fields -> '字段名'，不要让 Agent3 猜测或改写字段。")
+
+        qualified_tables = sorted(set(
+            item.lower()
+            for item in re.findall(r"\b(?:from|join)\s+((?:[a-zA-Z_][\w]*\.)[a-zA-Z_][\w]*)", str(sql_text or ""), flags=re.I)
+        ))
+        if allowed_tables:
+            missing_tables = [table for table in qualified_tables if table not in allowed_tables and table.split(".")[-1] not in allowed_tables]
+            if missing_tables:
+                risks.extend(f"SQL 引用了当前数据集未登记的数据表：{table}" for table in missing_tables)
+                fixes.append("请确认 SQL 只访问当前数据集 schema_definition 中登记的数据表。")
+
+        return {
+            "ok": not risks,
+            "risks": risks,
+            "fixes": fixes,
+            "used_jsonb_keys": used_jsonb_keys,
+            "allowed_jsonb_count": len(allowed_jsonb_keys),
+            "qualified_tables": qualified_tables,
+        }
+
+    def _build_field_validation_block_review(
+        self,
+        validation: Dict[str, Any],
+        sql_text: str,
+        trace: Optional[Dict[str, Any]],
+        review_policy: str,
+    ) -> Dict[str, Any]:
+        summary = "SQL 字段校验失败：存在当前数据集未登记的表或 fields JSONB 字段，已阻断执行。"
+        self._append_trace(
+            trace,
+            "agent3.sql_review.field_validation_blocked",
+            "error",
+            review_policy=review_policy,
+            review_summary=summary,
+            risks=validation.get("risks", []),
+            fixes=validation.get("fixes", []),
+            used_jsonb_keys=validation.get("used_jsonb_keys", []),
+            sql=self._truncate_text(sql_text, 12000),
+        )
+        return {
+            "approved": False,
+            "final_sql": "",
+            "review_summary": summary,
+            "risks": validation.get("risks", []),
+            "fixes": validation.get("fixes", []),
+        }
 
     @staticmethod
     def _build_confirmation_option(
@@ -1045,13 +1225,55 @@ class FourAgentAskService:
 
     def _select_sql_strategy(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         samples = context.get("golden_sql_samples") or []
-        top_sample = samples[0] if samples else {}
+        sql_samples = [item for item in samples if str(item.get("sql_text") or "").strip()]
+        top_sample = sql_samples[0] if sql_samples else {}
         top_sample_sql = str(top_sample.get("sql_text") or "").strip()
         top_sample_score = self._safe_int(top_sample.get("match_score"), 0)
         route_match_score = self._safe_int(route.get("match_score"), 0)
         route_margin = self._safe_int(route.get("route_margin"), 0)
         preferred_override = bool(route.get("preferred_dataset_override"))
         rule_based_sql = self._build_rule_based_sql(question, route, context)
+        route_sample_sql = str(route.get("matched_sample_sql") or "").strip()
+        route_sample_id = route.get("matched_sample_id")
+
+        def question_key(value: Any) -> str:
+            text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
+            text = re.sub(r"^(请问|帮我|帮忙|麻烦|查一下|看一下|查询|分析一下|我想知道)+", "", text)
+            text = re.sub(r"(呢|啊|呀|吗|么|吧)$", "", text)
+            text = text.replace("消费者事业部", "").replace("消费事业部", "").replace("消费者", "")
+            text = text.replace("商用事业部", "").replace("商用", "")
+            return text
+
+        def same_question_intent(left: Any, right: Any) -> bool:
+            left_key = question_key(left)
+            right_key = question_key(right)
+            if not left_key or not right_key:
+                return False
+            return left_key == right_key or left_key in right_key or right_key in left_key
+
+        exact_sample = next(
+            (
+                item for item in sql_samples
+                if same_question_intent(item.get("question"), question)
+            ),
+            None,
+        )
+
+        if route_sample_sql:
+            return {
+                "mode": "sample_direct",
+                "sql": route_sample_sql,
+                "sample_id": route_sample_id,
+                "sample_score": top_sample_score,
+            }
+
+        if exact_sample:
+            return {
+                "mode": "sample_direct",
+                "sql": str(exact_sample.get("sql_text") or "").strip(),
+                "sample_id": exact_sample.get("id"),
+                "sample_score": self._safe_int(exact_sample.get("match_score"), 100),
+            }
 
         if route.get("decision") == "direct_execute" and top_sample_sql:
             return {
@@ -1361,6 +1583,8 @@ class FourAgentAskService:
             "analysisDimensions": config.get("analysisDimensions") or [],
             "metrics": config.get("metrics") or [],
             "levels": config.get("levels") or [],
+            "queryIntent": context.get("query_intent") or {},
+            "intentPolicies": config.get("intentPolicies") or {},
             "riskThreshold": config.get("riskThreshold"),
             "dynamicPerformanceRule": "报告中的好/差节点必须基于本次结果动态分组；不要按固定阈值或固定 TopN 硬切。好/差两组不得重复；可比对象少于 2 个时不做横向对比。",
             "agentReportGuidance": config.get("agentReportGuidance", ""),
@@ -2310,10 +2534,23 @@ class FourAgentAskService:
             ]
         )
 
+    def _build_syyb_base_sql(self, context: Dict[str, Any]) -> str:
+        dictionary_keys = {
+            str(item.get("jsonb_key") or "").strip()
+            for item in context.get("data_dictionary", []) or []
+            if str(item.get("jsonb_key") or "").strip()
+        }
+        if "业务部" in dictionary_keys:
+            return SYYB_BASE_SQL
+        return SYYB_BASE_SQL.replace(
+            "TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务部') = 'array' THEN fields->'业务部'->0->>'text' ELSE fields->>'业务部' END, '')) AS 业务部,",
+            "'' AS 业务部,",
+        )
+
     def _build_rule_based_sql(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> str:
         dataset = self._safe_dict(context.get("dataset"))
-        dataset_code = str(dataset.get("dataset_code") or "")
-        dataset_name = str(dataset.get("dataset_name") or "")
+        dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
+        dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
         is_consumer_dataset = (
             dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
@@ -2331,15 +2568,118 @@ class FourAgentAskService:
         if not is_syyb_dataset:
             return ""
 
+        syyb_base_sql = self._build_syyb_base_sql(context)
         ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"]
         has_ranking_intent = any(token in normalized_question for token in ranking_tokens)
         if is_phase1_dataset and has_ranking_intent:
+            rank_match = re.search(r"(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
+            configured_limit = self._parse_cn_int(rank_match.group(1) if rank_match else "", 0)
+            default_rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
+            rank_limit = max(1, min(20, configured_limit or default_rank_limit))
+            is_top_rank = any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"])
+            order_direction = "DESC" if is_top_rank else "ASC"
+            asks_grouped_rank = any(token in normalized_question for token in ["各", "每个", "分别", "各自", "按上级", "按代表处", "分组"])
+
+            if "业务代表" in normalized_question or "业务员" in normalized_question:
+                metric_column = "年度开单金额" if ("开单" in normalized_question or "金额" in normalized_question) else "达成率"
+                syyb_dictionary_keys = {
+                    str(item.get("jsonb_key") or "").strip()
+                    for item in context.get("data_dictionary", []) or []
+                    if str(item.get("jsonb_key") or "").strip()
+                }
+                business_dept_extract = (
+                    "TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务部') = 'array' THEN fields->'业务部'->0->>'text' ELSE fields->>'业务部' END, '')) AS 业务部"
+                    if "业务部" in syyb_dictionary_keys
+                    else "'' AS 业务部"
+                )
+                business_person_rank_sql = f"""
+WITH 业务代表原始 AS (
+    SELECT
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
+        {business_dept_extract},
+        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
+        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
+        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
+    FROM angel_group_data
+    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
+    GROUP BY 1, 2, 3, 4
+),
+业务代表汇总 AS (
+    SELECT
+        CASE
+            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'
+            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'
+            ELSE '事业部层级'
+        END AS 条线,
+        '业务代表' AS 层级,
+        业务代表 AS 节点名称,
+        COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部') AS 上级名称,
+        NULLIF(分公司, '') AS 分公司,
+        NULLIF(代表处, '') AS 代表处,
+        NULLIF(业务部, '') AS 业务部,
+        concat_ws(' / ', NULLIF(分公司, ''), NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(业务代表, '')) AS 组织路径,
+        SUM(总任务金额) AS 总任务金额,
+        SUM(年度开单金额) AS 年度开单金额
+    FROM 业务代表原始
+    WHERE 业务代表 <> ''
+    GROUP BY 分公司, 代表处, 业务部, 业务代表
+),
+业务代表结果 AS (
+    SELECT
+        条线,
+        层级,
+        组织路径,
+        节点名称,
+        上级名称,
+        分公司,
+        代表处,
+        业务部,
+        总任务金额,
+        年度开单金额,
+        CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,
+        ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额
+    FROM 业务代表汇总
+)
+"""
+                if asks_grouped_rank:
+                    return f"""
+{business_person_rank_sql},
+业务代表上级内排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY 上级名称
+            ORDER BY {metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
+        ) AS 上级内排名
+    FROM 业务代表结果
+)
+SELECT *
+FROM 业务代表上级内排序
+WHERE 上级内排名 <= {rank_limit}
+ORDER BY 上级名称, 上级内排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
+LIMIT 100
+""".strip()
+                return f"""
+{business_person_rank_sql},
+业务代表全局排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            ORDER BY {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
+        ) AS 全局排名
+    FROM 业务代表结果
+)
+SELECT *
+FROM 业务代表全局排序
+WHERE 全局排名 <= {rank_limit}
+ORDER BY 全局排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
+LIMIT {rank_limit}
+""".strip()
             if "代表处" in normalized_question:
-                order_direction = "DESC" if any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"]) else "ASC"
-                rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名"]) else 1
                 return f"""
 WITH 汇总结果 AS (
-{SYYB_BASE_SQL}
+{syyb_base_sql}
 ),
 代表处分公司内排序 AS (
     SELECT
@@ -2357,36 +2697,10 @@ WHERE 分公司内排名 <= {rank_limit}
 ORDER BY 上级名称, 分公司内排名, 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
-            if "业务代表" in normalized_question or "业务员" in normalized_question:
-                is_desc = any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"])
-                order_direction = "DESC" if is_desc else "ASC"
-                rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名"]) else 1
-                metric_column = "年度开单金额" if ("开单" in normalized_question or "金额" in normalized_question) else "达成率"
-                return f"""
-WITH 汇总结果 AS (
-{SYYB_BASE_SQL}
-),
-业务代表上级内排序 AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY 上级名称
-            ORDER BY {metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
-        ) AS 上级内排名
-    FROM 汇总结果
-    WHERE 层级 = '业务代表'
-)
-SELECT *
-FROM 业务代表上级内排序
-WHERE 上级内排名 <= {rank_limit}
-ORDER BY 上级名称, 上级内排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
-LIMIT 50
-""".strip()
             if "分公司" in normalized_question:
-                order_direction = "DESC" if any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"]) else "ASC"
                 return f"""
 WITH 汇总结果 AS (
-{SYYB_BASE_SQL}
+{syyb_base_sql}
 )
 SELECT *
 FROM 汇总结果
@@ -2398,7 +2712,7 @@ LIMIT 20
         if is_phase1_dataset and any(token in normalized_question for token in ["低于10", "低于 10", "小于10", "小于 10", "风险"]):
             return f"""
 WITH 汇总结果 AS (
-{SYYB_BASE_SQL}
+{syyb_base_sql}
 )
 SELECT *
 FROM 汇总结果
@@ -2424,7 +2738,7 @@ LIMIT 50
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             return f"""
 WITH 汇总结果 AS (
-{SYYB_BASE_SQL}
+{syyb_base_sql}
 ),
 命中节点 AS (
     SELECT 节点名称
@@ -2447,7 +2761,7 @@ LIMIT 10000
 
         if all(token in normalized_question for token in ["东部分公司", "南部分公司"]):
             return f"""
-{SYYB_BASE_SQL}
+{syyb_base_sql}
 HAVING 节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')
 ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
 LIMIT 10000
@@ -2525,6 +2839,21 @@ LIMIT 100
         return ""
 
     def _build_consumer_business_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
+        dictionary_keys = {
+            str(item.get("jsonb_key") or "").strip()
+            for item in context.get("data_dictionary", []) or []
+            if str(item.get("jsonb_key") or "").strip()
+        }
+        def consumer_key(*candidates: str) -> str:
+            for candidate in candidates:
+                if candidate in dictionary_keys:
+                    return candidate
+            return candidates[0]
+
+        city_field_key = consumer_key("城市公司", "城市分公司")
+        query_intent = self._safe_dict(context.get("query_intent"))
+        intent_is_ranking = query_intent.get("intent") == "ranking"
+        intent_target_level = str(query_intent.get("target_level") or "")
         asks_branch_extremes = (
             "分公司" in normalized_question
             and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
@@ -2571,11 +2900,7 @@ WITH 字段提取 AS (
         id,
         COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') AS 事业部,
         COALESCE(NULLIF(TRIM(fields->>'分公司'), ''), '') AS 分公司,
-        COALESCE(
-            NULLIF(TRIM(fields->>'城市公司'), ''),
-            NULLIF(TRIM(fields->>'城市分公司'), ''),
-            ''
-        ) AS 城市公司,
+        COALESCE(NULLIF(TRIM(fields->>'{city_field_key}'), ''), '') AS 城市公司,
         COALESCE(NULLIF(TRIM(fields->>'层级级别'), ''), '') AS 源层级,
         COALESCE(NULLIF(TRIM(fields->>'当前年'), ''), '2026') AS 当前年,
         NULLIF(regexp_replace(COALESCE(fields->>'总任务（金额）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 总任务原值,
@@ -2650,7 +2975,98 @@ WITH 字段提取 AS (
             metric_scope_expr=metric_scope_expr,
             task_metric_expr=task_metric_expr,
             actual_metric_expr=actual_metric_expr,
+            city_field_key=city_field_key,
         ).strip()
+
+        asks_best_branch = (
+            "分公司" in normalized_question
+            and any(token in normalized_question for token in ["最好", "最高", "最佳", "完成好", "完成最好", "哪个"])
+            and not any(token in normalized_question for token in ["最低", "最差", "不好", "风险", "落后"])
+        )
+        asks_branch_ranking = (
+            (intent_is_ranking and intent_target_level == "分公司")
+            or (
+                "分公司" in normalized_question
+                and any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最低", "最差"])
+            )
+        )
+        if asks_branch_ranking and not asks_branch_extremes and not (channel_metric and asks_best_branch):
+            rank_match = re.search(r"(?:Top|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
+            rank_text = rank_match.group(1) if rank_match else ""
+            chinese_digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+            def parse_rank_limit(value: str) -> int:
+                if not value:
+                    return 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
+                if value.isdigit():
+                    return max(1, min(20, int(value)))
+                if value == "十":
+                    return 10
+                if "十" in value:
+                    left, _, right = value.partition("十")
+                    tens = chinese_digits.get(left, 1 if left == "" else 0)
+                    ones = chinese_digits.get(right, 0)
+                    return max(1, min(20, tens * 10 + ones))
+                return max(1, min(20, chinese_digits.get(value, 3)))
+
+            rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
+            if rank_limit <= 0:
+                rank_limit = parse_rank_limit(rank_text)
+            rank_limit = max(1, min(20, rank_limit))
+            order_direction = str(query_intent.get("direction") or "").upper() if intent_is_ranking else ""
+            if order_direction not in {"ASC", "DESC"}:
+                order_direction = "ASC" if any(token in normalized_question for token in ["最低", "最差", "后", "倒数", "落后"]) else "DESC"
+            configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
+            allowed_sort_columns = {
+                "总任务金额",
+                "年度开单金额",
+                "达成率",
+                "剩余任务金额",
+                "线下任务_万元",
+                "新零售任务_万元",
+                "燃气定制任务_万元",
+                "地产任务_万元",
+                "线下实际_万元",
+                "新零售实际_万元",
+                "燃气定制实际_万元",
+                "地产实际_万元",
+            }
+            sort_column = configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
+            return f"""
+{base_sql}
+SELECT *
+FROM 汇总结果
+WHERE 层级 = '分公司'
+ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称
+LIMIT {rank_limit}
+""".strip()
+        if channel_metric and asks_best_branch:
+            # Ranking should ignore empty branch rows, but the final display should keep
+            # child city-company rows even when the selected metric is currently 0.
+            best_branch_base_sql = base_sql.replace(
+                f"    WHERE 节点名称 <> ''\n      AND (({task_metric_expr}) > 0 OR ({actual_metric_expr}) > 0)",
+                "    WHERE 节点名称 <> ''",
+            )
+            return f"""
+{best_branch_base_sql},
+最佳分公司 AS (
+    SELECT 节点名称
+    FROM 汇总结果
+    WHERE 层级 = '分公司'
+      AND 总任务金额 > 0
+    ORDER BY 达成率 DESC, 年度开单金额 DESC, 节点名称
+    LIMIT 1
+)
+SELECT *
+FROM 汇总结果
+WHERE 节点名称 IN (SELECT 节点名称 FROM 最佳分公司)
+   OR 上级名称 IN (SELECT 节点名称 FROM 最佳分公司)
+ORDER BY
+    CASE 层级 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    达成率 DESC,
+    节点名称
+LIMIT 1000
+""".strip()
 
         if asks_branch_extremes:
             return f"""
@@ -2766,6 +3182,7 @@ LIMIT 10000
                         "explicit descendant scope; used stable hierarchy sql" if force_descendant_scope_rule else "rule based sql fallback"
                     )
                 ),
+                "source": "rule_based",
             }
         seed_block = ""
         if seed_sql:
@@ -2879,7 +3296,7 @@ Agent1 路由结果：
                     sample_id=seed_sample_id,
                     sql=self._truncate_text(seed_sql, 12000),
                 )
-                return {"sql": seed_sql, "notes": "golden sample seed fallback", "sample_id": seed_sample_id}
+                return {"sql": seed_sql, "notes": "golden sample seed fallback", "sample_id": seed_sample_id, "source": "sample_direct"}
             if rule_based_sql and defer_rule_fallback:
                 self._append_trace(
                     trace,
@@ -2887,9 +3304,49 @@ Agent1 路由结果：
                     "info",
                     sql=self._truncate_text(rule_based_sql, 12000),
                 )
-                return {"sql": rule_based_sql, "notes": "dynamic generation failed; used rule fallback"}
+                return {"sql": rule_based_sql, "notes": "dynamic generation failed; used rule fallback", "source": "rule_based"}
         result["sql"] = sql_text
         return result
+
+    def _preferred_dataset_conflicts_with_question(
+        self,
+        question: str,
+        preferred_dataset_ids: Optional[List[int]],
+        allowed_dataset_ids: Optional[List[int]] = None,
+    ) -> bool:
+        if not preferred_dataset_ids:
+            return False
+        try:
+            selected_ids = {int(item) for item in preferred_dataset_ids}
+        except Exception:
+            return False
+        if not selected_ids:
+            return False
+
+        catalog = self.repository.get_agent1_catalog()
+        if allowed_dataset_ids is not None:
+            allowed = {int(item) for item in allowed_dataset_ids}
+            catalog = [item for item in catalog if int(item.get("id") or 0) in allowed]
+        if not catalog:
+            return False
+
+        scored = [
+            (dataset, self._dataset_alias_match_score(question, dataset))
+            for dataset in catalog
+        ]
+        selected_score = max(
+            [score for dataset, score in scored if int(dataset.get("id") or 0) in selected_ids] or [0]
+        )
+        best_other = max(
+            [
+                (score, dataset)
+                for dataset, score in scored
+                if int(dataset.get("id") or 0) not in selected_ids
+            ],
+            key=lambda item: item[0],
+            default=(0, {}),
+        )
+        return best_other[0] >= 90 and best_other[0] >= selected_score + 12
 
     def _repair_sql_after_execution_error(
         self,
@@ -2965,9 +3422,125 @@ Agent1 路由结果：
         context: Dict[str, Any],
         dataset_prompt: str,
         trace: Optional[Dict[str, Any]] = None,
+        review_policy: str = "normal",
     ) -> Dict[str, Any]:
         dataset = self._safe_dict(context.get("dataset"))
         normalized_question = str(question or "").replace("\n", " ").strip()
+        if review_policy in {"trusted_sql", "rule_sql"}:
+            if not self._is_read_only_sql(sql_text):
+                self._append_trace(
+                    trace,
+                    "agent3.sql_review.trusted_blocked",
+                    "error",
+                    review_policy=review_policy,
+                    review_summary="可信 SQL 未通过只读安全校验，已阻断执行。",
+                    sql=self._truncate_text(sql_text, 12000),
+                )
+                return {
+                    "approved": False,
+                    "final_sql": "",
+                    "review_summary": "可信 SQL 未通过只读安全校验，已阻断执行。",
+                    "risks": ["SQL 不是只读查询，或包含禁止执行的语句。"],
+                    "fixes": ["请检查维护 SQL，仅保留 SELECT/WITH/SHOW 等只读语句。"],
+                }
+            validation = self._dataset_field_validation(sql_text, context)
+            if not validation.get("ok"):
+                if review_policy == "trusted_sql":
+                    rule_sql = self._build_rule_based_sql(question, route, context)
+                    rule_validation = self._dataset_field_validation(rule_sql, context) if rule_sql else {"ok": False}
+                    if rule_sql and rule_validation.get("ok"):
+                        summary = "Golden SQL 字段校验失败，已切换到字段字典校验通过的规则 SQL。"
+                        self._append_trace(
+                            trace,
+                            "agent3.sql_review.trusted_to_rule_fallback",
+                            "warning",
+                            review_policy=review_policy,
+                            review_summary=summary,
+                            original_risks=validation.get("risks", []),
+                            sql=self._truncate_text(rule_sql, 12000),
+                        )
+                        return {
+                            "approved": True,
+                            "final_sql": rule_sql,
+                            "review_summary": summary,
+                            "risks": validation.get("risks", []),
+                            "fixes": ["请修正当前 Golden SQL 字段；本轮已临时使用稳定规则 SQL 兜底。"],
+                        }
+                return self._build_field_validation_block_review(validation, sql_text, trace, review_policy)
+            summary = "Golden SQL 已通过只读与字段字典校验，Agent3 不改写人工维护 SQL。"
+            if review_policy == "rule_sql":
+                summary = "规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。"
+            self._append_trace(
+                trace,
+                "agent3.sql_review.trusted_passthrough",
+                "info",
+                review_policy=review_policy,
+                review_summary=summary,
+                field_validation={
+                    "used_jsonb_keys": validation.get("used_jsonb_keys", []),
+                    "allowed_jsonb_count": validation.get("allowed_jsonb_count", 0),
+                    "qualified_tables": validation.get("qualified_tables", []),
+                },
+                sql=self._truncate_text(sql_text, 12000),
+            )
+            return {
+                "approved": True,
+                "final_sql": sql_text,
+                "review_summary": summary,
+                "risks": [],
+                "fixes": [],
+            }
+        asks_channel_best_branch = (
+            "分公司" in normalized_question
+            and any(metric in normalized_question for metric in ["线下", "新零售", "燃气定制", "地产"])
+            and any(token in normalized_question for token in ["最好", "最高", "最佳", "完成好", "完成最好", "哪个"])
+            and not any(token in normalized_question for token in ["最低", "最差", "不好", "风险", "落后"])
+        )
+        asks_branch_extreme_compare = (
+            "分公司" in normalized_question
+            and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
+            and any(token in normalized_question for token in ["对比", "比较", "差距", "差异", "二者", "两家", "任务体量", "实际开单", "缺口"])
+        )
+        if asks_channel_best_branch:
+            rule_sql = self._build_rule_based_sql(question, route, context)
+            if rule_sql and "最佳分公司" in rule_sql:
+                self._append_trace(
+                    trace,
+                    "agent3.sql_review.best_branch_rule_fix",
+                    "info",
+                    review_summary="分业务线最佳分公司查询已改用稳定规则 SQL，避免复核阶段提前过滤下级节点。",
+                    sql=self._truncate_text(rule_sql, 12000),
+                )
+                validation = self._dataset_field_validation(rule_sql, context)
+                if not validation.get("ok"):
+                    return self._build_field_validation_block_review(validation, rule_sql, trace, "rule_sql")
+                return {
+                    "approved": True,
+                    "final_sql": rule_sql,
+                    "review_summary": "已改用稳定规则 SQL：先按业务线选最佳分公司，再展示该分公司及其下级节点。",
+                    "risks": [],
+                    "fixes": ["避免用总任务过滤最终展示结果，保留下级城市公司节点。"],
+                }
+        if asks_branch_extreme_compare:
+            rule_sql = self._build_rule_based_sql(question, route, context)
+            if rule_sql and "头尾分公司" in rule_sql:
+                self._append_trace(
+                    trace,
+                    "agent3.sql_review.branch_extreme_rule_fix",
+                    "info",
+                    review_summary="分公司最高/最低对比查询已改用稳定规则 SQL，避免复核阶段误用字段或改坏样例 SQL。",
+                    sql=self._truncate_text(rule_sql, 12000),
+                )
+                validation = self._dataset_field_validation(rule_sql, context)
+                if not validation.get("ok"):
+                    return self._build_field_validation_block_review(validation, rule_sql, trace, "rule_sql")
+                return {
+                    "approved": True,
+                    "final_sql": rule_sql,
+                    "review_summary": "已改用稳定规则 SQL：返回达成率最高、最低分公司，并对比任务体量、实际开单、缺口和达成率差距。",
+                    "risks": [],
+                    "fixes": ["使用当前年字段和标准金额字段，避免维护样例中的年份字段错误。"],
+                }
         needs_descendant_rows = (
             re.search(r"(?:代表处|分公司|业务部)", normalized_question)
             and any(token in normalized_question for token in ["下面", "下级", "业务代表", "业务员", "人员", "的人", "明细", "咋样", "怎么样"])
@@ -2994,6 +3567,9 @@ Agent1 路由结果：
                         review_summary="问题要求查看下级人员，已改用稳定层级 SQL 返回命中节点和业务代表明细。",
                         sql=self._truncate_text(rule_sql, 12000),
                     )
+                    validation = self._dataset_field_validation(rule_sql, context)
+                    if not validation.get("ok"):
+                        return self._build_field_validation_block_review(validation, rule_sql, trace, "rule_sql")
                     return {
                         "approved": True,
                         "final_sql": rule_sql,
@@ -3002,16 +3578,19 @@ Agent1 路由结果：
                         "fixes": ["使用稳定层级 SQL，避免只返回上级汇总行。"],
                     }
         if self._is_read_only_sql(sql_text) and "angel_group_data" in str(sql_text):
+            validation = self._dataset_field_validation(sql_text, context)
+            if not validation.get("ok"):
+                return self._build_field_validation_block_review(validation, sql_text, trace, "normal")
             self._append_trace(
                 trace,
                 "agent3.sql_review.rule_based",
                 "info",
-                review_summary="已通过规则复核：只读 SQL、限定 angel_group_data，并保留书架层级口径。",
+                review_summary="已通过规则复核：只读 SQL、字段字典校验通过，并保留书架层级口径。",
             )
             return {
                 "approved": True,
                 "final_sql": sql_text,
-                "review_summary": "规则复核通过：SQL 只读且使用当前数据集表结构。",
+                "review_summary": "规则复核通过：SQL 只读且字段字典校验通过。",
                 "risks": [],
                 "fixes": [],
             }
@@ -3101,6 +3680,11 @@ LLD：
         result["fixes"] = result.get("fixes") if isinstance(result.get("fixes"), list) else [str(result.get("fixes") or "").strip()] if result.get("fixes") else []
         if result.get("approved") is not False and not result.get("final_sql"):
             result["final_sql"] = sql_text
+        final_sql = str(result.get("final_sql") or "").strip()
+        if final_sql:
+            validation = self._dataset_field_validation(final_sql, context)
+            if not validation.get("ok"):
+                return self._build_field_validation_block_review(validation, final_sql, trace, "normal")
         return result
 
     def _execute_sql(
@@ -3334,13 +3918,17 @@ Agent3 复核结果：
                 return result
             saved_report_config = report_config_store.get_config(int(dataset_id))
             report_config_source = "dataset_config" if saved_report_config else "default"
-            report_config = saved_report_config or report_config_store.get_default_config()
+            report_config = dict(saved_report_config or report_config_store.get_default_config())
             context["report_config"] = report_config
             context["resolved_entities"] = self._route_entity_resolution(route) or self._resolve_question_entities(
                 route.get("refined_query", question),
                 context,
                 trace=trace,
             )
+            query_intent = self._resolve_query_intent(route.get("refined_query", question), context)
+            report_config = {**report_config, "queryIntent": query_intent}
+            context["report_config"] = report_config
+            context["query_intent"] = query_intent
             self._append_trace(
                 trace,
                 "pipeline.dataset_context",
@@ -3360,6 +3948,7 @@ Agent3 复核结果：
                     "track": report_config.get("trackColumn"),
                 },
                 resolved_entities=context.get("resolved_entities"),
+                query_intent=context.get("query_intent"),
                 row_security=context.get("row_security"),
             )
             prompts = context.get("agent_prompts", {})
@@ -3367,8 +3956,10 @@ Agent3 复核结果：
             agent3_prompt = "\n\n".join(item["prompt_content"] for item in prompts.get(3, []))
 
             sql_strategy = self._select_sql_strategy(route.get("refined_query", question), route, context)
+            agent3_review_policy = "normal"
             if sql_strategy.get("mode") == "sample_direct" and sql_strategy.get("sql"):
                 sql_text = str(sql_strategy.get("sql") or "").strip()
+                agent3_review_policy = "trusted_sql"
                 self._append_trace(
                     trace,
                     "agent2.sql_generate.golden_direct",
@@ -3382,6 +3973,7 @@ Agent3 复核结果：
                 steps.append({"title": "Golden SQL 高匹配直执行", "duration": 0, "status": "success"})
             elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql"):
                 sql_text = str(sql_strategy.get("sql") or "").strip()
+                agent3_review_policy = "rule_sql"
                 self._append_trace(
                     trace,
                     "agent2.sql_generate.rule_based",
@@ -3403,6 +3995,10 @@ Agent3 复核结果：
                     trace=trace,
                 )
                 sql_text = (agent2_result.get("sql") or "").strip()
+                if agent2_result.get("source") == "sample_direct":
+                    agent3_review_policy = "trusted_sql"
+                elif agent2_result.get("source") == "rule_based":
+                    agent3_review_policy = "rule_sql"
                 self._append_trace(
                     trace,
                     "pipeline.agent2_result",
@@ -3446,7 +4042,15 @@ Agent3 复核结果：
                 )
 
             step_started = time.time()
-            review = self._agent3_review(question, route, sql_text, context, agent3_prompt, trace=trace)
+            review = self._agent3_review(
+                question,
+                route,
+                sql_text,
+                context,
+                agent3_prompt,
+                trace=trace,
+                review_policy=agent3_review_policy,
+            )
             final_sql = review.get("final_sql", sql_text)
             self._append_trace(
                 trace,
@@ -3469,7 +4073,18 @@ Agent3 复核结果：
             )
 
             if review.get("approved") is False:
-                fallback_sql = (final_sql or sql_text or "").strip()
+                fallback_sql = (final_sql or "").strip()
+                if not fallback_sql:
+                    dataset_results.append(
+                        self._build_graceful_dataset_result(
+                            question=question,
+                            context=context,
+                            review=review,
+                            result={"columns": [], "rows": [], "row_count": 0},
+                            sql_text=sql_text,
+                        )
+                    )
+                    continue
                 if not self._is_read_only_sql(fallback_sql):
                     dataset_results.append(
                         self._build_graceful_dataset_result(
@@ -3789,6 +4404,20 @@ Agent3 复核结果：
         try:
             step_started = time.time()
             allowed_set = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
+            if preferred_dataset_ids and self._preferred_dataset_conflicts_with_question(
+                question,
+                preferred_dataset_ids,
+                allowed_dataset_ids,
+            ):
+                self._append_trace(
+                    trace,
+                    "agent1.preferred_dataset_released",
+                    "info",
+                    reason="current_question_explicitly_matches_another_dataset",
+                    preferred_dataset_ids=preferred_dataset_ids or [],
+                )
+                preferred_dataset_ids = []
+
             if preferred_dataset_ids:
                 selected_dataset_ids = [int(item) for item in preferred_dataset_ids]
                 if allowed_set is not None:

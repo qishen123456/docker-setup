@@ -12,6 +12,7 @@ import time
 from typing import Any, Dict, List
 
 import psycopg2
+from psycopg2 import sql as pg_sql
 from psycopg2.extras import RealDictCursor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1611,6 +1612,48 @@ def json_dump(obj: Any) -> str:
     return __import__("json").dumps(obj, ensure_ascii=False)
 
 
+def _split_pg_table_name(table_name: str) -> tuple[str, str]:
+    cleaned = (table_name or "").strip().replace('"', "")
+    if not cleaned:
+        raise ValueError("table_name is required.")
+    parts = [part for part in cleaned.split(".") if part]
+    if len(parts) == 1:
+        return "public", parts[0]
+    return parts[-2], parts[-1]
+
+
+def _guess_pg_dict_type(name: str, pg_type: str = "", jsonb_types: str = "") -> str:
+    text = f"{name} {pg_type} {jsonb_types}".lower()
+    if any(token in text for token in ["numeric", "integer", "bigint", "double", "real", "number"]):
+        return "数字"
+    if any(token in str(name) for token in ["金额", "任务", "比例", "率", "差额", "当前年", "当前月", "日期", "天数"]):
+        return "数字"
+    if any(token in text for token in ["timestamp", "date", "time"]):
+        return "时间"
+    if "array" in text:
+        return "数组"
+    if "boolean" in text:
+        return "布尔"
+    return "字符串"
+
+
+def _jsonb_text_expr(jsonb_column: str, key: str) -> str:
+    safe_col = jsonb_column.replace('"', '""')
+    safe_key = key.replace("'", "''")
+    return (
+        f"CASE WHEN jsonb_typeof(\"{safe_col}\"->'{safe_key}') = 'array' "
+        f"THEN \"{safe_col}\"->'{safe_key}'->0->>'text' "
+        f"ELSE \"{safe_col}\"->>'{safe_key}' END"
+    )
+
+
+def _jsonb_extraction_rule(jsonb_column: str, key: str, data_type: str) -> str:
+    text_expr = _jsonb_text_expr(jsonb_column, key)
+    if data_type == "数字":
+        return f"COALESCE(NULLIF(regexp_replace({text_expr}, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC"
+    return text_expr
+
+
 @bookshelf_bp.route("/api/bookshelves/source-tables", methods=["GET"])
 def list_source_tables():
     try:
@@ -1704,3 +1747,154 @@ def list_source_tables():
         return jsonify({"error": f"unsupported datasource type for table scan: {ds_type}"}), 400
     except Exception as exc:
         return jsonify({"error": f"list source tables failed: {exc}"}), 500
+
+
+@bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/dictionary/extract-from-pg", methods=["POST"])
+def extract_dictionary_from_pg(dataset_id: int):
+    denied = _require_dataset_modify(dataset_id, "dataset_dict_extract")
+    if denied:
+        return denied
+    try:
+        repo.ensure_schema()
+        payload = request.get_json() or {}
+        requested_source_id = payload.get("source_id")
+        requested_table_name = (payload.get("table_name") or "").strip()
+        jsonb_column = (payload.get("jsonb_column") or "fields").strip() or "fields"
+        sample_limit = max(1, min(int(payload.get("sample_limit") or 5000), 100000))
+
+        with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT id, source_id FROM bs_datasets WHERE id = %s;", (dataset_id,))
+            dataset = cur.fetchone()
+            if not dataset:
+                return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
+            source_id = _optional_int(requested_source_id) or dataset.get("source_id")
+            if not requested_table_name:
+                cur.execute(
+                    """
+                    SELECT table_name
+                    FROM bs_schema_definitions
+                    WHERE dataset_id = %s AND is_active = TRUE
+                    ORDER BY updated_at DESC, id DESC
+                    LIMIT 1;
+                    """,
+                    (dataset_id,),
+                )
+                schema_row = cur.fetchone()
+                requested_table_name = (schema_row or {}).get("table_name") or ""
+
+        if not source_id:
+            return jsonify({"error": "当前数据集未绑定默认来源，无法连接 PostgreSQL。"}), 400
+        if not requested_table_name:
+            return jsonify({"error": "请先在 DDL + 表关联中维护来源表，或传入 table_name。"}), 400
+
+        ds = get_datasource_by_id(int(source_id))
+        if not ds:
+            return jsonify({"error": f"datasource not found: {source_id}"}), 404
+        if (ds.get("type") or "").lower() != "postgresql":
+            return jsonify({"error": "当前仅支持从 PostgreSQL 数据源提取 fields JSONB 字典。"}), 400
+
+        table_schema, table_name = _split_pg_table_name(requested_table_name)
+        items: List[Dict[str, Any]] = []
+        with psycopg2.connect(
+            host=ds.get("host", "localhost"),
+            port=int(ds.get("port", 5432) or 5432),
+            database=ds.get("database_name", ""),
+            user=ds.get("username", ""),
+            password=ds.get("password", ""),
+            connect_timeout=8,
+        ) as pg_conn, pg_conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT c.column_name, c.data_type, pgd.description
+                FROM information_schema.columns c
+                LEFT JOIN pg_catalog.pg_statio_all_tables st
+                  ON st.schemaname = c.table_schema AND st.relname = c.table_name
+                LEFT JOIN pg_catalog.pg_description pgd
+                  ON pgd.objoid = st.relid AND pgd.objsubid = c.ordinal_position
+                WHERE c.table_schema = %s AND c.table_name = %s
+                ORDER BY c.ordinal_position;
+                """,
+                (table_schema, table_name),
+            )
+            columns = [dict(row) for row in cur.fetchall()]
+            if not columns:
+                return jsonify({"error": f"未找到 PostgreSQL 表：{table_schema}.{table_name}"}), 404
+
+            for col in columns:
+                col_name = str(col.get("column_name") or "")
+                pg_type = str(col.get("data_type") or "")
+                items.append(
+                    {
+                        "table_name": f"{table_schema}.{table_name}",
+                        "column_name": col_name,
+                        "jsonb_key": "",
+                        "semantic_name": str(col.get("description") or col_name),
+                        "data_type": pg_type,
+                        "enum_mapping": {},
+                        "extraction_rule": col_name,
+                        "is_active": True,
+                        "source": "pg_column",
+                    }
+                )
+
+            if any(str(col.get("column_name") or "") == jsonb_column and str(col.get("data_type") or "").lower() == "jsonb" for col in columns):
+                key_query = pg_sql.SQL(
+                    """
+                    WITH sampled AS (
+                        SELECT {jsonb_column} AS fields_payload
+                        FROM {table_ident}
+                        WHERE {jsonb_column} IS NOT NULL
+                          AND jsonb_typeof({jsonb_column}) = 'object'
+                        LIMIT %s
+                    )
+                    SELECT
+                        key AS jsonb_key,
+                        COUNT(*) AS occurrence_count,
+                        string_agg(DISTINCT jsonb_typeof(fields_payload -> key), ', ' ORDER BY jsonb_typeof(fields_payload -> key)) AS jsonb_types
+                    FROM sampled
+                    CROSS JOIN LATERAL jsonb_object_keys(fields_payload) AS keys(key)
+                    GROUP BY key
+                    ORDER BY key;
+                    """
+                ).format(
+                    jsonb_column=pg_sql.Identifier(jsonb_column),
+                    table_ident=pg_sql.Identifier(table_schema, table_name),
+                )
+                cur.execute(key_query, (sample_limit,))
+                for row in cur.fetchall():
+                    key = str(row.get("jsonb_key") or "")
+                    data_type = _guess_pg_dict_type(key, jsonb_types=str(row.get("jsonb_types") or ""))
+                    items.append(
+                        {
+                            "table_name": f"{table_schema}.{table_name}",
+                            "column_name": jsonb_column,
+                            "jsonb_key": key,
+                            "semantic_name": key,
+                            "data_type": data_type,
+                            "enum_mapping": {},
+                            "extraction_rule": _jsonb_extraction_rule(jsonb_column, key, data_type),
+                            "is_active": True,
+                            "source": "pg_jsonb_key",
+                            "occurrence_count": int(row.get("occurrence_count") or 0),
+                            "jsonb_types": row.get("jsonb_types") or "",
+                        }
+                    )
+
+        return jsonify(
+            {
+                "dataset_id": dataset_id,
+                "source_id": int(source_id),
+                "table_name": f"{table_schema}.{table_name}",
+                "jsonb_column": jsonb_column,
+                "sample_limit": sample_limit,
+                "items": items,
+                "count": len(items),
+                "jsonb_key_count": len([item for item in items if item.get("source") == "pg_jsonb_key"]),
+            }
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except BookshelfConfigurationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"extract dictionary from pg failed: {exc}"}), 500

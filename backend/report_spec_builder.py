@@ -446,6 +446,7 @@ def build_report_spec(
     resolved_entities: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     config = report_config or {}
+    query_intent = config.get("queryIntent") if isinstance(config.get("queryIntent"), dict) else {}
     rows = rows if isinstance(rows, list) else []
     available_columns = [str(item) for item in (columns or []) if str(item or "").strip()]
     if not available_columns:
@@ -551,9 +552,21 @@ def build_report_spec(
         ]
         if level_nodes:
             comparison_nodes = level_nodes
-    low_first = _negative_ranking_requested(question or "")
+    low_first = (
+        str(query_intent.get("direction") or "").lower() == "asc"
+        if query_intent.get("intent") == "ranking"
+        else _negative_ranking_requested(question or "")
+    )
 
     scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes))
+    if query_intent.get("intent") == "ranking":
+        scene = {
+            "key": "ranking",
+            "label": "排名分析",
+            "layout": "ranking",
+            "required_contract": ["nameColumn", "metrics"],
+            "reasons": ["命中数据集意图策略：ranking"],
+        }
     mode = scene.get("key", "detail")
     contract_health = validate_report_contract(config, columns, scene)
     compare_label = _level_label(comparison_nodes, "下一层级")
@@ -964,6 +977,7 @@ def build_report_spec(
             "scene": scene,
             "contract": contract_health,
             "report_config_used": bool(config),
+            "query_intent": query_intent,
             "standard_columns": {
                 "name": config.get("nameColumn"),
                 "parent": config.get("parentColumn"),

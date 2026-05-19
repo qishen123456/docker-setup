@@ -34,7 +34,7 @@ SCENES: Dict[str, Dict[str, Any]] = {
 }
 
 
-_RANKING_RE = re.compile(r"排名|排行|前\s*\d+|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低", re.I)
+_RANKING_RE = re.compile(r"排名|排行|前\s*(?:\d+|[一二两三四五六七八九十]+)|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低", re.I)
 _COMPARATIVE_RE = re.compile(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", re.I)
 _DIAGNOSTIC_RE = re.compile(r"为什么|原因|归因|下滑|异常|差距|风险|缺口", re.I)
 
