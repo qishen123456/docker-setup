@@ -10,6 +10,11 @@
       "locked": true,
       "function_permissions": [
         "admin_console",
+        "advanced_ask_flow",
+        "advanced_capabilities",
+        "advanced_capability_reset",
+        "advanced_capability_save",
+        "advanced_skill_import",
         "agent_config_edit",
         "agent_management",
         "ai_channel_edit",
@@ -145,6 +150,9 @@
       "builtin": true,
       "locked": true,
       "function_permissions": [
+        "advanced_capabilities",
+        "advanced_capability_save",
+        "advanced_skill_import",
         "agent_config_edit",
         "agent_management",
         "ai_channel_edit",
@@ -221,6 +229,7 @@
         "report_template_edit",
         "smart_ask_workspace",
         "smart_chart_auto_infer",
+        "smart_confirm_scope",
         "smart_dataset_select",
         "smart_field_confidence",
         "smart_field_dataset_hit",
@@ -229,11 +238,14 @@
         "smart_field_generated_sql",
         "smart_field_token_usage",
         "smart_model_select",
+        "smart_new_chat",
         "smart_question_copy",
         "smart_question_edit",
         "smart_question_rerun",
         "smart_quick_ask",
-        "smart_quick_refresh"
+        "smart_quick_refresh",
+        "smart_send_question",
+        "smart_stop_run"
       ],
       "resource_permissions": {}
     },
@@ -317,6 +329,7 @@
         "smart_new_chat",
         "smart_question_copy",
         "smart_question_edit",
+        "smart_question_rerun",
         "smart_quick_ask",
         "smart_quick_refresh",
         "smart_send_question",
@@ -371,6 +384,6 @@
       "user_ids": []
     }
   ],
-  "updated_at": "2026-05-18 16:36:48",
+  "updated_at": "2026-05-20 17:53:41",
   "updated_by": "admin"
 }

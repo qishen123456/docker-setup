@@ -126,9 +126,9 @@
             rows="1"
             :disabled="isRunning"
             @input="autoGrow"
-            @keydown.enter.exact.prevent="allowSend && !isRunning && $emit('send')"
+            @keydown="handleKeydown"
           ></textarea>
-          <div class="sa-composer-hint">Enter 发送，Shift + Enter 换行</div>
+          <div class="sa-composer-hint">Enter / Alt + Enter 发送，Shift + Enter 换行</div>
         </div>
 
         <button
@@ -191,7 +191,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['send', 'stop', 'datasetChange'])
+const emit = defineEmits(['send', 'stop', 'datasetChange'])
 
 const inputRef = ref(null)
 const datasetSelectValue = computed({
@@ -218,6 +218,14 @@ const resizeTextarea = () => {
 
 const autoGrow = () => {
   resizeTextarea()
+}
+
+const handleKeydown = (event) => {
+  if (event.key !== 'Enter') return
+  if (event.shiftKey) return
+  if (!props.allowSend || props.isRunning) return
+  event.preventDefault()
+  emit('send')
 }
 
 watch(modelQuery, () => nextTick(resizeTextarea))
