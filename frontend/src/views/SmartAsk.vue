@@ -1122,7 +1122,7 @@ import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted,
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
-import { getAskFlowConfig, getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
+import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
 import { useFeatureFlags } from '../state/featureFlags'
@@ -1286,19 +1286,66 @@ const mergeDatasetReports = (datasetResults) => (
     .join('\n\n---\n\n')
 )
 
+const parseMetricNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const text = String(value || '').trim()
+  const numeric = Number(text.replace(/[^0-9.-]/g, ''))
+  if (!Number.isFinite(numeric)) return null
+  if (text.includes('亿')) return numeric * 100000000
+  if (text.includes('万')) return numeric * 10000
+  return numeric
+}
+
+const findDatasetKpiNumber = (dataset, matcher) => {
+  const kpis = Array.isArray(dataset?.report_spec?.kpis) ? dataset.report_spec.kpis : []
+  const item = kpis.find(kpi => matcher.test(`${kpi?.key || ''}${kpi?.label || ''}`))
+  if (!item) return null
+  return parseMetricNumber(item.value ?? item.displayValue)
+}
+
+const findDatasetRowNumber = (dataset, matcher) => {
+  const rows = Array.isArray(dataset?.rows) ? dataset.rows : []
+  const row = rows.find(item => item && typeof item === 'object') || {}
+  const key = Object.keys(row).find(name => matcher.test(name))
+  return key ? parseMetricNumber(row[key]) : null
+}
+
+const buildDatasetComparisonRow = (dataset) => {
+  const task = findDatasetKpiNumber(dataset, /总任务|任务金额|目标|task/i)
+    ?? findDatasetRowNumber(dataset, /总任务|任务金额|目标/i)
+  const actual = findDatasetKpiNumber(dataset, /年度开单|开单金额|开单|完成|实际|actual/i)
+    ?? findDatasetRowNumber(dataset, /年度开单|开单金额|开单|完成|实际/i)
+  const rate = findDatasetKpiNumber(dataset, /达成率|完成率|rate|percent/i)
+    ?? findDatasetRowNumber(dataset, /达成率|完成率/i)
+    ?? (task ? (Number(actual || 0) / task) * 100 : null)
+  const remain = findDatasetKpiNumber(dataset, /剩余|缺口|差额|remain|gap/i)
+    ?? findDatasetRowNumber(dataset, /剩余|缺口|差额/i)
+    ?? (task !== null && actual !== null ? task - actual : null)
+  return {
+    节点名称: dataset?.dataset_name || `数据集 ${dataset?.dataset_id || ''}`.trim(),
+    层级: '数据集',
+    总任务金额: task,
+    年度开单金额: actual,
+    达成率: rate,
+    剩余任务金额: remain,
+  }
+}
+
 const buildAggregateDataset = (datasetResults) => {
   if (!Array.isArray(datasetResults) || datasetResults.length === 0) return null
   if (datasetResults.length === 1) return datasetResults[0]
 
   const totalRows = datasetResults.reduce((sum, item) => sum + Number(item?.row_count || item?.rows?.length || 0), 0)
   const allColumns = Array.from(new Set(datasetResults.flatMap(item => item?.columns || [])))
+  const comparisonRows = datasetResults.map(buildDatasetComparisonRow).filter(item => item.节点名称)
 
   return {
     dataset_name: `共 ${datasetResults.length} 个数据集`,
     dataset_id: 'multi',
     row_count: totalRows,
-    rows: { length: totalRows },
-    columns: allColumns,
+    rows: comparisonRows,
+    columns: Array.from(new Set([...allColumns, '节点名称', '层级', '总任务金额', '年度开单金额', '达成率', '剩余任务金额'])),
   }
 }
 
@@ -4229,16 +4276,6 @@ const loadQuestions = async () => {
   }
 }
 
-const loadAskFlowDisplayConfig = async () => {
-  try {
-    const res = await getAskFlowConfig()
-    const config = res?.data?.config || res?.config || {}
-    showAskFlowBadge.value = config.attachMetadata !== false
-  } catch {
-    showAskFlowBadge.value = true
-  }
-}
-
 const handleDatasetChange = async () => {
   if (!canUseFeature('smart_dataset_select')) {
     datasetId.value = null
@@ -4709,7 +4746,6 @@ watch(canViewFullscreenReport, (allowed) => {
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadFeatureFlags()
-  await loadAskFlowDisplayConfig()
   loadHistory()
 
   // 从 sessionStorage 还原输入状态
@@ -4750,7 +4786,6 @@ onActivated(async () => {
     const modelRes = await getActiveAIModels()
     aiModels.value = modelRes.models || []
   } catch {}
-  await loadAskFlowDisplayConfig()
   loadHistory()
 })
 

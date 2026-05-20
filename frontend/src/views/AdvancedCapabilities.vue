@@ -365,7 +365,7 @@ const loadConfig = async () => {
 const loadAskFlowState = async () => {
   askFlowLoading.value = true
   try {
-    const res = await getAskFlowConfig()
+    const res = await getAskFlowConfig({ silent: true })
     askFlowConfig.value = {
       ...askFlowConfig.value,
       ...(res?.data?.config || {}),

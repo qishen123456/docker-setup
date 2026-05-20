@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any, Dict, List
 from uuid import uuid4
@@ -173,6 +174,155 @@ class AdvancedAskService:
         if mention_text:
             instruction += f" 命中组织与数据集：{mention_text}。"
         return f"{question}\n{instruction}".strip()
+
+    @staticmethod
+    def _number_value(value: Any) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value) if value == value else None
+        text = str(value or "").strip()
+        if not text:
+            return None
+        cleaned = re.sub(r"[^0-9.\-]", "", text)
+        if not cleaned:
+            return None
+        try:
+            number = float(cleaned)
+        except Exception:
+            return None
+        if "亿" in text:
+            number *= 100000000
+        elif "万" in text:
+            number *= 10000
+        return number
+
+    @staticmethod
+    def _format_amount(value: Any) -> str:
+        number = AdvancedAskService._number_value(value)
+        if number is None:
+            return ""
+        abs_value = abs(number)
+        if abs_value >= 100000000:
+            return f"{number / 100000000:.2f}".rstrip("0").rstrip(".") + "亿"
+        if abs_value >= 10000:
+            return f"{number / 10000:.1f}".rstrip("0").rstrip(".") + "万"
+        return f"{number:.2f}".rstrip("0").rstrip(".")
+
+    @staticmethod
+    def _format_rate(value: Any) -> str:
+        number = AdvancedAskService._number_value(value)
+        if number is None:
+            return ""
+        return f"{number:.2f}".rstrip("0").rstrip(".") + "%"
+
+    @staticmethod
+    def _kpi_value(dataset: Dict[str, Any], tokens: List[str]) -> Any:
+        spec = dataset.get("report_spec") if isinstance(dataset.get("report_spec"), dict) else {}
+        for item in spec.get("kpis") or []:
+            if not isinstance(item, dict):
+                continue
+            text = f"{item.get('key', '')}{item.get('label', '')}"
+            if any(token in text for token in tokens):
+                return item.get("value") if item.get("value") is not None else item.get("displayValue")
+        return None
+
+    @staticmethod
+    def _row_value(dataset: Dict[str, Any], tokens: List[str]) -> Any:
+        rows = dataset.get("rows") if isinstance(dataset.get("rows"), list) else []
+        if not rows:
+            return None
+        row = rows[0] if isinstance(rows[0], dict) else {}
+        for key, value in row.items():
+            text = str(key or "")
+            if any(token in text for token in tokens):
+                return value
+        return None
+
+    def _dataset_metric(self, dataset: Dict[str, Any], tokens: List[str]) -> float | None:
+        return self._number_value(self._kpi_value(dataset, tokens) or self._row_value(dataset, tokens))
+
+    def _dataset_overview(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
+        task = self._dataset_metric(dataset, ["总任务", "任务金额", "目标", "task"])
+        actual = self._dataset_metric(dataset, ["年度开单", "开单金额", "开单", "完成", "实际", "actual"])
+        rate = self._dataset_metric(dataset, ["达成率", "完成率", "rate", "percent"])
+        remain = self._dataset_metric(dataset, ["剩余", "缺口", "差额", "remain", "gap"])
+        if rate is None and task:
+            rate = (actual or 0) / task * 100
+        if remain is None and task is not None and actual is not None:
+            remain = task - actual
+        return {
+            "dataset_id": dataset.get("dataset_id"),
+            "name": str(dataset.get("dataset_name") or "当前数据集").strip(),
+            "task": task,
+            "actual": actual,
+            "rate": rate,
+            "remain": remain,
+        }
+
+    def _build_cross_dataset_conclusion(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        datasets = result.get("dataset_results") if isinstance(result, dict) else []
+        overviews = [
+            item for item in (self._dataset_overview(dataset) for dataset in datasets or [])
+            if item.get("task") is not None or item.get("actual") is not None or item.get("rate") is not None
+        ]
+        if len(overviews) < 2:
+            return {}
+
+        ranked = sorted(
+            overviews,
+            key=lambda item: item.get("rate") if item.get("rate") is not None else -1,
+            reverse=True,
+        )
+        leader = ranked[0]
+        pressure = ranked[-1]
+        lines = []
+        if leader.get("rate") is not None and pressure.get("rate") is not None and leader["name"] != pressure["name"]:
+            diff = abs(float(leader["rate"]) - float(pressure["rate"]))
+            diff_text = f"{diff:.2f}".rstrip("0").rstrip(".")
+            lines.append(
+                f"{leader['name']}达成率{self._format_rate(leader['rate'])}，"
+                f"高于{pressure['name']}{diff_text}个百分点"
+            )
+        actual_ranked = sorted(
+            [item for item in overviews if item.get("actual") is not None],
+            key=lambda item: item.get("actual") or 0,
+            reverse=True,
+        )
+        if len(actual_ranked) >= 2:
+            lines.append(
+                f"{actual_ranked[0]['name']}开单{self._format_amount(actual_ranked[0]['actual'])}，"
+                f"{actual_ranked[-1]['name']}开单{self._format_amount(actual_ranked[-1]['actual'])}"
+            )
+        task_ranked = sorted(
+            [item for item in overviews if item.get("task") is not None],
+            key=lambda item: item.get("task") or 0,
+            reverse=True,
+        )
+        if len(task_ranked) >= 2:
+            lines.append(
+                f"任务体量分别为{task_ranked[0]['name']}{self._format_amount(task_ranked[0]['task'])}、"
+                f"{task_ranked[-1]['name']}{self._format_amount(task_ranked[-1]['task'])}"
+            )
+        if not lines:
+            return {}
+        conclusion = "跨数据集对比结论：" + "；".join(lines) + "。"
+        return {"conclusion": conclusion, "overviews": overviews}
+
+    def _apply_cross_dataset_conclusion(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        payload = self._build_cross_dataset_conclusion(result)
+        conclusion = str(payload.get("conclusion") or "").strip()
+        if not conclusion:
+            return payload
+        prefix = f"## 跨数据集核心结论\n\n{conclusion}"
+        result["analysis"] = f"{prefix}\n\n---\n\n{result.get('analysis') or ''}".strip()
+        datasets = result.get("dataset_results") if isinstance(result.get("dataset_results"), list) else []
+        if datasets and isinstance(datasets[0], dict):
+            first_analysis = str(datasets[0].get("analysis") or "").strip()
+            if conclusion not in first_analysis:
+                datasets[0]["analysis"] = f"{prefix}\n\n{first_analysis}".strip()
+        payload["applied"] = True
+        return payload
 
     def _run_advanced_trace(self, question: str, preferred_dataset_ids, allowed_dataset_ids, live_callback) -> Dict[str, Any]:
         config = load_config()
@@ -860,9 +1010,9 @@ class AdvancedAskService:
                 detail_lines=[
                     f"结果集：{contract['dataset_result_count']} 个，行数：{contract['row_count']} 行。",
                     f"report_spec：{'已生成' if contract['has_report_spec'] else '未生成'}。",
-                    "未改写核心结论、报告结构和明细数据，只追加进阶诊断信息。",
+                    "报告结构和明细数据保持不变；跨数据集场景会补充对比总览结论。",
                 ],
-                thought="最终报告和现有前端保持一致，进阶流程只增强过程、可解释性和问题定位。",
+                thought="最终报告和现有前端保持一致，进阶流程只增强过程、可解释性和跨数据集结论。",
                 tool_type="report",
                 started=stage_started,
                 report_contract=contract,
@@ -925,6 +1075,8 @@ class AdvancedAskService:
                 )
             except Exception as exc:
                 result_diagnostics = {"result_trace_error": str(exc)}
+            if route_guard.get("action") == "cross_dataset_compare":
+                result_diagnostics["cross_dataset_conclusion"] = self._apply_cross_dataset_conclusion(result)
 
             diagnostics = result.setdefault("diagnostics", {})
             if isinstance(diagnostics, dict):

@@ -137,7 +137,21 @@ class RouteGuardSkill:
         }
 
         if preferred:
-            if org_dataset_ids and set(preferred).isdisjoint(set(org_dataset_ids)):
+            if (
+                len(org_dataset_ids) > 1
+                and self._looks_like_cross_dataset_compare(question, org_compact)
+                and set(preferred).intersection(set(org_dataset_ids))
+            ):
+                result.update(
+                    {
+                        "action": "cross_dataset_compare",
+                        "confidence": "high",
+                        "apply_dataset_ids": org_dataset_ids,
+                        "recommended_dataset_ids": org_dataset_ids,
+                        "reason": "问题明确要求多个事业部/组织口径对比，已覆盖当前手动选择并纳入全部命中数据集。",
+                    }
+                )
+            elif org_dataset_ids and set(preferred).isdisjoint(set(org_dataset_ids)):
                 result.update(
                     {
                         "action": "manual_mismatch",
