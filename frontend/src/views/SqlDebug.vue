@@ -327,7 +327,11 @@ const runAsk = async () => {
       question: questionText.value,
       limit: limit.value,
     })
-    askResult.value = { ...createEmptyResult(), ...response }
+    askResult.value = {
+      ...createEmptyResult(),
+      ...response,
+      final_sql: response?.preview_sql || response?.final_sql || '',
+    }
   } catch (error) {
     const payload = error?.response?.data || {}
     askResult.value = normalizeErrorResult(error, {

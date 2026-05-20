@@ -24,7 +24,7 @@ import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
 from dataset_copilot import CopilotError, DatasetCopilot
 from auth_store import get_current_user
-from data_permission_store import apply_row_level_filter, dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions, org_mention_permission_check
+from data_permission_store import apply_row_level_filter, dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions, org_mention_permission_check, user_org_scope_for_rule
 from feature_flags import feature_available
 from system_log_store import log_event, request_snapshot
 
@@ -1179,15 +1179,25 @@ def debug_bookshelf_dataset_ask_sql(dataset_id: int):
 
         context = service.repository.get_dataset_context(int(dataset_id), question)
         dataset_meta = service._safe_dict(context.get("dataset")) or dict(dataset)
+        permission_rule = (load_data_permissions().get("rules") or {}).get(str(int(dataset_id))) or {}
+        user_scope = user_org_scope_for_rule(user or {}, permission_rule) if permission_rule.get("mode") == "org_tree" else {}
         saved_report_config = report_config_store.get_config(int(dataset_id))
         report_config = dict(saved_report_config or report_config_store.get_default_config())
         context["route"] = route
+        context["row_security"] = {
+            "mode": permission_rule.get("mode") or "public",
+            "tree_type_id": permission_rule.get("tree_type_id") or "",
+            "tree_type_ids": permission_rule.get("tree_type_ids") or ([permission_rule.get("tree_type_id")] if permission_rule.get("tree_type_id") else []),
+            "organization_field": service._safe_dict(permission_rule.get("scope")).get("organization_field") or "组织编码",
+            "allowed_codes": user_scope.get("codes") or [],
+            "allowed_names": user_scope.get("names") or [],
+        }
         context["report_config"] = report_config
         context["resolved_entities"] = service._resolve_question_entities(question, context, trace=None)
         query_intent = service._resolve_query_intent(question, context)
         context["query_intent"] = query_intent
         context["report_config"] = {**report_config, "queryIntent": query_intent}
-        add_log("info", "已加载书架上下文并识别查询意图。", query_intent=query_intent)
+        add_log("info", "已加载书架上下文并识别查询意图。", query_intent=query_intent, row_security=context["row_security"])
 
         prompts = context.get("agent_prompts", {}) or {}
         agent2_prompt = "\n\n".join(str(item.get("prompt_content") or "") for item in prompts.get(2, []))
@@ -1241,6 +1251,10 @@ def debug_bookshelf_dataset_ask_sql(dataset_id: int):
             review_policy=agent3_review_policy,
         )
         final_sql = str(review.get("final_sql") or sql_text).strip()
+        normalized_final_sql = service._normalize_known_sql_alias_typos(final_sql)
+        if normalized_final_sql != final_sql:
+            final_sql = normalized_final_sql
+            add_log("info", "已修正常见 SQL 字段别名拼写。")
         add_log("info", "SQL 复核完成。", approved=review.get("approved"), review_summary=review.get("review_summary") or "")
 
         if review.get("approved") is False and not final_sql:
@@ -1276,7 +1290,93 @@ def debug_bookshelf_dataset_ask_sql(dataset_id: int):
         preview_sql = _wrap_preview_sql(secured_sql, limit)
         add_log("info", "已应用行级权限并限制返回行数。", limit=limit)
 
-        dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
+        try:
+            dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
+        except Exception as exec_error:
+            add_log("error", "SQL 执行失败，开始自动修复。", error=str(exec_error))
+            repair_result = service._repair_sql_after_execution_error(
+                question=question,
+                route=route,
+                context=context,
+                failed_sql=final_sql,
+                error_message=str(exec_error),
+                dataset_prompt=agent2_prompt,
+                trace=None,
+            )
+            repaired_sql = str(repair_result.get("sql") or "").strip()
+            repaired_sql = service._normalize_known_sql_alias_typos(repaired_sql)
+            if not repaired_sql:
+                return jsonify({
+                    "error": f"SQL 执行失败，自动修复未生成可执行 SQL：{exec_error}",
+                    "question": question,
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                    "generated_sql": sql_text,
+                    "final_sql": secured_sql,
+                    "preview_sql": preview_sql,
+                    "review": review,
+                    "sql_strategy": sql_strategy,
+                    "query_intent": query_intent,
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                    "limit": limit,
+                    "logs": logs,
+                }), 400
+            repair_review = service._agent3_review(
+                question,
+                route,
+                repaired_sql,
+                context,
+                agent3_prompt,
+                trace=None,
+                review_policy="normal",
+            )
+            repaired_final_sql = str(repair_review.get("final_sql") or repaired_sql).strip()
+            repaired_final_sql = service._normalize_known_sql_alias_typos(repaired_final_sql)
+            if not service._is_read_only_sql(repaired_final_sql) or not _is_read_only_sql(repaired_final_sql):
+                return jsonify({
+                    "error": "SQL 自动修复结果未通过只读安全校验，已阻断执行。",
+                    "question": question,
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                    "generated_sql": sql_text,
+                    "final_sql": repaired_final_sql,
+                    "review": repair_review,
+                    "sql_strategy": sql_strategy,
+                    "query_intent": query_intent,
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                    "limit": limit,
+                    "logs": logs,
+                }), 400
+            final_sql = repaired_final_sql
+            review = repair_review
+            secured_sql = apply_row_level_filter(final_sql, user, int(dataset_id))
+            preview_sql = _wrap_preview_sql(secured_sql, limit)
+            add_log("info", "SQL 自动修复完成，重新执行。", notes=repair_result.get("notes") or "")
+            try:
+                dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
+            except Exception as repair_exec_error:
+                add_log("error", "SQL 自动修复后仍执行失败。", error=str(repair_exec_error))
+                return jsonify({
+                    "error": f"SQL 自动修复后仍执行失败：{repair_exec_error}",
+                    "question": question,
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                    "generated_sql": sql_text,
+                    "final_sql": secured_sql,
+                    "preview_sql": preview_sql,
+                    "review": review,
+                    "sql_strategy": sql_strategy,
+                    "query_intent": query_intent,
+                    "columns": [],
+                    "rows": [],
+                    "row_count": 0,
+                    "limit": limit,
+                    "logs": logs,
+                }), 400
         records = json.loads(dataframe.to_json(orient="records", force_ascii=False, date_format="iso"))
         columns = [str(col) for col in dataframe.columns.tolist()]
         add_log("info", "SQL 执行完成。", row_count=len(records))

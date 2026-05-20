@@ -9,12 +9,18 @@ from data_permission_store import apply_row_level_filter
 from four_agent_ask import FourAgentAskService
 from organization_route_resolver import OrganizationRouteResolver
 from smartask_advanced.skills.dataset_route import DatasetRouteSkill
+from smartask_advanced.skills.route_guard import RouteGuardSkill
 
 
 CATALOG = [
     {"id": 3, "dataset_name": "商用事业部", "dataset_code": "angel_business_2026"},
     {"id": 11, "dataset_name": "消费者测试数据集", "dataset_code": "consumer_business_standard_v1"},
 ]
+
+
+class FakeRepo:
+    def get_agent1_catalog(self):
+        return CATALOG
 
 
 def _node(node_id, parent_id, name, path_ids, path_names, level):
@@ -120,6 +126,7 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         consumer = {"id": 11, "dataset_name": "消费者测试数据集", "dataset_code": "consumer_business_standard_v1"}
 
         self.assertGreater(DatasetRouteSkill.score(question, commercial), DatasetRouteSkill.score(question, consumer))
+        self.assertLessEqual(DatasetRouteSkill.score(question, consumer), 0)
         self.assertGreaterEqual(
             FourAgentAskService._profile_level_alias_score(
                 question,
@@ -127,6 +134,27 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
             ),
             90,
         )
+
+    def test_route_guard_locks_commercial_when_org_tree_lacks_rep_office_node(self):
+        question = "分析下湖南代表处的业绩"
+        candidates = DatasetRouteSkill(FakeRepo()).run(question, limit=2)
+        guard = RouteGuardSkill(FakeRepo())
+        guard.organization_resolver.resolve = lambda *args, **kwargs: None
+
+        result = guard.run(question=question, candidates=candidates)
+
+        self.assertEqual(result["action"], "auto_lock")
+        self.assertEqual(result["apply_dataset_ids"], [3])
+
+    def test_known_sql_alias_typos_are_normalized_before_execution(self):
+        sql = "SELECT * FROM 基础数据 WHERE 条线_type='区域条线' OR 条线Type='行业条线'"
+
+        normalized = FourAgentAskService._normalize_known_sql_alias_typos(sql)
+
+        self.assertIn("条线类型='区域条线'", normalized)
+        self.assertIn("条线类型='行业条线'", normalized)
+        self.assertNotIn("条线_type", normalized)
+        self.assertNotIn("条线Type", normalized)
 
 
 if __name__ == "__main__":

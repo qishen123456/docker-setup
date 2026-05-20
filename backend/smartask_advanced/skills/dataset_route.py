@@ -9,28 +9,24 @@ from .common import as_int_list, tokens
 
 class DatasetRouteSkill:
     key = "dataset_route"
+    SPECIFIC_LEVELS = {
+        "代表处",
+        "办事处",
+        "网点",
+        "业务代表",
+        "业务员",
+        "业务部",
+        "行业业务部",
+        "城市公司",
+        "城市分公司",
+    }
 
     def __init__(self, repository):
         self.repository = repository
 
     @staticmethod
-    def _profile_level_score(question: str, dataset: Dict[str, Any]) -> int:
-        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-        if not profile:
-            return 0
-        text = str(question or "").replace(" ", "").lower()
-        specific_levels = {
-            "代表处",
-            "办事处",
-            "网点",
-            "业务代表",
-            "业务员",
-            "业务部",
-            "行业业务部",
-            "城市公司",
-            "城市分公司",
-        }
-        score = 0
+    def _profile_supported_levels(profile: Dict[str, Any]) -> set[str]:
+        supported = set()
         for level in profile.get("levels") or []:
             aliases = [
                 str(level.get("dimension_name") or ""),
@@ -38,8 +34,26 @@ class DatasetRouteSkill:
             ]
             for alias in aliases:
                 normalized_alias = alias.replace(" ", "").lower()
-                if normalized_alias in specific_levels and normalized_alias in text:
-                    score = max(score, 55)
+                if normalized_alias in DatasetRouteSkill.SPECIFIC_LEVELS:
+                    supported.add(normalized_alias)
+        return supported
+
+    @staticmethod
+    def _profile_level_score(question: str, dataset: Dict[str, Any]) -> int:
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if not profile:
+            return 0
+        text = str(question or "").replace(" ", "").lower()
+        asked = {item for item in DatasetRouteSkill.SPECIFIC_LEVELS if item in text}
+        if not asked:
+            return 0
+        supported = DatasetRouteSkill._profile_supported_levels(profile)
+        score = 0
+        if asked.intersection(supported):
+            score = 55
+        unsupported = [item for item in asked if item not in supported]
+        if unsupported:
+            score -= min(60, 35 * len(unsupported))
         return score
 
     @staticmethod

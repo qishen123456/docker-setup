@@ -1889,6 +1889,12 @@ class FourAgentAskService:
     def _normalize_compact_text(text: Any) -> str:
         return re.sub(r"\s+", "", str(text or "")).lower()
 
+    @staticmethod
+    def _normalize_known_sql_alias_typos(sql_text: str) -> str:
+        sql = str(sql_text or "")
+        sql = re.sub(r"条线[\s_-]*type\b", "条线类型", sql, flags=re.IGNORECASE)
+        return sql
+
     @classmethod
     def _profile_level_alias_score(cls, question: str, profile: Optional[Dict[str, Any]]) -> int:
         if not profile:
@@ -1920,6 +1926,40 @@ class FourAgentAskService:
                 if normalized_alias in normalized_question:
                     score = max(score, 93)
         return score
+
+    @classmethod
+    def _profile_level_mismatch_penalty(cls, question: str, profile: Optional[Dict[str, Any]]) -> int:
+        if not profile:
+            return 0
+        normalized_question = cls._normalize_compact_text(question)
+        if not normalized_question:
+            return 0
+        specific_levels = {
+            "代表处",
+            "办事处",
+            "网点",
+            "业务代表",
+            "业务员",
+            "业务部",
+            "行业业务部",
+            "城市公司",
+            "城市分公司",
+        }
+        asked = {item for item in specific_levels if item in normalized_question}
+        if not asked:
+            return 0
+        supported = set()
+        for level in profile.get("levels") or []:
+            aliases = [
+                str(level.get("dimension_name") or ""),
+                *[str(item or "") for item in (level.get("aliases") or [])],
+            ]
+            for alias in aliases:
+                normalized_alias = cls._normalize_compact_text(alias)
+                if normalized_alias in specific_levels:
+                    supported.add(normalized_alias)
+        unsupported = [item for item in asked if item not in supported]
+        return -min(60, 35 * len(unsupported))
 
     def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any]) -> int:
         normalized_question = self._normalize_compact_text(question)
@@ -1984,14 +2024,30 @@ class FourAgentAskService:
         synonyms = " ".join(dataset.get("synonyms", []) or [])
         common_questions = " ".join(item.get("question_text", "") for item in context.get("common_questions", [])[:8])
         lld_text = self._get_lld_content(context)[:600]
-        dataset_text = f"{dataset.get('dataset_name', '')} {dataset.get('business_domain', '')} {synonyms} {common_questions} {lld_text}"
+        dictionary_text = " ".join(
+            " ".join(
+                str(item.get(key) or "")
+                for key in ("semantic_name", "jsonb_key", "column_name")
+            )
+            for item in (context.get("data_dictionary") or [])[:80]
+        )
+        schema_text = " ".join(
+            " ".join(
+                str(item.get(key) or "")
+                for key in ("table_name", "column_name", "semantic_name")
+            )
+            for item in (context.get("schema_definition") or [])[:80]
+        )
+        dataset_text = f"{dataset.get('dataset_name', '')} {dataset.get('business_domain', '')} {synonyms} {common_questions} {dictionary_text} {schema_text} {lld_text}"
         dataset_tokens = self._tokenize(dataset_text)
         synonym_overlap = len(q_tokens.intersection(dataset_tokens))
         sample_score = max([int(item.get("match_score", 0)) for item in context.get("golden_sql_samples", [])] or [0])
-        schema_hit = 1 if any(token in dataset_tokens for token in ("日期", "时间", "金额", "分公司", "事业部", "区域")) else 0
+        schema_hit = 1 if any(token in dataset_tokens for token in ("日期", "时间", "金额", "分公司", "事业部", "代表处", "业务代表", "业务部", "城市公司", "区域")) else 0
         name_hit_score = self._dataset_alias_match_score(question, dataset)
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         score = synonym_overlap * 12 + min(sample_score, 90) + schema_hit * 4 + name_hit_score
-        return min(score, 100)
+        score += self._profile_level_mismatch_penalty(question, profile)
+        return max(0, min(score, 100))
 
     @staticmethod
     def _summarize_candidate_strengths(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -3300,6 +3356,7 @@ Agent1 路由结果：
         sql_text = (result.get("sql") or "").strip()
         sql_text = re.sub(r"^```sql\s*", "", sql_text, flags=re.IGNORECASE).strip()
         sql_text = re.sub(r"\s*```$", "", sql_text).strip()
+        sql_text = self._normalize_known_sql_alias_typos(sql_text)
         if "..." in sql_text:
             sql_text = ""
             result["notes"] = "agent2 generated incomplete sql"
@@ -3338,6 +3395,7 @@ Agent1 路由结果：
             retry_sql = (retry_result.get("sql") or "").strip()
             retry_sql = re.sub(r"^```sql\s*", "", retry_sql, flags=re.IGNORECASE).strip()
             retry_sql = re.sub(r"\s*```$", "", retry_sql).strip()
+            retry_sql = self._normalize_known_sql_alias_typos(retry_sql)
             if "..." in retry_sql:
                 retry_sql = ""
                 retry_result["notes"] = "agent2 retry generated incomplete sql"
@@ -3466,6 +3524,7 @@ Agent1 路由结果：
         sql_text = (result.get("sql") or "").strip()
         sql_text = re.sub(r"^```sql\s*", "", sql_text, flags=re.IGNORECASE).strip()
         sql_text = re.sub(r"\s*```$", "", sql_text).strip()
+        sql_text = self._normalize_known_sql_alias_typos(sql_text)
         if "..." in sql_text or not self._is_read_only_sql(sql_text):
             sql_text = ""
         result["sql"] = sql_text
