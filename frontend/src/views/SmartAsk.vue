@@ -1342,9 +1342,39 @@ const buildDatasetComparisonRow = (dataset) => {
   }
 }
 
+const collectResolvedNamesFromDatasets = (datasetResults) => {
+  const names = []
+  const add = (value) => {
+    const text = String(value || '').trim()
+    if (text && !names.includes(text)) names.push(text)
+  }
+  ;(datasetResults || []).forEach((dataset) => {
+    const resolved = dataset?.resolved_entities || {}
+    ;(resolved.all_members || []).forEach(add)
+    ;(resolved.entities || []).forEach((entity) => {
+      ;(entity?.members || []).forEach(add)
+    })
+  })
+  return names
+}
+
+const datasetRowsContainAnyName = (dataset, names = []) => {
+  if (!names.length) return false
+  return (dataset?.rows || []).some((row) => {
+    const text = Object.values(row || {}).map(value => String(value ?? '')).join(' ')
+    return names.some(name => text.includes(name))
+  })
+}
+
 const buildAggregateDataset = (datasetResults) => {
   if (!Array.isArray(datasetResults) || datasetResults.length === 0) return null
   if (datasetResults.length === 1) return datasetResults[0]
+
+  const resolvedNames = collectResolvedNamesFromDatasets(datasetResults)
+  if (resolvedNames.length === 1) {
+    const matching = datasetResults.filter(dataset => datasetRowsContainAnyName(dataset, resolvedNames))
+    if (matching.length === 1) return matching[0]
+  }
 
   const totalRows = datasetResults.reduce((sum, item) => sum + Number(item?.row_count || item?.rows?.length || 0), 0)
   const allColumns = Array.from(new Set(datasetResults.flatMap(item => item?.columns || [])))
