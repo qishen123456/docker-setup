@@ -512,7 +512,11 @@ const resolveFocusRow = (items = []) => {
       || null
   }
   const question = questionLabel.value
-  return items.find(item => item.name && question.includes(item.name) && !/业务代表|业务员/.test(item.level))
+  const explicitRows = items.filter(item => item.name && question.includes(item.name))
+  const managementRow = explicitRows.find(item => !/业务代表|业务员/.test(item.level))
+  if (managementRow) return managementRow
+  if (explicitRows.length === 1) return explicitRows[0]
+  return explicitRows[0]
     || items.find(item => item.name && !item.parent)
     || null
 }

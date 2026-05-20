@@ -79,6 +79,10 @@ def _node_label(node: Dict[str, Any]) -> str:
     return " / ".join(path) or _text(node.get("name"))
 
 
+def _is_compare_question(question: str) -> bool:
+    return bool(re.search(r"对比|比较|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
+
+
 def _dataset_name(dataset_id: int, catalog_by_id: Dict[int, Dict[str, Any]]) -> str:
     item = catalog_by_id.get(int(dataset_id)) or {}
     return _text(item.get("dataset_name")) or f"数据集 {dataset_id}"
@@ -239,6 +243,26 @@ class OrganizationRouteResolver:
                 "organization_mentions": mentions,
                 "resolved_members": [mention["node_name"]],
                 "scope_mode": "single",
+                "split_queries": [{"dataset_id": dataset_ids[0], "sub_query": refined_query}],
+            }
+
+        if len(dataset_ids) == 1:
+            scope_mode = "compare" if _is_compare_question(question) or len(distinct_node_names) > 1 else "aggregate"
+            return {
+                "dataset_ids": [dataset_ids[0]],
+                "intent": "detail",
+                "refined_query": refined_query,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": 96,
+                "route_margin": 100,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": ORG_ROUTE_REASON,
+                "candidate_dataset_ids": candidate_dataset_ids,
+                "organization_mentions": mentions,
+                "resolved_members": distinct_node_names,
+                "scope_mode": scope_mode,
                 "split_queries": [{"dataset_id": dataset_ids[0], "sub_query": refined_query}],
             }
 

@@ -156,6 +156,47 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         self.assertNotIn("条线_type", normalized)
         self.assertNotIn("条线Type", normalized)
 
+    def test_golden_sql_subject_literal_is_rewritten_for_current_question(self):
+        service = object.__new__(FourAgentAskService)
+        sample_sql = "WITH 汇总结果 AS (SELECT 1) SELECT * FROM 汇总结果 WHERE 节点名称 = '靳锋' LIMIT 100"
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026", "dataset_name": "商用事业部"},
+            "resolved_entities": {},
+            "golden_sql_samples": [
+                {
+                    "id": 7,
+                    "question": "看下靳锋的业绩",
+                    "sql_text": sample_sql,
+                    "match_score": 98,
+                    "quality_score": 95,
+                }
+            ],
+            "data_dictionary": [],
+        }
+
+        strategy = service._select_sql_strategy("看下赵标的业绩呢", {"match_score": 90, "route_margin": 20}, context)
+
+        self.assertEqual(strategy["mode"], "sample_direct")
+        self.assertTrue(strategy["sample_rewritten"])
+        self.assertIn("节点名称 = '赵标'", strategy["sql"])
+        self.assertNotIn("靳锋", strategy["sql"])
+
+    def test_business_person_question_gets_dynamic_rule_scope(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026", "dataset_name": "商用事业部"},
+            "resolved_entities": {},
+            "data_dictionary": [],
+        }
+
+        sql = service._build_rule_based_sql("看下赵标的业绩呢", {}, context)
+
+        self.assertIn("'赵标'", sql)
+        self.assertIn("WITH RECURSIVE", sql)
+        self.assertIn("节点名称 IN ('赵标')", sql)
+        self.assertIn("JOIN 命中链路 父节点", sql)
+        self.assertIn("子节点.上级名称 = 父节点.节点名称", sql)
+
 
 if __name__ == "__main__":
     unittest.main()

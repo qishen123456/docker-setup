@@ -1267,6 +1267,30 @@ class FourAgentAskService:
                 return False
             return left_key == right_key or left_key in right_key or right_key in left_key
 
+        def direct_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
+            prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
+            if prepared.get("conflict"):
+                return None
+            return {
+                "mode": "sample_direct",
+                "sql": prepared.get("sql") or sql,
+                "sample_id": sample_id,
+                "sample_score": sample_score,
+                "sample_rewritten": prepared.get("rewritten", False),
+            }
+
+        def template_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
+            prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
+            if prepared.get("conflict"):
+                return None
+            return {
+                "mode": "sample_template",
+                "sql": prepared.get("sql") or sql,
+                "sample_id": sample_id,
+                "sample_score": sample_score,
+                "sample_rewritten": prepared.get("rewritten", False),
+            }
+
         exact_sample = next(
             (
                 item for item in sql_samples
@@ -1276,51 +1300,40 @@ class FourAgentAskService:
         )
 
         if route_sample_sql:
-            return {
-                "mode": "sample_direct",
-                "sql": route_sample_sql,
-                "sample_id": route_sample_id,
-                "sample_score": top_sample_score,
-            }
+            prepared = direct_sample(route_sample_sql, route_sample_id, top_sample_score)
+            if prepared:
+                return prepared
 
         if exact_sample:
-            return {
-                "mode": "sample_direct",
-                "sql": str(exact_sample.get("sql_text") or "").strip(),
-                "sample_id": exact_sample.get("id"),
-                "sample_score": self._safe_int(exact_sample.get("match_score"), 100),
-            }
+            prepared = direct_sample(
+                str(exact_sample.get("sql_text") or "").strip(),
+                exact_sample.get("id"),
+                self._safe_int(exact_sample.get("match_score"), 100),
+            )
+            if prepared:
+                return prepared
 
         if route.get("decision") == "direct_execute" and top_sample_sql:
-            return {
-                "mode": "sample_direct",
-                "sql": top_sample_sql,
-                "sample_id": top_sample.get("id"),
-                "sample_score": top_sample_score,
-            }
+            prepared = direct_sample(top_sample_sql, top_sample.get("id"), top_sample_score)
+            if prepared:
+                return prepared
 
         if top_sample_sql and (
             top_sample_score >= 96
             or (preferred_override and top_sample_score >= 82)
             or (route_match_score >= 86 and top_sample_score >= 84 and route_margin >= 8)
         ):
-            return {
-                "mode": "sample_direct",
-                "sql": top_sample_sql,
-                "sample_id": top_sample.get("id"),
-                "sample_score": top_sample_score,
-            }
+            prepared = direct_sample(top_sample_sql, top_sample.get("id"), top_sample_score)
+            if prepared:
+                return prepared
 
         if top_sample_sql and (
             top_sample_score >= 66
             or (preferred_override and top_sample_score >= 58)
         ):
-            return {
-                "mode": "sample_template",
-                "sql": top_sample_sql,
-                "sample_id": top_sample.get("id"),
-                "sample_score": top_sample_score,
-            }
+            prepared = template_sample(top_sample_sql, top_sample.get("id"), top_sample_score)
+            if prepared:
+                return prepared
 
         if rule_based_sql:
             return {
@@ -1336,6 +1349,103 @@ class FourAgentAskService:
             "sample_id": None,
             "sample_score": 0,
         }
+
+    @classmethod
+    def _sql_subject_filter_literals(cls, sql_text: str) -> List[str]:
+        sql = str(sql_text or "")
+        values: List[str] = []
+        condition_prefix = r"(?:WHERE|AND|OR|HAVING)\s+"
+        subject_cols = r"(?:节点名称|上级名称|业务代表|分公司|代表处|业务部)"
+        for match in re.finditer(condition_prefix + rf"[^;\n]{{0,100}}?\b{subject_cols}\b\s*=\s*'([^']+)'", sql, flags=re.I):
+            value = str(match.group(1) or "").strip()
+            if value and value not in values and value not in {"商用事业部", "消费者事业部"}:
+                values.append(value)
+        for match in re.finditer(condition_prefix + rf"[^;\n]{{0,100}}?\b{subject_cols}\b\s+IN\s*\(([^)]+)\)", sql, flags=re.I | re.S):
+            for value in re.findall(r"'([^']+)'", match.group(1) or ""):
+                value = str(value or "").strip()
+                if value and value not in values and value not in {"商用事业部", "消费者事业部"}:
+                    values.append(value)
+        return values
+
+    @staticmethod
+    def _normalize_entity_key(value: Any) -> str:
+        return re.sub(r"[\s,，、/\\|()（）【】\[\]{}<>《》“”\"'：:；;.!！?？-]+", "", str(value or "")).lower()
+
+    @classmethod
+    def _looks_like_noise_subject(cls, value: str) -> bool:
+        text = str(value or "").strip()
+        if not text or len(text) < 2 or len(text) > 8:
+            return True
+        if re.match(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", text):
+            return True
+        blocked = [
+            "商用", "消费者", "事业部", "分公司", "代表处", "业务部", "业务员", "业务代表",
+            "销售", "整体", "当前", "今年", "本年", "业绩", "绩效", "开单", "达成",
+            "完成", "情况", "表现", "排名", "最高", "最低", "最好", "最差",
+        ]
+        return any(token in text for token in blocked)
+
+    def _question_subject_names(self, question: str, context: Dict[str, Any]) -> List[str]:
+        names = self._resolved_entity_names(context)
+        dataset = self._safe_dict(context.get("dataset"))
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if profile:
+            semantic = resolve_member_mentions(question, profile)
+            for name in semantic.get("all_members") or []:
+                value = str(name or "").strip()
+                if value and value not in names:
+                    names.append(value)
+
+        text = str(question or "").replace("\n", " ").strip()
+        for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部|事业部)", text):
+            cleaned = match.strip("，,、 和与及的业绩情况表现整体")
+            if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
+                continue
+            if any(token in cleaned for token in ["哪些", "所有", "各", "每个", "业务线", "任务完成", "最好", "最高", "最低", "哪个"]):
+                continue
+            if cleaned and cleaned not in names:
+                names.append(cleaned)
+
+        person_patterns = [
+            r"(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)\s*([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现)",
+            r"(?:问的是|查询的是|看的是|主体是|节点是|人员是|业务员是|业务代表是)\s*([\u4e00-\u9fa5]{2,6})",
+            r"([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)",
+        ]
+        for pattern in person_patterns:
+            for match in re.findall(pattern, text):
+                candidate = str(match or "").strip("，,、 的呢吗么吧")
+                candidate = re.sub(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", "", candidate).strip()
+                if self._looks_like_noise_subject(candidate):
+                    continue
+                if candidate not in names:
+                    names.append(candidate)
+        return names
+
+    def _prepare_subject_safe_sample_sql(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        sql_text: str,
+    ) -> Dict[str, Any]:
+        requested = self._question_subject_names(question, context)
+        sample_literals = self._sql_subject_filter_literals(sql_text)
+        if not requested or not sample_literals:
+            return {"sql": sql_text, "rewritten": False, "conflict": False}
+
+        requested_keys = {self._normalize_entity_key(item) for item in requested}
+        sample_keys = {self._normalize_entity_key(item) for item in sample_literals}
+        if requested_keys.intersection(sample_keys):
+            return {"sql": sql_text, "rewritten": False, "conflict": False}
+
+        if len(requested) == 1 and len(sample_literals) == 1:
+            old_value = sample_literals[0]
+            new_value = requested[0]
+            escaped_old = re.escape(old_value.replace("'", "''"))
+            escaped_new = new_value.replace("'", "''")
+            rewritten = re.sub(rf"'{escaped_old}'", f"'{escaped_new}'", str(sql_text or ""))
+            return {"sql": rewritten, "rewritten": rewritten != sql_text, "conflict": False}
+
+        return {"sql": sql_text, "rewritten": False, "conflict": True}
 
     def _build_result_confidence(self, route: Dict[str, Any], dataset_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         dataset_results = dataset_results or []
@@ -2046,8 +2156,30 @@ class FourAgentAskService:
         name_hit_score = self._dataset_alias_match_score(question, dataset)
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         score = synonym_overlap * 12 + min(sample_score, 90) + schema_hit * 4 + name_hit_score
+        if self._looks_like_person_performance_question(question) and any(
+            token in dataset_text for token in ("业务代表", "业务员", "销售人员")
+        ):
+            score = max(score, 88)
         score += self._profile_level_mismatch_penalty(question, profile)
         return max(0, min(score, 100))
+
+    @classmethod
+    def _looks_like_person_performance_question(cls, question: str) -> bool:
+        text = str(question or "").replace("\n", " ").strip()
+        patterns = [
+            r"(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|问下|问一下)\s*([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现)",
+            r"([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)",
+        ]
+        for pattern in patterns:
+            for match in re.findall(pattern, text):
+                candidate = re.sub(
+                    r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|问下|问一下)",
+                    "",
+                    str(match or "").strip("，,、 的呢吗么吧"),
+                ).strip()
+                if candidate and not cls._looks_like_noise_subject(candidate):
+                    return True
+        return False
 
     @staticmethod
     def _summarize_candidate_strengths(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -2463,7 +2595,7 @@ class FourAgentAskService:
                 "intent": "detail",
                 "refined_query": arbiter_result.get("refined_query") or question,
                 "requires_confirmation": False,
-                "decision": "direct_execute",
+                "decision": "generate_sql",
                 "match_score": max(best_score, 82),
                 "route_margin": route_margin,
                 "matched_sample_id": None,
@@ -2845,30 +2977,43 @@ LIMIT 50
                 cleaned = match.strip("，,、 和与及的业绩情况表现")
                 if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
                     continue
+                if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
+                    continue
+                if any(token in cleaned for token in ["哪些", "所有", "各", "每个", "业务线", "任务完成", "最好", "最高", "最低", "哪个"]):
+                    continue
                 if cleaned and cleaned not in entity_names:
                     entity_names.append(cleaned)
+        if not entity_names:
+            entity_names = self._question_subject_names(normalized_question, context)
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             return f"""
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 {syyb_base_sql}
 ),
-命中节点 AS (
-    SELECT 节点名称
+命中链路 AS (
+    SELECT *
     FROM 汇总结果
-    WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
-),
-命中孙级 AS (
-    SELECT 子节点.节点名称
+    WHERE 节点名称 IN ({quoted_entities})
+    UNION ALL
+    SELECT 子节点.*
     FROM 汇总结果 子节点
-    WHERE 子节点.上级名称 IN (SELECT 节点名称 FROM 命中节点)
+    JOIN 命中链路 父节点
+      ON 子节点.上级名称 = 父节点.节点名称
 )
 SELECT *
-FROM 汇总结果
-WHERE 节点名称 IN ({quoted_entities})
-   OR 上级名称 IN ({quoted_entities})
-   OR 节点名称 IN (SELECT 节点名称 FROM 命中孙级)
-ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
+FROM 命中链路
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
 LIMIT 10000
 """.strip()
 
@@ -4050,6 +4195,24 @@ Agent3 复核结果：
                 context,
                 trace=trace,
             )
+            if not self._resolved_entity_names(context):
+                subject_names = self._question_subject_names(route.get("refined_query", question), context)
+                if subject_names:
+                    context["resolved_entities"] = {
+                        "intent": "single" if len(subject_names) == 1 else "compare",
+                        "scope_mode": "single" if len(subject_names) == 1 else "compare",
+                        "entities": [
+                            {
+                                "dimension_name": "业务主体",
+                                "members": subject_names,
+                                "matched_aliases": subject_names,
+                                "source": "question_subject_fallback",
+                            }
+                        ],
+                        "all_members": subject_names,
+                        "confidence": 0.66,
+                        "source": "question_subject_fallback",
+                    }
             query_intent = self._resolve_query_intent(route.get("refined_query", question), context)
             report_config = {**report_config, "queryIntent": query_intent}
             context["report_config"] = report_config
