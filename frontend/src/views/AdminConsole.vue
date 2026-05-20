@@ -1096,7 +1096,7 @@ const permissionSectionRules = [
   { key: 'dataset-schema', label: 'DDL + 表关联', description: 'DDL、表结构、表关联和来源表导入。', match: /^dataset_(schema|relation|source_table)/ },
   { key: 'dataset-golden', label: 'Golden SQL', description: '训练实例和 Golden SQL 样例维护。', match: /^dataset_golden_/ },
   { key: 'dataset-prompt', label: 'Agent 提示片段', description: 'Agent 提示词片段维护。', match: /^dataset_prompt_(create|update|delete)$/ },
-  { key: 'dataset-sql', label: 'SQL 测试', description: 'SQL 测试执行和结果复制。', match: /^dataset_sql_preview_/ },
+  { key: 'dataset-sql', label: 'SQL 调试台', description: '智能问数页 SQL 调试执行、复制和导出。', match: /^dataset_sql_preview_/ },
   { key: 'dataset-extcfg', label: '飞书/外部配置', description: '数据集外部配置维护。', match: /^dataset_extcfg_/ },
   { key: 'employee-account', label: '账号维护', description: '新增、编辑、启停、批量修改和删除账号。', match: /^employee_(create|update|status_update|bulk_update|delete)$/ },
   { key: 'employee-security', label: '账号安全', description: '密码重置等敏感账号操作。', match: /^employee_password_/ },

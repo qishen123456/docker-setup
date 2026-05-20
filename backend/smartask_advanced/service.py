@@ -242,7 +242,24 @@ class AdvancedAskService:
     def _dataset_metric(self, dataset: Dict[str, Any], tokens: List[str]) -> float | None:
         return self._number_value(self._kpi_value(dataset, tokens) or self._row_value(dataset, tokens))
 
-    def _dataset_overview(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _dataset_subject_map(route_guard: Dict[str, Any] | None) -> Dict[int, str]:
+        route = (route_guard or {}).get("organization_route") or {}
+        result: Dict[int, str] = {}
+        for item in route.get("organization_mentions") or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("node_name") or "").strip()
+            if not name:
+                continue
+            for dataset_id in item.get("dataset_ids") or []:
+                try:
+                    result[int(dataset_id)] = name
+                except Exception:
+                    continue
+        return result
+
+    def _dataset_overview(self, dataset: Dict[str, Any], subject_map: Dict[int, str] | None = None) -> Dict[str, Any]:
         task = self._dataset_metric(dataset, ["总任务", "任务金额", "目标", "task"])
         actual = self._dataset_metric(dataset, ["年度开单", "开单金额", "开单", "完成", "实际", "actual"])
         rate = self._dataset_metric(dataset, ["达成率", "完成率", "rate", "percent"])
@@ -251,19 +268,24 @@ class AdvancedAskService:
             rate = (actual or 0) / task * 100
         if remain is None and task is not None and actual is not None:
             remain = task - actual
+        try:
+            dataset_id = int(dataset.get("dataset_id") or dataset.get("id") or 0)
+        except Exception:
+            dataset_id = 0
         return {
             "dataset_id": dataset.get("dataset_id"),
-            "name": str(dataset.get("dataset_name") or "当前数据集").strip(),
+            "name": str((subject_map or {}).get(dataset_id) or dataset.get("comparison_subject_name") or dataset.get("dataset_name") or "当前主体").strip(),
             "task": task,
             "actual": actual,
             "rate": rate,
             "remain": remain,
         }
 
-    def _build_cross_dataset_conclusion(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_cross_dataset_conclusion(self, result: Dict[str, Any], route_guard: Dict[str, Any] | None = None) -> Dict[str, Any]:
         datasets = result.get("dataset_results") if isinstance(result, dict) else []
+        subject_map = self._dataset_subject_map(route_guard)
         overviews = [
-            item for item in (self._dataset_overview(dataset) for dataset in datasets or [])
+            item for item in (self._dataset_overview(dataset, subject_map) for dataset in datasets or [])
             if item.get("task") is not None or item.get("actual") is not None or item.get("rate") is not None
         ]
         if len(overviews) < 2:
@@ -309,8 +331,8 @@ class AdvancedAskService:
         conclusion = "跨数据集对比结论：" + "；".join(lines) + "。"
         return {"conclusion": conclusion, "overviews": overviews}
 
-    def _apply_cross_dataset_conclusion(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        payload = self._build_cross_dataset_conclusion(result)
+    def _apply_cross_dataset_conclusion(self, result: Dict[str, Any], route_guard: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        payload = self._build_cross_dataset_conclusion(result, route_guard)
         conclusion = str(payload.get("conclusion") or "").strip()
         if not conclusion:
             return payload
@@ -1076,7 +1098,7 @@ class AdvancedAskService:
             except Exception as exc:
                 result_diagnostics = {"result_trace_error": str(exc)}
             if route_guard.get("action") == "cross_dataset_compare":
-                result_diagnostics["cross_dataset_conclusion"] = self._apply_cross_dataset_conclusion(result)
+                result_diagnostics["cross_dataset_conclusion"] = self._apply_cross_dataset_conclusion(result, route_guard)
 
             diagnostics = result.setdefault("diagnostics", {})
             if isinstance(diagnostics, dict):

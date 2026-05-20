@@ -72,6 +72,40 @@ class AdvancedCrossDatasetTest(unittest.TestCase):
         self.assertIn("消费者事业部达成率30%", result["dataset_results"][0]["analysis"])
         self.assertIn("高于商用事业部14.2个百分点", result["dataset_results"][0]["analysis"])
 
+    def test_cross_dataset_conclusion_uses_business_subject_names_from_route_guard(self):
+        service = AdvancedAskService(fallback_service=object())
+        result = {
+            "analysis": "",
+            "dataset_results": [
+                {
+                    "dataset_id": 3,
+                    "dataset_name": "商用事业部（阶段一升级版）",
+                    "analysis": "",
+                    "report_spec": {"kpis": [{"label": "整体达成率", "value": 15.8}]},
+                },
+                {
+                    "dataset_id": 11,
+                    "dataset_name": "消费者测试数据集",
+                    "analysis": "",
+                    "report_spec": {"kpis": [{"label": "整体达成率", "value": 26.5}]},
+                },
+            ],
+        }
+        route_guard = {
+            "organization_route": {
+                "organization_mentions": [
+                    {"node_name": "商用事业部", "dataset_ids": [3]},
+                    {"node_name": "消费者事业部", "dataset_ids": [11]},
+                ]
+            }
+        }
+
+        payload = service._apply_cross_dataset_conclusion(result, route_guard)
+
+        self.assertTrue(payload["applied"])
+        self.assertIn("消费者事业部达成率26.5%", result["analysis"])
+        self.assertNotIn("消费者测试数据集达成率", result["analysis"])
+
 
 if __name__ == "__main__":
     unittest.main()

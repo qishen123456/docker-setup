@@ -12,6 +12,12 @@ const routes = [
     meta: { title: '智能分析工作台', roles: ['super_admin', 'admin', 'user'] }
   },
   {
+    path: '/sql-debug',
+    name: 'SqlDebug',
+    component: () => import('../views/SqlDebug.vue'),
+    meta: { title: 'SQL调试台', roles: ['super_admin', 'admin', 'business_admin', 'user'] }
+  },
+  {
     path: '/chat',
     redirect: '/smart-ask'
   },

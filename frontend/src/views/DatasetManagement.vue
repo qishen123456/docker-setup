@@ -131,7 +131,7 @@
             <div v-if="!canViewDatasetShelfDetails" class="readonly-summary-card">
               <div class="readonly-summary-title">当前账号仅开放数据集基础信息</div>
               <div class="readonly-summary-desc">
-                书架维护内容、训练样例、DDL、Agent 提示词和 SQL 测试仅对有维护权限的账号展示。
+                书架维护内容、训练样例、DDL 和 Agent 提示词仅对有维护权限的账号展示；SQL 调试请到智能问数首页使用调试台。
               </div>
               <div class="readonly-summary-grid">
                 <div>
@@ -305,48 +305,6 @@
                     </template>
                   </el-table-column>
                 </el-table>
-              </el-tab-pane>
-
-              <!-- SQL 测试 -->
-              <el-tab-pane label="SQL 测试" name="sql_test">
-                <div class="sql-test-panel">
-                  <div class="sql-test-head">
-                    <div>
-                      <div class="section-title">只读 SQL 测试</div>
-                      <div class="muted-text">使用当前数据集绑定的数据源执行，仅允许 SELECT / WITH 查询，最多返回 10000 行。</div>
-                    </div>
-                    <div class="sql-test-actions">
-                      <span class="muted-text">最多行数</span>
-                      <el-input-number v-model="sqlPreviewLimit" :min="1" :max="10000" :step="100" size="small" controls-position="right" />
-                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_run')" size="small" type="primary" :loading="sqlPreviewLoading" @click="runSqlPreview">执行 SQL</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_copy')" size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('tsv')">复制表格</el-button>
-                      <el-button v-if="canUseDatasetFeature('dataset_sql_preview_copy')" size="small" :disabled="sqlPreviewRows.length === 0" @click="copySqlPreview('json')">复制 JSON</el-button>
-                    </div>
-                  </div>
-                  <el-input
-                    v-model="sqlPreviewText"
-                    type="textarea"
-                    :rows="9"
-                    resize="vertical"
-                    class="mono-textarea sql-preview-editor"
-                    placeholder="输入 SELECT 或 WITH 查询，例如：SELECT * FROM your_table LIMIT 20"
-                  />
-                  <div v-if="sqlPreviewMeta" class="sql-preview-meta">
-                    返回 {{ sqlPreviewMeta.row_count }} 行，最多 {{ sqlPreviewMeta.limit }} 行
-                  </div>
-                  <el-table v-if="sqlPreviewColumns.length" :data="sqlPreviewRows" border size="small" max-height="360" class="sql-preview-table">
-                    <el-table-column
-                      v-for="column in sqlPreviewColumns"
-                      :key="column"
-                      :label="column"
-                      min-width="150"
-                      show-overflow-tooltip
-                    >
-                      <template #default="{ row }">{{ formatPreviewCell(row[column]) }}</template>
-                    </el-table-column>
-                  </el-table>
-                  <el-empty v-else description="执行 SQL 后在这里查看返回数据" :image-size="72" />
-                </div>
               </el-tab-pane>
 
               <!-- 外部配置 -->
@@ -643,7 +601,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
-  extractBookshelfDictionaryFromPg, generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables, previewBookshelfDatasetSql,
+  extractBookshelfDictionaryFromPg, generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables,
   saveBookshelfDatasetFull, updateBookshelfDataset
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
@@ -664,13 +622,7 @@ const activeTab = ref('common_questions')
 const isDirty = ref(false)
 const newDatasetSourceId = ref(null)
 const qualitySummary = ref(null)
-const sqlPreviewText = ref('')
-const sqlPreviewLimit = ref(100)
-const sqlPreviewLoading = ref(false)
 const pgDictLoading = ref(false)
-const sqlPreviewColumns = ref([])
-const sqlPreviewRows = ref([])
-const sqlPreviewMeta = ref(null)
 const promptDatasetVisible = ref(false)
 const promptDatasetLoading = ref(false)
 const promptDatasetStatus = ref('')
@@ -731,8 +683,6 @@ const datasetShelfFeatureKeys = [
   'dataset_autofill',
   'dataset_dict_extract',
   'dataset_source_table',
-  'dataset_sql_preview_run',
-  'dataset_sql_preview_copy',
   ...datasetItemActionFeatureKeys,
 ]
 const canViewDatasetShelfDetails = computed(() => Boolean(
@@ -1615,7 +1565,6 @@ const loadDataSources = async () => {
 const selectDataset = async (dataset) => {
   selectedDatasetId.value = dataset.id
   applyDataset(dataset)
-  resetSqlPreview()
   const r = await getBookshelfDatasetFull(dataset.id)
   if (r.dataset) {
     const idx = datasets.value.findIndex(item => Number(item.id) === Number(dataset.id))
@@ -1963,65 +1912,6 @@ const addSchema = () => openSchemaEditor()
 const ddlPreview = (t) => { const n = String(t || '').replace(/\s+/g, ' ').trim(); return n ? (n.length > 120 ? n.slice(0, 120) + '...' : n) : '暂无 DDL' }
 const jsonString = (v) => { try { return JSON.stringify(v || {}, null, 2) } catch { return '{}' } }
 
-const resetSqlPreview = () => {
-  sqlPreviewColumns.value = []
-  sqlPreviewRows.value = []
-  sqlPreviewMeta.value = null
-}
-const formatPreviewCell = (value) => {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-const runSqlPreview = async () => {
-  if (!selectedDatasetId.value) return
-  if (!canUseDatasetFeature('dataset_sql_preview_run')) { warnReadonly(); return }
-  if (!String(sqlPreviewText.value || '').trim()) {
-    ElMessage.warning('请先输入要测试的 SQL。')
-    return
-  }
-  sqlPreviewLoading.value = true
-  try {
-    const result = await previewBookshelfDatasetSql(selectedDatasetId.value, {
-      sql: sqlPreviewText.value,
-      limit: sqlPreviewLimit.value,
-    })
-    sqlPreviewColumns.value = result.columns || []
-    sqlPreviewRows.value = result.rows || []
-    sqlPreviewMeta.value = result
-    ElMessage.success(`SQL 执行成功，返回 ${result.row_count || 0} 行`)
-  } finally {
-    sqlPreviewLoading.value = false
-  }
-}
-const copyText = async (text) => {
-  if (navigator?.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
-}
-const copySqlPreview = async (format = 'tsv') => {
-  if (!canUseDatasetFeature('dataset_sql_preview_copy')) { warnReadonly(); return }
-  if (!sqlPreviewRows.value.length) return
-  const text = format === 'json'
-    ? JSON.stringify(sqlPreviewRows.value, null, 2)
-    : [
-        sqlPreviewColumns.value.join('\t'),
-        ...sqlPreviewRows.value.map(row => sqlPreviewColumns.value.map(column => formatPreviewCell(row[column]).replace(/\t/g, ' ').replace(/\r?\n/g, ' ')).join('\t')),
-      ].join('\n')
-  await copyText(text)
-  ElMessage.success(format === 'json' ? '已复制 JSON' : '已复制表格数据')
-}
-
 onMounted(async () => {
   await loadFeatureFlags()
   await Promise.all([loadDatasets(), loadDataSources()])
@@ -2074,13 +1964,6 @@ onUnmounted(() => {
 .toolbar { margin-bottom: 10px; display: flex; gap: 8px; }
 .section-title { margin: 18px 0 10px; font-weight: 700; font-size: 14px; color: var(--text-title, #1d2129); }
 .muted-text { color: var(--text-muted, #86909c); font-size: 12px; line-height: 1.5; }
-.sql-test-panel { display: flex; flex-direction: column; gap: 12px; }
-.sql-test-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.sql-test-head .section-title { margin-top: 0; }
-.sql-test-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-.sql-preview-editor { margin-top: 2px; }
-.sql-preview-meta { color: var(--text-muted, #86909c); font-size: 12px; }
-.sql-preview-table { width: 100%; }
 .text-preview { font-size: 12px; color: var(--text-body, #4e5969); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
 .schema-name-cell { font-weight: 600; color: var(--text-title, #1d2129); }
 .ddl-preview-line { font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 12px; line-height: 1.4; color: var(--text-body, #4e5969); word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px; }

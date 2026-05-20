@@ -30,18 +30,48 @@ def _unique(items: List[Any]) -> List[Any]:
     return result
 
 
+ORG_SUFFIXES = ("城市分公司", "城市公司", "分公司", "事业部", "业务部", "代表处")
+
+
+def _node_suffix(compact_name: str) -> str:
+    for suffix in ORG_SUFFIXES:
+        if compact_name.endswith(suffix):
+            return suffix
+    return ""
+
+
 def _node_aliases(name: str) -> List[str]:
     compact_name = _compact(name)
     if not compact_name:
         return []
     aliases = [compact_name]
-    for suffix in ("城市分公司", "城市公司", "分公司", "事业部", "业务部", "代表处"):
+    for suffix in ORG_SUFFIXES:
         if compact_name.endswith(suffix):
             prefix = compact_name[: -len(suffix)]
             if len(prefix) >= 2:
                 aliases.append(prefix)
             break
     return _unique(aliases)
+
+
+def _alias_matches_question(alias: str, node_name: str, normalized_question: str) -> bool:
+    if not alias or alias not in normalized_question:
+        return False
+    compact_name = _compact(node_name)
+    if alias == compact_name:
+        return True
+
+    node_suffix = _node_suffix(compact_name)
+    start = 0
+    while True:
+        index = normalized_question.find(alias, start)
+        if index < 0:
+            return False
+        tail = normalized_question[index + len(alias):]
+        conflict_suffix = next((suffix for suffix in ORG_SUFFIXES if tail.startswith(suffix)), "")
+        if not conflict_suffix or conflict_suffix == node_suffix:
+            return True
+        start = index + len(alias)
 
 
 def _node_label(node: Dict[str, Any]) -> str:
@@ -109,7 +139,11 @@ class OrganizationRouteResolver:
             name = _text(node.get("name"))
             if len(name) < 2:
                 continue
-            aliases = [alias for alias in _node_aliases(name) if alias and alias in normalized_question]
+            aliases = [
+                alias
+                for alias in _node_aliases(name)
+                if _alias_matches_question(alias, name, normalized_question)
+            ]
             if not aliases:
                 continue
             dataset_ids = self._dataset_ids_for_node(node, permissions)

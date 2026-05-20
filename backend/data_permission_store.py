@@ -348,6 +348,10 @@ def _sql_literal(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _row_json_text(candidate: str) -> str:
+    return f"(to_jsonb(__smartask_row_scope)->>{_sql_literal(candidate)})"
+
+
 def _nodes_for_scope(node_ids: List[str], tree_type_id: str) -> List[Dict[str, Any]]:
     nodes = _org_node_tree_map()
     return [
@@ -478,17 +482,34 @@ def apply_row_level_filter(sql: str, user: Dict[str, Any], dataset_id: int, perm
         condition = "1 = 0"
     else:
         conditions: List[str] = []
+        seen_conditions = set()
+
+        def add_condition(condition: str) -> None:
+            if condition in seen_conditions:
+                return
+            seen_conditions.add(condition)
+            conditions.append(condition)
+
         if codes:
             code_literals = ", ".join(_sql_literal(item) for item in codes)
             for candidate in _as_list([field, "组织编码", "分公司编码", "部门编码", "节点编码"]):
-                conditions.append(f"(to_jsonb(__smartask_row_scope)->>{_sql_literal(candidate)}) IN ({code_literals})")
+                add_condition(f"{_row_json_text(candidate)} IN ({code_literals})")
+            for candidate in _as_list(["组织编码路径", "路径编码", "组织路径", "组织链路", "链接字段(勿删)"]):
+                for code in codes:
+                    add_condition(f"POSITION({_sql_literal(code)} IN COALESCE({_row_json_text(candidate)}, '')) > 0")
         if names:
             name_literals = ", ".join(_sql_literal(item) for item in names)
             for candidate in _as_list([
                 "节点名称", "上级名称", "组织名称", "分公司", "事业部", "业务部",
                 "代表处", "城市公司", "部门", "条线", "区域", "公司名称",
             ]):
-                conditions.append(f"(to_jsonb(__smartask_row_scope)->>{_sql_literal(candidate)}) IN ({name_literals})")
+                add_condition(f"{_row_json_text(candidate)} IN ({name_literals})")
+            for candidate in _as_list([
+                "组织路径", "组织全路径", "管理链路", "组织链路", "链接字段(勿删)",
+                "链路", "路径", "full_path", "org_path", "organization_path",
+            ]):
+                for name in names:
+                    add_condition(f"POSITION({_sql_literal(name)} IN COALESCE({_row_json_text(candidate)}, '')) > 0")
         condition = "(" + " OR ".join(conditions) + ")" if conditions else "1 = 0"
     return f"SELECT * FROM (\n{sql.strip().rstrip(';')}\n) AS __smartask_row_scope\nWHERE {condition}"
 

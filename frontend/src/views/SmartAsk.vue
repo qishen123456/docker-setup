@@ -1311,7 +1311,17 @@ const findDatasetRowNumber = (dataset, matcher) => {
   return key ? parseMetricNumber(row[key]) : null
 }
 
+const inferSubjectLevel = (name) => {
+  const text = String(name || '')
+  if (text.includes('事业部')) return '事业部'
+  if (text.includes('分公司')) return '分公司'
+  if (text.includes('业务部')) return '业务部'
+  if (text.includes('代表处')) return '代表处'
+  return '对象'
+}
+
 const buildDatasetComparisonRow = (dataset) => {
+  const subjectName = dataset?.comparison_subject_name || dataset?.dataset_name || `数据集 ${dataset?.dataset_id || ''}`.trim()
   const task = findDatasetKpiNumber(dataset, /总任务|任务金额|目标|task/i)
     ?? findDatasetRowNumber(dataset, /总任务|任务金额|目标/i)
   const actual = findDatasetKpiNumber(dataset, /年度开单|开单金额|开单|完成|实际|actual/i)
@@ -1323,8 +1333,8 @@ const buildDatasetComparisonRow = (dataset) => {
     ?? findDatasetRowNumber(dataset, /剩余|缺口|差额/i)
     ?? (task !== null && actual !== null ? task - actual : null)
   return {
-    节点名称: dataset?.dataset_name || `数据集 ${dataset?.dataset_id || ''}`.trim(),
-    层级: '数据集',
+    节点名称: subjectName,
+    层级: dataset?.comparison_subject_level || inferSubjectLevel(subjectName),
     总任务金额: task,
     年度开单金额: actual,
     达成率: rate,
@@ -1376,10 +1386,11 @@ const currentDatasetLabel = computed(() => {
   const bySelected = isDatasetManuallySelected.value
     ? datasets.value.find(item => Number(item.id) === Number(datasetId.value))?.dataset_name
     : ''
+  if (bySelected) return bySelected
   const resultDatasetId = latestDataset.value?.dataset_id
   const canShowResultDataset = resultDatasetId === 'multi' || isDatasetVisible(resultDatasetId)
   const byResult = canShowResultDataset ? latestDataset.value?.dataset_name : ''
-  return bySelected || byResult || '自动路由数据集'
+  return byResult ? `自动路由：${byResult}` : '自动路由数据集'
 })
 
 const datasetResults = computed(() => latestDatasets.value)
@@ -3498,8 +3509,26 @@ const getDatasets = (msg) => {
     if (cache) cache.datasets = []
     return []
   }
-  const visible = raw.filter(dataset => isDatasetVisible(dataset?.dataset_id))
-  const datasetsForMessage = visible.length ? visible : raw
+  const subjectByDatasetId = new Map()
+  const orgRoute = msg?.data?.diagnostics?.advanced?.route_guard?.organization_route || {}
+  ;(orgRoute.organization_mentions || []).forEach((item) => {
+    const subjectName = String(item?.node_name || '').trim()
+    if (!subjectName) return
+    ;(item?.dataset_ids || []).forEach((id) => {
+      const numericId = Number(id)
+      if (Number.isFinite(numericId)) {
+        subjectByDatasetId.set(numericId, subjectName)
+      }
+    })
+  })
+  const enriched = raw.map((dataset) => {
+    const subjectName = subjectByDatasetId.get(Number(dataset?.dataset_id))
+    return subjectName
+      ? { ...dataset, comparison_subject_name: subjectName, comparison_subject_level: inferSubjectLevel(subjectName) }
+      : dataset
+  })
+  const visible = enriched.filter(dataset => isDatasetVisible(dataset?.dataset_id))
+  const datasetsForMessage = visible.length ? visible : enriched
   if (cache) cache.datasets = datasetsForMessage
   return datasetsForMessage
 }

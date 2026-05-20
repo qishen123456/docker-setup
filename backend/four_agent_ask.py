@@ -1,6 +1,7 @@
 ﻿import json
 import logging
 import os
+import random
 import re
 import sys
 import time
@@ -1888,6 +1889,38 @@ class FourAgentAskService:
     def _normalize_compact_text(text: Any) -> str:
         return re.sub(r"\s+", "", str(text or "")).lower()
 
+    @classmethod
+    def _profile_level_alias_score(cls, question: str, profile: Optional[Dict[str, Any]]) -> int:
+        if not profile:
+            return 0
+        normalized_question = cls._normalize_compact_text(question)
+        if not normalized_question:
+            return 0
+        specific_levels = {
+            "代表处",
+            "办事处",
+            "网点",
+            "业务代表",
+            "业务员",
+            "业务部",
+            "行业业务部",
+            "城市公司",
+            "城市分公司",
+        }
+        score = 0
+        for level in profile.get("levels") or []:
+            aliases = [
+                str(level.get("dimension_name") or ""),
+                *[str(item or "") for item in (level.get("aliases") or [])],
+            ]
+            for alias in aliases:
+                normalized_alias = cls._normalize_compact_text(alias)
+                if not normalized_alias or normalized_alias not in specific_levels:
+                    continue
+                if normalized_alias in normalized_question:
+                    score = max(score, 93)
+        return score
+
     def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any]) -> int:
         normalized_question = self._normalize_compact_text(question)
         if not normalized_question:
@@ -1934,6 +1967,9 @@ class FourAgentAskService:
                 if term and term in normalized_question:
                     score = max(score, 90)
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        profile_level_score = self._profile_level_alias_score(question, profile)
+        if profile_level_score:
+            score = max(score, profile_level_score)
         if profile:
             resolved_scope = resolve_member_mentions(question, profile)
             if resolved_scope.get("all_members"):
@@ -2503,10 +2539,11 @@ class FourAgentAskService:
         if row_security.get("mode") == "org_tree":
             row_security_lines.append(
                 "当前数据集启用了组织树数据权限。SQL 最终 SELECT 必须保留可识别组织范围的结果列，"
-                "优先输出 节点名称、上级名称、分公司、事业部、业务部、代表处；如源数据有编码，也输出组织编码。"
+                "优先输出 节点名称、上级名称、分公司、事业部、业务部、代表处、组织路径、链接字段(勿删)；"
+                "如源数据有编码，也输出组织编码。"
             )
             row_security_lines.append(
-                "系统会在执行前二次套行级过滤；如果最终结果没有任何组织列，普通用户可能查询不到数据。"
+                "系统会在执行前二次套行级过滤；如果最终结果没有任何组织列，或业务代表明细缺少上级分公司/代表处/链路，普通用户可能查询不到数据。"
             )
             row_security_lines.append(
                 f"当前用户授权组织名称：{', '.join(row_security.get('allowed_names') or []) or '无'}；"
@@ -3893,6 +3930,7 @@ Agent3 复核结果：
             return {"error": "Agent1 did not provide dataset_ids."}
 
         dataset_results = []
+        golden_hit_delay_applied = False
         for dataset_id in dataset_ids:
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
             dataset_meta = self._safe_dict(context.get("dataset"))
@@ -3986,8 +4024,14 @@ Agent3 复核结果：
             sql_strategy = self._select_sql_strategy(route.get("refined_query", question), route, context)
             agent3_review_policy = "normal"
             if sql_strategy.get("mode") == "sample_direct" and sql_strategy.get("sql"):
+                step_started = time.time()
                 sql_text = str(sql_strategy.get("sql") or "").strip()
                 agent3_review_policy = "trusted_sql"
+                delay_seconds = 0.0
+                if not golden_hit_delay_applied:
+                    delay_seconds = random.uniform(2.0, 3.0)
+                    time.sleep(delay_seconds)
+                    golden_hit_delay_applied = True
                 self._append_trace(
                     trace,
                     "agent2.sql_generate.golden_direct",
@@ -3996,9 +4040,16 @@ Agent3 复核结果：
                     dataset_name=dataset_meta.get("dataset_name"),
                     sample_id=sql_strategy.get("sample_id"),
                     sample_score=sql_strategy.get("sample_score"),
+                    simulated_delay_ms=round(delay_seconds * 1000, 2),
                     sql=self._truncate_text(sql_text, 12000),
                 )
-                steps.append({"title": "Golden SQL 高匹配直执行", "duration": 0, "status": "success"})
+                steps.append(
+                    {
+                        "title": "Golden SQL 高匹配直执行",
+                        "duration": round((time.time() - step_started) * 1000, 2),
+                        "status": "success",
+                    }
+                )
             elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql"):
                 sql_text = str(sql_strategy.get("sql") or "").strip()
                 agent3_review_policy = "rule_sql"

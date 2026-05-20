@@ -312,6 +312,7 @@
         x
       </button>
     </div>
+    <SqlDebugFloat />
   </el-container>
 </template>
 
@@ -319,8 +320,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Operation, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Monitor, Operation, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
+import SqlDebugFloat from './components/SqlDebugFloat.vue'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
@@ -383,6 +385,7 @@ const roleRank = {
 
 const menuItems = [
   { path: '/smart-ask', label: '智能分析工作台', icon: ChatLineRound, minRole: 'user', featureKey: 'smart_ask_workspace' },
+  { path: '/sql-debug', label: 'SQL调试台', icon: Monitor, minRole: 'user', featureKey: 'dataset_sql_preview_run' },
   { path: '/agents', label: '智能体编排配置', icon: Cpu, minRole: 'admin', featureKey: 'agent_management' },
   { path: '/datasets', label: '数据资产管理', icon: Collection, minRole: 'admin', featureKey: 'dataset_management' },
   { path: '/databases', label: '数据连接管理', icon: Coin, minRole: 'admin', featureKey: 'database_management' },
@@ -398,6 +401,7 @@ const menuItems = [
 
 const subtitleMap = {
   '/smart-ask': '',
+  '/sql-debug': '快速生成、执行与核对问数 SQL',
   '/agents': '维护核心智能体提示词与执行规则',
   '/datasets': '治理数据集元数据、书架与Golden SQL',
   '/databases': '管理 PostgreSQL 与其他业务数据连接',
@@ -433,8 +437,8 @@ const canAccessMenuItem = (item) => {
   return canAccessRole(item.minRole)
 }
 const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessMenuItem(item)))
-const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask'))
-const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask'))
+const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask' || item.path === '/sql-debug'))
+const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask' && item.path !== '/sql-debug'))
 const managementDefaultOpeneds = computed(() => (
   managementMenuItems.value.some((item) => item.path === route.path) ? ['management'] : []
 ))

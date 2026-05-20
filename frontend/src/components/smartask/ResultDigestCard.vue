@@ -285,6 +285,7 @@ const rankDirection = computed(() => (
 const normalizeLevelHint = (value) => {
   const text = cleanText(value)
   if (!text || /^(对象|下一层级|明细层级|下级节点)$/.test(text)) return ''
+  if (text.includes('事业部')) return '事业部'
   if (text.includes('业务代表') || text.includes('业务员')) return '业务代表'
   if (text.includes('代表处')) return '代表处'
   if (text.includes('城市公司') || text.includes('城市分公司')) return '城市公司'
@@ -294,6 +295,7 @@ const normalizeLevelHint = (value) => {
 }
 const explicitQuestionLevel = computed(() => {
   const text = questionText.value
+  if (/事业部/.test(text)) return '事业部'
   if (/业务代表|业务员/.test(text)) return '业务代表'
   if (/代表处/.test(text)) return '代表处'
   if (/城市公司|城市分公司/.test(text)) return '城市公司'
@@ -751,7 +753,7 @@ const comparisonRows = computed(() => {
     : digestCompareLevel.value
   const officeRows = normalizedRows.value.filter((item) => {
     if (targetLevel) return item.level === targetLevel
-    return /分公司|业务部|代表处/.test(item.level) || /分公司|业务部|代表处/.test(item.name)
+    return /事业部|分公司|业务部|代表处|数据集/.test(item.level) || /事业部|分公司|业务部|代表处/.test(item.name)
   })
   if (!officeRows.length) return []
   if (resolvedMemberNames.value.length >= 2) {
@@ -859,6 +861,7 @@ const comparisonLevelLabel = computed(() => {
   const level = comparisonDigestRows.value.find(item => item.level)?.level || ''
   if (level) return level
   const name = comparisonDigestRows.value.find(item => item.name)?.name || ''
+  if (name.includes('事业部')) return '事业部'
   if (name.includes('业务部')) return '业务部'
   if (name.includes('分公司')) return '分公司'
   if (name.includes('代表处')) return '代表处'

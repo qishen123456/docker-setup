@@ -3,6 +3,7 @@ Bookshelf management controller (dataset-isolated knowledge + prompts + golden S
 """
 
 from flask import Blueprint, jsonify, request
+import json
 import os
 import random
 import re
@@ -23,7 +24,7 @@ import dataset_report_config as report_config_store
 from datasource_router import router as datasource_router
 from dataset_copilot import CopilotError, DatasetCopilot
 from auth_store import get_current_user
-from data_permission_store import dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions
+from data_permission_store import apply_row_level_filter, dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions, org_mention_permission_check
 from feature_flags import feature_available
 from system_log_store import log_event, request_snapshot
 
@@ -1078,11 +1079,10 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
         if dataset.get("source_id") is None:
             return jsonify({"error": "当前数据集未绑定数据源，无法测试 SQL。"}), 400
 
-        preview_sql = _wrap_preview_sql(sql_text, limit)
+        secured_sql = apply_row_level_filter(sql_text, user, int(dataset_id))
+        preview_sql = _wrap_preview_sql(secured_sql, limit)
         dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
         json_text = dataframe.to_json(orient="records", force_ascii=False, date_format="iso")
-        import json
-
         records = json.loads(json_text)
         columns = [str(col) for col in dataframe.columns.tolist()]
         return jsonify({
@@ -1101,6 +1101,211 @@ def preview_bookshelf_dataset_sql(dataset_id: int):
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": f"SQL 测试失败: {exc}"}), 500
+
+
+@bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/ask-sql-debug", methods=["POST"])
+def debug_bookshelf_dataset_ask_sql(dataset_id: int):
+    logs: List[Dict[str, Any]] = []
+
+    def add_log(level: str, message: str, **extra: Any) -> None:
+        logs.append({
+            "level": level,
+            "message": message,
+            "ts": int(time.time() * 1000),
+            **extra,
+        })
+
+    try:
+        repo.ensure_schema()
+        user = get_current_user()
+        if user.get("role") != "super_admin" and not feature_available("dataset_sql_preview_run", user):
+            return jsonify({"error": "当前账号没有执行 SQL 调试权限。", "logs": logs}), 403
+
+        payload = request.get_json() or {}
+        question = str(payload.get("question") or "").strip()
+        try:
+            limit = int(payload.get("limit") or 100)
+        except (TypeError, ValueError):
+            limit = 100
+        limit = max(1, min(limit, 10000))
+
+        if not question:
+            return jsonify({"error": "问题不能为空。", "logs": logs}), 400
+
+        with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, dataset_name, dataset_code, source_id
+                FROM bs_datasets
+                WHERE id = %s AND is_active = TRUE;
+                """,
+                (dataset_id,),
+            )
+            dataset = cur.fetchone()
+
+        if not dataset:
+            return jsonify({"error": f"dataset not found: {dataset_id}", "logs": logs}), 404
+        if not dataset_access_summary(user, dataset_id)["can_view"]:
+            return jsonify({"error": "当前账号没有访问该数据集的权限。", "logs": logs}), 403
+        if dataset.get("source_id") is None:
+            return jsonify({"error": "当前数据集未绑定数据源，无法调试问数 SQL。", "logs": logs}), 400
+
+        org_permission = org_mention_permission_check(user, int(dataset_id), question)
+        if not org_permission.get("ok", True):
+            return jsonify({
+                "error": org_permission.get("message") or "当前账号没有查询该组织范围的权限。",
+                "logs": logs,
+                "blocked_mentions": org_permission.get("blocked_mentions") or [],
+            }), 403
+
+        add_log("info", "已校验账号权限和数据集访问范围。", dataset_id=dataset_id)
+
+        from four_agent_ask import four_agent_ask_service
+
+        service = four_agent_ask_service
+        route = {
+            "dataset_ids": [int(dataset_id)],
+            "candidate_dataset_ids": [int(dataset_id)],
+            "selected_dataset_id": int(dataset_id),
+            "preferred_dataset_override": True,
+            "intent": "debug_sql",
+            "decision": "generate_sql",
+            "requires_confirmation": False,
+            "refined_query": question,
+            "split_queries": [{"dataset_id": int(dataset_id), "sub_query": question}],
+            "match_score": 100,
+            "route_margin": 100,
+        }
+
+        context = service.repository.get_dataset_context(int(dataset_id), question)
+        dataset_meta = service._safe_dict(context.get("dataset")) or dict(dataset)
+        saved_report_config = report_config_store.get_config(int(dataset_id))
+        report_config = dict(saved_report_config or report_config_store.get_default_config())
+        context["route"] = route
+        context["report_config"] = report_config
+        context["resolved_entities"] = service._resolve_question_entities(question, context, trace=None)
+        query_intent = service._resolve_query_intent(question, context)
+        context["query_intent"] = query_intent
+        context["report_config"] = {**report_config, "queryIntent": query_intent}
+        add_log("info", "已加载书架上下文并识别查询意图。", query_intent=query_intent)
+
+        prompts = context.get("agent_prompts", {}) or {}
+        agent2_prompt = "\n\n".join(str(item.get("prompt_content") or "") for item in prompts.get(2, []))
+        agent3_prompt = "\n\n".join(str(item.get("prompt_content") or "") for item in prompts.get(3, []))
+
+        sql_strategy = service._select_sql_strategy(question, route, context)
+        agent3_review_policy = "normal"
+        if sql_strategy.get("mode") == "sample_direct" and sql_strategy.get("sql"):
+            sql_text = str(sql_strategy.get("sql") or "").strip()
+            agent3_review_policy = "trusted_sql"
+            add_log("info", "命中 Golden SQL，直接进入复核。", sample_id=sql_strategy.get("sample_id"))
+        elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql"):
+            sql_text = str(sql_strategy.get("sql") or "").strip()
+            agent3_review_policy = "rule_sql"
+            add_log("info", "命中规则 SQL，直接进入复核。")
+        else:
+            add_log("info", "开始生成 SQL。")
+            agent2_result = service._agent2_generate_sql(
+                question,
+                route,
+                context,
+                agent2_prompt,
+                seed_sql=sql_strategy.get("sql") if sql_strategy.get("mode") == "sample_template" else "",
+                seed_sample_id=sql_strategy.get("sample_id") if sql_strategy.get("mode") == "sample_template" else None,
+                trace=None,
+            )
+            sql_text = str(agent2_result.get("sql") or "").strip()
+            add_log("info", "SQL 生成完成。", notes=agent2_result.get("notes") or "")
+
+        if not sql_text:
+            return jsonify({
+                "error": "未生成可执行 SQL。",
+                "question": question,
+                "dataset_id": dataset_id,
+                "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                "generated_sql": "",
+                "final_sql": "",
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "logs": logs,
+            }), 400
+
+        review = service._agent3_review(
+            question,
+            route,
+            sql_text,
+            context,
+            agent3_prompt,
+            trace=None,
+            review_policy=agent3_review_policy,
+        )
+        final_sql = str(review.get("final_sql") or sql_text).strip()
+        add_log("info", "SQL 复核完成。", approved=review.get("approved"), review_summary=review.get("review_summary") or "")
+
+        if review.get("approved") is False and not final_sql:
+            return jsonify({
+                "error": review.get("review_summary") or "SQL 复核未通过。",
+                "question": question,
+                "dataset_id": dataset_id,
+                "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                "generated_sql": sql_text,
+                "final_sql": "",
+                "review": review,
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "logs": logs,
+            }), 400
+        if not service._is_read_only_sql(final_sql) or not _is_read_only_sql(final_sql):
+            return jsonify({
+                "error": "生成的 SQL 未通过只读安全校验，已阻断执行。",
+                "question": question,
+                "dataset_id": dataset_id,
+                "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+                "generated_sql": sql_text,
+                "final_sql": final_sql,
+                "review": review,
+                "columns": [],
+                "rows": [],
+                "row_count": 0,
+                "logs": logs,
+            }), 400
+
+        secured_sql = apply_row_level_filter(final_sql, user, int(dataset_id))
+        preview_sql = _wrap_preview_sql(secured_sql, limit)
+        add_log("info", "已应用行级权限并限制返回行数。", limit=limit)
+
+        dataframe = datasource_router.execute_sql_for_source(int(dataset["source_id"]), preview_sql)
+        records = json.loads(dataframe.to_json(orient="records", force_ascii=False, date_format="iso"))
+        columns = [str(col) for col in dataframe.columns.tolist()]
+        add_log("info", "SQL 执行完成。", row_count=len(records))
+        return jsonify({
+            "question": question,
+            "dataset_id": dataset_id,
+            "dataset_name": dataset_meta.get("dataset_name") or dataset.get("dataset_name"),
+            "source_id": dataset.get("source_id"),
+            "generated_sql": sql_text,
+            "final_sql": secured_sql,
+            "preview_sql": preview_sql,
+            "review": review,
+            "sql_strategy": sql_strategy,
+            "query_intent": query_intent,
+            "columns": columns,
+            "rows": records,
+            "row_count": len(records),
+            "limit": limit,
+            "logs": logs,
+        })
+    except ValueError as exc:
+        add_log("error", str(exc))
+        return jsonify({"error": str(exc), "logs": logs}), 400
+    except BookshelfConfigurationError as exc:
+        add_log("error", str(exc))
+        return jsonify({"error": str(exc), "logs": logs}), 400
+    except Exception as exc:
+        add_log("error", f"问数 SQL 调试失败: {exc}")
+        return jsonify({"error": f"问数 SQL 调试失败: {exc}", "logs": logs}), 500
 
 
 @bookshelf_bp.route("/api/bookshelves/datasets/<int:dataset_id>/full", methods=["PUT"])
