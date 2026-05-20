@@ -494,6 +494,28 @@ def build_report_spec(
         metric for metric in metrics
         if metric and metric not in [task_metric, actual_metric, rate_metric, remain_metric]
     ]
+    ranking_sort_metric = None
+    if query_intent.get("intent") == "ranking":
+        sort_key = str(query_intent.get("sort_metric_key") or "")
+        sort_column = str(query_intent.get("sort_metric_column") or "")
+        ranking_sort_metric = next(
+            (
+                metric for metric in metrics
+                if sort_key and str(metric.get("key") or "") == sort_key
+            ),
+            None,
+        ) or next(
+            (
+                metric for metric in metrics
+                if sort_column and sort_column in {
+                    str(metric.get("column") or ""),
+                    str(metric.get("label") or ""),
+                    str(metric.get("key") or ""),
+                }
+            ),
+            None,
+        )
+    sort_metric = ranking_sort_metric or rate_metric or actual_metric or task_metric or remain_metric or {}
 
     resolved_names = _resolved_member_names(resolved_entities)
     if not resolved_names:
@@ -584,7 +606,7 @@ def build_report_spec(
 
     compare_rows = sorted(
         [chart_row(node) for node in comparison_nodes],
-        key=lambda item: item.get(rate_metric.get("label") or rate_metric.get("column") or "达成率", 0) if rate_metric else 0,
+        key=lambda item: item.get(sort_metric.get("label") or sort_metric.get("column") or "达成率", 0) if sort_metric else 0,
         reverse=not low_first,
     )
     compare_columns = ["名称"] + [metric.get("label") or metric.get("column") or metric.get("key") for metric in chart_metrics]
@@ -960,7 +982,7 @@ def build_report_spec(
 
     overview_chart = {
         "chartType": "horizontalRateBar",
-        "title": f"各{compare_label}达成率排序",
+        "title": f"各{compare_label}{sort_metric.get('label') or sort_metric.get('column') or '达成率'}排序",
         "columns": compare_columns,
         "rows": compare_rows,
         "lowFirst": low_first,

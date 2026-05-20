@@ -243,7 +243,7 @@
             </label>
             <div class="flow-setting-item is-wide">
               <span>允许使用进阶流程的角色</span>
-              <small>默认建议只给超管；确认稳定后再扩大。</small>
+              <small>这里控制进阶流程执行准入；功能权限控制里的“使用进阶问数流程”也会生效。</small>
               <el-checkbox-group v-model="askFlowConfig.advancedRoles" class="flow-role-checks">
                 <el-checkbox v-for="role in roles" :key="role.value" :label="role.value">{{ role.label }}</el-checkbox>
               </el-checkbox-group>

@@ -143,11 +143,21 @@
             <el-tag type="warning" v-if="previewResult.overwrite_configs">覆盖配置</el-tag>
             <el-tag type="success" v-else>保留已有配置</el-tag>
           </div>
+          <el-alert
+            v-if="hasSkippedItems"
+            class="skip-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="存在无法匹配的资源，导入时会自动跳过"
+            :description="skippedSummaryText"
+          />
           <el-table :data="configPlan" size="small" max-height="180">
             <el-table-column label="配置资源" min-width="180">
               <template #default="{ row }">{{ configFileLabel(row.file) }}</template>
             </el-table-column>
             <el-table-column prop="file" label="文件" min-width="210" />
+            <el-table-column prop="skipped_items" label="跳过项" width="80" />
             <el-table-column prop="action" label="动作" width="140">
               <template #default="{ row }">{{ actionLabel(row.action) }}</template>
             </el-table-column>
@@ -159,6 +169,7 @@
             <el-table-column prop="incoming" label="导入记录" width="90" />
             <el-table-column prop="existing" label="现有记录" width="90" />
             <el-table-column prop="id_overlaps" label="ID 重合" width="90" />
+            <el-table-column prop="skippable" label="将跳过" width="80" />
             <el-table-column prop="action" label="动作" width="100" />
           </el-table>
           <el-table v-if="logPlan.length" :data="logPlan" size="small" max-height="180" class="table-plan">
@@ -277,6 +288,19 @@ const tablePlan = computed(() => {
   return Object.entries(plan).map(([table, item]) => ({ table, ...item }))
 })
 const logPlan = computed(() => previewResult.value?.log_file_plan || [])
+const skippedConfigItems = computed(() => previewResult.value?.skipped_config_items || [])
+const skippedTableRows = computed(() => previewResult.value?.skipped_table_rows || previewResult.value?.skipped_table_rows_preview || [])
+const skippedLogFiles = computed(() => previewResult.value?.skipped_log_files || [])
+const skippedItemCount = computed(() => skippedConfigItems.value.length + skippedTableRows.value.length + skippedLogFiles.value.length)
+const hasSkippedItems = computed(() => skippedItemCount.value > 0)
+const skippedSummaryText = computed(() => {
+  if (!hasSkippedItems.value) return ''
+  const parts = []
+  if (skippedConfigItems.value.length) parts.push(`配置引用 ${skippedConfigItems.value.length} 项`)
+  if (skippedTableRows.value.length) parts.push(`表记录 ${skippedTableRows.value.length} 行`)
+  if (skippedLogFiles.value.length) parts.push(`日志文件 ${skippedLogFiles.value.length} 个`)
+  return `${parts.join('、')}无法匹配或无效，系统会跳过这些资源并继续导入其余内容。`
+})
 const logFileSummaryText = computed(() => {
   const lines = summaryStats.value.logFileLines
   const size = summaryStats.value.logFileSize
@@ -359,9 +383,16 @@ const handleImport = async () => {
   importing.value = true
   try {
     const res = await importRuntimeMigrationBundle(bundle.value, { ...importOptions(), auto_backup: true })
-    previewResult.value = res.result?.preview || previewResult.value
+    const result = res.result || {}
+    previewResult.value = {
+      ...(result.preview || previewResult.value || {}),
+      skipped_config_items: result.skipped_config_items || result.preview?.skipped_config_items || [],
+      skipped_table_rows: result.skipped_table_rows || result.preview?.skipped_table_rows_preview || [],
+      skipped_log_files: result.skipped_log_files || result.preview?.skipped_log_files || [],
+    }
     await loadSummary()
-    ElMessage.success('导入完成，已生成回滚备份')
+    const skipped = (result.skipped_config_items?.length || 0) + (result.skipped_table_rows?.length || 0) + (result.skipped_log_files?.length || 0)
+    ElMessage.success(skipped ? `导入完成，已跳过 ${skipped} 个无法匹配资源` : '导入完成，已生成回滚备份')
   } finally {
     importing.value = false
   }
@@ -397,6 +428,8 @@ const configFileLabel = (file) => ({
   'rbac_permissions.json': '功能权限/RBAC',
   'organization_trees.json': '组织树',
   'feature_flags.json': '功能开关',
+  'ask_flow.json': '问数流程配置',
+  'advanced_capabilities.json': '进阶问数能力配置',
   'query_history.json': '问数历史',
   'smartask_report_history.json': '问数报告历史',
 }[file] || file)
@@ -593,6 +626,10 @@ onMounted(() => {
 }
 
 .table-plan {
+  margin-top: 14px;
+}
+
+.skip-alert {
   margin-top: 14px;
 }
 

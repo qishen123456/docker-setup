@@ -429,6 +429,44 @@ const reportDebugItems = computed(() => {
 })
 
 const reportSpec = computed(() => props.dataset?.report_spec || datasetList.value.find(item => item?.report_spec)?.report_spec || {})
+const queryIntent = computed(() => {
+  const intent = reportSpec.value?.debug?.query_intent
+  return intent && typeof intent === 'object' ? intent : {}
+})
+
+const rankingMetricMeta = computed(() => {
+  const key = cleanText(queryIntent.value?.sort_metric_key).toLowerCase()
+  const column = cleanText(queryIntent.value?.sort_metric_column)
+  const text = `${questionText.value} ${column}`
+  if (key === 'actual' || /年度开单|开单金额|开单|完成金额|实际|销售/.test(text)) {
+    return { key: 'actual', label: column || '年度开单金额' }
+  }
+  if (key === 'task' || /任务|目标/.test(text)) {
+    return { key: 'task', label: column || '任务金额' }
+  }
+  if (key === 'remain' || /剩余|缺口|差额|待完成/.test(text)) {
+    return { key: 'remain', label: column || '剩余任务金额' }
+  }
+  return { key: 'rate', label: column || '达成率' }
+})
+
+const rankingMetricValue = (row) => {
+  if (!row) return null
+  const key = rankingMetricMeta.value.key
+  const value = key === 'actual' ? row.actual : key === 'task' ? row.task : key === 'remain' ? row.remain : row.rate
+  return value === null || value === undefined || Number.isNaN(Number(value)) ? null : Number(value)
+}
+
+const rankingMetricText = (row) => {
+  if (!row) return ''
+  const key = rankingMetricMeta.value.key
+  return key === 'actual' ? row.actualText : key === 'task' ? row.taskText : key === 'remain' ? row.remainText : row.rateText
+}
+
+const rankingMetricPhrase = (row) => {
+  const value = rankingMetricText(row)
+  return value ? `${rankingMetricMeta.value.label}${value}` : rankingMetricMeta.value.label
+}
 
 const metricTone = (label, value) => {
   const text = `${label || ''} ${value || ''}`
@@ -1026,8 +1064,8 @@ const secondaryDrillRows = computed(() => {
   return [...rows]
     .sort((left, right) => (
       rankDirection.value === 'asc'
-        ? (left.rate ?? Infinity) - (right.rate ?? Infinity)
-        : (right.rate ?? -Infinity) - (left.rate ?? -Infinity)
+        ? (rankingMetricValue(left) ?? Infinity) - (rankingMetricValue(right) ?? Infinity)
+        : (rankingMetricValue(right) ?? -Infinity) - (rankingMetricValue(left) ?? -Infinity)
     ))
     .slice(0, limit)
 })
@@ -1087,9 +1125,8 @@ const secondaryDrillSummary = computed(() => {
   if (!rows.length) return ''
   if (isRankingQuestion.value) {
     const shown = secondaryDrillRows.value
-    const directionText = rankDirection.value === 'asc' ? '倒序' : '正序'
-    const names = shown.map(item => `${item.name}${item.rateText ? ` ${item.rateText}` : ''}`).join('、')
-    return `按达成率${directionText}取${shown.length}个${secondaryLevelLabel.value}${names ? `：${names}` : ''}`
+    const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+    return `按${rankingMetricMeta.value.label}取${directionText}${shown.length}个${secondaryLevelLabel.value}，完整明细见下表`
   }
   const ranked = rows.filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
   const best = ranked[0]
@@ -1202,7 +1239,21 @@ const directAnswer = computed(() => {
   }
   if (isRankingQuestion.value && secondaryDrillRows.value.length) {
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
-    return `本轮按达成率取${directionText}${secondaryDrillRows.value.length}个${secondaryLevelLabel.value}：${formatRankRows(secondaryDrillRows.value)}。`
+    const leader = secondaryDrillRows.value[0]
+    const topNames = secondaryDrillRows.value
+      .slice(0, Math.min(3, secondaryDrillRows.value.length))
+      .map(item => item.name)
+      .filter(Boolean)
+      .join('、')
+    const leaderMetrics = [
+      rankingMetricText(leader) ? `${rankingMetricMeta.value.label}${rankingMetricText(leader)}` : '',
+      rankingMetricMeta.value.key !== 'rate' && leader?.rateText ? `达成率${leader.rateText}` : '',
+      leader?.remainText ? `缺口${leader.remainText}` : '',
+    ].filter(Boolean).join('，')
+    const riskHint = leader?.rate !== null && leader?.rate !== undefined && Number(leader.rate) < 60
+      ? '，但达成率仍低于60%红线，需要把“相对领先”和“绝对进度风险”分开管理'
+      : ''
+    return `本轮${secondaryLevelLabel.value}${rankingMetricMeta.value.label}${directionText}${secondaryDrillRows.value.length}名已生成，前三为${topNames || leader?.name || '见下方明细'}；榜首${leader?.name || '当前对象'}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}。完整名单见排名结果。`
   }
   if (singleOrgConclusion.value) return singleOrgConclusion.value
   if (managementLayerRows.value.length >= 2) {
@@ -1262,12 +1313,26 @@ const supportLines = computed(() => {
     return lines.filter(Boolean)
   }
   if (isRankingQuestion.value && secondaryDrillRows.value.length) {
-    const names = formatRankRows(secondaryDrillRows.value)
+    const shown = secondaryDrillRows.value
+    const leader = shown[0]
+    const tail = shown[shown.length - 1]
+    const leaderValue = rankingMetricValue(leader)
+    const tailValue = rankingMetricValue(tail)
+    const metricGap = leader && tail && leader.name !== tail.name && leaderValue !== null && tailValue !== null
+      ? Math.abs(leaderValue - tailValue)
+      : null
+    const gapText = metricGap !== null
+      ? (rankingMetricMeta.value.key === 'rate' ? `${metricGap.toFixed(2).replace(/\.?0+$/, '')}个百分点` : amountText(metricGap))
+      : ''
+    const riskCount = shown.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
     return [
-      `排名结果：${names}。`,
-      secondaryDrillAllRows.value.length > secondaryDrillRows.value.length
-        ? `已从${secondaryDrillAllRows.value.length}个${secondaryLevelLabel.value}中按达成率筛出${secondaryDrillRows.value.length}个。`
+      leader ? `榜首判断：${leader.name}${rankingMetricText(leader) ? `的${rankingMetricPhrase(leader)}` : ''}${leader.rateText && rankingMetricMeta.value.key !== 'rate' ? `，达成率${leader.rateText}` : ''}，可作为本轮复盘样本。` : '',
+      tail && leader && tail.name !== leader.name && gapText
+        ? `榜内分化：第1名与第${shown.length}名相差${gapText}，说明头部${secondaryLevelLabel.value}之间仍需分层管理。`
         : '',
+      riskCount
+        ? `风险提醒：Top${shown.length}中仍有${riskCount}个低于${riskThreshold.value}%风险线，不能只看排名，还要看缺口消化。`
+        : `风险提醒：Top${shown.length}暂无低于${riskThreshold.value}%风险线的节点，重点沉淀领先动作。`,
     ].filter(Boolean)
   }
   if (groupedWorstLines.value.length) return groupedWorstLines.value

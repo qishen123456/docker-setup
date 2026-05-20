@@ -101,6 +101,7 @@ RUNTIME_CONFIG_FILES=(
   "rbac_permissions.json"
   "organization_trees.json"
   "feature_flags.json"
+  "ask_flow.json"
   "auth_tokens.json"
   "advanced_capabilities.json"
   "query_history.json"

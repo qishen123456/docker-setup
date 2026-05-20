@@ -20,6 +20,7 @@ DEFAULT_ASK_FLOW_CONFIG: Dict[str, Any] = {
     "fallbackToBasicOnError": True,
     "attachMetadata": True,
 }
+ADVANCED_ASK_FLOW_FEATURE_KEY = "advanced_ask_flow"
 
 
 class AskFlowController:
@@ -60,8 +61,21 @@ class AskFlowController:
         roles = config.get("advancedRoles") or []
         if not roles:
             return True
+        allowed_roles = {str(item).strip() for item in roles if str(item).strip()}
+        user_roles = set()
         role = str((user or {}).get("role") or "").strip()
-        return role in {str(item).strip() for item in roles}
+        if role:
+            user_roles.add(role)
+        role_ids = (user or {}).get("role_ids")
+        if isinstance(role_ids, list):
+            user_roles.update(str(item).strip() for item in role_ids if str(item).strip())
+        if allowed_roles.intersection(user_roles):
+            return True
+        try:
+            from feature_flags import feature_available
+            return feature_available(ADVANCED_ASK_FLOW_FEATURE_KEY, user or {})
+        except Exception:
+            return False
 
     @staticmethod
     def _first_dataset_id(dataset_ids: Optional[Iterable[Any]]) -> str:

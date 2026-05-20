@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List
@@ -88,6 +89,19 @@ SYSTEM_TABLES = [
 RUNTIME_TABLES = [*BOOKSHELF_TABLES, *SYSTEM_TABLES]
 
 DELETE_ORDER = list(reversed(RUNTIME_TABLES))
+DATASET_REFERENCE_TABLES = {
+    "bs_dataset_synonyms",
+    "bs_lld_documents",
+    "bs_data_dictionary_items",
+    "bs_schema_definitions",
+    "bs_table_relations",
+    "bs_golden_sql_samples",
+    "bs_agent_prompt_fragments",
+    "bs_common_questions",
+    "bs_regression_cases",
+    "bs_dataset_external_configs",
+    "bs_dataset_report_config",
+}
 
 
 def _timestamp() -> str:
@@ -118,6 +132,182 @@ def _write_json_file(path: str, payload: Any) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2, default=_json_default)
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_line(value: Any, limit: int = 240) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text.splitlines()[0][:limit]
+
+
+def _incoming_dataset_ids(tables: Dict[str, Any]) -> set[int]:
+    result: set[int] = set()
+    for row in tables.get("bs_datasets") or []:
+        if not isinstance(row, dict):
+            continue
+        dataset_id = _safe_int(row.get("id"))
+        if dataset_id is not None:
+            result.add(dataset_id)
+    return result
+
+
+def _existing_table_ids(cur, table_name: str) -> set[int]:
+    cur.execute(f"SELECT id FROM {table_name};")
+    return {
+        int(row["id"])
+        for row in cur.fetchall()
+        if row.get("id") is not None
+    }
+
+
+def _effective_dataset_ids_for_import(cur, tables: Dict[str, Any], mode: str) -> set[int]:
+    incoming = _incoming_dataset_ids(tables)
+    if mode == "replace":
+        return incoming
+    return _existing_table_ids(cur, "bs_datasets") | incoming
+
+
+def _skip_detail(kind: str, reason: str, **extra) -> Dict[str, Any]:
+    return {
+        "kind": kind,
+        "reason": reason,
+        **{key: value for key, value in extra.items() if value is not None and value != ""},
+    }
+
+
+def _filter_dataset_keyed_dict(
+    mapping: Any,
+    valid_dataset_ids: set[int],
+    *,
+    file: str,
+    section: str,
+    skipped: List[Dict[str, Any]],
+) -> Any:
+    if not isinstance(mapping, dict):
+        return mapping
+    clean = {}
+    for raw_key, value in mapping.items():
+        dataset_id = _safe_int(raw_key)
+        if isinstance(value, dict):
+            dataset_id = _safe_int(value.get("dataset_id")) or dataset_id
+        if dataset_id is None:
+            skipped.append(_skip_detail("config_ref", "无法识别数据集 ID，已跳过", file=file, section=section, key=str(raw_key)))
+            continue
+        if dataset_id not in valid_dataset_ids:
+            skipped.append(
+                _skip_detail(
+                    "config_ref",
+                    "引用的数据集在当前环境和导入包中不存在，已跳过",
+                    file=file,
+                    section=section,
+                    dataset_id=dataset_id,
+                    key=str(raw_key),
+                )
+            )
+            continue
+        clean[str(dataset_id)] = value
+    return clean
+
+
+def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set[int]) -> tuple[Any, List[Dict[str, Any]]]:
+    result = deepcopy(payload)
+    skipped: List[Dict[str, Any]] = []
+    if filename == "data_permissions.json" and isinstance(result, dict):
+        rules = result.get("rules")
+        if isinstance(rules, dict):
+            result["rules"] = _filter_dataset_keyed_dict(
+                rules,
+                valid_dataset_ids,
+                file=filename,
+                section="rules",
+                skipped=skipped,
+            )
+        elif isinstance(rules, list):
+            clean_rules = []
+            for index, item in enumerate(rules):
+                dataset_id = _safe_int(item.get("dataset_id") if isinstance(item, dict) else None)
+                if dataset_id is None or dataset_id not in valid_dataset_ids:
+                    skipped.append(
+                        _skip_detail(
+                            "config_ref",
+                            "数据集权限规则未匹配到有效数据集，已跳过",
+                            file=filename,
+                            section="rules",
+                            index=index + 1,
+                            dataset_id=dataset_id,
+                        )
+                    )
+                    continue
+                clean_rules.append(item)
+            result["rules"] = clean_rules
+    elif filename == "ask_flow.json" and isinstance(result, dict):
+        policies = result.get("datasetPolicies")
+        if isinstance(policies, dict):
+            result["datasetPolicies"] = _filter_dataset_keyed_dict(
+                policies,
+                valid_dataset_ids,
+                file=filename,
+                section="datasetPolicies",
+                skipped=skipped,
+            )
+    elif filename == "rbac_permissions.json" and isinstance(result, dict):
+        for role in result.get("roles") or []:
+            if not isinstance(role, dict) or not isinstance(role.get("resource_permissions"), dict):
+                continue
+            clean_permissions = {}
+            for raw_key, level in role["resource_permissions"].items():
+                if str(raw_key) == "*":
+                    clean_permissions[str(raw_key)] = level
+                    continue
+                dataset_id = _safe_int(raw_key)
+                if dataset_id is None or dataset_id not in valid_dataset_ids:
+                    skipped.append(
+                        _skip_detail(
+                            "config_ref",
+                            "角色资源权限引用的数据集不存在，已跳过",
+                            file=filename,
+                            section=f"roles.{role.get('id') or role.get('code') or ''}.resource_permissions",
+                            dataset_id=dataset_id,
+                            key=str(raw_key),
+                        )
+                    )
+                    continue
+                clean_permissions[str(dataset_id)] = level
+            role["resource_permissions"] = clean_permissions
+    return result, skipped
+
+
+def _preview_table_skips(tables: Dict[str, Any], valid_dataset_ids: set[int]) -> List[Dict[str, Any]]:
+    skipped: List[Dict[str, Any]] = []
+    for table_name in RUNTIME_TABLES:
+        for index, row in enumerate(tables.get(table_name) or []):
+            if not isinstance(row, dict):
+                skipped.append(_skip_detail("table_row", "记录不是对象，导入时会跳过", table=table_name, index=index + 1))
+                continue
+            if table_name in DATASET_REFERENCE_TABLES:
+                dataset_id = _safe_int(row.get("dataset_id"))
+                if dataset_id is None or dataset_id not in valid_dataset_ids:
+                    skipped.append(
+                        _skip_detail(
+                            "table_row",
+                            "记录引用的数据集不存在，导入时会跳过",
+                            table=table_name,
+                            index=index + 1,
+                            id=row.get("id"),
+                            dataset_id=dataset_id,
+                        )
+                    )
+    return skipped
 
 
 def _log_file_sources() -> List[Dict[str, str]]:
@@ -297,23 +487,31 @@ def _merge_log_text(existing: str, incoming: str) -> str:
     return "\n".join(merged) + ("\n" if merged else "")
 
 
-def _write_log_files(log_files: Dict[str, Any], mode: str) -> List[str]:
+def _write_log_files(log_files: Dict[str, Any], mode: str, skipped_log_files: List[Dict[str, Any]] | None = None) -> List[str]:
     written: List[str] = []
     for rel_path, content in (log_files or {}).items():
         if not isinstance(content, str) or content.startswith("__error__:"):
+            if skipped_log_files is not None:
+                skipped_log_files.append(_skip_detail("log_file", "日志内容无效，已跳过", file=str(rel_path)))
             continue
         target_path = _safe_log_file_path(rel_path)
         if not target_path:
+            if skipped_log_files is not None:
+                skipped_log_files.append(_skip_detail("log_file", "日志路径不在允许范围内，已跳过", file=str(rel_path)))
             continue
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        if mode == "replace" or not os.path.exists(target_path):
-            output = content if content.endswith("\n") or not content else content + "\n"
-        else:
-            with open(target_path, "r", encoding="utf-8") as fh:
-                output = _merge_log_text(fh.read(), content)
-        with open(target_path, "w", encoding="utf-8") as fh:
-            fh.write(output)
-        written.append(str(rel_path))
+        try:
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            if mode == "replace" or not os.path.exists(target_path):
+                output = content if content.endswith("\n") or not content else content + "\n"
+            else:
+                with open(target_path, "r", encoding="utf-8") as fh:
+                    output = _merge_log_text(fh.read(), content)
+            with open(target_path, "w", encoding="utf-8") as fh:
+                fh.write(output)
+            written.append(str(rel_path))
+        except Exception as exc:
+            if skipped_log_files is not None:
+                skipped_log_files.append(_skip_detail("log_file", "日志文件写入失败，已跳过", file=str(rel_path), error=_first_line(exc)))
     return written
 
 
@@ -415,17 +613,45 @@ def _reset_sequence(cur, table_name: str) -> None:
     cur.execute("SELECT setval(%s, %s, %s);", (seq_name, max_id if max_id > 0 else 1, max_id > 0))
 
 
-def _upsert_rows(cur, table_name: str, rows: Iterable[Dict[str, Any]], fallback_source_id: int) -> int:
+def _upsert_rows(
+    cur,
+    table_name: str,
+    rows: Iterable[Dict[str, Any]],
+    fallback_source_id: int,
+    skipped_rows: List[Dict[str, Any]] | None = None,
+) -> int:
     inserted = 0
     available_columns = set(_get_table_columns(cur, table_name))
     natural_conflicts = {
         "bs_dataset_report_config": ["dataset_id"],
         "bs_dataset_external_configs": ["dataset_id", "config_type", "config_key"],
     }
-    for raw_row in rows:
-        row = _normalize_row(table_name, raw_row, fallback_source_id)
+    for index, raw_row in enumerate(rows or []):
+        if not isinstance(raw_row, dict):
+            if skipped_rows is not None:
+                skipped_rows.append(_skip_detail("table_row", "记录不是对象，已跳过", table=table_name, index=index + 1))
+            continue
+        try:
+            row = _normalize_row(table_name, raw_row, fallback_source_id)
+        except Exception as exc:
+            if skipped_rows is not None:
+                skipped_rows.append(
+                    _skip_detail(
+                        "table_row",
+                        "记录清洗失败，已跳过",
+                        table=table_name,
+                        index=index + 1,
+                        id=raw_row.get("id"),
+                        error=_first_line(exc),
+                    )
+                )
+            continue
         row = {key: value for key, value in row.items() if key in available_columns}
         if not row:
+            if skipped_rows is not None:
+                skipped_rows.append(
+                    _skip_detail("table_row", "记录没有可写入字段，已跳过", table=table_name, index=index + 1, id=raw_row.get("id"))
+                )
             continue
 
         columns = list(row.keys())
@@ -442,8 +668,27 @@ def _upsert_rows(cur, table_name: str, rows: Iterable[Dict[str, Any]], fallback_
         elif conflict_columns:
             sql += f" ON CONFLICT ({', '.join(conflict_columns)}) DO NOTHING"
         sql += ";"
-        cur.execute(sql, values)
-        inserted += 1
+        cur.execute("SAVEPOINT smartask_runtime_import_row;")
+        try:
+            cur.execute(sql, values)
+            affected = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            cur.execute("RELEASE SAVEPOINT smartask_runtime_import_row;")
+            inserted += affected
+        except Exception as exc:
+            cur.execute("ROLLBACK TO SAVEPOINT smartask_runtime_import_row;")
+            cur.execute("RELEASE SAVEPOINT smartask_runtime_import_row;")
+            if skipped_rows is not None:
+                skipped_rows.append(
+                    _skip_detail(
+                        "table_row",
+                        "记录与当前环境不匹配，已跳过",
+                        table=table_name,
+                        index=index + 1,
+                        id=raw_row.get("id"),
+                        dataset_id=raw_row.get("dataset_id"),
+                        error=_first_line(exc),
+                    )
+                )
     return inserted
 
 
@@ -557,20 +802,36 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
     log_files = bundle.get("log_files") or {}
 
     config_plan = []
+    skipped_config_items: List[Dict[str, Any]] = []
     for raw_name, payload in configs.items():
         filename = _safe_config_filename(raw_name)
         if not filename or (isinstance(payload, dict) and "__error__" in payload):
+            skipped_config_items.append(_skip_detail("config_file", "配置文件无效或不在允许范围内，已跳过", file=str(raw_name)))
             continue
-        target_path = os.path.join(CONFIG_DIR, filename)
-        exists = os.path.exists(target_path)
-        action = "overwrite" if exists and overwrite_configs else ("skip_existing" if exists else "create")
-        config_plan.append({"file": filename, "exists": exists, "action": action})
 
     repo = BookshelfRepository()
     repo.ensure_schema()
     table_plan = {}
+    skipped_table_rows_preview: List[Dict[str, Any]] = []
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
+        valid_dataset_ids = _effective_dataset_ids_for_import(cur, tables, mode)
+        for raw_name, payload in configs.items():
+            filename = _safe_config_filename(raw_name)
+            if not filename or (isinstance(payload, dict) and "__error__" in payload):
+                continue
+            _, config_skips = _sanitize_config_payload(filename, payload, valid_dataset_ids)
+            skipped_config_items.extend(config_skips)
+            target_path = os.path.join(CONFIG_DIR, filename)
+            exists = os.path.exists(target_path)
+            action = "overwrite" if exists and overwrite_configs else ("skip_existing" if exists else "create")
+            config_plan.append({"file": filename, "exists": exists, "action": action, "skipped_items": len(config_skips)})
+        skipped_table_rows_preview = _preview_table_skips(tables, valid_dataset_ids)
+        skipped_by_table: Dict[str, int] = {}
+        for item in skipped_table_rows_preview:
+            table = item.get("table")
+            if table:
+                skipped_by_table[str(table)] = skipped_by_table.get(str(table), 0) + 1
         for table_name in RUNTIME_TABLES:
             incoming_rows = tables.get(table_name) or []
             cur.execute(f"SELECT COUNT(*) AS count FROM {table_name};")
@@ -585,12 +846,15 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
                 "existing": existing_count,
                 "id_overlaps": overlap,
                 "action": "replace" if mode == "replace" else "merge",
+                "skippable": skipped_by_table.get(table_name, 0),
             }
 
     log_file_plan = []
+    skipped_log_files: List[Dict[str, Any]] = []
     for rel_path, content in log_files.items():
         target_path = _safe_log_file_path(rel_path)
         if not target_path or not isinstance(content, str) or content.startswith("__error__:"):
+            skipped_log_files.append(_skip_detail("log_file", "日志文件路径或内容无效，已跳过", file=str(rel_path)))
             continue
         existing_text = ""
         if os.path.exists(target_path):
@@ -610,6 +874,13 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
             }
         )
 
+    warnings = []
+    if mode == "replace":
+        warnings.append("replace 模式会先清空书架运行态表，再写入导入包。")
+    skipped_total = len(skipped_config_items) + len(skipped_table_rows_preview) + len(skipped_log_files)
+    if skipped_total:
+        warnings.append(f"检测到 {skipped_total} 个无法匹配或无效资源，正式导入时将自动跳过。")
+
     return {
         "ok": True,
         "dry_run": True,
@@ -619,9 +890,10 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
         "config_plan": config_plan,
         "table_plan": table_plan,
         "log_file_plan": log_file_plan,
-        "warnings": [
-            "replace 模式会先清空书架运行态表，再写入导入包。"
-        ] if mode == "replace" else [],
+        "skipped_config_items": skipped_config_items,
+        "skipped_table_rows_preview": skipped_table_rows_preview,
+        "skipped_log_files": skipped_log_files,
+        "warnings": warnings,
     }
 
 
@@ -645,23 +917,16 @@ def import_runtime_bundle(
 
     written_configs: List[str] = []
     skipped_configs: List[str] = []
-
-    for raw_name, payload in configs.items():
-        filename = _safe_config_filename(raw_name)
-        if not filename or (isinstance(payload, dict) and "__error__" in payload):
-            continue
-        target_path = os.path.join(CONFIG_DIR, filename)
-        if os.path.exists(target_path) and not overwrite_configs:
-            skipped_configs.append(filename)
-            continue
-        _write_json_file(target_path, payload)
-        written_configs.append(filename)
+    skipped_config_items: List[Dict[str, Any]] = []
+    skipped_table_rows: List[Dict[str, Any]] = []
+    skipped_log_files: List[Dict[str, Any]] = []
 
     repo = BookshelfRepository()
     repo.ensure_schema()
     fallback_source = get_default_datasource() or {}
     fallback_source_id = int(fallback_source.get("id") or 1)
     imported_counts: Dict[str, int] = {}
+    final_dataset_ids: set[int] = set()
 
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
@@ -671,13 +936,50 @@ def import_runtime_bundle(
 
         for table_name in RUNTIME_TABLES:
             rows = tables.get(table_name) or []
-            imported_counts[table_name] = _upsert_rows(cur, table_name, rows, fallback_source_id)
+            cur.execute("SAVEPOINT smartask_runtime_import_table;")
+            try:
+                imported_counts[table_name] = _upsert_rows(cur, table_name, rows, fallback_source_id, skipped_table_rows)
+                cur.execute("RELEASE SAVEPOINT smartask_runtime_import_table;")
+            except Exception as exc:
+                cur.execute("ROLLBACK TO SAVEPOINT smartask_runtime_import_table;")
+                cur.execute("RELEASE SAVEPOINT smartask_runtime_import_table;")
+                imported_counts[table_name] = 0
+                skipped_table_rows.append(
+                    _skip_detail(
+                        "table",
+                        "整表与当前环境不匹配，已跳过",
+                        table=table_name,
+                        error=_first_line(exc),
+                    )
+                )
 
         for table_name in RUNTIME_TABLES:
             _reset_sequence(cur, table_name)
+        final_dataset_ids = _existing_table_ids(cur, "bs_datasets")
         conn.commit()
 
-    written_log_files = _write_log_files(log_files, mode)
+    for raw_name, payload in configs.items():
+        filename = _safe_config_filename(raw_name)
+        if not filename or (isinstance(payload, dict) and "__error__" in payload):
+            skipped_configs.append(str(raw_name))
+            skipped_config_items.append(_skip_detail("config_file", "配置文件无效或不在允许范围内，已跳过", file=str(raw_name)))
+            continue
+        sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids)
+        skipped_config_items.extend(config_skips)
+        target_path = os.path.join(CONFIG_DIR, filename)
+        if os.path.exists(target_path) and not overwrite_configs:
+            skipped_configs.append(filename)
+            continue
+        try:
+            _write_json_file(target_path, sanitized_payload)
+            written_configs.append(filename)
+        except Exception as exc:
+            skipped_configs.append(filename)
+            skipped_config_items.append(
+                _skip_detail("config_file", "配置文件写入失败，已跳过", file=filename, error=_first_line(exc))
+            )
+
+    written_log_files = _write_log_files(log_files, mode, skipped_log_files)
 
     return {
         "ok": True,
@@ -687,8 +989,11 @@ def import_runtime_bundle(
         "backup": backup,
         "written_configs": written_configs,
         "skipped_configs": skipped_configs,
+        "skipped_config_items": skipped_config_items,
         "imported_counts": imported_counts,
+        "skipped_table_rows": skipped_table_rows,
         "written_log_files": written_log_files,
+        "skipped_log_files": skipped_log_files,
         "preview": preview,
     }
 

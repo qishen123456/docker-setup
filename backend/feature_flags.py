@@ -109,6 +109,19 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "roles": ["super_admin", "admin"],
             "experimental": True,
         },
+        "advanced_ask_flow": {
+            "label": "使用进阶问数流程",
+            "description": "智能分析页，控制用户提问时是否可以进入进阶问数流程；仍受问数流程总开关和数据集灰度保护。",
+            "category": "流程权限",
+            "module": "smart_ask_workspace",
+            "module_label": "智能分析工作台",
+            "kind": "flow",
+            "order": 118,
+            "risk": "medium",
+            "enabled": True,
+            "roles": ["super_admin"],
+            "experimental": True,
+        },
         "feishu_sync": {
             "label": "飞书数据同步",
             "description": "维护飞书表格同步任务。",
@@ -1358,6 +1371,30 @@ def _role_allowed(user_role: str, allowed_roles: list[str]) -> bool:
     return user_role in allowed_roles
 
 
+def _user_role_keys(user: dict[str, Any] | None) -> set[str]:
+    result: set[str] = set()
+    if not isinstance(user, dict):
+        return result
+    role = str(user.get("role") or "").strip()
+    if role:
+        result.add(role)
+    role_ids = user.get("role_ids")
+    if isinstance(role_ids, list):
+        result.update(str(item).strip() for item in role_ids if str(item).strip())
+    return result
+
+
+def _effective_function_permissions(user: dict[str, Any] | None) -> set[str]:
+    if not isinstance(user, dict) or not user:
+        return set()
+    try:
+        from rbac_store import effective_permissions
+        perms = effective_permissions(user)
+        return {str(item) for item in (perms.get("function_permissions") or []) if str(item)}
+    except Exception:
+        return set()
+
+
 def _clean_roles(value: Any, fallback: list[str]) -> list[str]:
     if not isinstance(value, list):
         return list(fallback)
@@ -1491,11 +1528,14 @@ def _sync_builtin_role_permissions(flags: dict[str, Any], operator: str = "") ->
 
 
 def view_for_user(flags: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
-    role = (user or {}).get("role") or "user"
+    role_keys = _user_role_keys(user) or {"user"}
+    function_permissions = _effective_function_permissions(user)
     result = deepcopy(flags)
     for key, feature in result.get("features", {}).items():
         roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
-        feature["available"] = bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+        feature["available"] = bool(feature.get("enabled", False)) and (
+            bool(set(roles).intersection(role_keys)) or key in function_permissions
+        )
     return result
 
 
@@ -1505,5 +1545,7 @@ def feature_available(key: str, user: dict[str, Any] | None) -> bool:
     if not isinstance(feature, dict):
         return True
     roles = feature.get("roles") if isinstance(feature.get("roles"), list) else []
-    role = (user or {}).get("role") or "user"
-    return bool(feature.get("enabled", False)) and _role_allowed(role, roles)
+    role_keys = _user_role_keys(user) or {"user"}
+    return bool(feature.get("enabled", False)) and (
+        bool(set(roles).intersection(role_keys)) or key in _effective_function_permissions(user)
+    )
