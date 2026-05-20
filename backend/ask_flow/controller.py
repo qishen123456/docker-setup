@@ -58,6 +58,13 @@ class AskFlowController:
         return self.basic_service.route_with_agent1(*args, **kwargs)
 
     def _role_allowed(self, user: Optional[Dict[str, Any]], config: Dict[str, Any]) -> bool:
+        try:
+            from feature_flags import feature_available
+            if not feature_available(ADVANCED_ASK_FLOW_FEATURE_KEY, user or {}):
+                return False
+        except Exception:
+            return False
+
         roles = config.get("advancedRoles") or []
         if not roles:
             return True
@@ -69,13 +76,7 @@ class AskFlowController:
         role_ids = (user or {}).get("role_ids")
         if isinstance(role_ids, list):
             user_roles.update(str(item).strip() for item in role_ids if str(item).strip())
-        if allowed_roles.intersection(user_roles):
-            return True
-        try:
-            from feature_flags import feature_available
-            return feature_available(ADVANCED_ASK_FLOW_FEATURE_KEY, user or {})
-        except Exception:
-            return False
+        return bool(allowed_roles.intersection(user_roles))
 
     @staticmethod
     def _first_dataset_id(dataset_ids: Optional[Iterable[Any]]) -> str:

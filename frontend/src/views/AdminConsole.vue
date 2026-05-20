@@ -243,7 +243,7 @@
             </label>
             <div class="flow-setting-item is-wide">
               <span>允许使用进阶流程的角色</span>
-              <small>这里控制进阶流程执行准入；功能权限控制里的“使用进阶问数流程”也会生效。</small>
+              <small>这里是进阶流程灰度名单；账号必须同时拥有功能权限控制里的“使用进阶问数流程”。</small>
               <el-checkbox-group v-model="askFlowConfig.advancedRoles" class="flow-role-checks">
                 <el-checkbox v-for="role in roles" :key="role.value" :label="role.value">{{ role.label }}</el-checkbox>
               </el-checkbox-group>
