@@ -13,6 +13,7 @@ Files captured (existing only, missing files are simply skipped):
     config/organization_trees.json
     config/feature_flags.json
     config/ask_flow.json
+    config/advanced_capabilities.json
     config/query_history.json
     config/smartask_report_history.json
 
@@ -50,6 +51,7 @@ CAPTURED_FILES = [
     "organization_trees.json",
     "feature_flags.json",
     "ask_flow.json",
+    "advanced_capabilities.json",
     "query_history.json",
     "smartask_report_history.json",
 ]

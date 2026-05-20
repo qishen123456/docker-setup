@@ -72,6 +72,7 @@ config/auth_tokens.json
 config/employee_permissions.json
 config/feature_flags.json
 config/ask_flow.json
+config/advanced_capabilities.json
 config/organization_trees.json
 config/data_permissions.json
 config/rbac_permissions.json

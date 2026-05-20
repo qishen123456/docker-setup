@@ -561,8 +561,24 @@ const normalizeTraceStageKey = (stage) => {
   return `trace-${text.replace(/[^a-z0-9_-]+/gi, '-') || 'event'}`
 }
 
-const getTraceStageMeta = (stage) => {
+const shouldSuppressAdvancedSqlPlaceholder = (stage, event = {}) => {
   const text = String(stage || '')
+  if (!['advanced.skill.sql_generate', 'advanced.skill.sql_review', 'advanced.skill.sql_execute'].includes(text)) return false
+  const status = String(event?.status || '').toLowerCase()
+  if (status !== 'info') return false
+  const readable = `${event?.summary || ''} ${(event?.detailLines || []).join(' ')}`
+  return /复用稳定|稳定引擎|真实 SQL 节点由现有稳定引擎承接/.test(readable)
+}
+
+const getTraceStageMeta = (stage, event = {}) => {
+  const text = String(stage || '')
+  if (text.startsWith('advanced.')) {
+    return {
+      title: event.title || '进阶流程节点',
+      kind: text.includes('.skill.') ? 'tool' : 'system',
+      toolType: event.toolType || inferToolType({ key: text, title: event.title || '', kind: 'tool' }),
+    }
+  }
   if (text === 'request.received') {
     return { title: '开始执行任务', kind: 'system', toolType: 'default' }
   }
@@ -607,6 +623,23 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
   const lines = []
   const text = String(stage || '')
   const isFallback = String(status || '').toLowerCase() === 'fallback'
+
+  if (text.startsWith('advanced.')) {
+    if (payload.summary) lines.push(payload.summary)
+    if (Array.isArray(payload.detailLines)) lines.push(...payload.detailLines)
+    if (payload.intent?.intent) lines.push(`进阶意图：${payload.intent.intent}`)
+    if (Array.isArray(payload.candidates) && payload.candidates.length > 0) {
+      lines.push(`候选资产：${payload.candidates.map(item => item.dataset_name || `数据集 ${item.id}`).filter(Boolean).join('、')}`)
+    }
+    if (Array.isArray(payload.assets) && payload.assets.length > 0) {
+      const totalGolden = payload.assets.reduce((sum, item) => sum + Number(item?.golden_sql_count || 0), 0)
+      const totalDict = payload.assets.reduce((sum, item) => sum + Number(item?.dictionary_count || 0), 0)
+      lines.push(`资产摘要：字段 ${totalDict} 条，Golden SQL ${totalGolden} 条`)
+    }
+    if (payload.capability_summary?.skill_count) {
+      lines.push(`启用 Skill：${payload.capability_summary.skill_count} 个`)
+    }
+  }
 
   if (text === 'request.received') {
     lines.push(`开始执行任务：${payload.question || state.question || '当前业务问题'}`)
@@ -697,6 +730,7 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
 const buildTraceThought = (stage, status, payload = {}) => {
   const text = String(stage || '')
   if (status === 'delta') return ''
+  if (text.startsWith('advanced.') && payload.thought) return String(payload.thought).trim()
   if (payload.response_text) return String(payload.response_text).trim()
   if (payload.analysis_preview) return String(payload.analysis_preview).trim()
   if (payload.review_summary) return String(payload.review_summary).trim()
@@ -842,6 +876,7 @@ const applyTraceEvent = (payload = {}) => {
   const event = payload?.event || {}
   const stage = String(event.stage || '')
   if (!stage) return
+  if (shouldSuppressAdvancedSqlPlaceholder(stage, event)) return
 
   if (state.logs.some(item => item.key === 'stream-connect')) {
     setLogStatus('stream-connect', 'success', '', {
@@ -854,7 +889,7 @@ const applyTraceEvent = (payload = {}) => {
     })
   }
 
-  const meta = getTraceStageMeta(stage)
+  const meta = getTraceStageMeta(stage, event)
   const key = normalizeTraceStageKey(stage)
   const normalizedStatus = normalizeTraceStatus(event.status, stage)
   const detailLines = buildTraceDetailLines(stage, event.status, event)

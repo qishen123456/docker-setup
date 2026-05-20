@@ -38,6 +38,7 @@ RUNTIME_CONFIG_FILES = [
     "organization_trees.json",
     "feature_flags.json",
     "ask_flow.json",
+    "advanced_capabilities.json",
     "query_history.json",
     "smartask_report_history.json",
 ]
@@ -54,6 +55,7 @@ CONFIG_FILE_LABELS = {
     "organization_trees.json": "组织树",
     "feature_flags.json": "功能开关",
     "ask_flow.json": "问数流程配置",
+    "advanced_capabilities.json": "进阶问数能力配置",
     "query_history.json": "问数历史",
     "smartask_report_history.json": "问数报告历史",
 }
@@ -229,6 +231,11 @@ def _runtime_config_summary(configs: Dict[str, Any]) -> List[Dict[str, Any]]:
             elif filename == "ask_flow.json":
                 count = 1
                 description = "问数流程编排与界面展示配置"
+            elif filename == "advanced_capabilities.json":
+                skills = payload.get("skills") if isinstance(payload.get("skills"), list) else []
+                enabled = sum(1 for item in skills if isinstance(item, dict) and item.get("enabled") is not False)
+                count = len(skills) or 1
+                description = f"{enabled} 个启用进阶 Skill/工具"
             elif filename in {"query_history.json", "smartask_report_history.json"}:
                 count = len(payload)
                 description = "按用户隔离的历史记录"

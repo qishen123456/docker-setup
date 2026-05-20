@@ -1410,6 +1410,10 @@ const buildResultConfidenceMeta = (route = {}, datasets = []) => {
 }
 
 const sideConfidenceBadges = computed(() => {
+  const advanced = activeReportResult.value?.diagnostics?.advanced || {}
+  const evidenceVote = advanced?.evidence_vote || {}
+  const templatePolicy = advanced?.template_policy || {}
+  const routeGuard = advanced?.route_guard || {}
   const backendConfidence = activeReportResult.value?.confidence || {}
   const routeMeta = backendConfidence?.route
     ? {
@@ -1427,11 +1431,49 @@ const sideConfidenceBadges = computed(() => {
         value: `${backendConfidence.result.label || ''} ${backendConfidence.result.score || 0}`.trim(),
       }
     : buildResultConfidenceMeta(activeReportResult.value?.route || {}, latestDatasets.value)
-  return [routeMeta, resultMeta].filter(item => item?.score > 0)
+  const advancedVoteMeta = evidenceVote?.decision
+    ? {
+        score: Number(evidenceVote.confidence_score || 0),
+        tone: evidenceVote.decision === 'accept' ? 'success' : evidenceVote.decision === 'accept_with_caution' ? 'info' : 'warning',
+        label: '进阶择优',
+        value: `${({
+          accept: '可采信',
+          accept_with_caution: '谨慎采信',
+          review_required: '需复核',
+        }[evidenceVote.decision] || evidenceVote.decision)} ${evidenceVote.confidence_score || 0}`.trim(),
+      }
+    : null
+  const templateMeta = templatePolicy?.expected_top_n
+    ? {
+        score: Number(templatePolicy.expected_top_n || 0),
+        tone: Number(templatePolicy.warning_count || 0) > 0 ? 'warning' : 'success',
+        label: '模板策略',
+        value: `Top${templatePolicy.expected_top_n}`,
+      }
+    : null
+  const routeGuardLabel = {
+    auto_lock: '自动锁定',
+    cross_dataset_compare: '跨集对比',
+    manual_respected: '手动优先',
+    manual_mismatch: '手动错配',
+    needs_confirmation: '待确认',
+    no_candidate: '无候选',
+    observe: '观察',
+  }[routeGuard.action] || routeGuard.action
+  const guardMeta = routeGuard?.action
+    ? {
+        score: Number(routeGuard.confidence || 0),
+        tone: routeGuard.action === 'auto_lock' || routeGuard.action === 'manual_respected' ? 'success' : 'warning',
+        label: '路由守门',
+        value: routeGuardLabel,
+      }
+    : null
+  return [routeMeta, resultMeta, advancedVoteMeta, templateMeta, guardMeta].filter(item => item?.score > 0)
 })
 
 const routeDecisionDetail = computed(() => {
   const result = activeReportResult.value || {}
+  const advanced = result?.diagnostics?.advanced || {}
   const route = result.route || {}
   const summary = String(result.confidence?.route?.summary || '').trim()
   const reason = String(result.confidence?.route?.reason || route.arbiter_reason || '').trim()
@@ -1445,11 +1487,18 @@ const routeDecisionDetail = computed(() => {
   }[reason] || ''
   const ids = Array.isArray(route.dataset_ids) ? route.dataset_ids : []
   const names = ids.map(id => datasetNameMap.value.get(Number(id)) || `数据集 ${id}`).filter(Boolean)
-  if (!summary && !reasonLabel && !names.length) return ''
+  const routeGuard = advanced?.route_guard || {}
+  const evidenceVote = advanced?.evidence_vote || {}
+  const advancedLines = [
+    routeGuard?.reason ? `进阶守门：${routeGuard.reason}` : '',
+    evidenceVote?.recommended_action ? `采信建议：${evidenceVote.recommended_action}` : '',
+  ].filter(Boolean)
+  if (!summary && !reasonLabel && !names.length && !advancedLines.length) return ''
   return [
     names.length ? `自动路由：${names.join('、')}` : '',
     reasonLabel ? `依据：${reasonLabel}` : '',
     summary,
+    ...advancedLines,
   ].filter(Boolean).join('；')
 })
 

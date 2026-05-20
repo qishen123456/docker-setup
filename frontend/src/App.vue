@@ -319,7 +319,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Operation, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
@@ -388,6 +388,7 @@ const menuItems = [
   { path: '/databases', label: '数据连接管理', icon: Coin, minRole: 'admin', featureKey: 'database_management' },
   { path: '/ai-models', label: '模型服务配置', icon: MagicStick, minRole: 'admin', featureKey: 'ai_model_config' },
   { path: '/report-config', label: '报告模板配置', icon: Document, minRole: 'admin', featureKey: 'report_config' },
+  { path: '/advanced-capabilities', label: '进阶能力中心', icon: Operation, minRole: 'admin', featureKey: 'advanced_capabilities' },
   { path: '/feishu-sync', label: '飞书数据同步', icon: Connection, minRole: 'admin', featureKey: 'feishu_sync' },
   { path: '/runtime-migration', label: '迁移发布管理', icon: UploadFilled, minRole: 'super_admin', featureKey: 'runtime_migration' },
   { path: '/organization-trees', label: '组织树管理', icon: Share, minRole: 'super_admin', featureKey: 'organization_tree_management' },
@@ -402,6 +403,7 @@ const subtitleMap = {
   '/databases': '管理 PostgreSQL 与其他业务数据连接',
   '/ai-models': '配置默认模型、通道与调用参数',
   '/report-config': '维护数据集对应的报告模板与展示规范',
+  '/advanced-capabilities': '管理进阶问数 Skill、MCP 和 SQL Server 工具链路',
   '/feishu-sync': '管理飞书多维表格同步、日志与任务控制',
   '/runtime-migration': '导出导入运行态配置，发布前自动备份可回滚',
   '/organization-trees': '维护多套独立组织树类型与树形节点',

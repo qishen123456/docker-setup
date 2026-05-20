@@ -58,6 +58,12 @@ const routes = [
     meta: { title: '报告模板配置', roles: ['super_admin', 'admin'] }
   },
   {
+    path: '/advanced-capabilities',
+    name: 'AdvancedCapabilities',
+    component: () => import('../views/AdvancedCapabilities.vue'),
+    meta: { title: '进阶能力中心', roles: ['super_admin', 'admin'] }
+  },
+  {
     path: '/feishu-sync',
     name: 'FeishuSync',
     component: () => import('../views/FeishuSync.vue'),

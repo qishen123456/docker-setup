@@ -102,6 +102,7 @@ RUNTIME_CONFIG_FILES=(
   "organization_trees.json"
   "feature_flags.json"
   "auth_tokens.json"
+  "advanced_capabilities.json"
   "query_history.json"
   "smartask_report_history.json"
 )

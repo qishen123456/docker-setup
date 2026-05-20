@@ -47,6 +47,7 @@ from controllers.data_permissions import data_permissions_bp
 from controllers.feishu_sync import feishu_bp
 from controllers.feature_flags import feature_flags_bp
 from controllers.ask_flow import ask_flow_bp
+from controllers.advanced_capabilities import advanced_capabilities_bp
 from controllers.smart_chat import smart_chat_bp
 from controllers.report_config import report_config_bp
 from controllers.runtime_migration import runtime_migration_bp
@@ -99,6 +100,7 @@ app.register_blueprint(report_config_bp)
 app.register_blueprint(runtime_migration_bp)
 app.register_blueprint(feature_flags_bp)
 app.register_blueprint(ask_flow_bp)
+app.register_blueprint(advanced_capabilities_bp)
 app.register_blueprint(system_logs_bp)
 app.register_blueprint(rbac_bp)
 app.register_blueprint(organization_trees_bp)
