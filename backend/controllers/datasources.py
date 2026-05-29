@@ -15,6 +15,7 @@ from config_manager import (
     get_datasources_safe, get_datasource_by_id,
     save_datasource, update_datasource, delete_datasource
 )
+from security import require_feature
 from vanna_core import test_db_connection, mark_reinit
 
 datasources_bp = Blueprint('datasources', __name__)
@@ -22,6 +23,9 @@ datasources_bp = Blueprint('datasources', __name__)
 
 @datasources_bp.route('/api/datasources', methods=['GET'])
 def list_datasources():
+    _, denied = require_feature("database_management", "当前账号没有查看数据连接配置权限")
+    if denied:
+        return denied
     try:
         return jsonify({"databases": get_datasources_safe()})
     except Exception as e:
@@ -30,6 +34,9 @@ def list_datasources():
 
 @datasources_bp.route('/api/datasources', methods=['POST'])
 def create_datasource():
+    _, denied = require_feature("datasource_create", "当前账号没有添加数据源权限")
+    if denied:
+        return denied
     try:
         data = request.get_json()
         if not data:
@@ -52,6 +59,9 @@ def create_datasource():
 
 @datasources_bp.route('/api/datasources/<int:db_id>', methods=['PUT'])
 def update_datasource_route(db_id):
+    _, denied = require_feature("datasource_edit", "当前账号没有编辑数据源权限")
+    if denied:
+        return denied
     try:
         data = request.get_json()
         updated = update_datasource(db_id, data)
@@ -70,6 +80,9 @@ def update_datasource_route(db_id):
 
 @datasources_bp.route('/api/datasources/<int:db_id>', methods=['DELETE'])
 def delete_datasource_route(db_id):
+    _, denied = require_feature("datasource_delete", "当前账号没有删除数据源权限")
+    if denied:
+        return denied
     try:
         success = delete_datasource(db_id)
         if not success:
@@ -82,6 +95,9 @@ def delete_datasource_route(db_id):
 
 @datasources_bp.route('/api/datasources/<int:db_id>/test', methods=['POST'])
 def test_datasource(db_id):
+    _, denied = require_feature("datasource_test", "当前账号没有测试数据源连接权限")
+    if denied:
+        return denied
     try:
         db = get_datasource_by_id(db_id)
         if db is None:

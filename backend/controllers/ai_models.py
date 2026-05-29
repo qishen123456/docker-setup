@@ -17,6 +17,7 @@ from config_manager import (
     save_ai_model, update_ai_model, delete_ai_model,
     read_json, write_json
 )
+from security import require_feature, require_login
 from vanna_core import test_ai_model, mark_reinit
 
 ai_models_bp = Blueprint('ai_models', __name__)
@@ -24,6 +25,9 @@ ai_models_bp = Blueprint('ai_models', __name__)
 
 @ai_models_bp.route('/api/ai-models', methods=['GET'])
 def list_ai_models():
+    _, denied = require_feature("ai_model_config", "当前账号没有查看模型服务配置权限")
+    if denied:
+        return denied
     try:
         return jsonify({"models": get_ai_models_safe()})
     except Exception as e:
@@ -32,6 +36,9 @@ def list_ai_models():
 
 @ai_models_bp.route('/api/ai-models', methods=['POST'])
 def create_ai_model():
+    _, denied = require_feature("ai_model_edit", "当前账号没有维护模型配置权限")
+    if denied:
+        return denied
     try:
         data = request.get_json()
         if not data:
@@ -55,6 +62,9 @@ def create_ai_model():
 
 @ai_models_bp.route('/api/ai-models/<int:model_id>', methods=['PUT'])
 def update_ai_model_route(model_id):
+    _, denied = require_feature("ai_model_edit", "当前账号没有维护模型配置权限")
+    if denied:
+        return denied
     try:
         data = request.get_json()
         updated = update_ai_model(model_id, data)
@@ -73,6 +83,9 @@ def update_ai_model_route(model_id):
 
 @ai_models_bp.route('/api/ai-models/<int:model_id>', methods=['DELETE'])
 def delete_ai_model_route(model_id):
+    _, denied = require_feature("ai_model_edit", "当前账号没有维护模型配置权限")
+    if denied:
+        return denied
     try:
         success = delete_ai_model(model_id)
         if not success:
@@ -85,6 +98,9 @@ def delete_ai_model_route(model_id):
 
 @ai_models_bp.route('/api/ai-models/<int:model_id>/test', methods=['POST'])
 def test_ai_model_route(model_id):
+    _, denied = require_feature("ai_model_test", "当前账号没有测试模型连接权限")
+    if denied:
+        return denied
     try:
         model = get_ai_model_by_id(model_id)
         if model is None:
@@ -103,6 +119,9 @@ def test_ai_model_route(model_id):
 
 @ai_models_bp.route('/api/ai-models/<int:model_id>/set-default', methods=['POST'])
 def set_default_model(model_id):
+    _, denied = require_feature("ai_model_edit", "当前账号没有维护模型配置权限")
+    if denied:
+        return denied
     try:
         config = read_json('ai_settings.json')
         models = config.get('models', [])
@@ -123,6 +142,9 @@ def set_default_model(model_id):
 @ai_models_bp.route('/api/ai-models/active', methods=['GET'])
 def list_active_models():
     """返回所有启用的模型（供前端模型选择器使用，不含敏感字段）"""
+    _, denied = require_login()
+    if denied:
+        return denied
     try:
         models = get_ai_models_safe()
         active = [

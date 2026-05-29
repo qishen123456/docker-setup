@@ -210,4 +210,12 @@ def get_current_user() -> Dict[str, Any]:
     if user:
         return user
     session_user = session.get("user")
-    return session_user if isinstance(session_user, dict) else {}
+    if not isinstance(session_user, dict):
+        return {}
+    refreshed_user = _refresh_user_from_employee(session_user)
+    if _is_user_disabled(refreshed_user):
+        session.pop("auth_token", None)
+        session.pop("user", None)
+        return {}
+    session["user"] = refreshed_user
+    return refreshed_user

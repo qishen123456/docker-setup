@@ -12,8 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from feishu_url_parser import parse_feishu_url
 from feishu_sync_logger import get_logs, get_all_logs, get_log_stats, clear_logs
-from auth_store import get_current_user
-from feature_flags import feature_available
+from security import require_feature
 
 from feishu_sync_manager import (
     get_feishu_configs, 
@@ -28,10 +27,8 @@ feishu_bp = Blueprint('feishu', __name__)
 
 
 def _require_feature(key: str, error_text: str):
-    user = get_current_user()
-    if user.get("role") == "super_admin" or feature_available(key, user):
-        return None
-    return jsonify({"error": error_text}), 403
+    _, denied = require_feature(key, error_text)
+    return denied
 
 
 def _parse_log_limit(default: int = 100):
@@ -46,6 +43,9 @@ def _parse_log_limit(default: int = 100):
 @feishu_bp.route('/api/feishu-sync', methods=['GET'])
 def get_feishu_sync_configs():
     """获取飞书同步配置列表"""
+    denied = _require_feature("feishu_sync", "当前账号没有查看飞书同步配置权限")
+    if denied:
+        return denied
     try:
         configs = get_feishu_configs()
         return jsonify({
@@ -227,6 +227,9 @@ def start_sync(config_id):
 @feishu_bp.route('/api/feishu-sync/<int:config_id>/status', methods=['GET'])
 def get_sync_status(config_id):
     """获取同步状态"""
+    denied = _require_feature("feishu_sync", "当前账号没有查看飞书同步配置权限")
+    if denied:
+        return denied
     try:
         configs = get_feishu_configs()
         target_config = None

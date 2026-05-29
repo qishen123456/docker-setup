@@ -652,7 +652,7 @@ def feishu_callback():
     expected_state = session.get("feishu_oauth_state")
     if not code:
         return jsonify({"success": False, "error": "缺少飞书 OAuth code"}), 400
-    if expected_state and state and state != expected_state:
+    if not expected_state or state != expected_state:
         return jsonify({"success": False, "error": "飞书 OAuth state 校验失败"}), 400
     try:
         user_data = _enrich_feishu_user(cfg, _exchange_web_code(cfg, code))

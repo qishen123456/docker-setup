@@ -1540,6 +1540,8 @@ def view_for_user(flags: dict[str, Any], user: dict[str, Any] | None) -> dict[st
 
 
 def feature_available(key: str, user: dict[str, Any] | None) -> bool:
+    if not isinstance(user, dict) or not user:
+        return False
     flags = load_feature_flags()
     feature = flags.get("features", {}).get(key)
     if not isinstance(feature, dict):

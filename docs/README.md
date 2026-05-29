@@ -39,7 +39,7 @@ git push gitee docker-setup --force
 推送下方四行代码，第三行改个名字即可
 git status
 git add .
-git commit -m "chore: update smartask LIn 17"
+git commit -m "chore: update smartask LIn 25.2"
 git push -u gitee docker-setup
 
 

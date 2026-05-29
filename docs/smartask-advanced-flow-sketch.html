@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SmartAsk 进阶问数流程手绘图</title>
+  <style>
+    :root {
+      --ink: #171717;
+      --muted: #475569;
+      --paper: #fffdf7;
+      --blue: #2563eb;
+      --purple: #7c3aed;
+      --green: #16a34a;
+      --red: #dc2626;
+      --orange: #ea580c;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #e8eef7;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    }
+
+    .canvas {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.13) 1px, transparent 1.25px) 0 0 / 18px 18px,
+        linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px) 0 0 / 380px 100%,
+        linear-gradient(0deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px) 0 0 / 100% 245px,
+        var(--paper);
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hand {
+      font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
+      font-weight: 800;
+    }
+
+    .title {
+      font-size: 40px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      fill: var(--muted);
+    }
+
+    .zone {
+      fill: rgba(255, 255, 255, 0.62);
+      stroke: #cbd5e1;
+      stroke-width: 3;
+      stroke-dasharray: 8 12;
+    }
+
+    .box {
+      fill: rgba(255, 255, 255, 0.95);
+      stroke: var(--ink);
+      stroke-width: 4;
+      stroke-linejoin: round;
+      filter: url(#softShadow);
+    }
+
+    .skill {
+      fill: rgba(238, 242, 255, 0.96);
+      stroke: #4f46e5;
+      stroke-width: 3.5;
+      filter: url(#softShadow);
+    }
+
+    .engine {
+      fill: rgba(236, 254, 255, 0.96);
+      stroke: #0891b2;
+      stroke-width: 3.5;
+      filter: url(#softShadow);
+    }
+
+    .output {
+      fill: rgba(240, 253, 244, 0.96);
+      stroke: #16a34a;
+      stroke-width: 3.5;
+      filter: url(#softShadow);
+    }
+
+    .risk {
+      fill: rgba(254, 242, 242, 0.96);
+      stroke: #dc2626;
+      stroke-width: 3.5;
+      filter: url(#softShadow);
+    }
+
+    .gate {
+      fill: rgba(255, 247, 237, 0.96);
+      stroke: #ea580c;
+      stroke-width: 3.5;
+      filter: url(#softShadow);
+    }
+
+    .pill {
+      fill: url(#purpleInk);
+      stroke: var(--ink);
+      stroke-width: 3;
+    }
+
+    .pillText {
+      fill: white;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .nodeTitle {
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .nodeText {
+      font-size: 13px;
+      fill: #334155;
+    }
+
+    .small {
+      font-size: 12px;
+      fill: #475569;
+    }
+
+    .tiny {
+      font-size: 11px;
+      fill: #64748b;
+    }
+
+    .arrow {
+      fill: none;
+      stroke: var(--ink);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      marker-end: url(#arrowHead);
+    }
+
+    .dash { stroke-dasharray: 10 11; }
+
+    .greenArrow {
+      fill: none;
+      stroke: #65a30d;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 10 10;
+      marker-end: url(#greenArrowHead);
+    }
+  </style>
+</head>
+<body>
+  <main class="canvas" role="img" aria-label="SmartAsk 进阶问数流程手绘风网页流程图">
+    <svg viewBox="0 0 1900 980" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="3" dy="5" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.14" />
+        </filter>
+
+        <pattern id="hatchPurple" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+          <rect width="9" height="9" fill="#f5e8ff" />
+          <line x1="0" y1="0" x2="0" y2="9" stroke="#c084fc" stroke-width="2" opacity="0.45" />
+        </pattern>
+
+        <pattern id="hatchGreen" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+          <rect width="9" height="9" fill="#ecfdf5" />
+          <line x1="0" y1="0" x2="0" y2="9" stroke="#86efac" stroke-width="2" opacity="0.52" />
+        </pattern>
+
+        <pattern id="hatchRed" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+          <rect width="9" height="9" fill="#fff1f2" />
+          <line x1="0" y1="0" x2="0" y2="9" stroke="#fca5a5" stroke-width="2" opacity="0.55" />
+        </pattern>
+
+        <linearGradient id="purpleInk" x1="0" x2="1">
+          <stop offset="0" stop-color="#7c3aed" />
+          <stop offset="1" stop-color="#2563eb" />
+        </linearGradient>
+
+        <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M1,1 L7,4 L1,7 Z" fill="#171717" />
+        </marker>
+
+        <marker id="greenArrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M1,1 L7,4 L1,7 Z" fill="#65a30d" />
+        </marker>
+      </defs>
+
+      <!-- 标题 -->
+      <path d="M42 54 C190 28, 376 45, 522 33 C662 22, 800 51, 932 40" fill="none" stroke="#a7f3d0" stroke-width="25" stroke-linecap="round" opacity="0.46" />
+      <text x="64" y="70" class="title">SmartAsk 进阶问数流程</text>
+      <text x="68" y="108" class="subtitle">进阶问数不是替代基础引擎，而是在前后增加 Skill 编排、质量门、自检和诊断增强</text>
+
+      <!-- 用户与准入 -->
+      <circle cx="78" cy="220" r="22" fill="#e9d5ff" stroke="#9333ea" stroke-width="3" />
+      <path d="M38 296 C47 254, 110 254, 122 296" fill="none" stroke="#9333ea" stroke-width="4" stroke-linecap="round" />
+      <path d="M140 166 C172 136, 300 140, 314 176 C322 205, 288 230, 223 225 L164 268 L177 226 C134 220, 112 196, 140 166Z" fill="url(#hatchPurple)" stroke="#171717" stroke-width="3" />
+      <text x="158" y="198" class="hand" font-size="22">用户问题</text>
+
+      <rect x="330" y="150" width="250" height="150" rx="24" class="gate" />
+      <text x="370" y="193" class="nodeTitle">进阶准入判断</text>
+      <text x="366" y="228" class="nodeText">advancedEnabled</text>
+      <text x="366" y="255" class="nodeText">功能权限 + 角色策略</text>
+      <text x="366" y="282" class="nodeText">请求 / 默认流程选择</text>
+      <path class="arrow dash" d="M126 294 C190 332, 272 300, 330 250" />
+
+      <rect x="650" y="150" width="250" height="150" rx="24" class="risk" />
+      <text x="698" y="193" class="nodeTitle">不满足准入</text>
+      <text x="690" y="234" class="nodeText">直接回到基础流程</text>
+      <text x="690" y="262" class="nodeText">不影响普通问数体验</text>
+      <path class="arrow dash" d="M580 225 L650 225" />
+
+      <rect x="970" y="150" width="312" height="150" rx="24" class="box" />
+      <text x="1014" y="193" class="nodeTitle">AdvancedAskService</text>
+      <text x="1014" y="230" class="nodeText">读取进阶能力配置</text>
+      <text x="1014" y="258" class="nodeText">生成 Skill 计划和 trace_id</text>
+      <text x="1014" y="286" class="nodeText">实时输出 Skill Trace</text>
+      <path class="arrow dash" d="M580 225 C734 116, 880 118, 970 198" />
+
+      <!-- 总体关系 -->
+      <rect x="1360" y="142" width="460" height="166" rx="28" class="output" />
+      <text x="1404" y="186" class="nodeTitle">进阶 = 增强链路 + 基础稳定引擎</text>
+      <text x="1404" y="224" class="nodeText">最终报告协议保持不变</text>
+      <text x="1404" y="252" class="nodeText">额外写入 diagnostics.advanced</text>
+      <text x="1404" y="280" class="nodeText">异常可回退，不绕过权限</text>
+      <path class="arrow dash" d="M1282 225 L1360 225" />
+
+      <!-- 前置区 -->
+      <rect x="56" y="342" width="1220" height="238" rx="24" class="zone" />
+      <text x="90" y="376" class="hand" font-size="22">前置 Skill 编排 · Preflight</text>
+
+      <rect x="92" y="410" width="160" height="110" rx="20" class="skill" />
+      <text x="118" y="446" class="nodeTitle">数据集路由</text>
+      <text x="116" y="480" class="nodeText">资产候选召回</text>
+      <text x="116" y="505" class="nodeText">相似度打分</text>
+
+      <path class="arrow dash" d="M252 465 L316 465" />
+
+      <rect x="316" y="410" width="160" height="110" rx="20" class="skill" />
+      <text x="344" y="446" class="nodeTitle">路由守门</text>
+      <text x="340" y="480" class="nodeText">组织树命中</text>
+      <text x="340" y="505" class="nodeText">确认/锁定/对比</text>
+
+      <path class="arrow dash" d="M476 465 L540 465" />
+
+      <rect x="540" y="410" width="160" height="110" rx="20" class="skill" />
+      <text x="568" y="446" class="nodeTitle">资产打包</text>
+      <text x="564" y="480" class="nodeText">字段 / DDL / LLD</text>
+      <text x="564" y="505" class="nodeText">Prompt / 模板</text>
+
+      <path class="arrow dash" d="M700 465 L764 465" />
+
+      <rect x="764" y="410" width="160" height="110" rx="20" class="skill" />
+      <text x="792" y="446" class="nodeTitle">任务规划</text>
+      <text x="788" y="480" class="nodeText">排名/对比/下钻</text>
+      <text x="788" y="505" class="nodeText">层级与 TopN</text>
+
+      <path class="arrow dash" d="M924 465 L988 465" />
+
+      <rect x="988" y="410" width="160" height="110" rx="20" class="skill" />
+      <text x="1018" y="446" class="nodeTitle">样例口径</text>
+      <text x="1012" y="480" class="nodeText">Golden SQL</text>
+      <text x="1012" y="505" class="nodeText">常见问题参考</text>
+
+      <path class="arrow dash" d="M1148 465 L1216 465" />
+
+      <rect x="1216" y="410" width="190" height="110" rx="20" class="box" />
+      <text x="1248" y="446" class="nodeTitle">工具声明</text>
+      <text x="1246" y="480" class="nodeText">MCP / SQL Server</text>
+      <text x="1246" y="505" class="nodeText">自定义 Skill</text>
+
+      <!-- Handoff -->
+      <path class="arrow" d="M1310 520 C1288 626, 1136 626, 1030 626" />
+      <rect x="862" y="600" width="250" height="86" rx="24" class="engine" />
+      <text x="914" y="636" class="nodeTitle">Handoff</text>
+      <text x="900" y="666" class="nodeText">交给基础稳定问数引擎</text>
+
+      <!-- 基础引擎区 -->
+      <rect x="56" y="640" width="742" height="206" rx="24" class="zone" />
+      <text x="90" y="674" class="hand" font-size="22">基础稳定执行引擎 · Four Agent</text>
+
+      <rect x="94" y="718" width="118" height="78" rx="18" class="engine" />
+      <text x="116" y="749" class="nodeTitle">Agent1</text>
+      <text x="112" y="776" class="nodeText">路由确认</text>
+      <path class="arrow dash" d="M212 758 L260 758" />
+
+      <rect x="260" y="718" width="118" height="78" rx="18" class="engine" />
+      <text x="282" y="749" class="nodeTitle">Agent2</text>
+      <text x="280" y="776" class="nodeText">生成 SQL</text>
+      <path class="arrow dash" d="M378 758 L426 758" />
+
+      <rect x="426" y="718" width="118" height="78" rx="18" class="engine" />
+      <text x="448" y="749" class="nodeTitle">Agent3</text>
+      <text x="452" y="776" class="nodeText">复核安全</text>
+      <path class="arrow dash" d="M544 758 L592 758" />
+
+      <rect x="592" y="718" width="152" height="78" rx="18" class="engine" />
+      <text x="626" y="749" class="nodeTitle">执行查询</text>
+      <text x="624" y="776" class="nodeText">行级过滤/修复</text>
+
+      <path class="arrow dash" d="M744 758 C800 758, 808 706, 862 668" />
+
+      <!-- 后置区 -->
+      <rect x="844" y="710" width="860" height="210" rx="24" class="zone" />
+      <text x="878" y="744" class="hand" font-size="22">后置质量门 · Postflight</text>
+
+      <rect x="880" y="780" width="138" height="82" rx="18" class="skill" />
+      <text x="908" y="812" class="nodeTitle">SQL质量</text>
+      <text x="904" y="840" class="nodeText">只读/字段/空值</text>
+
+      <rect x="1042" y="780" width="138" height="82" rx="18" class="skill" />
+      <text x="1068" y="812" class="nodeTitle">模板策略</text>
+      <text x="1065" y="840" class="nodeText">TopN/场景</text>
+
+      <rect x="1204" y="780" width="138" height="82" rx="18" class="skill" />
+      <text x="1228" y="812" class="nodeTitle">Pandas加工</text>
+      <text x="1228" y="840" class="nodeText">排名/缺口</text>
+
+      <rect x="1366" y="780" width="138" height="82" rx="18" class="skill" />
+      <text x="1392" y="812" class="nodeTitle">答案契约</text>
+      <text x="1388" y="840" class="nodeText">是否答到问题</text>
+
+      <rect x="1528" y="780" width="138" height="82" rx="18" class="skill" />
+      <text x="1555" y="812" class="nodeTitle">结果自检</text>
+      <text x="1552" y="840" class="nodeText">路由/数据一致</text>
+
+      <path class="arrow dash" d="M1018 821 L1042 821" />
+      <path class="arrow dash" d="M1180 821 L1204 821" />
+      <path class="arrow dash" d="M1342 821 L1366 821" />
+      <path class="arrow dash" d="M1504 821 L1528 821" />
+
+      <path class="arrow" d="M1598 780 C1598 706, 1512 660, 1420 664" />
+
+      <!-- 输出诊断 -->
+      <rect x="1420" y="374" width="398" height="250" rx="28" class="output" />
+      <text x="1464" y="420" class="nodeTitle">统一返回</text>
+      <text x="1464" y="456" class="nodeText">基础报告结构保持一致</text>
+      <text x="1464" y="484" class="nodeText">追加进阶诊断和置信度</text>
+      <text x="1464" y="512" class="nodeText">跨数据集时补充对比结论</text>
+      <rect x="1480" y="542" width="252" height="48" rx="13" fill="#dcfce7" stroke="#16a34a" stroke-width="3" />
+      <text x="1518" y="573" class="nodeTitle">diagnostics.advanced</text>
+      <path class="arrow dash" d="M1406 465 L1420 465" />
+      <path class="arrow dash" d="M1666 821 C1772 784, 1810 682, 1708 624" />
+
+      <!-- 风险与回退 -->
+      <rect x="56" y="864" width="642" height="78" rx="22" class="risk" />
+      <text x="94" y="896" class="nodeTitle">可回退不变式</text>
+      <text x="94" y="924" class="nodeText">配置异常、前置异常、后置异常时，保留基础结果；进阶不能绕过数据集权限和行级权限。</text>
+      <path class="greenArrow" d="M650 300 C470 356, 324 520, 348 640" />
+      <text x="276" y="582" class="small">降级回基础流程</text>
+
+      <!-- 跨数据集标注 -->
+      <path d="M1665 640 C1708 616, 1790 618, 1806 652 C1822 686, 1788 714, 1726 706 L1684 730 L1694 700 C1649 694, 1626 662, 1665 640Z" fill="url(#hatchGreen)" stroke="#171717" stroke-width="3" />
+      <text x="1686" y="674" class="hand" font-size="20">跨数据集</text>
+      <text x="1688" y="698" class="small">对比结论增强</text>
+    </svg>
+  </main>
+</body>
+</html>

@@ -26,6 +26,7 @@ from dataset_copilot import CopilotError, DatasetCopilot
 from auth_store import get_current_user
 from data_permission_store import apply_row_level_filter, dataset_access_summary, dataset_scope_hit_for_user, filter_dataset_rows_for_user, load_data_permissions, org_mention_permission_check, user_org_scope_for_rule
 from feature_flags import feature_available
+from security import require_feature
 from system_log_store import log_event, request_snapshot
 
 
@@ -1961,6 +1962,9 @@ def _jsonb_extraction_rule(jsonb_column: str, key: str, data_type: str) -> str:
 
 @bookshelf_bp.route("/api/bookshelves/source-tables", methods=["GET"])
 def list_source_tables():
+    _, denied = require_feature("dataset_source_table", "当前账号没有从数据源拉取表结构权限")
+    if denied:
+        return denied
     try:
         source_id = request.args.get("source_id", type=int)
         if not source_id:
