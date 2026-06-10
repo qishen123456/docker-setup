@@ -5,11 +5,11 @@
 当前项目真实 Git 信息：
 
 ```text
-Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
+GitHub remote：https://github.com/qishen123456/docker-setup.git
 当前可拉取发布分支：docker-setup
 ```
 
-注意：Linux/Git 对分支名大小写敏感。已核验当前本地与 Gitee 远端存在的分支是 `docker-setup`；如果后续你在 Gitee 另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
+注意：Linux/Git 对分支名大小写敏感。当前发布分支是 `docker-setup`；如果后续另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
 
 本文档是 SmartAsk 给用户机交付、Windows 一键 Docker 部署、日常更新、权限控制和运行态配置保护的统一入口。Linux 服务器部署请另看：
 
@@ -60,7 +60,7 @@ docker compose version
 下面这段可以直接发给用户机执行。
 
 ```powershell
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 Copy-Item .env.example .env
 notepad .env
@@ -69,7 +69,7 @@ notepad .env
 
 命令解释：
 
-- `git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask`：从 Gitee 下载 `docker-setup` 分支，并把目录命名为 `smartask`。
+- `git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask`：从 GitHub 下载 `docker-setup` 分支，并把目录命名为 `smartask`。
 - `cd smartask`：进入项目目录，后续命令都在这里执行。
 - `Copy-Item .env.example .env`：复制一份真实运行配置文件。
 - `notepad .env`：打开配置文件，填写 AI Key、系统密钥、超管密码、飞书配置等真实值。
@@ -78,7 +78,7 @@ notepad .env
 部署成功后访问：
 
 ```text
-前端：http://localhost:8080
+前端：http://localhost:8888
 后端健康：http://localhost:5002/api/health
 ```
 
@@ -116,7 +116,7 @@ BACKEND_URL
 FRONTEND_URL
 ```
 
-`.env` 不提交到 Git / Gitee。
+`.env` 不提交到 Git。
 
 ## 5. 登录与权限
 
@@ -184,7 +184,7 @@ cd smartask
 命令解释：
 
 - `cd smartask`：进入已经部署过的项目目录。
-- `.\update.ps1 -RunTests`：自动备份、拉取 Gitee 最新代码、重建 Docker 服务，并跑接口测试。
+- `.\update.ps1 -RunTests`：自动备份、拉取 GitHub 最新代码、重建 Docker 服务，并跑接口测试。
 
 可选参数：
 
@@ -373,7 +373,7 @@ python -c "compile(open('backend/app.py', encoding='utf-8').read(), 'backend/app
 第一次部署：
 
 ```powershell
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 Copy-Item .env.example .env
 notepad .env

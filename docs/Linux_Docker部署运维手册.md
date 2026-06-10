@@ -5,11 +5,11 @@
 当前项目真实 Git 信息：
 
 ```text
-Gitee remote：https://gitee.com/tailin1/volcano-intelligent-questions.git
+GitHub remote：https://github.com/qishen123456/docker-setup.git
 当前可拉取发布分支：docker-setup
 ```
 
-注意：Linux/Git 对分支名大小写敏感。已核验当前本地与 Gitee 远端存在的分支是 `docker-setup`；如果后续你在 Gitee 另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
+注意：Linux/Git 对分支名大小写敏感。当前发布分支是 `docker-setup`；如果后续另建大写 `DOCKER-SETUP` 分支，命令里的 `docker-setup` 才需要替换成 `DOCKER-SETUP`。
 
 本文档只解决一件事：Linux 服务器如何部署、启动、更新、备份、回滚和检查 SmartAsk。
 
@@ -61,16 +61,16 @@ sudo systemctl start docker
 
 ## 2. 拉取项目
 
-如果 Gitee 默认分支不是完整代码，直接 `git clone` 可能只看到 README。建议先确认分支：
+如果默认分支不是完整代码，直接 `git clone` 可能只看到 README。建议先确认分支：
 
 ```bash
-git ls-remote --heads https://gitee.com/tailin1/volcano-intelligent-questions.git
+git ls-remote --heads https://github.com/qishen123456/docker-setup.git
 ```
 
 完整项目当前应从 `docker-setup` 分支拉取：
 
 ```bash
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 ```
 
@@ -196,13 +196,13 @@ curl http://localhost:5002/api/health
 默认前端地址：
 
 ```text
-http://服务器IP:8080
+http://服务器IP:8888
 ```
 
 如服务器启用了防火墙，需要开放端口：
 
 ```bash
-sudo ufw allow 8080/tcp
+sudo ufw allow 8888/tcp
 sudo ufw allow 5002/tcp
 ```
 
@@ -365,7 +365,7 @@ Ctrl + F5
 默认端口：
 
 ```text
-前端：8080
+前端：8888
 后端：5002
 PostgreSQL 宿主机映射：5433
 ```
@@ -373,7 +373,7 @@ PostgreSQL 宿主机映射：5433
 这些端口来自 `.env`：
 
 ```text
-SMARTASK_FRONTEND_PORT=8080
+SMARTASK_FRONTEND_PORT=8888
 SMARTASK_BACKEND_PORT=5002
 SMARTASK_DOCKER_PG_PORT=5433
 ```
@@ -575,7 +575,7 @@ bash doctor.sh
 - Docker / Docker Compose 版本。
 - `docker compose config`、容器状态、镜像、volume 和 network。
 - `backend`、`frontend`、`postgres` 最近日志。
-- 端口监听、后端健康检查、前端 8080 检查。
+- 端口监听、后端健康检查、前端 8888 检查。
 - 脱敏后的 `.env` 摘要。
 
 生成后，把下面文件发给开发者：
@@ -637,7 +637,7 @@ docker compose ps
 ```bash
 docker compose logs --tail=200 frontend
 docker compose ps
-ss -lntp | grep 8080
+ss -lntp | grep 8888
 ```
 
 系统控制台保存失败：
@@ -675,7 +675,7 @@ curl http://localhost:5002/api/health
 首次部署：
 
 ```bash
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 cp .env.example .env
 nano .env

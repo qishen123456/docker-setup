@@ -11,14 +11,14 @@
 完整步骤见 [DEPLOY.md](DEPLOY.md)。最简版：
 
 ```powershell
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 Copy-Item .env.example .env
 # 编辑 .env，填入 AI/飞书等真实密钥
 .\deploy.ps1 -RunTests
 ```
 
-打开浏览器访问 http://localhost:8080 即可。
+打开浏览器访问 http://localhost:8888 即可。
 
 后端容器启动时会**自动**完成：
 - PostgreSQL 健康等待

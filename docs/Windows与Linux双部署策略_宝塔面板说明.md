@@ -24,7 +24,7 @@
 Docker 正式部署后，前端默认访问：
 
 ```text
-http://服务器IP:8080
+http://服务器IP:8888
 ```
 
 开发机本地 Vite 才使用：
@@ -38,13 +38,13 @@ http://localhost:5173
 ```yaml
 frontend:
   ports:
-    - "${SMARTASK_FRONTEND_PORT:-8080}:80"
+    - "${SMARTASK_FRONTEND_PORT:-8888}:80"
 ```
 
 也就是说：
 
 - 容器内 Nginx 监听 `80`。
-- 宿主机默认暴露 `8080`。
+- 宿主机默认暴露 `8888`。
 - 如果 `.env` 里设置 `SMARTASK_FRONTEND_PORT=5173`，也可以改成 `5173`，但不建议生产/用户机这么做。
 
 ## 3. 宝塔面板不是根因，但可能影响访问链路
@@ -71,8 +71,8 @@ frontend:
 排查：
 
 ```bash
-curl -I http://127.0.0.1:8080
-curl -I http://127.0.0.1:8080/assets/
+curl -I http://127.0.0.1:8888
+curl -I http://127.0.0.1:8888/assets/
 docker compose logs --tail=200 frontend
 ```
 
@@ -94,7 +94,7 @@ location /api/ {
 }
 ```
 
-如果用户直接访问 Docker 前端 `http://服务器IP:8080`，这条链路是正常的。
+如果用户直接访问 Docker 前端 `http://服务器IP:8888`，这条链路是正常的。
 
 如果用户通过宝塔新建站点或域名反向代理访问，例如：
 
@@ -105,7 +105,7 @@ https://ask.example.com
 宝塔 Nginx 必须把请求完整转发到 Docker 前端：
 
 ```text
-ask.example.com -> 127.0.0.1:8080
+ask.example.com -> 127.0.0.1:8888
 ```
 
 不要把 `/api` 单独代理到错误端口，也不要把站点根目录指向旧 `dist`。
@@ -114,7 +114,7 @@ ask.example.com -> 127.0.0.1:8080
 
 ```bash
 curl http://127.0.0.1:5002/api/health
-curl http://127.0.0.1:8080/api/health
+curl http://127.0.0.1:8888/api/health
 curl http://你的域名/api/health
 ```
 
@@ -150,7 +150,7 @@ proxy_read_timeout 300s;
 ```text
 用户浏览器
   -> 宝塔 Nginx / 域名 / SSL
-  -> 127.0.0.1:8080
+  -> 127.0.0.1:8888
   -> Docker frontend nginx
   -> /api 代理到 Docker backend
   -> Docker postgres
@@ -163,7 +163,7 @@ proxy_read_timeout 300s;
 在宝塔网站中配置反向代理：
 
 ```text
-目标 URL：http://127.0.0.1:8080
+目标 URL：http://127.0.0.1:8888
 ```
 
 然后访问：
@@ -214,7 +214,7 @@ reset.ps1
 
 - 给不懂命令行的 Windows 用户机一键部署。
 - 使用 Docker Desktop。
-- 默认访问 `http://localhost:8080`。
+- 默认访问 `http://localhost:8888`。
 
 ### 5.3 Linux / 宝塔服务器脚本层
 
@@ -309,8 +309,8 @@ docker compose ps
 docker compose logs --tail=200 frontend
 docker compose logs --tail=200 backend
 curl http://127.0.0.1:5002/api/health
-curl http://127.0.0.1:8080/api/health
-curl -I http://127.0.0.1:8080
+curl http://127.0.0.1:8888/api/health
+curl -I http://127.0.0.1:8888
 ```
 
 如果用了域名：
@@ -326,9 +326,9 @@ curl https://你的域名/api/health
 
 优先怀疑：
 
-1. 用户访问了错误入口，例如访问宝塔静态站点而不是 Docker 前端 `8080`。
+1. 用户访问了错误入口，例如访问宝塔静态站点而不是 Docker 前端 `8888`。
 2. 静态资源 JS 加载失败。
-3. 宝塔反向代理没有完整转发到 `127.0.0.1:8080`。
+3. 宝塔反向代理没有完整转发到 `127.0.0.1:8888`。
 4. `/api` 被宝塔代理到了错误位置。
 5. 用户机拉到的代码不是 `docker-setup` 分支最新提交。
 6. 前端构建时漏文件，例如之前的 `TypewriterLine.vue` 没进 Git。
@@ -341,7 +341,7 @@ curl https://你的域名/api/health
 
 - 已新增 `doctor.sh`。
 - 文档补充宝塔排查路径。
-- 明确用户访问 `8080`，开发访问 `5173`。
+- 明确用户访问 `8888`，开发访问 `5173`。
 
 第二阶段：补齐 Linux 一键脚本。
 

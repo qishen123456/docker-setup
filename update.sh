@@ -7,6 +7,7 @@ SKIP_BACKUP=0
 RUN_TESTS=0
 RUN_STREAM_TESTS=0
 BRANCH="docker-setup"
+REMOTE="${SMARTASK_GIT_REMOTE_NAME:-}"
 SKIP_VERIFY=0
 
 while [[ $# -gt 0 ]]; do
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       BRANCH="${2:-docker-setup}"
       shift 2
       ;;
+    --remote)
+      REMOTE="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       cat <<'EOF'
 SmartAsk Linux 更新脚本
@@ -47,11 +52,13 @@ SmartAsk Linux 更新脚本
 用法：
   bash update.sh
   bash update.sh --run-tests
+  bash update.sh --remote github --run-tests
   bash update.sh --no-pull
   bash update.sh --pip-index-url https://mirrors.aliyun.com/pypi/simple/
 
 参数：
   --branch NAME        指定更新分支，默认 docker-setup。
+  --remote NAME        指定 Git 远端名，例如 github；未指定时使用当前分支 upstream。
   --no-build          不重新构建镜像，只重启容器。
   --no-pull           不拉取 Git，仅用当前代码重建。
   --skip-backup       跳过更新前备份，不建议生产环境使用。
@@ -484,7 +491,19 @@ if [[ "$NO_PULL" -eq 0 ]]; then
     restore_runtime_config_files
     fail "切换分支失败，已尽量恢复运行态配置"
   fi
-  if ! git pull --ff-only; then
+  if [[ -n "$REMOTE" ]]; then
+    echo "  Git remote: $REMOTE"
+    echo "  Git branch: $BRANCH"
+    git fetch "$REMOTE" "$BRANCH" || {
+      restore_runtime_config_files
+      fail "从远端 $REMOTE 拉取分支 $BRANCH 失败"
+    }
+    git branch --set-upstream-to="$REMOTE/$BRANCH" "$BRANCH" 2>/dev/null || true
+    if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
+      restore_runtime_config_files
+      fail "拉取 $REMOTE/$BRANCH 失败，已尽量恢复运行态配置"
+    fi
+  elif ! git pull --ff-only; then
     restore_runtime_config_files
     fail "拉取最新代码失败，已尽量恢复运行态配置"
   fi

@@ -17,7 +17,7 @@
 
 ```powershell
 # 1) 克隆代码
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 
 # 2) 复制模板并填写真实密钥
@@ -40,7 +40,7 @@ Copy-Item .env.example .env
 如果项目管理员已经单独发给你可用的 `.env`，也可以直接放到项目根目录后执行：
 
 ```powershell
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 .\deploy.ps1 -RunTests
 ```
@@ -48,7 +48,7 @@ cd smartask
 宝塔 / Linux 首次部署：
 
 ```bash
-git clone -b docker-setup https://gitee.com/tailin1/volcano-intelligent-questions.git smartask
+git clone -b docker-setup https://github.com/qishen123456/docker-setup.git smartask
 cd smartask
 # 放入 .env；如果 .env 里有 enc:v1 密文，也要放入 config/.secret_master_key
 bash deploy.sh --run-tests
@@ -56,7 +56,7 @@ bash deploy.sh --run-tests
 
 完成后浏览器访问：
 
-- 前端：http://localhost:8080
+- 前端：http://localhost:8888
 - 后端健康检查：http://localhost:5002/api/health
 
 > 端口可在 `.env` 中通过 `SMARTASK_FRONTEND_PORT` / `SMARTASK_BACKEND_PORT` / `SMARTASK_DOCKER_PG_PORT` 自定义。
@@ -97,7 +97,9 @@ bash deploy.sh --run-tests
 
 ```bash
 bash update.sh
+bash update.sh --remote github
 bash update.sh --run-tests
+bash update.sh --remote github --run-tests
 bash update.sh --no-build
 bash update.sh --no-pull --run-tests
 ```
@@ -107,7 +109,8 @@ bash update.sh --no-pull --run-tests
 说明：
 
 - `-RunStreamTests` 会额外测试 AI 流式问数链路，依赖真实模型 Key 和网络。
-- `-NoPull` 适合离线更新包场景，不从 Gitee 拉代码。
+- `--remote github` 适合宝塔 / Linux 服务器，明确从 GitHub 的 `docker-setup` 分支更新，避免仍连到旧远端。
+- `-NoPull` / `--no-pull` 适合离线更新包场景，不从远端拉代码。
 - `-NoBuild` 只重启已有镜像，不重新构建。
 - 更新脚本默认会先调用 `backup.ps1` 备份，保护用户机已有数据。
 - Linux `update.sh` 会在启动容器前检查加密配置：如果 `.env` 或 `config/*.json` 中出现 `enc:v1:`，必须存在 `config/.secret_master_key`，或配置 `SMARTASK_SECRET_MASTER_KEY` / `SMARTASK_SECRET_KEY_FILE`，否则会停止更新，避免容器启动后无法解密。
