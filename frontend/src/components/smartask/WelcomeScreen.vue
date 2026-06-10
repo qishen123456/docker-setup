@@ -1,7 +1,7 @@
 <template>
   <div class="sa-welcome">
     <div class="sa-welcome-head">
-      <div class="sa-welcome-avatar">DA</div>
+      <div class="sa-welcome-avatar">D</div>
       <div class="sa-welcome-copy">
         <div class="sa-welcome-label">经营分析顾问</div>
         <div class="sa-welcome-text">{{ displayText }}</div>
@@ -15,7 +15,9 @@
           <div class="sa-quick-tip">点击问题将带入所属数据集口径，你可以修改后再发送。</div>
         </div>
         <button v-if="allowRefreshQuestions" class="sa-quick-refresh" :disabled="commonQuestionsLoading" @click="$emit('refresh-questions')">
-          <span class="sa-quick-refresh-icon" :class="{ 'is-loading': commonQuestionsLoading }">↻</span>
+          <el-icon class="sa-quick-refresh-icon" :class="{ 'is-loading': commonQuestionsLoading }">
+            <RefreshRight />
+          </el-icon>
           <span>{{ commonQuestionsLoading ? '刷新中' : '换一批' }}</span>
         </button>
       </div>
@@ -40,6 +42,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { RefreshRight } from '@element-plus/icons-vue'
 
 const props = defineProps({
   welcomeText: {
@@ -100,15 +103,17 @@ onMounted(() => {
 .sa-welcome-avatar {
   width: 40px;
   height: 40px;
-  background: linear-gradient(180deg, #3a74ff 0%, #165dff 100%);
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   color: #fff;
-  border-radius: 50%;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 10px 22px rgba(22, 93, 255, 0.14);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.12),
+    inset 0 -3px 0 rgba(37, 99, 235, 0.55);
 }
 
 .sa-welcome-copy {
@@ -167,23 +172,30 @@ onMounted(() => {
 .sa-quick-refresh {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid rgba(22, 93, 255, 0.16);
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 82px;
+  padding: 0 13px;
+  border: 1px solid rgba(30, 41, 59, 0.1);
   border-radius: 999px;
-  background: #fff;
-  color: #165dff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #334155;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 750;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.15s;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
   white-space: nowrap;
 }
 
 .sa-quick-refresh:hover:not(:disabled) {
-  border-color: rgba(22, 93, 255, 0.32);
-  background: #f7fbff;
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.22);
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 9px 18px rgba(15, 23, 42, 0.07);
 }
 
 .sa-quick-refresh:disabled {
@@ -193,8 +205,13 @@ onMounted(() => {
 
 .sa-quick-refresh-icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
   font-size: 14px;
   line-height: 1;
+  transform-origin: center;
 }
 
 .sa-quick-refresh-icon.is-loading {

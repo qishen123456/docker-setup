@@ -510,7 +510,7 @@ require_env "SMARTASK_ADMIN_PASSWORD"
 ok ".env 已存在且关键项不是占位符"
 validate_secret_master_key
 
-FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8080)"
+FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8888)"
 BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
 PG_PORT="$(read_env SMARTASK_DOCKER_PG_PORT 5433)"
 

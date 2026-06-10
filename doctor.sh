@@ -145,8 +145,8 @@ done
 echo "==> 健康检查"
 run_shell "health_backend_5002" "curl -fsS --max-time 8 http://127.0.0.1:5002/api/health"
 run_shell "health_backend_env_port" "BACKEND_PORT=\$(grep -E '^SMARTASK_BACKEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); BACKEND_PORT=\${BACKEND_PORT:-5002}; curl -fsS --max-time 8 http://127.0.0.1:\$BACKEND_PORT/api/health"
-run_shell "health_frontend_8080" "curl -I --max-time 8 http://127.0.0.1:8080"
-run_shell "health_frontend_env_port" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); FRONTEND_PORT=\${FRONTEND_PORT:-8080}; curl -I --max-time 8 http://127.0.0.1:\$FRONTEND_PORT"
+run_shell "health_frontend_8888" "curl -I --max-time 8 http://127.0.0.1:8888"
+run_shell "health_frontend_env_port" "FRONTEND_PORT=\$(grep -E '^SMARTASK_FRONTEND_PORT=' .env 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d '\r'); FRONTEND_PORT=\${FRONTEND_PORT:-8888}; curl -I --max-time 8 http://127.0.0.1:\$FRONTEND_PORT"
 
 echo "==> 生成脱敏配置摘要"
 redact_file ".env" "$DIAG_DIR/env_redacted.txt"

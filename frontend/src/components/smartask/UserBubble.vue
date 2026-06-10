@@ -32,7 +32,9 @@
         </el-tooltip>
       </div>
     </div>
-    <div class="sa-user-avatar">{{ userName[0] }}</div>
+    <div class="sa-user-avatar" aria-label="用户头像">
+      <span class="sa-user-avatar-mark">U</span>
+    </div>
   </div>
 </template>
 
@@ -86,28 +88,55 @@ defineEmits(['copy', 'edit', 'rerun'])
 }
 
 .sa-user-avatar {
-  width: 26px;
-  height: 26px;
-  background: #86909c;
-  color: #fff;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+  color: #1e293b;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 500;
   flex-shrink: 0;
+  border: 1px solid rgba(30, 41, 59, 0.12);
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.sa-user-avatar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb 0%, #0f766e 100%);
+}
+
+.sa-user-avatar-mark {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .sa-user-bubble {
-  padding: 11px 15px;
-  background: #165dff;
-  color: #ffffff;
-  border-radius: 12px 12px 2px 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  color: #172033;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 18px 18px 6px 18px;
   font-size: 13px;
-  line-height: 1.58;
+  line-height: 1.62;
   word-break: break-word;
-  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.16);
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .sa-user-actions {

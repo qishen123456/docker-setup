@@ -15,58 +15,58 @@
       </div>
     </section>
 
-    <section class="metric-grid">
+    <section class="metric-grid" :class="{ 'is-loading': loading && !summary }">
       <article class="metric-card">
         <span>配置文件</span>
-        <strong>{{ summaryStats.configCount }}</strong>
+        <strong>{{ metricValue(summaryStats.configCount) }}</strong>
         <small>包含员工、组织树、数据集权限和问数历史；不含登录 token 与 local 私有配置</small>
       </article>
       <article class="metric-card">
         <span>启用数据集</span>
-        <strong>{{ datasetCount }}</strong>
-        <small>{{ inactiveDatasetCount ? `另有 ${inactiveDatasetCount} 个停用数据集随迁移包保留` : '来自 bs_datasets 当前启用项' }}</small>
+        <strong>{{ metricValue(datasetCount) }}</strong>
+        <small>{{ summary ? (inactiveDatasetCount ? `另有 ${inactiveDatasetCount} 个停用数据集随迁移包保留` : '来自 bs_datasets 当前启用项') : '正在读取运行态数据' }}</small>
       </article>
       <article class="metric-card">
         <span>运行态记录</span>
-        <strong>{{ summaryStats.runtimeRows }}</strong>
+        <strong>{{ metricValue(summaryStats.runtimeRows) }}</strong>
         <small>字段字典、Golden SQL、提示词等</small>
       </article>
       <article class="metric-card">
         <span>权限资源</span>
-        <strong>{{ permissionStats.enabledEmployees }}</strong>
+        <strong>{{ metricValue(permissionStats.enabledEmployees) }}</strong>
         <small>{{ permissionResourceText }}</small>
       </article>
       <article class="metric-card">
         <span>系统日志</span>
-        <strong>{{ summaryStats.systemLogRows }}</strong>
+        <strong>{{ metricValue(summaryStats.systemLogRows) }}</strong>
         <small>{{ logFileSummaryText }}</small>
       </article>
       <article class="metric-card">
         <span>最近备份</span>
-        <strong>{{ backups.length }}</strong>
+        <strong>{{ metricValue(backups.length) }}</strong>
         <small>导入前会自动生成回滚包</small>
       </article>
     </section>
 
-    <section class="permission-grid">
+    <section class="permission-grid" :class="{ 'is-loading': loading && !summary }">
       <article class="permission-card">
         <span>员工账号</span>
-        <strong>{{ permissionStats.enabledEmployees }} / {{ permissionStats.employees }}</strong>
+        <strong>{{ summary ? `${permissionStats.enabledEmployees} / ${permissionStats.employees}` : '-- / --' }}</strong>
         <small>{{ permissionStats.adminEmployees }} 个管理员或业务管理员</small>
       </article>
       <article class="permission-card">
         <span>组织树</span>
-        <strong>{{ permissionStats.enabledOrganizationNodes }} / {{ permissionStats.organizationNodes }}</strong>
+        <strong>{{ summary ? `${permissionStats.enabledOrganizationNodes} / ${permissionStats.organizationNodes}` : '-- / --' }}</strong>
         <small>{{ permissionStats.organizationTreeTypes }} 个组织树类型</small>
       </article>
       <article class="permission-card">
         <span>数据集权限</span>
-        <strong>{{ permissionStats.dataPermissionRules }}</strong>
+        <strong>{{ metricValue(permissionStats.dataPermissionRules) }}</strong>
         <small>{{ permissionStats.orgTreeDataPermissionRules }} 条按组织树控制</small>
       </article>
       <article class="permission-card">
         <span>功能权限 RBAC</span>
-        <strong>{{ permissionStats.rbacRoles }}</strong>
+        <strong>{{ metricValue(permissionStats.rbacRoles) }}</strong>
         <small>{{ permissionStats.rbacGroups }} 个权限组/分组</small>
       </article>
     </section>
@@ -195,7 +195,7 @@
         <div class="panel-title">
           <div>
             <h2>备份与回滚线索</h2>
-            <p>每次正式导入前都会自动生成当前环境的完整运行态包，包含系统日志和同步日志线索，误操作时可用该包回滚。</p>
+            <p>每次正式导入前都会自动生成当前环境的运行态包，包含近 7 天系统日志和同步日志线索，误操作时可用该包回滚。</p>
           </div>
         </div>
       </template>
@@ -264,6 +264,7 @@ const datasetCount = computed(() => (
   summary.value?.dataset_counts?.active ?? summary.value?.table_counts?.bs_datasets ?? 0
 ))
 const inactiveDatasetCount = computed(() => Number(summary.value?.dataset_counts?.inactive || 0))
+const metricValue = (value) => (summary.value ? Number(value || 0) : '--')
 const permissionStats = computed(() => {
   const counts = summary.value?.permission_counts || {}
   return {
@@ -302,10 +303,11 @@ const skippedSummaryText = computed(() => {
   return `${parts.join('、')}无法匹配或无效，系统会跳过这些资源并继续导入其余内容。`
 })
 const logFileSummaryText = computed(() => {
+  if (!summary.value) return '正在统计近 7 天日志'
   const lines = summaryStats.value.logFileLines
   const size = summaryStats.value.logFileSize
-  if (!lines && !size) return '来自 system_event_logs'
-  return `另有 ${lines} 行日志文件，${formatSize(size)} 随包保留`
+  if (!lines && !size) return '仅统计近 7 天 system_event_logs'
+  return `近 7 天另有 ${lines} 行日志文件，${formatSize(size)} 随包保留`
 })
 
 const loadSummary = async () => {
@@ -514,9 +516,19 @@ onMounted(() => {
 
 .hero-actions {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   white-space: nowrap;
+}
+
+.hero-actions :deep(.el-button),
+.action-row :deep(.el-button) {
+  height: 38px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .metric-grid {
@@ -528,6 +540,22 @@ onMounted(() => {
 
 .metric-card {
   padding: 20px;
+}
+
+.metric-grid.is-loading .metric-card,
+.permission-grid.is-loading .permission-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-grid.is-loading .metric-card::after,
+.permission-grid.is-loading .permission-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.58), transparent);
+  transform: translateX(-100%);
+  animation: migration-loading-sheen 1.3s ease-in-out infinite;
 }
 
 .metric-card span,
@@ -542,6 +570,8 @@ onMounted(() => {
   margin: 10px 0 4px;
   color: #1d4ed8;
   font-size: 30px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
 .permission-grid {
@@ -560,6 +590,10 @@ onMounted(() => {
 
 .permission-card strong {
   font-size: 24px;
+}
+
+@keyframes migration-loading-sheen {
+  to { transform: translateX(100%); }
 }
 
 .workbench {

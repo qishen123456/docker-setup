@@ -47,7 +47,9 @@
                 <!-- AI 回复 -->
                 <div v-else class="sa-ai-wrap">
                   <div class="sa-ai-meta">
-                    <div class="sa-ai-avatar">DA</div>
+                    <div class="sa-ai-avatar" aria-label="经营分析助手头像">
+                      <span class="sa-ai-avatar-core">D</span>
+                    </div>
                     <span class="sa-ai-name">经营分析顾问</span>
                   </div>
                   <div class="sa-ai-cards">
@@ -233,10 +235,13 @@
                     <!-- 状态提示卡-->
                     </div>
                     <div v-if="msg.data?.aborted" class="sa-card sa-cancel-card">
-                      <span class="sa-cancel-icon" aria-hidden="true">!</span>
-                      <div>
-                        <div class="sa-cancel-title">已取消本轮问数</div>
-                        <div class="sa-cancel-desc">你已手动取消，执行流程已停止，不会继续生成 SQL 或报告。</div>
+                      <span class="sa-cancel-icon" aria-hidden="true">
+                        <span class="sa-cancel-icon-core"></span>
+                      </span>
+                      <div class="sa-cancel-copy">
+                        <div class="sa-cancel-kicker">FLOW INTERRUPTED</div>
+                        <div class="sa-cancel-title">本轮问数已取消</div>
+                        <div class="sa-cancel-desc">执行链路已关闭，不会继续生成 SQL、图表或报告。</div>
                       </div>
                     </div>
                     <div v-if="msg.data?.error" class="sa-card sa-error-card">
@@ -4988,22 +4993,54 @@ onUnmounted(() => {
   gap: 9px;
 }
 .sa-ai-avatar {
-  width: 30px;
-  height: 30px;
-  background: linear-gradient(180deg, #2a6cff 0%, #165dff 100%);
-  color: #fff;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
   flex-shrink: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow:
+    0 10px 22px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.sa-ai-avatar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb 0%, #0f766e 100%);
+}
+
+.sa-ai-avatar-core {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .sa-ai-name {
   font-size: 13px;
-  font-weight: 600;
-  color: #1d2129;
+  font-weight: 700;
+  color: #172033;
 }
 .sa-ai-cards {
   display: flex;
@@ -5476,36 +5513,115 @@ onUnmounted(() => {
 
 .sa-cancel-card {
   align-items: flex-start;
-  background: #fffaf0;
-  border: 1px solid #ffd591;
-  color: #ad6800;
+  position: relative;
+  overflow: hidden;
+  gap: 12px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, rgba(20, 184, 166, 0.16), transparent 30%),
+    linear-gradient(135deg, #f8fbff 0%, #eef6ff 54%, #f7fbff 100%);
+  background-size: 18px 18px, 18px 18px, auto, auto;
+  border: 1px solid rgba(22, 93, 255, 0.22);
+  color: #19365f;
+  box-shadow:
+    0 12px 28px rgba(22, 93, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+}
+
+.sa-cancel-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border-left: 3px solid #14b8a6;
+  pointer-events: none;
+}
+
+.sa-cancel-card::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 13px;
+  width: 58px;
+  height: 16px;
+  border-top: 1px solid rgba(22, 93, 255, 0.2);
+  border-right: 1px solid rgba(20, 184, 166, 0.42);
+  transform: skewX(-24deg);
+  pointer-events: none;
 }
 
 .sa-cancel-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
+  width: 30px;
+  height: 30px;
+  position: relative;
+  margin-top: 2px;
   border-radius: 50%;
-  background: #ffe7ba;
-  color: #ad6800;
-  font-size: 12px;
-  font-weight: 800;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.96) 0 30%, transparent 31%),
+    conic-gradient(from 210deg, rgba(20, 184, 166, 0.18), rgba(22, 93, 255, 0.85), rgba(20, 184, 166, 0.18));
+  box-shadow:
+    0 0 0 4px rgba(22, 93, 255, 0.06),
+    0 0 18px rgba(20, 184, 166, 0.28);
   flex: 0 0 auto;
 }
 
+.sa-cancel-icon::before,
+.sa-cancel-icon::after {
+  content: '';
+  position: absolute;
+  background: #165dff;
+  border-radius: 999px;
+}
+
+.sa-cancel-icon::before {
+  width: 14px;
+  height: 2px;
+  transform: rotate(45deg);
+}
+
+.sa-cancel-icon::after {
+  width: 14px;
+  height: 2px;
+  transform: rotate(-45deg);
+}
+
+.sa-cancel-icon-core {
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(22, 93, 255, 0.28);
+}
+
+.sa-cancel-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.sa-cancel-kicker {
+  margin-bottom: 3px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 .sa-cancel-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 780;
+  color: #102a4c;
 }
 
 .sa-cancel-desc {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 12px;
-  line-height: 1.55;
-  color: #996500;
+  line-height: 1.6;
+  color: #53657c;
 }
 
 /* 状态栏 */

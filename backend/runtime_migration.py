@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List
 
@@ -26,6 +26,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(CURRENT_DIR)
 CONFIG_DIR = os.getenv("SMARTASK_CONFIG_DIR") or os.path.join(BASE_DIR, "config")
 BACKUP_DIR = os.getenv("SMARTASK_RUNTIME_BACKUP_DIR") or os.path.join(BASE_DIR, "backups", "runtime")
+RUNTIME_LOG_RETENTION_DAYS = int(os.getenv("SMARTASK_RUNTIME_LOG_RETENTION_DAYS", "7") or "7")
 
 RUNTIME_CONFIG_FILES = [
     "datasources.json",
@@ -329,8 +330,21 @@ def _log_file_sources() -> List[Dict[str, str]]:
     ]
 
 
-def _collect_log_files() -> Dict[str, str]:
+def _runtime_log_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(days=max(RUNTIME_LOG_RETENTION_DAYS, 0))
+
+
+def _is_recent_log_file(path: str, cutoff: datetime) -> bool:
+    try:
+        modified_at = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
+        return modified_at >= cutoff
+    except OSError:
+        return False
+
+
+def _collect_log_files(cutoff: datetime | None = None) -> Dict[str, str]:
     files: Dict[str, str] = {}
+    cutoff = cutoff or _runtime_log_cutoff()
     for source in _log_file_sources():
         directory = source["directory"]
         if not os.path.isdir(directory):
@@ -340,6 +354,8 @@ def _collect_log_files() -> Dict[str, str]:
                 continue
             path = os.path.join(directory, name)
             if not os.path.isfile(path):
+                continue
+            if not _is_recent_log_file(path, cutoff):
                 continue
             rel_path = f"{source['relative_dir']}/{name}".replace("\\", "/")
             try:
@@ -695,6 +711,7 @@ def _upsert_rows(
 def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
     repo = BookshelfRepository()
     repo.ensure_schema()
+    log_cutoff = _runtime_log_cutoff()
 
     bundle: Dict[str, Any] = {
         "version": 2,
@@ -709,6 +726,8 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
             "system_tables": list(SYSTEM_TABLES),
             "runtime_tables": list(RUNTIME_TABLES),
             "excluded_files": sorted(EXCLUDED_CONFIG_FILES),
+            "log_retention_days": RUNTIME_LOG_RETENTION_DAYS,
+            "log_cutoff": log_cutoff.isoformat(),
         },
     }
 
@@ -724,10 +743,16 @@ def export_runtime_bundle(output_path: str | None = None) -> Dict[str, Any]:
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
         for table in RUNTIME_TABLES:
-            cur.execute(f"SELECT * FROM {table} ORDER BY id ASC;")
+            if table == "system_event_logs":
+                cur.execute(
+                    "SELECT * FROM system_event_logs WHERE created_at >= %s ORDER BY id ASC;",
+                    (log_cutoff,),
+                )
+            else:
+                cur.execute(f"SELECT * FROM {table} ORDER BY id ASC;")
             bundle["bookshelf"]["tables"][table] = [dict(row) for row in cur.fetchall()]
 
-    bundle["log_files"] = _collect_log_files()
+    bundle["log_files"] = _collect_log_files(log_cutoff)
     bundle["manifest"]["log_files"] = list(bundle["log_files"].keys())
 
     if output_path:

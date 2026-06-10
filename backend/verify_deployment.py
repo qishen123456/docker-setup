@@ -7,7 +7,7 @@
 - bs_datasets 已导入数据
 - 报告场景识别与报告模板契约校验模块可用
 - Flask /api/health 健康
-- /api/datasources 与 /api/ai-models 返回 200
+- /api/datasources 与 /api/ai-models 可访问；启用鉴权时允许返回 401
 
 用法：
     docker compose exec backend python verify_deployment.py
@@ -115,11 +115,13 @@ def _check_http() -> List[Tuple[str, bool, str]]:
     backend_port = os.getenv("SMARTASK_BACKEND_PORT", "5002")
     base = f"http://localhost:{backend_port}"
     out: List[Tuple[str, bool, str]] = []
+    protected_paths = {"/api/datasources", "/api/ai-models"}
     for path in ["/api/health", "/api/datasources", "/api/ai-models"]:
         try:
             r = requests.get(base + path, timeout=5)
-            ok = 200 <= r.status_code < 300
-            out.append((path, ok, f"HTTP {r.status_code}"))
+            ok = 200 <= r.status_code < 300 or (path in protected_paths and r.status_code == 401)
+            suffix = " (auth required)" if path in protected_paths and r.status_code == 401 else ""
+            out.append((path, ok, f"HTTP {r.status_code}{suffix}"))
         except Exception as exc:
             out.append((path, False, f"请求失败: {exc}"))
     return out
