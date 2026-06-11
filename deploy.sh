@@ -577,6 +577,6 @@ fi
 echo ""
 echo "常用命令："
 echo "  日志：bash doctor.sh 或 docker compose logs -f backend"
-echo "  更新：bash update.sh"
+echo "  更新：bash update.sh --remote github"
 echo "  备份：bash backup.sh"
 echo "  停止：docker compose stop"
