@@ -41,7 +41,6 @@
                 <div class="sa-ds-option sa-ds-option-auto">
                   <div class="sa-ds-option-main">
                     <div class="sa-ds-option-title">自动路由数据集</div>
-                    <div class="sa-ds-option-meta">根据问题内容自动匹配业务口径</div>
                   </div>
                 </div>
               </el-option>
@@ -54,11 +53,6 @@
                 <div class="sa-ds-option">
                   <div class="sa-ds-option-main">
                     <div class="sa-ds-option-title">{{ d.dataset_name }}</div>
-                    <div class="sa-ds-option-meta">
-                      {{ d.business_domain || '未设置业务域' }}
-                      <span v-if="d.dataset_code" class="sa-ds-option-sep">·</span>
-                      <span v-if="d.dataset_code">{{ d.dataset_code }}</span>
-                    </div>
                   </div>
                 </div>
               </el-option>
@@ -592,18 +586,13 @@ onMounted(() => {
 }
 
 .sa-model-option.is-default-model {
-  margin: -2px 0;
-  padding: 8px 10px 8px 13px;
-  border-radius: 10px;
-  background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.09), rgba(51, 65, 85, 0.035));
-  box-shadow:
-    inset 0 0 0 1px rgba(15, 118, 110, 0.14),
-    inset 3px 0 0 rgba(15, 118, 110, 0.78);
+  padding-right: 0;
 }
 
 .sa-model-option.is-default-model::before {
-  display: none;
+  width: 4px;
+  background: #0f766e;
+  opacity: 1;
 }
 
 .sa-ds-option-auto::before {
@@ -612,9 +601,9 @@ onMounted(() => {
 
 .sa-ds-option-main {
   min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .sa-ds-option-title {
@@ -692,10 +681,10 @@ onMounted(() => {
 }
 
 :deep(.sa-ds-popper .el-select-dropdown__item) {
-  min-height: 46px;
+  min-height: 38px;
   border-radius: 10px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   color: #3d4756;
 }
 
@@ -756,6 +745,7 @@ onMounted(() => {
 
 :deep(.sa-model-popper .el-select-dropdown__item) {
   height: auto;
+  min-height: 42px;
 }
 
 .sa-composer-input-row {
