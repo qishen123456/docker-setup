@@ -7,7 +7,6 @@
           <!-- 头部组件-->
           <ChatHeader
             :show-panel="detailPanelVisible"
-            :dataset-name="currentDatasetLabel"
             :allow-toggle-panel="featureAccess.debug_execution_trace"
             :allow-new-chat="featureAccess.smart_new_chat"
             @toggle-panel="togglePanel"
@@ -1416,17 +1415,6 @@ const sanitizeDatasetSelection = () => {
     pendingQuickDataset.value = null
   }
 }
-
-const currentDatasetLabel = computed(() => {
-  const bySelected = isDatasetManuallySelected.value
-    ? datasets.value.find(item => Number(item.id) === Number(datasetId.value))?.dataset_name
-    : ''
-  if (bySelected) return bySelected
-  const resultDatasetId = latestDataset.value?.dataset_id
-  const canShowResultDataset = resultDatasetId === 'multi' || isDatasetVisible(resultDatasetId)
-  const byResult = canShowResultDataset ? latestDataset.value?.dataset_name : ''
-  return byResult ? `自动路由：${byResult}` : '自动路由数据集'
-})
 
 const datasetResults = computed(() => latestDatasets.value)
 const hasSideReport = computed(() => resultPreviews.value.length > 0 || !!latestReport.value)
