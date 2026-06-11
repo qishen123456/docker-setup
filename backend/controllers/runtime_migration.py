@@ -14,7 +14,7 @@ from runtime_migration import (
     import_runtime_bundle,
     list_runtime_backups,
     preview_runtime_import,
-    summarize_bundle,
+    summarize_runtime_state,
     _json_default,
 )
 
@@ -49,8 +49,7 @@ def summary():
     _, error = _require_super_admin()
     if error:
         return error
-    bundle = export_runtime_bundle()
-    return jsonify({"success": True, "summary": summarize_bundle(bundle), "backups": list_runtime_backups(8)})
+    return jsonify({"success": True, "summary": summarize_runtime_state(), "backups": list_runtime_backups(8)})
 
 
 @runtime_migration_bp.route("/export", methods=["GET", "POST"])

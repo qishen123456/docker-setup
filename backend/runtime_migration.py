@@ -366,6 +366,43 @@ def _collect_log_files(cutoff: datetime | None = None) -> Dict[str, str]:
     return files
 
 
+def _count_log_file_lines(path: str) -> int:
+    count = 0
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.strip():
+                    count += 1
+    except Exception:
+        return 0
+    return count
+
+
+def _collect_log_file_stats(cutoff: datetime | None = None) -> Dict[str, Dict[str, int]]:
+    stats: Dict[str, Dict[str, int]] = {}
+    cutoff = cutoff or _runtime_log_cutoff()
+    for source in _log_file_sources():
+        directory = source["directory"]
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            if not name.startswith(source["prefix"]) or not name.endswith(source["suffix"]):
+                continue
+            path = os.path.join(directory, name)
+            if not os.path.isfile(path) or not _is_recent_log_file(path, cutoff):
+                continue
+            rel_path = f"{source['relative_dir']}/{name}".replace("\\", "/")
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                size = 0
+            stats[rel_path] = {
+                "lines": _count_log_file_lines(path),
+                "size": size,
+            }
+    return stats
+
+
 def _safe_log_file_path(relative_path: str) -> str | None:
     normalized = str(relative_path or "").replace("\\", "/").strip().lstrip("/")
     if normalized.startswith("../") or "/../" in normalized:
@@ -786,6 +823,74 @@ def summarize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
         "log_file_total": sum(_line_count(content) for content in log_files.values()),
         "log_file_sizes": {name: _byte_size(content) for name, content in log_files.items()},
         "log_file_size_total": sum(_byte_size(content) for content in log_files.values()),
+    }
+
+
+def summarize_runtime_state() -> Dict[str, Any]:
+    repo = BookshelfRepository()
+    repo.ensure_schema()
+    log_cutoff = _runtime_log_cutoff()
+    configs: Dict[str, Any] = {}
+    for filename in RUNTIME_CONFIG_FILES:
+        path = os.path.join(CONFIG_DIR, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            configs[filename] = _read_json_file(path)
+        except Exception as exc:
+            configs[filename] = {"__error__": str(exc)}
+
+    table_counts: Dict[str, int] = {}
+    dataset_counts = {"active": 0, "inactive": 0, "total": 0}
+    with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+        _ensure_optional_tables(cur)
+        for table in RUNTIME_TABLES:
+            try:
+                if table == "system_event_logs":
+                    cur.execute("SELECT COUNT(*) AS count FROM system_event_logs WHERE created_at >= %s;", (log_cutoff,))
+                else:
+                    cur.execute(f"SELECT COUNT(*) AS count FROM {table};")
+                table_counts[table] = int((cur.fetchone() or {}).get("count") or 0)
+            except Exception:
+                table_counts[table] = 0
+        try:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE is_active IS NOT FALSE) AS active,
+                    COUNT(*) FILTER (WHERE is_active IS FALSE) AS inactive
+                FROM bs_datasets;
+                """
+            )
+            row = cur.fetchone() or {}
+            dataset_counts = {
+                "active": int(row.get("active") or 0),
+                "inactive": int(row.get("inactive") or 0),
+                "total": int(row.get("total") or 0),
+            }
+        except Exception:
+            dataset_counts = {
+                "active": table_counts.get("bs_datasets", 0),
+                "inactive": 0,
+                "total": table_counts.get("bs_datasets", 0),
+            }
+
+    log_stats = _collect_log_file_stats(log_cutoff)
+    return {
+        "type": "smartask_runtime_bundle",
+        "version": 2,
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "config_counts": {name: 1 for name in configs.keys()},
+        "config_details": _runtime_config_summary(configs),
+        "permission_counts": _permission_resource_counts(configs),
+        "table_counts": table_counts,
+        "dataset_counts": dataset_counts,
+        "config_files": list(configs.keys()),
+        "log_file_counts": {name: item["lines"] for name, item in log_stats.items()},
+        "log_file_total": sum(item["lines"] for item in log_stats.values()),
+        "log_file_sizes": {name: item["size"] for name, item in log_stats.items()},
+        "log_file_size_total": sum(item["size"] for item in log_stats.values()),
     }
 
 

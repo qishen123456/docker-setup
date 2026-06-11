@@ -244,7 +244,7 @@
 
       <el-main class="page-wrap" :class="{ 'page-wrap-smart': isSmartAskRoute }">
         <router-view v-slot="{ Component }">
-          <keep-alive :include="['SmartAsk']">
+          <keep-alive :include="cachedPageNames">
             <component :is="Component" />
           </keep-alive>
         </router-view>
@@ -323,6 +323,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Monitor, Operation, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import SqlDebugFloat from './components/SqlDebugFloat.vue'
+import { preloadRouteComponents } from './router'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
@@ -399,6 +400,23 @@ const menuItems = [
   { path: '/admin-console', label: '系统控制台', icon: Setting, minRole: 'super_admin', featureKey: 'admin_console', hidden: true }
 ]
 
+const routeComponentNamesByPath = {
+  '/smart-ask': 'SmartAsk',
+  '/sql-debug': 'SqlDebug',
+  '/agents': 'AgentManagement',
+  '/datasets': 'DatasetManagement',
+  '/bookshelves': 'Bookshelves',
+  '/databases': 'Databases',
+  '/ai-models': 'AIModels',
+  '/report-config': 'DatasetReportConfig',
+  '/advanced-capabilities': 'AdvancedCapabilities',
+  '/feishu-sync': 'FeishuSync',
+  '/runtime-migration': 'RuntimeMigration',
+  '/organization-trees': 'OrganizationTrees',
+  '/employee-permissions': 'EmployeePermissions',
+  '/admin-console': 'AdminConsole',
+}
+
 const subtitleMap = {
   '/smart-ask': '',
   '/sql-debug': '快速生成、执行与核对问数 SQL',
@@ -439,6 +457,9 @@ const canAccessMenuItem = (item) => {
 const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessMenuItem(item)))
 const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask' || item.path === '/sql-debug'))
 const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask' && item.path !== '/sql-debug'))
+const cachedPageNames = computed(() => (
+  Array.from(new Set(availableMenuItems.value.map((item) => routeComponentNamesByPath[item.path]).filter(Boolean)))
+))
 const managementDefaultOpeneds = computed(() => (
   managementMenuItems.value.some((item) => item.path === route.path) ? ['management'] : []
 ))
@@ -485,6 +506,7 @@ const refreshAuthUser = async () => {
         .then(() => enforceRouteAccess())
         .catch(() => {})
       syncHistory().catch(() => {})
+      scheduleRoutePreload()
     } else clearFeatureFlags()
   } catch {
     authUser.value = null
@@ -511,6 +533,7 @@ const handleAuthenticated = async (user) => {
       .then(() => enforceRouteAccess())
       .catch(() => {})
     syncHistory().catch(() => {})
+    scheduleRoutePreload()
   } else clearFeatureFlags()
   authReady.value = true
   enforceRouteAccess()
@@ -783,6 +806,20 @@ const clearHistoryList = async () => {
 let clockTimer = null
 let healthTimer = null
 let historyFocusTimer = null
+let routePreloadScheduled = false
+
+const scheduleRoutePreload = () => {
+  if (routePreloadScheduled) return
+  routePreloadScheduled = true
+  const preload = () => {
+    preloadRouteComponents(cachedPageNames.value).catch(() => {})
+  }
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(preload, { timeout: 2000 })
+  } else {
+    window.setTimeout(preload, 800)
+  }
+}
 
 const handleHistoryFocus = () => {
   if (collapsed.value) {
