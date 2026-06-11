@@ -144,6 +144,15 @@
             <el-tag type="success" v-else>保留已有配置</el-tag>
           </div>
           <el-alert
+            v-if="previewWarnings.length"
+            class="skip-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="导入前请确认"
+            :description="previewWarnings.join('；')"
+          />
+          <el-alert
             v-if="hasSkippedItems"
             class="skip-alert"
             type="warning"
@@ -289,6 +298,7 @@ const tablePlan = computed(() => {
   return Object.entries(plan).map(([table, item]) => ({ table, ...item }))
 })
 const logPlan = computed(() => previewResult.value?.log_file_plan || [])
+const previewWarnings = computed(() => previewResult.value?.warnings || [])
 const skippedConfigItems = computed(() => previewResult.value?.skipped_config_items || [])
 const skippedTableRows = computed(() => previewResult.value?.skipped_table_rows || previewResult.value?.skipped_table_rows_preview || [])
 const skippedLogFiles = computed(() => previewResult.value?.skipped_log_files || [])

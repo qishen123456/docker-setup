@@ -104,6 +104,26 @@ DATASET_REFERENCE_TABLES = {
     "bs_dataset_report_config",
 }
 
+NATURAL_KEY_COLUMNS = {
+    "bs_datasets": ["dataset_code"],
+    "bs_dataset_synonyms": ["dataset_id", "synonym"],
+    "bs_lld_documents": ["dataset_id", "title", "version"],
+    "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key", "semantic_name"],
+    "bs_schema_definitions": ["dataset_id", "table_name"],
+    "bs_golden_sql_samples": ["dataset_id", "question", "sql_text"],
+    "bs_agent_prompt_fragments": ["dataset_id", "agent_no", "prompt_key"],
+    "bs_common_questions": ["dataset_id", "question_text"],
+    "bs_regression_cases": ["dataset_id", "question_text", "case_type"],
+    "bs_dataset_external_configs": ["dataset_id", "config_type", "config_key"],
+    "bs_dataset_report_config": ["dataset_id"],
+}
+
+DEDUP_ORDER_BY = {
+    "bs_golden_sql_samples": "is_active DESC, quality_score DESC NULLS LAST, updated_at DESC NULLS LAST, id ASC",
+    "bs_common_questions": "is_active DESC, sort_order ASC, updated_at DESC NULLS LAST, id ASC",
+    "bs_regression_cases": "is_active DESC, sort_order ASC, updated_at DESC NULLS LAST, id ASC",
+}
+
 
 def _timestamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -189,6 +209,7 @@ def _skip_detail(kind: str, reason: str, **extra) -> Dict[str, Any]:
 def _filter_dataset_keyed_dict(
     mapping: Any,
     valid_dataset_ids: set[int],
+    dataset_id_map: Dict[int, int] | None = None,
     *,
     file: str,
     section: str,
@@ -201,6 +222,8 @@ def _filter_dataset_keyed_dict(
         dataset_id = _safe_int(raw_key)
         if isinstance(value, dict):
             dataset_id = _safe_int(value.get("dataset_id")) or dataset_id
+        if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
+            dataset_id = dataset_id_map[dataset_id]
         if dataset_id is None:
             skipped.append(_skip_detail("config_ref", "无法识别数据集 ID，已跳过", file=file, section=section, key=str(raw_key)))
             continue
@@ -216,11 +239,18 @@ def _filter_dataset_keyed_dict(
                 )
             )
             continue
+        if isinstance(value, dict):
+            value = {**value, "dataset_id": dataset_id}
         clean[str(dataset_id)] = value
     return clean
 
 
-def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set[int]) -> tuple[Any, List[Dict[str, Any]]]:
+def _sanitize_config_payload(
+    filename: str,
+    payload: Any,
+    valid_dataset_ids: set[int],
+    dataset_id_map: Dict[int, int] | None = None,
+) -> tuple[Any, List[Dict[str, Any]]]:
     result = deepcopy(payload)
     skipped: List[Dict[str, Any]] = []
     if filename == "data_permissions.json" and isinstance(result, dict):
@@ -229,6 +259,7 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
             result["rules"] = _filter_dataset_keyed_dict(
                 rules,
                 valid_dataset_ids,
+                dataset_id_map,
                 file=filename,
                 section="rules",
                 skipped=skipped,
@@ -237,6 +268,8 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
             clean_rules = []
             for index, item in enumerate(rules):
                 dataset_id = _safe_int(item.get("dataset_id") if isinstance(item, dict) else None)
+                if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
+                    dataset_id = dataset_id_map[dataset_id]
                 if dataset_id is None or dataset_id not in valid_dataset_ids:
                     skipped.append(
                         _skip_detail(
@@ -249,7 +282,7 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
                         )
                     )
                     continue
-                clean_rules.append(item)
+                clean_rules.append({**item, "dataset_id": dataset_id})
             result["rules"] = clean_rules
     elif filename == "ask_flow.json" and isinstance(result, dict):
         policies = result.get("datasetPolicies")
@@ -257,6 +290,7 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
             result["datasetPolicies"] = _filter_dataset_keyed_dict(
                 policies,
                 valid_dataset_ids,
+                dataset_id_map,
                 file=filename,
                 section="datasetPolicies",
                 skipped=skipped,
@@ -271,6 +305,8 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
                     clean_permissions[str(raw_key)] = level
                     continue
                 dataset_id = _safe_int(raw_key)
+                if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
+                    dataset_id = dataset_id_map[dataset_id]
                 if dataset_id is None or dataset_id not in valid_dataset_ids:
                     skipped.append(
                         _skip_detail(
@@ -288,7 +324,11 @@ def _sanitize_config_payload(filename: str, payload: Any, valid_dataset_ids: set
     return result, skipped
 
 
-def _preview_table_skips(tables: Dict[str, Any], valid_dataset_ids: set[int]) -> List[Dict[str, Any]]:
+def _preview_table_skips(
+    tables: Dict[str, Any],
+    valid_dataset_ids: set[int],
+    dataset_id_map: Dict[int, int] | None = None,
+) -> List[Dict[str, Any]]:
     skipped: List[Dict[str, Any]] = []
     for table_name in RUNTIME_TABLES:
         for index, row in enumerate(tables.get(table_name) or []):
@@ -297,6 +337,8 @@ def _preview_table_skips(tables: Dict[str, Any], valid_dataset_ids: set[int]) ->
                 continue
             if table_name in DATASET_REFERENCE_TABLES:
                 dataset_id = _safe_int(row.get("dataset_id"))
+                if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
+                    dataset_id = dataset_id_map[dataset_id]
                 if dataset_id is None or dataset_id not in valid_dataset_ids:
                     skipped.append(
                         _skip_detail(
@@ -648,10 +690,19 @@ def _prepare_value(value: Any) -> Any:
     return value
 
 
-def _normalize_row(table_name: str, row: Dict[str, Any], fallback_source_id: int) -> Dict[str, Any]:
+def _normalize_row(
+    table_name: str,
+    row: Dict[str, Any],
+    fallback_source_id: int,
+    dataset_id_map: Dict[int, int] | None = None,
+) -> Dict[str, Any]:
     item = dict(row)
     if table_name in {"bs_datasets", "bs_schema_definitions"}:
         item["source_id"] = int(item.get("source_id") or fallback_source_id)
+    if table_name in DATASET_REFERENCE_TABLES and "dataset_id" in item:
+        dataset_id = _safe_int(item.get("dataset_id"))
+        if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
+            item["dataset_id"] = dataset_id_map[dataset_id]
     return item
 
 
@@ -666,26 +717,99 @@ def _reset_sequence(cur, table_name: str) -> None:
     cur.execute("SELECT setval(%s, %s, %s);", (seq_name, max_id if max_id > 0 else 1, max_id > 0))
 
 
+def _natural_key_columns(table_name: str, available_columns: set[str]) -> List[str]:
+    columns = NATURAL_KEY_COLUMNS.get(table_name) or []
+    return [column for column in columns if column in available_columns]
+
+
+def _dedupe_table_by_natural_key(cur, table_name: str, available_columns: set[str]) -> int:
+    key_columns = _natural_key_columns(table_name, available_columns)
+    if not key_columns:
+        return 0
+    partition = ", ".join(key_columns)
+    ordering = DEDUP_ORDER_BY.get(table_name)
+    if not ordering:
+        ordering_parts = []
+        if "is_active" in available_columns:
+            ordering_parts.append("is_active DESC NULLS LAST")
+        if "updated_at" in available_columns:
+            ordering_parts.append("updated_at DESC NULLS LAST")
+        ordering_parts.append("id ASC")
+        ordering = ", ".join(ordering_parts)
+    cur.execute(
+        f"""
+        WITH ranked AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (PARTITION BY {partition} ORDER BY {ordering}) AS rn
+            FROM {table_name}
+        )
+        DELETE FROM {table_name}
+        WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+        """
+    )
+    return int(cur.rowcount or 0)
+
+
+def _existing_natural_key_id(cur, table_name: str, row: Dict[str, Any], key_columns: List[str]) -> int | None:
+    if not key_columns or any(column not in row for column in key_columns):
+        return None
+    where_clause = " AND ".join([f"{column} IS NOT DISTINCT FROM %s" for column in key_columns])
+    values = [row.get(column) for column in key_columns]
+    current_id = _safe_int(row.get("id"))
+    if current_id is not None:
+        where_clause = f"({where_clause}) AND id <> %s"
+        values.append(current_id)
+    cur.execute(
+        f"SELECT id FROM {table_name} WHERE {where_clause} ORDER BY id ASC LIMIT 1;",
+        values,
+    )
+    existing = cur.fetchone()
+    if not existing:
+        return None
+    return _safe_int(existing.get("id") if isinstance(existing, dict) else existing[0])
+
+
+def _build_dataset_id_map(cur, dataset_rows: Iterable[Dict[str, Any]], fallback_source_id: int, mode: str) -> Dict[int, int]:
+    if mode == "replace":
+        return {}
+    available_columns = set(_get_table_columns(cur, "bs_datasets"))
+    natural_key_columns = _natural_key_columns("bs_datasets", available_columns)
+    result: Dict[int, int] = {}
+    for raw_row in dataset_rows or []:
+        if not isinstance(raw_row, dict):
+            continue
+        incoming_id = _safe_int(raw_row.get("id"))
+        if incoming_id is None:
+            continue
+        row = _normalize_row("bs_datasets", raw_row, fallback_source_id, {})
+        row = {key: value for key, value in row.items() if key in available_columns}
+        existing_id = _existing_natural_key_id(cur, "bs_datasets", row, natural_key_columns)
+        if existing_id is not None:
+            result[incoming_id] = existing_id
+        else:
+            result[incoming_id] = incoming_id
+    return result
+
+
 def _upsert_rows(
     cur,
     table_name: str,
     rows: Iterable[Dict[str, Any]],
     fallback_source_id: int,
     skipped_rows: List[Dict[str, Any]] | None = None,
+    dataset_id_map: Dict[int, int] | None = None,
 ) -> int:
     inserted = 0
     available_columns = set(_get_table_columns(cur, table_name))
-    natural_conflicts = {
-        "bs_dataset_report_config": ["dataset_id"],
-        "bs_dataset_external_configs": ["dataset_id", "config_type", "config_key"],
-    }
+    natural_key_columns = _natural_key_columns(table_name, available_columns)
+    _dedupe_table_by_natural_key(cur, table_name, available_columns)
     for index, raw_row in enumerate(rows or []):
         if not isinstance(raw_row, dict):
             if skipped_rows is not None:
                 skipped_rows.append(_skip_detail("table_row", "记录不是对象，已跳过", table=table_name, index=index + 1))
             continue
         try:
-            row = _normalize_row(table_name, raw_row, fallback_source_id)
+            row = _normalize_row(table_name, raw_row, fallback_source_id, dataset_id_map)
         except Exception as exc:
             if skipped_rows is not None:
                 skipped_rows.append(
@@ -706,12 +830,13 @@ def _upsert_rows(
                     _skip_detail("table_row", "记录没有可写入字段，已跳过", table=table_name, index=index + 1, id=raw_row.get("id"))
                 )
             continue
+        existing_id = _existing_natural_key_id(cur, table_name, row, natural_key_columns)
+        if existing_id is not None and "id" in available_columns:
+            row["id"] = existing_id
 
         columns = list(row.keys())
         placeholders = ", ".join(["%s"] * len(columns))
-        conflict_columns = natural_conflicts.get(table_name)
-        if not conflict_columns or not all(column in columns for column in conflict_columns):
-            conflict_columns = ["id"] if "id" in columns else []
+        conflict_columns = ["id"] if "id" in columns else []
         update_columns = [column for column in columns if column not in set(conflict_columns + ["id"])]
         values = [_prepare_value(row[column]) for column in columns]
         sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
@@ -945,18 +1070,23 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
     skipped_table_rows_preview: List[Dict[str, Any]] = []
     with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
         _ensure_optional_tables(cur)
+        fallback_source = get_default_datasource() or {}
+        fallback_source_id = int(fallback_source.get("id") or 1)
+        dataset_id_map = _build_dataset_id_map(cur, tables.get("bs_datasets") or [], fallback_source_id, mode)
         valid_dataset_ids = _effective_dataset_ids_for_import(cur, tables, mode)
+        if dataset_id_map:
+            valid_dataset_ids = (valid_dataset_ids - set(dataset_id_map.keys())) | set(dataset_id_map.values())
         for raw_name, payload in configs.items():
             filename = _safe_config_filename(raw_name)
             if not filename or (isinstance(payload, dict) and "__error__" in payload):
                 continue
-            _, config_skips = _sanitize_config_payload(filename, payload, valid_dataset_ids)
+            _, config_skips = _sanitize_config_payload(filename, payload, valid_dataset_ids, dataset_id_map)
             skipped_config_items.extend(config_skips)
             target_path = os.path.join(CONFIG_DIR, filename)
             exists = os.path.exists(target_path)
             action = "overwrite" if exists and overwrite_configs else ("skip_existing" if exists else "create")
             config_plan.append({"file": filename, "exists": exists, "action": action, "skipped_items": len(config_skips)})
-        skipped_table_rows_preview = _preview_table_skips(tables, valid_dataset_ids)
+        skipped_table_rows_preview = _preview_table_skips(tables, valid_dataset_ids, dataset_id_map)
         skipped_by_table: Dict[str, int] = {}
         for item in skipped_table_rows_preview:
             table = item.get("table")
@@ -1007,6 +1137,12 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
     warnings = []
     if mode == "replace":
         warnings.append("replace 模式会先清空书架运行态表，再写入导入包。")
+    skipped_existing_configs = [item["file"] for item in config_plan if item.get("action") == "skip_existing"]
+    if skipped_existing_configs:
+        warnings.append(
+            "以下 JSON 配置已存在且不会覆盖，如需让配置生效请打开“覆盖已有 JSON 配置”："
+            + "、".join(skipped_existing_configs)
+        )
     skipped_total = len(skipped_config_items) + len(skipped_table_rows_preview) + len(skipped_log_files)
     if skipped_total:
         warnings.append(f"检测到 {skipped_total} 个无法匹配或无效资源，正式导入时将自动跳过。")
@@ -1063,12 +1199,20 @@ def import_runtime_bundle(
         if mode == "replace":
             for table_name in DELETE_ORDER:
                 cur.execute(f"DELETE FROM {table_name};")
+        dataset_id_map = _build_dataset_id_map(cur, tables.get("bs_datasets") or [], fallback_source_id, mode)
 
         for table_name in RUNTIME_TABLES:
             rows = tables.get(table_name) or []
             cur.execute("SAVEPOINT smartask_runtime_import_table;")
             try:
-                imported_counts[table_name] = _upsert_rows(cur, table_name, rows, fallback_source_id, skipped_table_rows)
+                imported_counts[table_name] = _upsert_rows(
+                    cur,
+                    table_name,
+                    rows,
+                    fallback_source_id,
+                    skipped_table_rows,
+                    dataset_id_map,
+                )
                 cur.execute("RELEASE SAVEPOINT smartask_runtime_import_table;")
             except Exception as exc:
                 cur.execute("ROLLBACK TO SAVEPOINT smartask_runtime_import_table;")
@@ -1094,7 +1238,7 @@ def import_runtime_bundle(
             skipped_configs.append(str(raw_name))
             skipped_config_items.append(_skip_detail("config_file", "配置文件无效或不在允许范围内，已跳过", file=str(raw_name)))
             continue
-        sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids)
+        sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids, dataset_id_map)
         skipped_config_items.extend(config_skips)
         target_path = os.path.join(CONFIG_DIR, filename)
         if os.path.exists(target_path) and not overwrite_configs:
