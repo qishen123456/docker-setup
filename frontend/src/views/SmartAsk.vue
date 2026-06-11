@@ -475,7 +475,7 @@
                             :class="{ 'is-open': isOfficeExpanded(office.id) }"
                             :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, businessDrillReport)"
                           >
-                            <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '详情' : '下钻') }}</span>
+                            <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '当前最细层' : '下钻') }}</span>
                             <i></i>
                           </span>
                         </span>
@@ -579,7 +579,7 @@
                           </div>
                         </div>
                         <div v-else class="sa-office-empty-drill">
-                          当前 SQL 结果未返回 {{ businessDrillReport.detailLevelLabel }} 明细。请重新问“{{ office.name }}下{{ businessDrillReport.detailLevelLabel }}业绩明细”或检查 SQL 是否包含下级层级。
+                          {{ getOfficeEmptyDrillText(office, businessDrillReport) }}
                         </div>
                       </div>
                     </article>
@@ -890,7 +890,7 @@
                       :class="{ 'is-open': isOfficeExpanded(office.id) }"
                       :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, dialogBusinessDrillReport)"
                     >
-                      <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '详情' : '下钻') }}</span>
+                      <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '当前最细层' : '下钻') }}</span>
                       <i></i>
                     </span>
                   </span>
@@ -991,7 +991,7 @@
                     </div>
                   </div>
                   <div v-else class="sa-office-empty-drill">
-                    当前 SQL 结果未返回 {{ dialogBusinessDrillReport.detailLevelLabel }} 明细。
+                    {{ getOfficeEmptyDrillText(office, dialogBusinessDrillReport) }}
                   </div>
                 </div>
               </article>
@@ -1988,6 +1988,12 @@ const getOfficeToggleTitle = (office, report) => (
     : `展开查看${office?.childCount || 0}个${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'}`
 )
 
+const getOfficeEmptyDrillText = (office, report) => (
+  office?.isLeafLevel
+    ? `${office.name || '当前对象'}已到当前最细层，暂无可继续下钻的下级明细。`
+    : `当前 SQL 结果未返回 ${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'} 明细。请重新问“${office?.name || '当前对象'}下${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'}业绩明细”或检查 SQL 是否包含下级层级。`
+)
+
 const getSingleOrgRateTone = (report) => {
   const rate = toNumber(getReportKpiText(report, 'rate'))
   if (rate === null) return 'neutral'
@@ -2187,6 +2193,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
           detailLevelLabel: compareLevelLabel,
           isLeafLevel: true,
           leafLabel: '当前最细层',
+          childCount: 0,
           tag: row?.标签 || '',
           kpis: Object.entries(row || {})
             .filter(([key]) => !['名称', 'name', '标签'].includes(key))
@@ -2257,7 +2264,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       rate: rateValue,
       rateLabel: rateKpi?.value || '-',
       progress: Math.max(0, Math.min(100, rateValue || 0)),
-      childCount: chartRows.length,
+      childCount: Number.isFinite(Number(item.childCount)) ? Number(item.childCount) : chartRows.length,
       isLeafLevel: Boolean(item.isLeafLevel),
       leafLabel: item.leafLabel || '',
       kpis: item.kpis || [],

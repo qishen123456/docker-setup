@@ -852,6 +852,8 @@ def build_report_spec(
             thresholds["officeBenchmark"],
             "区域标杆",
         )
+        if is_leaf_level and child_chart_rows:
+            child_chart_rows[0]["标签"] = node_tag
         if child_groups.get("canCompare"):
             highlight = f"领先节点：{_format_dynamic_group(child_groups.get('good', []), rate_metric, '暂无明显领先节点')}"
             risk_text = f"相对承压：{_format_dynamic_group(risk_children, rate_metric, '暂无明显落后节点')}"
@@ -882,6 +884,7 @@ def build_report_spec(
             "detailLevelLabel": node_detail_label,
             "isLeafLevel": is_leaf_level,
             "leafLabel": "当前最细层" if is_leaf_level else "",
+            "childCount": 0 if is_leaf_level else len(sorted_children_desc),
             "rankLabel": node_rank_label,
             "tag": node_tag,
             "highlight": highlight,
@@ -1036,7 +1039,7 @@ def build_report_spec(
                 "narrative": (
                     f"先横向比较{compare_label}，再纵向展开直接下级{detail_label}；业务员明细作为下一层证据，不直接替代管理层级判断。"
                     if has_drill_detail
-                    else f"当前结果只返回到{compare_label}层级，先做横向对比；未返回下一层明细时不展示下钻卡片，避免误导。"
+                    else f"当前结果已返回到{compare_label}层级；若已是最细层，则直接展示本层完成情况，不再继续下钻。"
                 ),
             },
         ],
