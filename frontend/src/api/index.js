@@ -42,10 +42,10 @@ api.interceptors.response.use(
   }
 )
 
-export const healthCheck = () => api.get('/health')
+export const healthCheck = () => api.get('/health', { timeout: 3000, silent: true })
 export const getDashboard = () => api.get('/dashboard')
 
-export const getCurrentUser = () => api.get('/auth/me')
+export const getCurrentUser = () => api.get('/auth/me', { timeout: 5000, silent: true })
 export const logout = () => api.post('/auth/logout').finally(() => clearAuthToken())
 export const passwordLogin = (data) => api.post('/auth/login', data)
 export const adminLogin = (data) => api.post('/auth/admin/login', data)
@@ -55,7 +55,7 @@ export const saveEmployeePermissions = (employees) => api.put('/auth/employee-pe
 export const getFeishuLoginUrl = () => api.get('/auth/feishu/login-url')
 export const feishuInAppAuth = (authCode) => api.post('/feishu/auth', { auth_code: authCode })
 
-export const getFeatureFlags = () => api.get('/feature-flags')
+export const getFeatureFlags = () => api.get('/feature-flags', { timeout: 5000, silent: true })
 export const getAdminFeatureFlags = () => api.get('/admin/feature-flags')
 export const saveAdminFeatureFlags = (features) => api.put('/admin/feature-flags', { features })
 export const resetAdminFeatureFlags = () => api.post('/admin/feature-flags/reset')
@@ -301,7 +301,7 @@ export const sendSmartChatStream = (question, signal, selectedDatasetIds, onEven
     conversation_history: conversationHistory || undefined,
   }, signal, onEvent)
 
-export const getSmartAskReportHistory = (limit = 50) => api.get('/smart-chat/report-history', { params: { limit }, silent: true })
+export const getSmartAskReportHistory = (limit = 50) => api.get('/smart-chat/report-history', { params: { limit }, timeout: 5000, silent: true })
 export const saveSmartAskReportHistory = (item) => api.post('/smart-chat/report-history', { item }, { silent: true })
 export const deleteSmartAskReportHistory = (id) => api.delete(`/smart-chat/report-history/${encodeURIComponent(id)}`, { silent: true })
 export const clearSmartAskReportHistory = () => api.delete('/smart-chat/report-history', { silent: true })

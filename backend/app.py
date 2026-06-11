@@ -110,6 +110,8 @@ def _skip_access_log(path: str) -> bool:
     return (
         not path.startswith("/api/")
         or path == "/api/health"
+        or path == "/api/auth/me"
+        or path == "/api/feature-flags"
         or path.startswith("/api/admin/system-logs")
     )
 

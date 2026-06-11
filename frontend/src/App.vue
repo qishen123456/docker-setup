@@ -481,8 +481,10 @@ const refreshAuthUser = async () => {
     authUser.value = data?.authenticated ? (data.user || {}) : null
     syncHistoryScope()
     if (authUser.value) {
-      await loadFeatureFlags(true)
-      await syncHistory()
+      loadFeatureFlags(true)
+        .then(() => enforceRouteAccess())
+        .catch(() => {})
+      syncHistory().catch(() => {})
     } else clearFeatureFlags()
   } catch {
     authUser.value = null
@@ -505,8 +507,10 @@ const handleAuthenticated = async (user) => {
   authUser.value = user || null
   syncHistoryScope()
   if (authUser.value) {
-    await loadFeatureFlags(true)
-    await syncHistory()
+    loadFeatureFlags(true)
+      .then(() => enforceRouteAccess())
+      .catch(() => {})
+    syncHistory().catch(() => {})
   } else clearFeatureFlags()
   authReady.value = true
   enforceRouteAccess()
