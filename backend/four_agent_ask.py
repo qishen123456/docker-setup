@@ -1262,6 +1262,12 @@ class FourAgentAskService:
         rule_based_sql = self._build_rule_based_sql(question, route, context)
         route_sample_sql = str(route.get("matched_sample_sql") or "").strip()
         route_sample_id = route.get("matched_sample_id")
+        query_intent = self._safe_dict(context.get("query_intent"))
+        requested_city_level = (
+            str(query_intent.get("target_level") or "") == "城市公司"
+            or "城市公司" in str(question or "")
+            or "城市分公司" in str(question or "")
+        )
 
         def question_key(value: Any) -> str:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
@@ -1278,7 +1284,17 @@ class FourAgentAskService:
                 return False
             return left_key == right_key or left_key in right_key or right_key in left_key
 
+        def sample_conflicts_requested_level(sql: str) -> bool:
+            if not requested_city_level:
+                return False
+            compact_sql = re.sub(r"\s+", "", str(sql or ""))
+            asks_branch_level = "层级='分公司'" in compact_sql or '层级="分公司"' in compact_sql
+            asks_city_level = "层级='城市公司'" in compact_sql or '层级="城市公司"' in compact_sql
+            return asks_branch_level and not asks_city_level
+
         def direct_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
+            if sample_conflicts_requested_level(sql):
+                return None
             prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
             if prepared.get("conflict"):
                 return None
@@ -1291,6 +1307,8 @@ class FourAgentAskService:
             }
 
         def template_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
+            if sample_conflicts_requested_level(sql):
+                return None
             prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
             if prepared.get("conflict"):
                 return None
