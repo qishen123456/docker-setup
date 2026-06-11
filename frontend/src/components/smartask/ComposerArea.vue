@@ -112,13 +112,16 @@
                 :label="m.name"
                 :value="m.id"
               >
-                <div class="sa-ds-option sa-model-option">
+                <div
+                  class="sa-ds-option sa-model-option"
+                  :class="{ 'is-default-model': m.is_default }"
+                >
                   <div class="sa-ds-option-main">
-                    <div class="sa-ds-option-title">{{ m.name }}</div>
-                    <div class="sa-ds-option-meta">
-                      {{ m.model }}
-                      <span v-if="m.is_default" class="sa-model-default-badge">默认</span>
+                    <div class="sa-ds-option-title sa-model-option-title">
+                      <span>{{ m.name }}</span>
+                      <span v-if="m.is_default" class="sa-model-default-badge">默认模型</span>
                     </div>
+                    <div class="sa-ds-option-meta">{{ m.model }}</div>
                   </div>
                 </div>
               </el-option>
@@ -576,6 +579,21 @@ onMounted(() => {
   background: #0f766e;
 }
 
+.sa-model-option.is-default-model {
+  margin: -2px 0;
+  padding: 8px 10px 8px 13px;
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.09), rgba(51, 65, 85, 0.035));
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 118, 110, 0.14),
+    inset 3px 0 0 rgba(15, 118, 110, 0.78);
+}
+
+.sa-model-option.is-default-model::before {
+  display: none;
+}
+
 .sa-ds-option-auto::before {
   opacity: 1;
 }
@@ -592,6 +610,21 @@ onMounted(() => {
   font-weight: 700;
   color: #243041;
   line-height: 1.4;
+}
+
+.sa-model-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sa-model-option-title > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sa-ds-option-meta {
@@ -679,6 +712,10 @@ onMounted(() => {
 
 :deep(.sa-model-popper .el-select-dropdown__item.is-selected) {
   background: rgba(15, 118, 110, 0.11);
+}
+
+:deep(.sa-model-popper .el-select-dropdown__item) {
+  height: auto;
 }
 
 .sa-composer-input-row {
@@ -1016,15 +1053,17 @@ onMounted(() => {
 }
 
 .sa-model-default-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 5px;
-  height: 14px;
-  line-height: 14px;
-  border-radius: 4px;
-  background: #e8f3ff;
-  color: #165dff;
-  font-size: 9px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18);
 }
 </style>
