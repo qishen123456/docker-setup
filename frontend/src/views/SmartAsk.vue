@@ -3895,7 +3895,13 @@ const handleStop = () => {
     thinkingOpen[msg.id] = false
   }
   stopTimer()
-  ElMessage.warning('已停止执行')
+  ElMessage({
+    message: '已停止执行',
+    type: 'warning',
+    duration: 1500,
+    showClose: false,
+    customClass: 'sa-toast-modern sa-toast-stop',
+  })
 }
 
 const resetForNewChat = () => {
@@ -4069,9 +4075,9 @@ const quickAsk = (item) => {
   })
   const datasetName = typeof item === 'string' ? '' : String(item?.dataset_name || item?.dataset_tag || '').trim()
   ElMessage({
-    message: datasetName ? `已填入问题，本轮优先按「${datasetName}」执行` : '已填入，按 Enter 发送',
+    message: datasetName ? `问题已填入 · ${datasetName}` : '问题已填入',
     type: 'success',
-    duration: 1800,
+    duration: 1500,
     showClose: false,
     customClass: 'sa-toast-modern'
   })
@@ -7804,6 +7810,55 @@ button.sa-compare-row:hover {
 
 .sa-insight-metric-large {
   min-height: 420px;
+}
+
+:global(.sa-toast-modern.el-message) {
+  min-width: 0;
+  width: auto;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 9px 13px;
+  border: 1px solid rgba(22, 93, 255, 0.12);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+:global(.sa-toast-modern .el-message__content) {
+  color: #243041;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+:global(.sa-toast-modern .el-message__icon) {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+:global(.sa-toast-modern.el-message--success) {
+  border-color: rgba(22, 163, 74, 0.16);
+}
+
+:global(.sa-toast-modern.el-message--success .el-message__icon) {
+  color: #16a34a;
+}
+
+:global(.sa-toast-stop.el-message) {
+  border-color: rgba(217, 119, 6, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(255, 250, 240, 0.98));
+}
+
+:global(.sa-toast-stop .el-message__content) {
+  color: #8a4b05;
+}
+
+:global(.sa-toast-stop .el-message__icon) {
+  color: #d97706;
 }
 
 /* 动画 */
