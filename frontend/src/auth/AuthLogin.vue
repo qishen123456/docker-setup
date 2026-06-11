@@ -32,7 +32,22 @@
         </label>
         <label>
           <span>登录密码</span>
-          <input v-model="form.password" type="password" autocomplete="current-password" placeholder="请输入密码" />
+          <div class="password-control">
+            <input
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+            />
+            <button
+              class="password-eye"
+              type="button"
+              :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+              @click="showPassword = !showPassword"
+            >
+              <el-icon><component :is="showPassword ? Hide : View" /></el-icon>
+            </button>
+          </div>
         </label>
         <button class="primary-login" type="submit" :disabled="adminLoading">
           {{ adminLoading ? '登录中...' : '账号登录' }}
@@ -53,6 +68,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Hide, View } from '@element-plus/icons-vue'
 import { getFeishuLoginUrl, passwordLogin, setAuthToken } from '../api/index.js'
 
 const emit = defineEmits(['authenticated'])
@@ -63,6 +79,7 @@ const form = ref({
 })
 const adminLoading = ref(false)
 const feishuLoading = ref(false)
+const showPassword = ref(false)
 
 const submitAdmin = async () => {
   if (adminLoading.value) return
@@ -72,7 +89,12 @@ const submitAdmin = async () => {
     if (data?.success && data?.token) {
       setAuthToken(data.token)
       form.value.password = ''
-      ElMessage.success('登录成功')
+      ElMessage({
+        message: '登录成功',
+        type: 'success',
+        duration: 1800,
+        customClass: 'app-toast-modern',
+      })
       emit('authenticated', data.user || null)
     }
   } catch {
@@ -229,6 +251,7 @@ const startFeishu = async () => {
 }
 
 .login-form input {
+  width: 100%;
   height: 44px;
   padding: 0 14px;
   border: 1px solid #e5e6eb;
@@ -237,6 +260,50 @@ const startFeishu = async () => {
   color: #1d2129;
   font-size: 14px;
   background: #fff;
+}
+
+.password-control {
+  position: relative;
+}
+
+.password-control input {
+  padding-right: 48px;
+}
+
+.password-control input[type="password"] {
+  font-size: 21px;
+}
+
+.password-control input::placeholder {
+  font-size: 14px;
+}
+
+.password-eye {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #667085;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  transform: translateY(-50%);
+}
+
+.password-eye:hover {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.password-eye .el-icon {
+  font-size: 17px;
 }
 
 .login-form input:focus {

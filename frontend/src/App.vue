@@ -268,15 +268,62 @@
       <div class="password-form">
         <label>
           <span>原密码</span>
-          <input v-model="passwordForm.old_password" type="password" autocomplete="current-password" placeholder="请输入当前密码" @keydown.enter="submitPasswordChange" />
+          <div class="dialog-password-control">
+            <input
+              v-model="passwordForm.old_password"
+              :type="passwordVisible.old ? 'text' : 'password'"
+              autocomplete="current-password"
+              placeholder="请输入当前密码"
+              @keydown.enter="submitPasswordChange"
+            />
+            <button
+              class="dialog-password-eye"
+              type="button"
+              :aria-label="passwordVisible.old ? '隐藏原密码' : '显示原密码'"
+              @click="passwordVisible.old = !passwordVisible.old"
+            >
+              <el-icon><component :is="passwordVisible.old ? Hide : View" /></el-icon>
+            </button>
+          </div>
         </label>
         <label>
           <span>新密码</span>
-          <input v-model="passwordForm.new_password" type="password" autocomplete="new-password" placeholder="至少 8 位" @keydown.enter="submitPasswordChange" />
+          <div class="dialog-password-control">
+            <input
+              v-model="passwordForm.new_password"
+              :type="passwordVisible.next ? 'text' : 'password'"
+              autocomplete="new-password"
+              placeholder="至少 8 位"
+              @keydown.enter="submitPasswordChange"
+            />
+            <button
+              class="dialog-password-eye"
+              type="button"
+              :aria-label="passwordVisible.next ? '隐藏新密码' : '显示新密码'"
+              @click="passwordVisible.next = !passwordVisible.next"
+            >
+              <el-icon><component :is="passwordVisible.next ? Hide : View" /></el-icon>
+            </button>
+          </div>
         </label>
         <label>
           <span>确认新密码</span>
-          <input v-model="passwordForm.confirm_password" type="password" autocomplete="new-password" @keydown.enter="submitPasswordChange" />
+          <div class="dialog-password-control">
+            <input
+              v-model="passwordForm.confirm_password"
+              :type="passwordVisible.confirm ? 'text' : 'password'"
+              autocomplete="new-password"
+              @keydown.enter="submitPasswordChange"
+            />
+            <button
+              class="dialog-password-eye"
+              type="button"
+              :aria-label="passwordVisible.confirm ? '隐藏确认密码' : '显示确认密码'"
+              @click="passwordVisible.confirm = !passwordVisible.confirm"
+            >
+              <el-icon><component :is="passwordVisible.confirm ? Hide : View" /></el-icon>
+            </button>
+          </div>
         </label>
       </div>
       <template #footer>
@@ -320,7 +367,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Lock, MagicStick, Monitor, Operation, Setting, Share, UploadFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Hide, Lock, MagicStick, Monitor, Operation, Setting, Share, UploadFilled, View } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import SqlDebugFloat from './components/SqlDebugFloat.vue'
 import { preloadRouteComponents } from './router'
@@ -370,6 +417,11 @@ const passwordForm = ref({
   old_password: '',
   new_password: '',
   confirm_password: ''
+})
+const passwordVisible = ref({
+  old: false,
+  next: false,
+  confirm: false,
 })
 const currentTime = ref('')
 const historyPanelRef = ref(null)
@@ -565,7 +617,13 @@ const submitPasswordChange = async () => {
     })
     passwordDialogVisible.value = false
     passwordForm.value = { old_password: '', new_password: '', confirm_password: '' }
-    ElMessage.success('密码已修改，请重新登录')
+    passwordVisible.value = { old: false, next: false, confirm: false }
+    ElMessage({
+      message: '密码已修改，请重新登录',
+      type: 'success',
+      duration: 2200,
+      customClass: 'app-toast-modern',
+    })
     clearAuthToken()
     authUser.value = null
     clearFeatureFlags()
@@ -718,7 +776,12 @@ const handleLogout = async () => {
     authUser.value = null
     clearFeatureFlags()
     syncHistoryScope()
-    ElMessage.success('已退出登录')
+    ElMessage({
+      message: '已退出登录',
+      type: 'success',
+      duration: 1800,
+      customClass: 'app-toast-modern',
+    })
   } catch {
     clearAuthToken()
     authUser.value = null
@@ -2607,6 +2670,50 @@ body,
   transition: all 0.18s ease;
 }
 
+.dialog-password-control {
+  position: relative;
+}
+
+.dialog-password-control input {
+  padding-right: 44px;
+}
+
+.dialog-password-control input[type="password"] {
+  font-size: 20px;
+}
+
+.dialog-password-control input::placeholder {
+  font-size: 13px;
+}
+
+.dialog-password-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #667085;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  transform: translateY(-50%);
+}
+
+.dialog-password-eye:hover {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.dialog-password-eye .el-icon {
+  font-size: 16px;
+}
+
 .password-form input:focus {
   border-color: #3370ff;
   box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.12);
@@ -2650,6 +2757,34 @@ body,
 .dialog-primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.app-toast-modern.el-message {
+  min-width: 0;
+  width: auto;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 9px 13px;
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.app-toast-modern .el-message__content {
+  color: #243041;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.app-toast-modern .el-message__icon {
+  margin-right: 8px;
+  color: #0f766e;
+  font-size: 14px;
 }
 
 .backend-status-chip {
