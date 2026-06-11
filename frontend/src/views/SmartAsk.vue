@@ -466,16 +466,16 @@
                       >
                         <div class="sa-office-head-main">
                           <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
-                          <div class="sa-office-subtitle">{{ office.childCount }} 个{{ businessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
+                          <div class="sa-office-subtitle">{{ getOfficeSubtitle(office, businessDrillReport) }}</div>
                         </div>
                         <span class="sa-office-head-actions">
                           <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                           <span
                             class="sa-office-drill-toggle"
                             :class="{ 'is-open': isOfficeExpanded(office.id) }"
-                            :title="isOfficeExpanded(office.id) ? '收起下钻明细' : `展开查看${office.childCount || 0}个${businessDrillReport.detailLevelLabel}`"
+                            :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, businessDrillReport)"
                           >
-                            <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
+                            <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '详情' : '下钻') }}</span>
                             <i></i>
                           </span>
                         </span>
@@ -881,16 +881,16 @@
                 >
                   <div class="sa-office-head-main">
                     <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
-                    <div class="sa-office-subtitle">{{ office.childCount }} 个{{ dialogBusinessDrillReport.detailLevelLabel }} · {{ office.parentName || '当前口径' }}</div>
+                    <div class="sa-office-subtitle">{{ getOfficeSubtitle(office, dialogBusinessDrillReport) }}</div>
                   </div>
                   <span class="sa-office-head-actions">
                     <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                     <span
                       class="sa-office-drill-toggle"
                       :class="{ 'is-open': isOfficeExpanded(office.id) }"
-                      :title="isOfficeExpanded(office.id) ? '收起下钻明细' : `展开查看${office.childCount || 0}个${dialogBusinessDrillReport.detailLevelLabel}`"
+                      :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, dialogBusinessDrillReport)"
                     >
-                      <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
+                      <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '详情' : '下钻') }}</span>
                       <i></i>
                     </span>
                   </span>
@@ -1975,6 +1975,19 @@ const getSingleOrgCounts = (report) => {
   }
 }
 
+const getOfficeSubtitle = (office, report) => {
+  if (office?.isLeafLevel) {
+    return `${office.leafLabel || '当前最细层'} · ${office.parentName || '当前口径'}`
+  }
+  return `${office?.childCount || 0} 个${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'} · ${office?.parentName || '当前口径'}`
+}
+
+const getOfficeToggleTitle = (office, report) => (
+  office?.isLeafLevel
+    ? `查看${office.name || '当前对象'}当前层指标`
+    : `展开查看${office?.childCount || 0}个${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'}`
+)
+
 const getSingleOrgRateTone = (report) => {
   const rate = toNumber(getReportKpiText(report, 'rate'))
   if (rate === null) return 'neutral'
@@ -2154,11 +2167,41 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   const spec = dataset?.report_spec
   if (!spec || spec.version !== '2.0') return null
   const overviewChart = Array.isArray(spec.charts) ? spec.charts[0] : null
-  const accordions = Array.isArray(spec.accordions) ? spec.accordions : []
-  if (!overviewChart && !accordions.length) return null
+  const rawAccordions = Array.isArray(spec.accordions) ? spec.accordions : []
+  const overviewRows = Array.isArray(overviewChart?.rows) ? overviewChart.rows : []
+  if (!overviewChart && !rawAccordions.length) return null
 
   const config = getDatasetReportConfig(dataset)
   const requestedLevels = getRequestedLevelValues(getQuestionText(), config)
+  const compareLevelLabel = requestedLevels[0] || spec.scope?.compareLevelLabel || '下一层级'
+  const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
+  const accordions = rawAccordions.length
+    ? rawAccordions
+    : overviewRows.map((row, index) => {
+        const name = row?.名称 || row?.name || row?.[overviewChart?.columns?.[0]] || `当前层对象 ${index + 1}`
+        return {
+          id: `overview-${index}-${name}`,
+          title: name,
+          parentName: spec.scope?.focusNode || '',
+          levelLabel: compareLevelLabel,
+          detailLevelLabel: compareLevelLabel,
+          isLeafLevel: true,
+          leafLabel: '当前最细层',
+          tag: row?.标签 || '',
+          kpis: Object.entries(row || {})
+            .filter(([key]) => !['名称', 'name', '标签'].includes(key))
+            .map(([key, value]) => ({ label: key, value })),
+          narrative: `${name}已是当前结果的最细层级。`,
+          detailNarrative: `${name}已是当前结果的最细层级，右侧展示该节点当前指标。`,
+          chart: {
+            chartType: overviewChart?.chartType || 'horizontalDrill',
+            title: `${name}当前层指标`,
+            columns: overviewChart?.columns || Object.keys(row || {}),
+            rows: [row],
+          },
+          drillGroups: [],
+        }
+      })
   const matchedAccordions = requestedLevels.length
     ? accordions.filter(item => (
         requestedLevels.includes(item?.levelLabel)
@@ -2166,8 +2209,6 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       ))
     : []
   const sourceAccordions = requestedLevels.length && matchedAccordions.length ? matchedAccordions : accordions
-  const compareLevelLabel = requestedLevels[0] || spec.scope?.compareLevelLabel || '下一层级'
-  const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
   const offices = sourceAccordions.map((item) => {
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
     const rateValue = toNumber(rateKpi?.value)
@@ -2217,6 +2258,8 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       rateLabel: rateKpi?.value || '-',
       progress: Math.max(0, Math.min(100, rateValue || 0)),
       childCount: chartRows.length,
+      isLeafLevel: Boolean(item.isLeafLevel),
+      leafLabel: item.leafLabel || '',
       kpis: item.kpis || [],
       summary: summaryText,
       chartText: item.detailNarrative || (detailRows.length ? '业务代表明细按达成率从高到低排序。' : ''),

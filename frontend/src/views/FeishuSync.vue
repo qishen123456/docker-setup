@@ -66,9 +66,9 @@
                   />
                 </el-select>
                 <el-radio-group v-model="scheduleFilter" size="small">
-                  <el-radio-button label="all">全部</el-radio-button>
-                  <el-radio-button label="active">启用</el-radio-button>
-                  <el-radio-button label="failed">异常</el-radio-button>
+                  <el-radio-button value="all">全部</el-radio-button>
+                  <el-radio-button value="active">启用</el-radio-button>
+                  <el-radio-button value="failed">异常</el-radio-button>
                 </el-radio-group>
               </div>
             </div>

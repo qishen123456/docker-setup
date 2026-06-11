@@ -739,9 +739,9 @@
         </div>
         <el-form-item label="权限模式">
           <el-radio-group v-model="dataRuleForm.rule.mode">
-            <el-radio-button label="public">公开</el-radio-button>
-            <el-radio-button label="org_tree">按组织树控制</el-radio-button>
-            <el-radio-button label="disabled">停用</el-radio-button>
+            <el-radio-button value="public">公开</el-radio-button>
+            <el-radio-button value="org_tree">按组织树控制</el-radio-button>
+            <el-radio-button value="disabled">停用</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="组织树类型">

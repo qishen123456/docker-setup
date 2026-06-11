@@ -16,9 +16,9 @@
           <div class="toolbar-col">
             <el-input v-model="searchKeyword" clearable placeholder="搜索数据集名称/编码..." size="small" />
             <el-radio-group v-model="listStatusFilter" size="small" class="dataset-status-filter">
-              <el-radio-button label="all">全部 {{ datasetStatusCounts.all }}</el-radio-button>
-              <el-radio-button label="active">启用 {{ datasetStatusCounts.active }}</el-radio-button>
-              <el-radio-button label="inactive">停用 {{ datasetStatusCounts.inactive }}</el-radio-button>
+              <el-radio-button value="all">全部 {{ datasetStatusCounts.all }}</el-radio-button>
+              <el-radio-button value="active">启用 {{ datasetStatusCounts.active }}</el-radio-button>
+              <el-radio-button value="inactive">停用 {{ datasetStatusCounts.inactive }}</el-radio-button>
             </el-radio-group>
             <el-select v-model="listFilterSourceId" clearable placeholder="按来源筛选" size="small">
               <el-option label="全部来源" value="" />

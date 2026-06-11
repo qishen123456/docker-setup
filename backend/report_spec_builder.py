@@ -731,10 +731,12 @@ def build_report_spec(
         lambda item: _row_value(item.get("raw") or {}, rate_metric) if rate_metric else None,
     )
     for node in ranked_comparison_nodes:
-        drill_children = _drill_children(node)
-        if not drill_children:
-            continue
+        raw_drill_children = _drill_children(node)
+        is_leaf_level = not raw_drill_children
+        drill_children = raw_drill_children or [node]
         node_detail_label = _level_label(drill_children, detail_label)
+        if is_leaf_level:
+            node_detail_label = node.get("levelValue") or node.get("levelName") or compare_label or "当前层级"
         sorted_children = sorted(drill_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0)
         sorted_children_desc = sorted(sorted_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)
         child_groups = _dynamic_performance_groups(
@@ -862,12 +864,24 @@ def build_report_spec(
         node_rank_value = high_node_rank.get(node.get("id"), 0)
         node_rank_label = _rate_rank_label(node_rank_value)
         node_rank_suffix = f"（{node_rank_label}）" if node_rank_value else ""
+        detail_action_text = "当前最细层" if is_leaf_level else f"点击展开{len(sorted_children_desc)}个{node_detail_label}明细。"
+        detail_narrative = (
+            f"{node['name']}已是当前结果的最细层级，右侧展示该节点的任务、开单、缺口与达成率。"
+            if is_leaf_level
+            else (
+                f"{node['name']}下钻到{node_detail_label}层：领先节点为{describe_detail(best)}；承压节点为{describe_detail(worst)}。"
+                if child_groups.get("canCompare")
+                else f"{node['name']}下钻到{node_detail_label}层：样本不足或差异不明显，不做首尾对比。"
+            )
+        )
         accordions.append({
             "id": node["id"],
             "title": node["name"],
             "parentName": node.get("parentName"),
             "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
             "detailLevelLabel": node_detail_label,
+            "isLeafLevel": is_leaf_level,
+            "leafLabel": "当前最细层" if is_leaf_level else "",
             "rankLabel": node_rank_label,
             "tag": node_tag,
             "highlight": highlight,
@@ -886,12 +900,8 @@ def build_report_spec(
                          f"任务{node_task} / 已完成{node_actual}"
                          f"{f' / 缺口{node_remain}' if remain_metric else ''}\n"
                          f"{highlight}；{risk_text}\n"
-                         f"点击展开{len(sorted_children_desc)}个{node_detail_label}明细。",
-            "detailNarrative": (
-                f"{node['name']}下钻到{node_detail_label}层：领先节点为{describe_detail(best)}；承压节点为{describe_detail(worst)}。"
-                if child_groups.get("canCompare")
-                else f"{node['name']}下钻到{node_detail_label}层：样本不足或差异不明显，不做首尾对比。"
-            ),
+                         f"{detail_action_text}",
+            "detailNarrative": detail_narrative,
             "chart": {
                 "chartType": "horizontalDrill",
                 "title": f"{node['name']}{node_detail_label}达成率与缺口",

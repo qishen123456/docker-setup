@@ -200,9 +200,9 @@
         </el-form-item>
         <el-form-item label="账号状态">
           <el-radio-group v-model="bulkForm.enabledMode">
-            <el-radio-button label="skip">不修改</el-radio-button>
-            <el-radio-button label="enabled">启用</el-radio-button>
-            <el-radio-button label="disabled">停用</el-radio-button>
+            <el-radio-button value="skip">不修改</el-radio-button>
+            <el-radio-button value="enabled">启用</el-radio-button>
+            <el-radio-button value="disabled">停用</el-radio-button>
           </el-radio-group>
         </el-form-item>
       </el-form>

@@ -203,8 +203,8 @@
           <el-form label-position="top">
             <el-form-item label="导入方式">
               <el-radio-group v-model="importForm.mode">
-                <el-radio-button label="merge">合并导入</el-radio-button>
-                <el-radio-button label="replace">替换导入</el-radio-button>
+                <el-radio-button value="merge">合并导入</el-radio-button>
+                <el-radio-button value="replace">替换导入</el-radio-button>
               </el-radio-group>
             </el-form-item>
             <el-form-item label="目标组织树">
