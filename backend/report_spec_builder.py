@@ -222,10 +222,12 @@ def _requested_level_values(question: str, config: Dict[str, Any]) -> List[str]:
         for value in (level.get("values") or [])
         if str(value or "").strip()
     ]
-    common_values = ["事业部", "业务部", "分公司", "代表处", "业务代表", "业务员", "城市公司", "部门", "条线"]
-    for value in [*configured_values, *common_values]:
-        if value and value in text and value not in values:
-            values.append(value)
+    common_values = ["城市分公司", "城市公司", "事业部", "业务部", "分公司", "代表处", "业务代表", "业务员", "部门", "条线"]
+    alias_map = {"城市分公司": "城市公司"}
+    for value in sorted([*configured_values, *common_values], key=len, reverse=True):
+        canonical = alias_map.get(value, value)
+        if value and value in text and canonical not in values:
+            values.append(canonical)
     return values
 
 

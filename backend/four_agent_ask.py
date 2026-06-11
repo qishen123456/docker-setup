@@ -430,14 +430,25 @@ class FourAgentAskService:
 
         target_level = ""
         aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
+        level_candidates = []
         for level, level_aliases in aliases.items():
             candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
-            if any(candidate and candidate in text for candidate in candidates):
-                target_level = str(level)
+            if str(level) == "城市公司":
+                candidates.append("城市分公司")
+            for candidate in candidates:
+                if candidate:
+                    level_candidates.append((candidate, str(level)))
+        for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
+            if candidate in text:
+                target_level = level
                 break
         if not target_level:
+            if "城市分公司" in text or "城市公司" in text:
+                target_level = "城市公司"
             for dimension in config.get("analysisDimensions") or []:
                 for level in dimension.get("path") or []:
+                    if target_level:
+                        break
                     if level and str(level) in text:
                         target_level = str(level)
                         break
@@ -3236,18 +3247,84 @@ WITH 字段提取 AS (
             city_field_key=city_field_key,
         ).strip()
 
+        city_level_requested = (
+            intent_target_level == "城市公司"
+            or "城市公司" in normalized_question
+            or "城市分公司" in normalized_question
+        )
         asks_best_branch = (
             "分公司" in normalized_question
+            and not city_level_requested
             and any(token in normalized_question for token in ["最好", "最高", "最佳", "完成好", "完成最好", "哪个"])
             and not any(token in normalized_question for token in ["最低", "最差", "不好", "风险", "落后"])
         )
         asks_branch_ranking = (
-            (intent_is_ranking and intent_target_level == "分公司")
-            or (
-                "分公司" in normalized_question
-                and any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最低", "最差"])
+            not city_level_requested
+            and (
+                (intent_is_ranking and intent_target_level == "分公司")
+                or (
+                    "分公司" in normalized_question
+                    and any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最低", "最差"])
+                )
             )
         )
+        asks_city_ranking = (
+            city_level_requested
+            and (
+                intent_is_ranking
+                or any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最佳", "完成好", "完成最好", "哪个", "最低", "最差"])
+            )
+        )
+        if asks_city_ranking:
+            rank_match = re.search(r"(?:Top|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
+            rank_text = rank_match.group(1) if rank_match else ""
+            chinese_digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+            def parse_city_rank_limit(value: str) -> int:
+                if not value:
+                    return 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
+                if value.isdigit():
+                    return max(1, min(20, int(value)))
+                if value == "十":
+                    return 10
+                if "十" in value:
+                    left, _, right = value.partition("十")
+                    tens = chinese_digits.get(left, 1 if left == "" else 0)
+                    ones = chinese_digits.get(right, 0)
+                    return max(1, min(20, tens * 10 + ones))
+                return max(1, min(20, chinese_digits.get(value, 3)))
+
+            rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
+            if rank_limit <= 0:
+                rank_limit = parse_city_rank_limit(rank_text)
+            rank_limit = max(1, min(20, rank_limit))
+            order_direction = str(query_intent.get("direction") or "").upper() if intent_is_ranking else ""
+            if order_direction not in {"ASC", "DESC"}:
+                order_direction = "ASC" if any(token in normalized_question for token in ["最低", "最差", "后", "倒数", "落后"]) else "DESC"
+            configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
+            allowed_sort_columns = {
+                "总任务金额",
+                "年度开单金额",
+                "达成率",
+                "剩余任务金额",
+                "线下任务_万元",
+                "新零售任务_万元",
+                "燃气定制任务_万元",
+                "地产任务_万元",
+                "线下实际_万元",
+                "新零售实际_万元",
+                "燃气定制实际_万元",
+                "地产实际_万元",
+            }
+            sort_column = configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
+            return f"""
+{base_sql}
+SELECT *
+FROM 汇总结果
+WHERE 层级 = '城市公司'
+ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称
+LIMIT {rank_limit}
+""".strip()
         if asks_branch_ranking and not asks_branch_extremes and not (channel_metric and asks_best_branch):
             rank_match = re.search(r"(?:Top|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
             rank_text = rank_match.group(1) if rank_match else ""
