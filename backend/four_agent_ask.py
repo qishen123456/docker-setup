@@ -1263,10 +1263,12 @@ class FourAgentAskService:
         route_sample_sql = str(route.get("matched_sample_sql") or "").strip()
         route_sample_id = route.get("matched_sample_id")
         query_intent = self._safe_dict(context.get("query_intent"))
+        original_question = str(context.get("original_question") or "")
+        level_hint_text = "\n".join(item for item in [str(question or ""), original_question] if item)
         requested_city_level = (
             str(query_intent.get("target_level") or "") == "城市公司"
-            or "城市公司" in str(question or "")
-            or "城市分公司" in str(question or "")
+            or "城市公司" in level_hint_text
+            or "城市分公司" in level_hint_text
         )
 
         def question_key(value: Any) -> str:
@@ -2826,6 +2828,9 @@ class FourAgentAskService:
         dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
         dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
+        original_question = str(context.get("original_question") or "").replace("\n", " ").strip()
+        if original_question and original_question not in normalized_question:
+            normalized_question = f"{normalized_question} {original_question}".strip()
         is_consumer_dataset = (
             dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
             or "消费者" in dataset_name
@@ -4232,6 +4237,7 @@ Agent3 复核结果：
         golden_hit_delay_applied = False
         for dataset_id in dataset_ids:
             context = self.repository.get_dataset_context(int(dataset_id), route.get("refined_query", question))
+            context["original_question"] = question
             dataset_meta = self._safe_dict(context.get("dataset"))
             permission_rule = (load_data_permissions().get("rules") or {}).get(str(int(dataset_id))) or {}
             user_scope = user_org_scope_for_rule(current_user or {}, permission_rule) if permission_rule.get("mode") == "org_tree" else {}
@@ -4308,7 +4314,11 @@ Agent3 复核结果：
                         "confidence": 0.66,
                         "source": "question_subject_fallback",
                     }
-            query_intent = self._resolve_query_intent(route.get("refined_query", question), context)
+            refined_question = str(route.get("refined_query") or question or "")
+            intent_question = refined_question
+            if question and question not in intent_question:
+                intent_question = f"{intent_question}\n{question}"
+            query_intent = self._resolve_query_intent(intent_question, context)
             report_config = {**report_config, "queryIntent": query_intent}
             context["report_config"] = report_config
             context["query_intent"] = query_intent
