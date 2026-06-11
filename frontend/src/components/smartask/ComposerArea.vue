@@ -102,7 +102,6 @@
                 <div class="sa-ds-option sa-model-option sa-ds-option-auto">
                   <div class="sa-ds-option-main">
                     <div class="sa-ds-option-title">Auto</div>
-                    <div class="sa-ds-option-meta">自动选择默认模型，失败时切换备用</div>
                   </div>
                 </div>
               </el-option>
@@ -121,7 +120,6 @@
                       <span>{{ m.name }}</span>
                       <span v-if="m.is_default" class="sa-model-default-badge">默认模型</span>
                     </div>
-                    <div class="sa-ds-option-meta">{{ m.model }}</div>
                   </div>
                 </div>
               </el-option>
@@ -377,9 +375,23 @@ onMounted(() => {
 .sa-composer-dataset-bar:hover,
 .sa-composer-dataset-bar.active {
   border-color: rgba(37, 99, 235, 0.22);
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.075), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.08),
     0 12px 24px rgba(15, 23, 42, 0.055),
     inset 3px 0 0 #2563eb;
+}
+
+.sa-composer-dataset-bar.active .sa-ds-select :deep(.el-select__wrapper) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 246, 255, 0.98) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 99, 235, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 3px rgba(37, 99, 235, 0.08),
+    0 12px 24px rgba(37, 99, 235, 0.055);
 }
 
 .sa-composer-model-bar:hover,
@@ -702,7 +714,35 @@ onMounted(() => {
 }
 
 :deep(.sa-dataset-popper .el-select-dropdown__item.is-selected) {
-  background: rgba(37, 99, 235, 0.11);
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(37, 99, 235, 0.055));
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 99, 235, 0.14),
+    inset 3px 0 0 #2563eb;
+}
+
+:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option) {
+  padding-right: 28px;
+}
+
+:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option::before) {
+  opacity: 0;
+}
+
+:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option::after) {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 12px;
+  height: 7px;
+  border-left: 2px solid #2563eb;
+  border-bottom: 2px solid #2563eb;
+  transform: translateY(-65%) rotate(-45deg);
+}
+
+:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option-title) {
+  color: #174ea6;
 }
 
 :deep(.sa-model-popper .el-select-dropdown__item.is-hovering),
