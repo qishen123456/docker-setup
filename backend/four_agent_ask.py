@@ -1381,6 +1381,49 @@ class FourAgentAskService:
             "sample_score": 0,
         }
 
+    def _requests_city_company_level(self, question: Any, context: Dict[str, Any]) -> bool:
+        query_intent = self._safe_dict(context.get("query_intent"))
+        route = self._safe_dict(context.get("route"))
+        text = "\n".join(
+            str(item or "")
+            for item in [
+                question,
+                context.get("original_question"),
+                route.get("refined_query"),
+            ]
+            if str(item or "").strip()
+        )
+        return (
+            str(query_intent.get("target_level") or "") == "城市公司"
+            or "城市分公司" in text
+            or "城市公司" in text
+        )
+
+    def _coerce_city_company_level_sql(self, question: Any, context: Dict[str, Any], sql_text: str) -> str:
+        sql = str(sql_text or "")
+        if not sql or not self._requests_city_company_level(question, context):
+            return sql
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
+        dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
+        is_consumer_dataset = (
+            dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
+            or "消费者" in dataset_name
+        )
+        if not is_consumer_dataset:
+            return sql
+        sql = re.sub(
+            r"(?P<col>\"?层级\"?)\s*=\s*(?P<quote>['\"])分公司(?P=quote)",
+            lambda match: f"{match.group('col')} = {match.group('quote')}城市公司{match.group('quote')}",
+            sql,
+        )
+        return re.sub(
+            r"(?P<col>\"?层级\"?)\s+IN\s*\(\s*(?P<quote>['\"])分公司(?P=quote)\s*\)",
+            lambda match: f"{match.group('col')} IN ({match.group('quote')}城市公司{match.group('quote')})",
+            sql,
+            flags=re.I,
+        )
+
     @classmethod
     def _sql_subject_filter_literals(cls, sql_text: str) -> List[str]:
         sql = str(sql_text or "")
@@ -4447,6 +4490,20 @@ Agent3 复核结果：
                     }
                 )
 
+            coerced_sql_text = self._coerce_city_company_level_sql(question, context, sql_text)
+            if coerced_sql_text != sql_text:
+                sql_text = coerced_sql_text
+                agent3_review_policy = "rule_sql"
+                self._append_trace(
+                    trace,
+                    "pipeline.sql_level_coerced",
+                    "info",
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_meta.get("dataset_name"),
+                    reason="city_company_requested",
+                    sql=self._truncate_text(sql_text, 12000),
+                )
+
             step_started = time.time()
             review = self._agent3_review(
                 question,
@@ -4458,6 +4515,23 @@ Agent3 复核结果：
                 review_policy=agent3_review_policy,
             )
             final_sql = review.get("final_sql", sql_text)
+            coerced_final_sql = self._coerce_city_company_level_sql(question, context, final_sql)
+            if coerced_final_sql != final_sql:
+                final_sql = coerced_final_sql
+                review = {
+                    **review,
+                    "final_sql": final_sql,
+                    "review_summary": ((review.get("review_summary") or "") + " 已按原始问题的城市公司层级修正 SQL。").strip(),
+                }
+                self._append_trace(
+                    trace,
+                    "pipeline.final_sql_level_coerced",
+                    "info",
+                    dataset_id=dataset_id,
+                    dataset_name=dataset_meta.get("dataset_name"),
+                    reason="city_company_requested",
+                    sql=self._truncate_text(final_sql, 12000),
+                )
             self._append_trace(
                 trace,
                 "pipeline.agent3_result",
@@ -4548,6 +4622,7 @@ Agent3 复核结果：
                     try:
                         repair_review = self._agent3_review(question, route, repaired_sql, context, agent3_prompt, trace=trace)
                         repaired_final_sql = (repair_review.get("final_sql") or repaired_sql).strip()
+                        repaired_final_sql = self._coerce_city_company_level_sql(question, context, repaired_final_sql)
                         if not self._is_read_only_sql(repaired_final_sql):
                             raise ValueError("SQL 自动修复结果未通过只读校验")
                         repaired_final_sql = apply_row_level_filter(repaired_final_sql, current_user or {}, int(dataset_id))
