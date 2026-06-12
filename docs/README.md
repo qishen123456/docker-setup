@@ -49,3 +49,41 @@ curl -I http://127.0.0.1:8888
 ## 专项保留
 
 - [LangChain_MCP_问数增强行动计划.md](LangChain_MCP_问数增强行动计划.md)：LangChain / MCP 方向的专项增强计划。
+
+## 终端速查
+
+### 一、git推送
+
+打开终端复制下方四行代码，第三行改个名字即可。
+
+```bash
+git status
+git add .
+git commit -m "chore: update smartask LIn aa"
+git push -u github docker-setup
+```
+
+### 二、强制关闭前后端
+
+用“管理员身份运行”的 PowerShell 执行。
+
+```powershell
+taskkill /F /PID 35028
+taskkill /F /IM node.exe
+taskkill /F /IM python.exe
+```
+
+### 三、重启后端
+
+```powershell
+cd "D:\万物云\万物云\AI培训\智能问数流程\火山引擎\智能问数项目_v20260330_004926(3)-566fee42a29e\智能问数项目_v20260330_004926"
+$env:PYTHONNOUSERSITE="1"
+C:\Users\liutq09\AppData\Local\anaconda3\python.exe backend\app.py
+```
+
+### 四、重启前端
+
+```powershell
+cd "D:\万物云\万物云\AI培训\智能问数流程\火山引擎\智能问数项目_v20260330_004926(3)-566fee42a29e\智能问数项目_v20260330_004926\frontend"
+npm run dev
+```

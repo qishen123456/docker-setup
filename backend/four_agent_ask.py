@@ -401,7 +401,74 @@ class FourAgentAskService:
             "output_mode": "",
             "matched_triggers": [],
         }
-        if not text or ranking_policy.get("enabled") is False:
+        if not text:
+            return intent
+
+        filter_operator = ""
+        if re.search(r"低于|不足|小于|低过|少于", text):
+            filter_operator = "<"
+        elif re.search(r"高于|超过|大于|不少于|不低于|达到|达成率高", text):
+            filter_operator = ">="
+        filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
+        filter_value = float(filter_value_match.group(1)) if filter_value_match else None
+        filter_problem = (
+            ("哪些" in text and bool(filter_operator))
+            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
+        )
+
+        def resolve_target_level_from_text() -> str:
+            aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
+            level_candidates = []
+            for level, level_aliases in aliases.items():
+                candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
+                if str(level) == "城市公司":
+                    candidates.append("城市分公司")
+                for candidate in candidates:
+                    if candidate:
+                        level_candidates.append((candidate, str(level)))
+            for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
+                if candidate in text:
+                    return level
+            if "城市分公司" in text or "城市公司" in text:
+                return "城市公司"
+            for dimension in config.get("analysisDimensions") or []:
+                for level in dimension.get("path") or []:
+                    if level and str(level) in text:
+                        return str(level)
+            return ""
+
+        if filter_problem:
+            target_level = resolve_target_level_from_text()
+            metric = next(
+                (
+                    item for item in (config.get("metrics") or [])
+                    if isinstance(item, dict)
+                    and (
+                        str(item.get("key") or "") == "rate"
+                        or "率" in str(item.get("label") or item.get("column") or "")
+                        or "rate" in str(item.get("key") or item.get("column") or "").lower()
+                    )
+                ),
+                {},
+            )
+            if not filter_operator:
+                filter_operator = "<"
+            if filter_value is None and filter_operator == "<":
+                filter_value = 60.0
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": metric.get("key") or "rate",
+                "filter_metric_column": metric.get("column") or metric.get("label") or "达成率",
+                "filter_operator": filter_operator,
+                "filter_value": filter_value,
+                "direction": "asc" if filter_operator == "<" else "desc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["filter"],
+            })
+            return intent
+
+        if ranking_policy.get("enabled") is False:
             return intent
 
         triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]

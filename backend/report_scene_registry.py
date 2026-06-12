@@ -26,6 +26,11 @@ SCENES: Dict[str, Dict[str, Any]] = {
         "layout": "ranking",
         "required_contract": ["nameColumn", "metrics"],
     },
+    "filter": {
+        "label": "filter",
+        "layout": "detail",
+        "required_contract": ["nameColumn", "metrics"],
+    },
     "diagnostic": {
         "label": "诊断/风险分析",
         "layout": "detail",
@@ -39,7 +44,12 @@ _COMPARATIVE_RE = re.compile(r"对比|比较|哪个|谁更|差异|分别|各自|
 _DIAGNOSTIC_RE = re.compile(r"为什么|原因|归因|下滑|异常|差距|风险|缺口", re.I)
 
 
-def detect_report_scene(question: str, focus_node: Optional[Dict[str, Any]], selected_count: int) -> Dict[str, Any]:
+def detect_report_scene(
+    question: str,
+    focus_node: Optional[Dict[str, Any]],
+    selected_count: int,
+    query_intent: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Return the final report scene and explain why it was selected.
 
     The priority intentionally mirrors the previous hard-coded logic:
@@ -47,7 +57,10 @@ def detect_report_scene(question: str, focus_node: Optional[Dict[str, Any]], sel
     """
     text = question or ""
     reasons = []
-    if _RANKING_RE.search(text):
+    if isinstance(query_intent, dict) and query_intent.get("intent") == "filter":
+        key = "filter"
+        reasons.append("命中数据集意图策略：filter")
+    elif _RANKING_RE.search(text):
         key = "ranking"
         reasons.append("问题包含排名/最高/最低/Top 等关键词")
     elif selected_count > 1 or _COMPARATIVE_RE.search(text):

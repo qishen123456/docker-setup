@@ -582,7 +582,7 @@ def build_report_spec(
         else _negative_ranking_requested(question or "")
     )
 
-    scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes))
+    scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes), query_intent)
     if query_intent.get("intent") == "ranking":
         scene = {
             "key": "ranking",
@@ -590,6 +590,14 @@ def build_report_spec(
             "layout": "ranking",
             "required_contract": ["nameColumn", "metrics"],
             "reasons": ["命中数据集意图策略：ranking"],
+        }
+    elif query_intent.get("intent") == "filter":
+        scene = {
+            "key": "filter",
+            "label": "filter",
+            "layout": "detail",
+            "required_contract": ["nameColumn", "metrics"],
+            "reasons": ["query_intent.intent=filter"],
         }
     mode = scene.get("key", "detail")
     contract_health = validate_report_contract(config, columns, scene)
@@ -1003,11 +1011,96 @@ def build_report_spec(
         "lowFirst": low_first,
     } if compare_rows else None
 
+    answer_mode = "filter" if query_intent.get("intent") == "filter" else mode
+    matched_filter_nodes: List[Dict[str, Any]] = []
+    answer_summary: Dict[str, Any] = {}
+    if answer_mode == "filter":
+        filter_metric_key = str(query_intent.get("filter_metric_key") or "")
+        filter_metric_column = str(query_intent.get("filter_metric_column") or "")
+        filter_metric = next(
+            (
+                metric for metric in metrics
+                if (
+                    filter_metric_key and str(metric.get("key") or "") == filter_metric_key
+                ) or (
+                    filter_metric_column and filter_metric_column in {
+                        str(metric.get("column") or ""),
+                        str(metric.get("label") or ""),
+                        str(metric.get("key") or ""),
+                    }
+                )
+            ),
+            None,
+        ) or rate_metric or sort_metric
+        filter_operator = str(query_intent.get("filter_operator") or "<")
+        try:
+            filter_value = float(query_intent.get("filter_value"))
+        except (TypeError, ValueError):
+            filter_value = thresholds.get("officeRisk") if filter_operator in {"<", "<="} else None
+
+        def filter_matches(node: Dict[str, Any]) -> bool:
+            value = _row_value(node.get("raw") or {}, filter_metric)
+            if value is None:
+                return False
+            if filter_value is None:
+                return True
+            if filter_operator in {"<", "<="}:
+                return value <= filter_value if filter_operator == "<=" else value < filter_value
+            if filter_operator in {">", ">="}:
+                return value >= filter_value if filter_operator == ">=" else value > filter_value
+            return value == filter_value
+
+        matched_source_nodes = sorted(
+            [node for node in comparison_nodes if filter_matches(node)],
+            key=lambda item: _row_sort_value(item.get("raw") or {}, filter_metric),
+            reverse=filter_operator in {">", ">="},
+        )
+        matched_filter_nodes = [
+            {
+                "id": node.get("id"),
+                "name": node.get("name"),
+                "parentName": node.get("parentName"),
+                "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
+                "tag": comparison_tag_by_name.get(node.get("name")) or "",
+                "kpis": [
+                    {
+                        "label": metric.get("label") or metric.get("column") or metric.get("key"),
+                        "value": _format_value(_row_value(node.get("raw") or {}, metric), metric),
+                    }
+                    for metric in [task_metric, actual_metric, rate_metric, remain_metric]
+                    if metric
+                ],
+                "metric": {
+                    "label": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
+                    "value": _format_value(_row_value(node.get("raw") or {}, filter_metric), filter_metric),
+                    "rawValue": _row_value(node.get("raw") or {}, filter_metric),
+                },
+            }
+            for node in matched_source_nodes
+        ]
+        answer_summary = {
+            "mode": "filter",
+            "title": "命中结果",
+            "targetLevel": compare_label,
+            "matchedCount": len(matched_filter_nodes),
+            "metricLabel": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
+            "operator": filter_operator,
+            "value": filter_value,
+            "text": (
+                f"命中 {len(matched_filter_nodes)} 个{compare_label}"
+                if matched_filter_nodes
+                else f"未命中符合条件的{compare_label}"
+            ),
+        }
+
     provenance_id = "p_sql_result_001"
     return {
         "version": "2.0",
         "reportTitle": "业绩分析报告",
         "question": question,
+        "answerMode": answer_mode,
+        "answerSummary": answer_summary,
+        "matchedNodes": matched_filter_nodes,
         "analysisMode": mode,
         "layoutTemplate": _layout_template(mode),
         "debug": {

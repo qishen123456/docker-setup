@@ -375,6 +375,30 @@
                   class="sa-side-section sa-business-report"
                   :class="{ 'is-single-focus': businessDrillReport.isSingleFocus }"
                 >
+                  <div v-if="businessDrillReport.filterAnswer" class="sa-filter-answer-card">
+                    <div class="sa-filter-answer-head">
+                      <div>
+                        <div class="sa-side-section-title">{{ businessDrillReport.filterAnswer.title || '命中结果' }}</div>
+                        <p class="sa-business-summary-text">{{ businessDrillReport.filterAnswer.text }}</p>
+                      </div>
+                      <span class="sa-business-risk-pill" :class="businessDrillReport.filterAnswer.nodes?.length ? 'warn' : 'good'">
+                        {{ businessDrillReport.filterAnswer.nodes?.length || 0 }} 个
+                      </span>
+                    </div>
+                    <div v-if="businessDrillReport.filterAnswer.nodes?.length" class="sa-filter-answer-list">
+                      <button
+                        v-for="node in businessDrillReport.filterAnswer.nodes"
+                        :key="`filter-answer-${node.id}`"
+                        class="sa-filter-answer-row"
+                        type="button"
+                        @click="toggleOfficeDrill(node.id)"
+                      >
+                        <span class="sa-filter-answer-name">{{ node.name }}</span>
+                        <span class="sa-filter-answer-metric">{{ node.metricLabel }} {{ node.metricValue }}</span>
+                        <span v-if="node.tag" class="sa-detail-tag" :class="node.tone">{{ node.tag }}</span>
+                      </button>
+                    </div>
+                  </div>
                   <div
                     v-if="businessNarrativeSections.length"
                     class="sa-management-narrative"
@@ -804,6 +828,33 @@
               </div>
             </section>
           </div>
+
+          <section v-if="dialogBusinessDrillReport?.filterAnswer" class="sa-report-stage-section">
+            <div class="sa-filter-answer-card">
+              <div class="sa-filter-answer-head">
+                <div>
+                  <div class="sa-report-stage-title">{{ dialogBusinessDrillReport.filterAnswer.title || '命中结果' }}</div>
+                  <p class="sa-business-summary-text">{{ dialogBusinessDrillReport.filterAnswer.text }}</p>
+                </div>
+                <span class="sa-business-risk-pill" :class="dialogBusinessDrillReport.filterAnswer.nodes?.length ? 'warn' : 'good'">
+                  {{ dialogBusinessDrillReport.filterAnswer.nodes?.length || 0 }} 个
+                </span>
+              </div>
+              <div v-if="dialogBusinessDrillReport.filterAnswer.nodes?.length" class="sa-filter-answer-list">
+                <button
+                  v-for="node in dialogBusinessDrillReport.filterAnswer.nodes"
+                  :key="`dialog-filter-answer-${node.id}`"
+                  class="sa-filter-answer-row"
+                  type="button"
+                  @click="toggleOfficeDrill(node.id)"
+                >
+                  <span class="sa-filter-answer-name">{{ node.name }}</span>
+                  <span class="sa-filter-answer-metric">{{ node.metricLabel }} {{ node.metricValue }}</span>
+                  <span v-if="node.tag" class="sa-detail-tag" :class="node.tone">{{ node.tag }}</span>
+                </button>
+              </div>
+            </div>
+          </section>
 
           <section v-if="dialogBusinessDrillReport && businessNarrativeSections.length" class="sa-report-stage-section sa-report-narrative-stage">
             <div class="sa-report-stage-title">经营解读</div>
@@ -2274,10 +2325,32 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   const summary = Array.isArray(spec.narrative) && spec.narrative.length
     ? spec.narrative.join('；')
     : spec.sections?.find(section => section.key === 'overview')?.narrative || `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。`
+  const matchedNodes = Array.isArray(spec.matchedNodes) ? spec.matchedNodes : []
+  const filterAnswer = spec.answerMode === 'filter'
+    ? {
+        ...spec.answerSummary,
+        nodes: matchedNodes.map((node) => {
+          const office = offices.find(item => item.name === node.name)
+          const metric = node.metric || {}
+          return {
+            id: office?.id || node.id || node.name,
+            name: node.name || '未命名对象',
+            levelLabel: node.levelLabel || compareLevelLabel,
+            tag: node.tag || office?.tag || '',
+            tone: office?.tone || getOfficeRateTone(toNumber(metric.rawValue), config),
+            metricLabel: metric.label || spec.answerSummary?.metricLabel || '指标',
+            metricValue: metric.value ?? formatDisplayValue(metric.rawValue),
+            kpis: Array.isArray(node.kpis) ? node.kpis : [],
+          }
+        }),
+      }
+    : null
 
   return {
     dataset,
     analysisMode: spec.analysisMode || 'detail',
+    answerMode: spec.answerMode || spec.analysisMode || 'detail',
+    filterAnswer,
     focusName: spec.scope?.focusNode || '',
     isSingleFocus: Boolean(spec.scope?.focusNode && spec.analysisMode !== 'comparative'),
     kpis: (spec.kpis || []).map(item => ({
@@ -6357,6 +6430,64 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1.75;
   color: #1d2129;
+}
+
+.sa-filter-answer-card {
+  padding: 14px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(245, 248, 255, 0.92), rgba(255, 255, 255, 0.96));
+  box-shadow: 0 10px 24px rgba(30, 64, 175, 0.08);
+}
+
+.sa-filter-answer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sa-filter-answer-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sa-filter-answer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #1d2129;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sa-filter-answer-row:hover {
+  border-color: rgba(22, 93, 255, 0.26);
+  background: #fff;
+}
+
+.sa-filter-answer-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-filter-answer-metric {
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .sa-business-risk-pill,

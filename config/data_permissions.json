@@ -2,20 +2,20 @@
   "rules": {
     "3": {
       "dataset_id": 3,
-      "mode": "org_tree",
-      "tree_type_id": "tree_e89e7f9d372f",
+      "mode": "public",
+      "tree_type_id": "tree_3991b9e4de6d",
       "tree_type_ids": [
-        "tree_e89e7f9d372f"
+        "tree_3991b9e4de6d"
       ],
       "organization_node_ids": [
-        "node_af7d8386f636",
-        "node_6ad79f42450f",
-        "node_5fbd42a1f50a",
-        "node_11c9cb38b5a3",
-        "node_fb0fb49af426",
-        "node_be11bf876975",
-        "node_2ef17df68769",
-        "node_1dc5ad871367"
+        "node_ea963f252380",
+        "node_2a423ecd0bbd",
+        "node_9b83dd3f8e77",
+        "node_87c1b660011d",
+        "node_739c2883d0e9",
+        "node_435990951f1f",
+        "node_c34ba10a4b8f",
+        "node_d565f7d6b917"
       ],
       "organization_codes": [
         "28b5364e2f181bfg",
@@ -26,59 +26,6 @@
         "63aa3gb14a191aee",
         "b8a3gda6d426a699",
         "ef5bd91dc373gfbg"
-      ],
-      "allowed_roles": [],
-      "allowed_departments": [],
-      "allowed_positions": [],
-      "allowed_employee_ids": [],
-      "allowed_union_ids": [],
-      "scope": {
-        "organization_field": "组织编码",
-        "organization_values": [],
-        "company_field": "",
-        "company_values": [],
-        "row_filter_note": ""
-      },
-      "note": ""
-    },
-    "11": {
-      "dataset_id": 11,
-      "mode": "org_tree",
-      "tree_type_id": "tree_e89e7f9d372f",
-      "tree_type_ids": [
-        "tree_e89e7f9d372f"
-      ],
-      "organization_node_ids": [
-        "node_c80ff5606cd5",
-        "node_47b422121cad",
-        "node_1037004610cd",
-        "node_0d965448c864",
-        "node_d36aa464ba7e",
-        "node_3a03c482b5e4",
-        "node_140a81c3245a",
-        "node_62bd450f601d",
-        "node_07a91bac8450",
-        "node_edbce0ef4b91",
-        "node_664f3f6c8d9f",
-        "node_44c6b403ba71",
-        "node_1f83674013a9",
-        "node_9462104b134e"
-      ],
-      "organization_codes": [
-        "7c38ff2d14dd5515",
-        "1f5bc53566bfa5b2",
-        "4c92717a393b3248",
-        "e26cc888231cb3c9",
-        "1bbd2a36b2fb686f",
-        "4b66949a1g2g1e8c",
-        "196873fd1d2cfg85",
-        "843a34aa6g3gg763",
-        "b45ddd151517eag6",
-        "e99798612e98b4d6",
-        "bg18ddb2efb2gf61",
-        "egg37cg26bafg5a9",
-        "aa34g4b218a28bgf",
-        "egcc258a8d9c811f"
       ],
       "allowed_roles": [],
       "allowed_departments": [],
