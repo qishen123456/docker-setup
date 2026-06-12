@@ -861,8 +861,7 @@ def delete_bookshelf_dataset(dataset_id: int):
         with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                UPDATE bs_datasets
-                SET is_active = FALSE, updated_at = NOW()
+                DELETE FROM bs_datasets
                 WHERE id = %s
                 RETURNING id;
                 """,
@@ -871,7 +870,7 @@ def delete_bookshelf_dataset(dataset_id: int):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": f"dataset not found: {dataset_id}"}), 404
-            return jsonify({"message": "dataset deactivated", "dataset_id": dataset_id})
+            return jsonify({"message": "dataset deleted", "dataset_id": dataset_id})
     except BookshelfConfigurationError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:

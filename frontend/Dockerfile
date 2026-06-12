@@ -2,15 +2,20 @@ FROM node:20-alpine AS build
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ENV npm_config_registry=${NPM_REGISTRY}
+ENV npm_registry=${NPM_REGISTRY}
+ENV PNPM_HOME=/pnpm
+ENV PATH=${PNPM_HOME}:${PATH}
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm config set registry "${NPM_REGISTRY}" \
-    && npm install --no-audit --progress=false
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable \
+    && corepack prepare pnpm@9.15.9 --activate \
+    && pnpm install --no-frozen-lockfile --prefer-offline
 
 COPY . /app
-RUN npm run build
+RUN rm -f pnpm-workspace.yaml \
+    && pnpm run build
 
 FROM nginx:1.27-alpine
 

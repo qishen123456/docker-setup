@@ -615,7 +615,7 @@ import {
 const datasets = ref([])
 const dataSources = ref([])
 const listFilterSourceId = ref('')
-const listStatusFilter = ref('all')
+const listStatusFilter = ref('active')
 const searchKeyword = ref('')
 const selectedDatasetId = ref(null)
 const activeTab = ref('common_questions')
@@ -1620,7 +1620,7 @@ const saveFull = async () => {
     if (currentDataset) {
       if ((listStatusFilter.value === 'active' && currentDataset.is_active === false)
         || (listStatusFilter.value === 'inactive' && currentDataset.is_active !== false)) {
-        listStatusFilter.value = 'all'
+        listStatusFilter.value = 'active'
       }
       await selectDataset(currentDataset)
     }
