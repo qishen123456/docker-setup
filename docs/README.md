@@ -32,11 +32,10 @@ Docker 前端默认端口：8888
 ```bash
 cd /opt/smartask/smartask
 git remote add github https://github.com/qishen123456/docker-setup.git 2>/dev/null || git remote set-url github https://github.com/qishen123456/docker-setup.git
-git fetch github
-git checkout docker-setup
-git branch --set-upstream-to=github/docker-setup docker-setup
 bash update.sh --remote github
 ```
+
+`update.sh --remote github` 会自动完成拉代码、备份、保护运行态配置、重建容器和自检；不要再手动 `git fetch/merge` 后接 `--no-pull`，除非需要临时排障。
 
 更新完成后在服务器本机检查：
 
@@ -59,7 +58,7 @@ curl -I http://127.0.0.1:8888
 ```bash
 git status
 git add .
-git commit -m "chore: update smartask LIn aa"
+git commit -m "chore: update smartask qi.1.1"
 git push -u github docker-setup
 ```
 

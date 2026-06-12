@@ -159,6 +159,7 @@ save_local_git_changes() {
   local status_text timestamp local_dir
   status_text="$(git status --porcelain --untracked-files=all)"
   if [[ -z "$status_text" ]]; then
+    echo "  Git local changes: clean"
     return 0
   fi
 
@@ -180,9 +181,10 @@ save_local_git_changes() {
 
   warn "检测到服务器存在本地改动或未跟踪文件，已保存到: $local_dir"
   warn "这些改动会先进入 git stash，避免 git pull 被本地文件阻断。"
-  git stash push --include-untracked -m "smartask-update-${timestamp}" >/dev/null
+  git stash push --include-untracked -m "smartask-update-${timestamp}"
   LOCAL_STASH_CREATED=1
   LOCAL_STASH_NOTE="本地 tracked/untracked 改动已暂存到 git stash: smartask-update-${timestamp}；备份目录: $local_dir"
+  echo "  Git local changes: stashed"
 }
 
 render_progress_bar() {
@@ -486,14 +488,18 @@ if [[ "$NO_PULL" -eq 0 ]]; then
   info "拉取最新代码"
   preserve_runtime_config_files
   if [[ -n "$REMOTE" ]]; then
+    echo "  Git fetch: $REMOTE/$BRANCH"
     git fetch "$REMOTE" "$BRANCH" || {
       restore_runtime_config_files
       fail "从远端 $REMOTE 拉取分支 $BRANCH 失败"
     }
   else
+    echo "  Git fetch: --all"
     git fetch --all
   fi
+  echo "  Git local changes check"
   save_local_git_changes
+  echo "  Git checkout: $BRANCH"
   if ! git checkout "$BRANCH"; then
     restore_runtime_config_files
     fail "切换分支失败，已尽量恢复运行态配置"
@@ -502,6 +508,7 @@ if [[ "$NO_PULL" -eq 0 ]]; then
     echo "  Git remote: $REMOTE"
     echo "  Git branch: $BRANCH"
     git branch --set-upstream-to="$REMOTE/$BRANCH" "$BRANCH" 2>/dev/null || true
+    echo "  Git merge: $REMOTE/$BRANCH"
     if ! git merge --ff-only "$REMOTE/$BRANCH"; then
       restore_runtime_config_files
       fail "拉取 $REMOTE/$BRANCH 失败，已尽量恢复运行态配置"
