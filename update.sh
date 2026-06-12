@@ -501,12 +501,8 @@ if [[ "$NO_PULL" -eq 0 ]]; then
   if [[ -n "$REMOTE" ]]; then
     echo "  Git remote: $REMOTE"
     echo "  Git branch: $BRANCH"
-    git fetch "$REMOTE" "$BRANCH" || {
-      restore_runtime_config_files
-      fail "从远端 $REMOTE 拉取分支 $BRANCH 失败"
-    }
     git branch --set-upstream-to="$REMOTE/$BRANCH" "$BRANCH" 2>/dev/null || true
-    if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
+    if ! git merge --ff-only "$REMOTE/$BRANCH"; then
       restore_runtime_config_files
       fail "拉取 $REMOTE/$BRANCH 失败，已尽量恢复运行态配置"
     fi
