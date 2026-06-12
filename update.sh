@@ -485,7 +485,14 @@ fi
 if [[ "$NO_PULL" -eq 0 ]]; then
   info "拉取最新代码"
   preserve_runtime_config_files
-  git fetch --all
+  if [[ -n "$REMOTE" ]]; then
+    git fetch "$REMOTE" "$BRANCH" || {
+      restore_runtime_config_files
+      fail "从远端 $REMOTE 拉取分支 $BRANCH 失败"
+    }
+  else
+    git fetch --all
+  fi
   save_local_git_changes
   if ! git checkout "$BRANCH"; then
     restore_runtime_config_files
