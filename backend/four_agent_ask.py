@@ -385,6 +385,88 @@ class FourAgentAskService:
             return tens * 10 + ones if tens else default
         return digits.get(text, default)
 
+    @staticmethod
+    def _rank_limit_match(text: str):
+        pattern = r"(\d+|[一二两三四五六七八九十]+)"
+        return (
+            re.search(rf"(?:Top|TOP|top|前|后|倒数)\s*{pattern}", text or "")
+            or re.search(rf"(?:最高|最低|最好|最差)(?:的)?\s*{pattern}\s*(?:个|名|位)?", text or "")
+        )
+
+    def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
+        text = str(text or "")
+        top_requested = bool(re.search(r"(?:Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好)", text))
+        bottom_requested = bool(re.search(r"(?:后\s*(?:\d+|[一二两三四五六七八九十]+)|倒数|最低|最差|垫底)", text))
+        match = self._rank_limit_match(text)
+        limit = self._parse_cn_int(match.group(1), default_limit) if match else default_limit
+        if limit:
+            limit = max(1, min(max_limit, limit))
+        return {
+            "limit": limit,
+            "sides": "both" if top_requested and bottom_requested else ("bottom" if bottom_requested else "top"),
+            "direction": "asc" if bottom_requested and not top_requested else "desc",
+        }
+
+    @staticmethod
+    def _build_ranked_select_sql(
+        *,
+        source_cte: str,
+        source_name: str,
+        output_cte: str,
+        where_clause: str,
+        metric_column: str,
+        direction: str,
+        rank_limit: int,
+        rank_sides: str = "",
+        tie_breaker: str = "剩余任务金额 DESC, 节点名称",
+    ) -> str:
+        direction = "ASC" if str(direction).upper() == "ASC" else "DESC"
+        rank_limit = max(1, int(rank_limit or 1))
+        if rank_sides == "both":
+            return f"""
+{source_cte},
+{output_cte} AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            ORDER BY {metric_column} DESC, {tie_breaker}
+        ) AS 前排名,
+        ROW_NUMBER() OVER (
+            ORDER BY {metric_column} ASC, {tie_breaker}
+        ) AS 后排名
+    FROM {source_name}
+    WHERE {where_clause}
+),
+双向排名结果 AS (
+    SELECT *, CASE WHEN 前排名 <= {rank_limit} THEN '前{rank_limit}' ELSE '后{rank_limit}' END AS 排名分组
+    FROM {output_cte}
+    WHERE 前排名 <= {rank_limit} OR 后排名 <= {rank_limit}
+)
+SELECT *
+FROM 双向排名结果
+ORDER BY CASE 排名分组 WHEN '前{rank_limit}' THEN 1 ELSE 2 END,
+         CASE WHEN 排名分组 = '前{rank_limit}' THEN 前排名 ELSE 后排名 END,
+         节点名称
+LIMIT {rank_limit * 2}
+""".strip()
+        return f"""
+{source_cte},
+{output_cte} AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            ORDER BY {metric_column} {direction}, {tie_breaker}
+        ) AS 全局排名
+    FROM {source_name}
+    WHERE {where_clause}
+)
+SELECT *
+FROM {output_cte}
+WHERE 全局排名 <= {rank_limit}
+ORDER BY 全局排名, {metric_column} {direction}, {tie_breaker}
+LIMIT {rank_limit}
+""".strip()
+
     def _resolve_query_intent(self, question: str, context: Dict[str, Any]) -> Dict[str, Any]:
         config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
         policies = self._safe_dict(config.get("intentPolicies"))
@@ -398,23 +480,12 @@ class FourAgentAskService:
             "sort_metric_key": "",
             "sort_metric_column": "",
             "direction": "",
+            "rank_sides": "",
             "output_mode": "",
             "matched_triggers": [],
         }
         if not text:
             return intent
-
-        filter_operator = ""
-        if re.search(r"低于|不足|小于|低过|少于", text):
-            filter_operator = "<"
-        elif re.search(r"高于|超过|大于|不少于|不低于|达到|达成率高", text):
-            filter_operator = ">="
-        filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
-        filter_value = float(filter_value_match.group(1)) if filter_value_match else None
-        filter_problem = (
-            ("哪些" in text and bool(filter_operator))
-            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
-        )
 
         def resolve_target_level_from_text() -> str:
             aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
@@ -437,8 +508,30 @@ class FourAgentAskService:
                         return str(level)
             return ""
 
+        filter_operator = ""
+        if re.search(r"低于|不足|小于|低过|少于", text):
+            filter_operator = "<"
+        elif re.search(r"高于|超过|大于|不少于|不低于|达到|达成率高", text):
+            filter_operator = ">="
+        filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
+        filter_value = float(filter_value_match.group(1)) if filter_value_match else None
+        filter_problem = (
+            ("哪些" in text and bool(filter_operator))
+            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
+        )
+        target_level = resolve_target_level_from_text()
+
+        drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻", text))
+        if drilldown_problem:
+            intent.update({
+                "intent": "drilldown",
+                "target_level": target_level,
+                "output_mode": "children_first",
+                "matched_triggers": ["drilldown"],
+            })
+            return intent
+
         if filter_problem:
-            target_level = resolve_target_level_from_text()
             metric = next(
                 (
                     item for item in (config.get("metrics") or [])
@@ -473,6 +566,46 @@ class FourAgentAskService:
 
         triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]
 
+        def metric_match_score(metric_item: Dict[str, Any]) -> int:
+            score = 0
+            metric_key = str(metric_item.get("key") or "")
+            metric_label = str(metric_item.get("label") or "")
+            metric_column = str(metric_item.get("column") or "")
+            metric_text = " ".join([metric_key, metric_label, metric_column])
+            amount_tokens = ["销售金额", "销售额", "开单金额", "开单额", "年度开单金额", "年度开单", "开单", "实际金额", "实际", "完成金额", "业绩金额", "金额", "销售"]
+            task_tokens = ["任务金额", "任务额", "目标金额", "目标", "任务"]
+            remain_tokens = ["剩余任务", "剩余金额", "缺口", "差额", "待完成"]
+            rate_tokens = ["达成率", "完成率", "进度", "比例", "rate", "percent"]
+
+            if any(token in text for token in amount_tokens):
+                if metric_key == "actual":
+                    score += 60
+                if any(token in metric_text for token in ["年度开单", "开单金额", "开单", "实际", "销售"]):
+                    score += 40
+            if any(token in text for token in task_tokens):
+                if metric_key == "task":
+                    score += 60
+                if any(token in metric_text for token in ["任务", "目标"]):
+                    score += 40
+            if any(token in text for token in remain_tokens):
+                if metric_key == "remain":
+                    score += 60
+                if any(token in metric_text for token in ["剩余", "缺口", "差额", "待完成"]):
+                    score += 40
+            if any(token in text.lower() for token in [item.lower() for item in rate_tokens]):
+                if metric_key == "rate":
+                    score += 60
+                if any(token in metric_text.lower() for token in [item.lower() for item in rate_tokens]):
+                    score += 40
+
+            if metric_key and metric_key in text:
+                score += 30
+            if metric_label and metric_label in text:
+                score += 30
+            if metric_column and metric_column in text:
+                score += 30
+            return score
+
         def trigger_matched(item: str) -> bool:
             if item in {"前", "后"}:
                 return bool(re.search(rf"{re.escape(item)}\s*(?:\d+|[一二两三四五六七八九十]+)", text))
@@ -482,54 +615,37 @@ class FourAgentAskService:
 
         matched_triggers = [item for item in triggers if item and trigger_matched(item)]
         if not matched_triggers:
+            if target_level:
+                intent["target_level"] = target_level
             return intent
 
         max_top_n = self._safe_int(ranking_policy.get("maxTopN"), 20)
         default_top_n = self._safe_int(ranking_policy.get("defaultTopN"), 3)
-        rank_match = re.search(r"(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", text)
-        top_n = self._parse_cn_int(rank_match.group(1) if rank_match else "", default_top_n)
-        top_n = max(1, min(max_top_n, top_n))
+        rank_spec = self._rank_request_spec(text, default_limit=0, max_limit=max_top_n)
+        top_n = rank_spec.get("limit") or None
+        if top_n is not None:
+            top_n = max(1, min(max_top_n, top_n))
 
         negative_triggers = [str(item) for item in (ranking_policy.get("negativeTriggers") or []) if str(item).strip()]
-        direction = "asc" if any(item in text for item in negative_triggers) else str(ranking_policy.get("defaultDirection") or "desc")
+        direction = (
+            "desc"
+            if rank_spec.get("sides") == "both"
+            else "asc" if any(item in text for item in negative_triggers)
+            else str(ranking_policy.get("defaultDirection") or "desc")
+        )
         if direction not in {"asc", "desc"}:
             direction = "desc"
 
-        target_level = ""
-        aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
-        level_candidates = []
-        for level, level_aliases in aliases.items():
-            candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
-            if str(level) == "城市公司":
-                candidates.append("城市分公司")
-            for candidate in candidates:
-                if candidate:
-                    level_candidates.append((candidate, str(level)))
-        for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
-            if candidate in text:
-                target_level = level
-                break
-        if not target_level:
-            if "城市分公司" in text or "城市公司" in text:
-                target_level = "城市公司"
-            for dimension in config.get("analysisDimensions") or []:
-                for level in dimension.get("path") or []:
-                    if target_level:
-                        break
-                    if level and str(level) in text:
-                        target_level = str(level)
-                        break
-                if target_level:
-                    break
-
         metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
-        metric = next(
+        scored_metrics = sorted(
             (
-                item for item in metrics
-                if any(str(item.get(key) or "") and str(item.get(key) or "") in text for key in ("key", "label", "column"))
+                (metric_match_score(item), item)
+                for item in metrics
             ),
-            None,
+            key=lambda pair: pair[0],
+            reverse=True,
         )
+        metric = scored_metrics[0][1] if scored_metrics and scored_metrics[0][0] > 0 else None
         if not metric:
             default_metric_key = str(ranking_policy.get("defaultMetricKey") or "")
             metric = next((item for item in metrics if str(item.get("key") or "") == default_metric_key), None)
@@ -542,6 +658,7 @@ class FourAgentAskService:
             "sort_metric_key": metric.get("key") or "",
             "sort_metric_column": metric.get("column") or metric.get("label") or "",
             "direction": direction,
+            "rank_sides": rank_spec.get("sides") or "",
             "output_mode": ranking_policy.get("outputMode") or "topn_only",
             "matched_triggers": matched_triggers,
         })
@@ -751,6 +868,7 @@ class FourAgentAskService:
             error_message,
             self._safe_dict(context.get("report_config")) or report_config_store.get_default_config(),
             self._safe_dict(context.get("resolved_entities")),
+            self._safe_dict(context.get("query_intent")),
         )
         if layered:
             return layered
@@ -871,6 +989,7 @@ class FourAgentAskService:
         error_message: str = "",
         report_config: Optional[Dict[str, Any]] = None,
         resolved_entities: Optional[Dict[str, Any]] = None,
+        query_intent: Optional[Dict[str, Any]] = None,
     ) -> str:
         if not isinstance(rows, list) or not rows:
             return ""
@@ -878,6 +997,7 @@ class FourAgentAskService:
             columns = []
 
         config = report_config or report_config_store.get_default_config()
+        query_intent = query_intent or {}
         metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
         metric_by_key = {str(item.get("key") or ""): item for item in metrics}
         rate_metric = metric_by_key.get("rate") or next((item for item in metrics if item.get("format") == "percent"), {})
@@ -905,6 +1025,11 @@ class FourAgentAskService:
 
         def row_rate(row: Dict[str, Any]) -> Optional[float]:
             return self._to_float(row.get(rate_col))
+
+        def row_metric_value(row: Dict[str, Any], metric_column: str) -> Optional[float]:
+            if not metric_column:
+                return None
+            return self._to_float(row.get(metric_column))
 
         def row_name(row: Dict[str, Any]) -> str:
             return normalized_text(row, name_col)
@@ -985,6 +1110,13 @@ class FourAgentAskService:
                 return "暂无"
             return "、".join(f"{row_name(row)} {self._format_metric(row_rate(row), '%')}" for row in items)
 
+        def format_metric_value(value: Optional[float], metric: Dict[str, Any]) -> str:
+            if value is None:
+                return "-"
+            if (metric or {}).get("format") == "percent":
+                return self._format_metric(value, "%")
+            return self._format_metric(value)
+
         def format_dynamic(groups: Dict[str, Any], key: str, empty_text: str) -> str:
             return format_rank(groups.get(key) or []) if groups.get("can_compare") else empty_text
 
@@ -1044,7 +1176,149 @@ class FourAgentAskService:
 
         subject_label = "、".join(query_subjects[:6]) or question or dataset_name
         resolved_names = self._resolved_entity_names({"resolved_entities": resolved_entities or {}})
+        explicit_person_focus = (
+            len(resolved_names) == 1
+            and any(row_name(row) == resolved_names[0] for row in valid_rows)
+        )
+        focus_person_row = next((row for row in valid_rows if row_name(row) == resolved_names[0]), None) if explicit_person_focus else None
         is_comparison = len(resolved_names) > 1 or bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
+        ranking_intent = str(query_intent.get("intent") or "") == "ranking"
+        ranking_metric_key = str(query_intent.get("sort_metric_key") or "")
+        ranking_metric_column = str(query_intent.get("sort_metric_column") or "").strip()
+        ranking_metric = metric_by_key.get(ranking_metric_key) or next(
+            (
+                item for item in metrics
+                if ranking_metric_column and ranking_metric_column in {
+                    str(item.get("column") or ""),
+                    str(item.get("label") or ""),
+                }
+            ),
+            {},
+        )
+        ranking_metric = ranking_metric or rate_metric or actual_metric or task_metric or remain_metric or {}
+        ranking_metric_column = ranking_metric_column or str(ranking_metric.get("column") or "")
+        ranking_metric_label = str(ranking_metric.get("label") or ranking_metric_column or ranking_metric_key or "指标")
+        ranking_direction = str(query_intent.get("direction") or "desc").lower()
+        target_level = str(query_intent.get("target_level") or "").strip()
+
+        if ranking_intent and ranking_metric_column:
+            scoped_rows = [
+                row for row in valid_rows
+                if row_metric_value(row, ranking_metric_column) is not None
+                and (not target_level or normalized_text(row, level_col) == target_level)
+            ]
+            if scoped_rows:
+                ranked_rows = sorted(
+                    scoped_rows,
+                    key=lambda row: row_metric_value(row, ranking_metric_column) or 0,
+                    reverse=ranking_direction != "asc",
+                )
+                rank_limit = self._safe_int(query_intent.get("top_n"), 0)
+                shown_rows = ranked_rows[: min(rank_limit, len(ranked_rows))] if rank_limit > 0 else ranked_rows
+                leader = shown_rows[0]
+                tail = shown_rows[-1]
+                leader_metric_value = row_metric_value(leader, ranking_metric_column)
+                tail_metric_value = row_metric_value(tail, ranking_metric_column)
+                leader_metric_text = format_metric_value(leader_metric_value, ranking_metric)
+                tail_metric_text = format_metric_value(tail_metric_value, ranking_metric)
+                leader_rate = row_rate(leader)
+                leader_rate_text = self._format_metric(leader_rate, "%") if leader_rate is not None else ""
+                tail_rate_value = row_rate(tail)
+                tail_rate_text = self._format_metric(tail_rate_value, "%") if tail_rate_value is not None else ""
+                rate_warning = (
+                    f"；但{leader.get(name_col) or row_name(leader)}达成率仅{leader_rate_text}，仍低于60%红线"
+                    if ranking_metric.get("format") != "percent" and leader_rate is not None and leader_rate < 60
+                    else ""
+                )
+                gap_text = ""
+                if leader_metric_value is not None and tail_metric_value is not None and row_name(leader) != row_name(tail):
+                    metric_gap = abs(leader_metric_value - tail_metric_value)
+                    gap_text = (
+                        f"{self._format_metric(metric_gap, '')} 个百分点"
+                        if ranking_metric.get("format") == "percent"
+                        else self._format_metric(metric_gap)
+                    )
+                risk_rows = [row for row in shown_rows if row_rate(row) is not None and (row_rate(row) or 0) < 20]
+                top_names = "、".join(row_name(row) for row in shown_rows[: min(3, len(shown_rows))] if row_name(row))
+                level_label = target_level or (normalized_text(leader, level_col) if leader else "") or "对象"
+                lines = [
+                    "## 业绩分析报告",
+                    "",
+                    "### 核心结论",
+                    (
+                        f"本次已按{ranking_metric_label}输出 {len(shown_rows)} 个{level_label}的排名结果："
+                        f"{row_name(leader)}位列第1，{ranking_metric_label}{leader_metric_text}；"
+                        f"{row_name(tail)}位于末位，{ranking_metric_label}{tail_metric_text}"
+                        f"{f'，首尾相差{gap_text}' if gap_text else ''}{rate_warning}。"
+                    ),
+                    "",
+                    "### 亮点分析",
+                    (
+                        f"• **榜首对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
+                        f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                        " -> 可作为当前口径的优先复盘样本。"
+                    ),
+                    (
+                        f"• **前三结果：** {top_names or row_name(leader)}"
+                        " -> 先看头部样本，再结合完整排名表继续核对差距来源。"
+                    ),
+                    "",
+                    "### 问题诊断",
+                    (
+                        f"• **末位对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
+                        f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
+                        " -> 建议优先核对任务缺口、项目推进和资源投入。"
+                    ),
+                    (
+                        f"• **风险提示：** 当前结果内低于20%风险线的节点 {len(risk_rows)} 个"
+                        + (f"，重点关注 {format_rank(risk_rows[:3])}。" if risk_rows else "，暂无明显低于20%的节点。")
+                    ),
+                    "",
+                    "### 改进建议",
+                    f"• 先按{ranking_metric_label}复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。",
+                    f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。",
+                    "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
+                ]
+                if review_summary:
+                    lines.extend(["", f"> SQL复核：{review_summary}"])
+                if error_message:
+                    lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
+                return "\n".join(lines)
+
+        if explicit_person_focus and focus_person_row:
+            person_name = row_name(focus_person_row)
+            parent_name = normalized_text(focus_person_row, parent_col) if parent_col else ""
+            level_name = normalized_text(focus_person_row, level_col) or "对象"
+            person_task = format_metric_value(self._to_float(focus_person_row.get(task_col)), task_metric) if task_col else "-"
+            person_actual = format_metric_value(self._to_float(focus_person_row.get(actual_col)), actual_metric) if actual_col else "-"
+            person_rate_value = row_rate(focus_person_row)
+            person_rate = format_metric_value(person_rate_value, rate_metric) if rate_metric else "-"
+            person_remain = format_metric_value(self._to_float(focus_person_row.get(remain_col)), remain_metric) if remain_col else "-"
+            pressure_text = "当前达成承压，建议优先跟进缺口转化。" if person_rate_value is not None and person_rate_value < 20 else "当前进度已明确，可继续结合上级链路判断支撑与压力来源。"
+            lines = [
+                "## 业绩分析报告",
+                "",
+                "### 核心结论",
+                f"{person_name}当前作为{level_name}{f'，归属{parent_name}' if parent_name else ''}：年度任务{person_task}，年度开单{person_actual}，达成率{person_rate}，剩余任务{person_remain}。{pressure_text}",
+                "",
+                "### 亮点分析",
+                f"• **当前主体：** {person_name} -> 年度开单{person_actual}，任务{person_task}，达成率{person_rate}。",
+                f"• **归属链路：** {parent_name or '未识别上级'} -> 可继续下钻查看所属业务部/代表处的整体支撑情况。",
+                "",
+                "### 问题诊断",
+                f"• **缺口判断：** 当前剩余任务{person_remain}，需要把个人开单进度和上级组织支撑拆开看。",
+                f"• **风险提示：** {'达成率低于20%，属于重点承压节点。' if person_rate_value is not None and person_rate_value < 20 else '当前未落入重点风险红线，但仍需关注后续缺口消化。'}",
+                "",
+                "### 改进建议",
+                f"• 先围绕{person_name}核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。",
+                f"• 再结合{parent_name or '上级组织'}横向比较，判断问题更偏个人执行还是组织支撑不足。",
+            ]
+            if review_summary:
+                lines.extend(["", f"> SQL复核：{review_summary}"])
+            if error_message:
+                lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
+            return "\n".join(lines)
+
         if is_comparison and len(top_section["rows"]) >= 2:
             compared = sorted(
                 [row for row in top_section["rows"] if row_rate(row) is not None],
@@ -1526,8 +1800,13 @@ class FourAgentAskService:
         ]
         return any(token in text for token in blocked)
 
-    def _question_subject_names(self, question: str, context: Dict[str, Any]) -> List[str]:
-        names = self._resolved_entity_names(context)
+    def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
+        names = self._resolved_entity_names(context) if include_resolved else []
+        text = str(question or "").replace("\n", " ").strip()
+        role_person_names = self._role_person_subject_names(text)
+        if role_person_names:
+            return role_person_names
+
         dataset = self._safe_dict(context.get("dataset"))
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         if profile:
@@ -1537,7 +1816,11 @@ class FourAgentAskService:
                 if value and value not in names:
                     names.append(value)
 
-        text = str(question or "").replace("\n", " ").strip()
+        role_person_names = self._role_person_subject_names(text)
+        for candidate in role_person_names:
+            if candidate not in names:
+                names.append(candidate)
+
         for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部|事业部)", text):
             cleaned = match.strip("，,、 和与及的业绩情况表现整体")
             if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
@@ -1556,6 +1839,22 @@ class FourAgentAskService:
             for match in re.findall(pattern, text):
                 candidate = str(match or "").strip("，,、 的呢吗么吧")
                 candidate = re.sub(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", "", candidate).strip()
+                if self._looks_like_noise_subject(candidate):
+                    continue
+                if candidate not in names:
+                    names.append(candidate)
+        return names
+
+    def _role_person_subject_names(self, question: str) -> List[str]:
+        text = str(question or "").replace("\n", " ").strip()
+        names: List[str] = []
+        role_person_patterns = [
+            r"(?:商用事业部|商用|安吉尔商用事业部)?(?:的)?(?:业务代表|业务员|业务经理|销售人员|销售)\s*([\u4e00-\u9fa5]{2,4})(?=\s*(?:的|业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|$|[，,。？?]))",
+            r"(?:业务代表|业务员|业务经理|销售人员|销售)(?:是|为|叫|：|:)\s*([\u4e00-\u9fa5]{2,4})",
+        ]
+        for pattern in role_person_patterns:
+            for match in re.findall(pattern, text):
+                candidate = str(match or "").strip("，,、 的呢吗么吧")
                 if self._looks_like_noise_subject(candidate):
                     continue
                 if candidate not in names:
@@ -2961,16 +3260,29 @@ class FourAgentAskService:
         ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"]
         has_ranking_intent = any(token in normalized_question for token in ranking_tokens)
         if is_phase1_dataset and has_ranking_intent:
-            rank_match = re.search(r"(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
-            configured_limit = self._parse_cn_int(rank_match.group(1) if rank_match else "", 0)
+            rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
+            configured_limit = int(rank_spec.get("limit") or 0)
+            rank_sides = str((context.get("query_intent") or {}).get("rank_sides") or rank_spec.get("sides") or "")
             default_rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
             rank_limit = max(1, min(20, configured_limit or default_rank_limit))
-            is_top_rank = any(token in normalized_question for token in ["最高", "最好", "Top", "top", "前"])
+            is_top_rank = rank_sides != "bottom"
             order_direction = "DESC" if is_top_rank else "ASC"
             asks_grouped_rank = any(token in normalized_question for token in ["各", "每个", "分别", "各自", "按上级", "按代表处", "分组"])
+            allowed_rank_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
+            intent_metric_column = str((context.get("query_intent") or {}).get("sort_metric_column") or "").strip()
+            phase1_metric_column = intent_metric_column if intent_metric_column in allowed_rank_columns else ""
+            if not phase1_metric_column:
+                if "剩余" in normalized_question or "缺口" in normalized_question or "待完成" in normalized_question:
+                    phase1_metric_column = "剩余任务金额"
+                elif "任务" in normalized_question or "目标" in normalized_question:
+                    phase1_metric_column = "总任务金额"
+                elif "开单" in normalized_question or "金额" in normalized_question or "销售" in normalized_question:
+                    phase1_metric_column = "年度开单金额"
+                else:
+                    phase1_metric_column = "达成率"
 
             if "业务代表" in normalized_question or "业务员" in normalized_question:
-                metric_column = "年度开单金额" if ("开单" in normalized_question or "金额" in normalized_question) else "达成率"
+                metric_column = phase1_metric_column
                 syyb_dictionary_keys = {
                     str(item.get("jsonb_key") or "").strip()
                     for item in context.get("data_dictionary", []) or []
@@ -3031,6 +3343,18 @@ WITH 业务代表原始 AS (
     FROM 业务代表汇总
 )
 """
+                if rank_sides == "both":
+                    return self._build_ranked_select_sql(
+                        source_cte=business_person_rank_sql,
+                        source_name="业务代表结果",
+                        output_cte="业务代表双向排序",
+                        where_clause="TRUE",
+                        metric_column=metric_column,
+                        direction=order_direction,
+                        rank_limit=rank_limit,
+                        rank_sides=rank_sides,
+                        tie_breaker="剩余任务金额 DESC, 组织路径",
+                    )
                 if asks_grouped_rank:
                     return f"""
 {business_person_rank_sql},
@@ -3066,6 +3390,38 @@ ORDER BY 全局排名, {metric_column} {order_direction}, 剩余任务金额 DES
 LIMIT {rank_limit}
 """.strip()
             if "代表处" in normalized_question:
+                if rank_sides == "both":
+                    return self._build_ranked_select_sql(
+                        source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
+                        source_name="汇总结果",
+                        output_cte="代表处双向排序",
+                        where_clause="层级 = '代表处'",
+                        metric_column=phase1_metric_column,
+                        direction=order_direction,
+                        rank_limit=rank_limit,
+                        rank_sides=rank_sides,
+                        tie_breaker="剩余任务金额 DESC, 节点名称",
+                    )
+                if configured_limit > 0:
+                    return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+),
+代表处全局排序 AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            ORDER BY {phase1_metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
+        ) AS 全局排名
+    FROM 汇总结果
+    WHERE 层级 = '代表处'
+)
+SELECT *
+FROM 代表处全局排序
+WHERE 全局排名 <= {rank_limit}
+ORDER BY 全局排名, {phase1_metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
+LIMIT {rank_limit}
+""".strip()
                 return f"""
 WITH 汇总结果 AS (
 {syyb_base_sql}
@@ -3075,7 +3431,7 @@ WITH 汇总结果 AS (
         *,
         ROW_NUMBER() OVER (
             PARTITION BY 上级名称
-            ORDER BY 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
+            ORDER BY {phase1_metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
         ) AS 分公司内排名
     FROM 汇总结果
     WHERE 层级 = '代表处'
@@ -3083,20 +3439,33 @@ WITH 汇总结果 AS (
 SELECT *
 FROM 代表处分公司内排序
 WHERE 分公司内排名 <= {rank_limit}
-ORDER BY 上级名称, 分公司内排名, 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
+ORDER BY 上级名称, 分公司内排名, {phase1_metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
+            if "业务部" in normalized_question:
+                return self._build_ranked_select_sql(
+                    source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
+                    source_name="汇总结果",
+                    output_cte="业务部排序",
+                    where_clause="层级 = '业务部'",
+                    metric_column=phase1_metric_column,
+                    direction=order_direction,
+                    rank_limit=rank_limit if configured_limit or rank_sides == "both" else 20,
+                    rank_sides=rank_sides,
+                    tie_breaker="剩余任务金额 DESC, 节点名称",
+                )
             if "分公司" in normalized_question:
-                return f"""
-WITH 汇总结果 AS (
-{syyb_base_sql}
-)
-SELECT *
-FROM 汇总结果
-WHERE 层级 = '分公司'
-ORDER BY 达成率 {order_direction}, 剩余任务金额 DESC, 节点名称
-LIMIT 20
-""".strip()
+                return self._build_ranked_select_sql(
+                    source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
+                    source_name="汇总结果",
+                    output_cte="分公司排序",
+                    where_clause="层级 = '分公司'",
+                    metric_column=phase1_metric_column,
+                    direction=order_direction,
+                    rank_limit=rank_limit if configured_limit or rank_sides == "both" else 20,
+                    rank_sides=rank_sides,
+                    tie_breaker="剩余任务金额 DESC, 节点名称",
+                )
 
         if is_phase1_dataset and any(token in normalized_question for token in ["低于10", "低于 10", "小于10", "小于 10", "风险"]):
             return f"""
@@ -3110,7 +3479,9 @@ ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
 
-        entity_names = self._resolved_entity_names(context)
+        role_person_entity_names = self._role_person_subject_names(normalized_question)
+        explicit_subject_names = self._question_subject_names(normalized_question, context, include_resolved=False)
+        entity_names = role_person_entity_names or explicit_subject_names or self._resolved_entity_names(context)
         if not entity_names:
             profile = get_dataset_profile(dataset_code, dataset_name)
             if profile:
@@ -3408,105 +3779,95 @@ WITH 字段提取 AS (
                 or any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最佳", "完成好", "完成最好", "哪个", "最低", "最差"])
             )
         )
+        rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
+        rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
+
+        def consumer_rank_limit() -> int:
+            rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
+            if rank_limit <= 0:
+                rank_limit = int(rank_spec.get("limit") or 0)
+            if rank_limit <= 0:
+                rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
+            return max(1, min(20, rank_limit))
+
+        def consumer_order_direction() -> str:
+            order_direction = str(query_intent.get("direction") or "").upper() if intent_is_ranking else ""
+            if order_direction not in {"ASC", "DESC"}:
+                order_direction = "ASC" if any(token in normalized_question for token in ["最低", "最差", "后", "倒数", "落后"]) else "DESC"
+            return "DESC" if rank_sides == "both" else order_direction
+
+        def consumer_sort_column() -> str:
+            configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
+            allowed_sort_columns = {
+                "总任务金额",
+                "年度开单金额",
+                "达成率",
+                "剩余任务金额",
+                "线下任务_万元",
+                "新零售任务_万元",
+                "燃气定制任务_万元",
+                "地产任务_万元",
+                "线下实际_万元",
+                "新零售实际_万元",
+                "燃气定制实际_万元",
+                "地产实际_万元",
+            }
+            return configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
+
         if asks_city_ranking:
-            rank_match = re.search(r"(?:Top|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
-            rank_text = rank_match.group(1) if rank_match else ""
-            chinese_digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-
-            def parse_city_rank_limit(value: str) -> int:
-                if not value:
-                    return 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
-                if value.isdigit():
-                    return max(1, min(20, int(value)))
-                if value == "十":
-                    return 10
-                if "十" in value:
-                    left, _, right = value.partition("十")
-                    tens = chinese_digits.get(left, 1 if left == "" else 0)
-                    ones = chinese_digits.get(right, 0)
-                    return max(1, min(20, tens * 10 + ones))
-                return max(1, min(20, chinese_digits.get(value, 3)))
-
-            rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
-            if rank_limit <= 0:
-                rank_limit = parse_city_rank_limit(rank_text)
-            rank_limit = max(1, min(20, rank_limit))
-            order_direction = str(query_intent.get("direction") or "").upper() if intent_is_ranking else ""
-            if order_direction not in {"ASC", "DESC"}:
-                order_direction = "ASC" if any(token in normalized_question for token in ["最低", "最差", "后", "倒数", "落后"]) else "DESC"
-            configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
-            allowed_sort_columns = {
-                "总任务金额",
-                "年度开单金额",
-                "达成率",
-                "剩余任务金额",
-                "线下任务_万元",
-                "新零售任务_万元",
-                "燃气定制任务_万元",
-                "地产任务_万元",
-                "线下实际_万元",
-                "新零售实际_万元",
-                "燃气定制实际_万元",
-                "地产实际_万元",
-            }
-            sort_column = configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
-            return f"""
-{base_sql}
-SELECT *
-FROM 汇总结果
-WHERE 层级 = '城市公司'
-ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称
-LIMIT {rank_limit}
-""".strip()
+            rank_limit = consumer_rank_limit()
+            order_direction = consumer_order_direction()
+            sort_column = consumer_sort_column()
+            return self._build_ranked_select_sql(
+                source_cte=base_sql,
+                source_name="汇总结果",
+                output_cte="城市公司排序",
+                where_clause="层级 = '城市公司'",
+                metric_column=sort_column,
+                direction=order_direction,
+                rank_limit=rank_limit,
+                rank_sides=rank_sides,
+                tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
+            )
         if asks_branch_ranking and not asks_branch_extremes and not (channel_metric and asks_best_branch):
-            rank_match = re.search(r"(?:Top|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", normalized_question)
-            rank_text = rank_match.group(1) if rank_match else ""
-            chinese_digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-
-            def parse_rank_limit(value: str) -> int:
-                if not value:
-                    return 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
-                if value.isdigit():
-                    return max(1, min(20, int(value)))
-                if value == "十":
-                    return 10
-                if "十" in value:
-                    left, _, right = value.partition("十")
-                    tens = chinese_digits.get(left, 1 if left == "" else 0)
-                    ones = chinese_digits.get(right, 0)
-                    return max(1, min(20, tens * 10 + ones))
-                return max(1, min(20, chinese_digits.get(value, 3)))
-
-            rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
-            if rank_limit <= 0:
-                rank_limit = parse_rank_limit(rank_text)
-            rank_limit = max(1, min(20, rank_limit))
-            order_direction = str(query_intent.get("direction") or "").upper() if intent_is_ranking else ""
-            if order_direction not in {"ASC", "DESC"}:
-                order_direction = "ASC" if any(token in normalized_question for token in ["最低", "最差", "后", "倒数", "落后"]) else "DESC"
-            configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
-            allowed_sort_columns = {
-                "总任务金额",
-                "年度开单金额",
-                "达成率",
-                "剩余任务金额",
-                "线下任务_万元",
-                "新零售任务_万元",
-                "燃气定制任务_万元",
-                "地产任务_万元",
-                "线下实际_万元",
-                "新零售实际_万元",
-                "燃气定制实际_万元",
-                "地产实际_万元",
-            }
-            sort_column = configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
+            rank_limit = consumer_rank_limit()
+            order_direction = consumer_order_direction()
+            sort_column = consumer_sort_column()
+            if rank_sides == "both":
+                return self._build_ranked_select_sql(
+                    source_cte=base_sql,
+                    source_name="汇总结果",
+                    output_cte="分公司排序",
+                    where_clause="层级 = '分公司'",
+                    metric_column=sort_column,
+                    direction=order_direction,
+                    rank_limit=rank_limit,
+                    rank_sides=rank_sides,
+                    tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
+                )
             return f"""
-{base_sql}
-SELECT *
-FROM 汇总结果
-WHERE 层级 = '分公司'
-ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称
-LIMIT {rank_limit}
+{base_sql},
+排名分公司 AS (
+    SELECT
+        节点名称,
+        ROW_NUMBER() OVER (ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称) AS 排名序号
+    FROM 汇总结果
+    WHERE 层级 = '分公司'
+    LIMIT {rank_limit}
+)
+SELECT r.*
+FROM 汇总结果 r
+JOIN 排名分公司 b
+  ON (r.层级 = '分公司' AND r.节点名称 = b.节点名称)
+  OR (r.层级 = '城市公司' AND r.上级名称 = b.节点名称)
+ORDER BY
+    b.排名序号,
+    CASE r.层级 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    r.{sort_column} {order_direction},
+    r.年度开单金额 DESC,
+    r.剩余任务金额 DESC,
+    r.节点名称
+LIMIT 10000
 """.strip()
         if channel_metric and asks_best_branch:
             # Ranking should ignore empty branch rows, but the final display should keep
@@ -4406,6 +4767,30 @@ Agent3 复核结果：
                 context,
                 trace=trace,
             )
+            explicit_subject_names = self._question_subject_names(
+                route.get("refined_query", question),
+                context,
+                include_resolved=False,
+            )
+            resolved_names = self._resolved_entity_names(context)
+            explicit_subject_keys = {self._normalize_entity_key(item) for item in explicit_subject_names}
+            resolved_name_keys = {self._normalize_entity_key(item) for item in resolved_names}
+            if explicit_subject_names and not explicit_subject_keys.intersection(resolved_name_keys):
+                context["resolved_entities"] = {
+                    "intent": "single" if len(explicit_subject_names) == 1 else "compare",
+                    "scope_mode": "single" if len(explicit_subject_names) == 1 else "compare",
+                    "entities": [
+                        {
+                            "dimension_name": "业务主体",
+                            "members": explicit_subject_names,
+                            "matched_aliases": explicit_subject_names,
+                            "source": "question_subject_override",
+                        }
+                    ],
+                    "all_members": explicit_subject_names,
+                    "confidence": 0.72 if len(explicit_subject_names) == 1 else 0.68,
+                    "source": "question_subject_override",
+                }
             if not self._resolved_entity_names(context):
                 subject_names = self._question_subject_names(route.get("refined_query", question), context)
                 if subject_names:
@@ -4425,9 +4810,10 @@ Agent3 复核结果：
                         "source": "question_subject_fallback",
                     }
             refined_question = str(route.get("refined_query") or question or "")
-            intent_question = refined_question
-            if question and question not in intent_question:
-                intent_question = f"{intent_question}\n{question}"
+            original_question = str(route.get("original_question") or question or "").strip()
+            intent_question = original_question or refined_question
+            if refined_question and refined_question not in intent_question:
+                intent_question = f"{intent_question}\n{refined_question}"
             query_intent = self._resolve_query_intent(intent_question, context)
             report_config = {**report_config, "queryIntent": query_intent}
             context["report_config"] = report_config
@@ -5133,6 +5519,7 @@ Agent3 复核结果：
 
         question = pending["question"]
         route = dict(pending["route"])
+        route["original_question"] = question
         allowed_set = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
         if allowed_set is not None:
             route = self._filter_route_by_allowed_datasets(route, allowed_set)

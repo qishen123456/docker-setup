@@ -375,6 +375,17 @@
                   class="sa-side-section sa-business-report"
                   :class="{ 'is-single-focus': businessDrillReport.isSingleFocus }"
                 >
+                  <div v-if="businessDrillReport.primaryAnswer" class="sa-filter-answer-card">
+                    <div class="sa-filter-answer-head">
+                      <div>
+                        <div class="sa-side-section-title">{{ businessDrillReport.primaryAnswer.title || '主回答' }}</div>
+                        <p class="sa-business-summary-text">{{ businessDrillReport.primaryAnswer.text }}</p>
+                      </div>
+                      <span class="sa-business-risk-pill" :class="businessDrillReport.answerMode === 'ranking' ? 'good' : 'warn'">
+                        {{ businessDrillReport.primaryAnswer.targetLevel || businessDrillReport.compareLevelLabel }}
+                      </span>
+                    </div>
+                  </div>
                   <div v-if="businessDrillReport.filterAnswer" class="sa-filter-answer-card">
                     <div class="sa-filter-answer-head">
                       <div>
@@ -416,7 +427,7 @@
                   <div class="sa-business-summary">
                     <div>
                       <div class="sa-side-section-title">核心业绩看板</div>
-                      <p class="sa-business-summary-text">{{ businessDrillReport.summary }}</p>
+                      <p class="sa-business-summary-text">{{ sideBusinessSummaryText }}</p>
                     </div>
                     <span class="sa-business-risk-pill" :class="businessDrillReport.riskTone">{{ businessDrillReport.riskLabel }}</span>
                   </div>
@@ -460,7 +471,7 @@
                         class="sa-compare-row"
                         :style="getOfficeAccentStyle(office, officeIndex)"
                         type="button"
-                        @click="toggleOfficeDrill(office.id)"
+                        @click="canToggleOffice(office) && toggleOfficeDrill(office.id)"
                       >
                         <span class="sa-detail-name">{{ office.name }}</span>
                         <span>{{ getOfficeKpiLabel(office, 'task') }}</span>
@@ -485,7 +496,7 @@
                         class="sa-office-card-head"
                         type="button"
                         :aria-expanded="String(isOfficeExpanded(office.id))"
-                        @click="toggleOfficeDrill(office.id)"
+                        @click="canToggleOffice(office) && toggleOfficeDrill(office.id)"
                       >
                         <div class="sa-office-head-main">
                           <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
@@ -494,20 +505,22 @@
                         <span class="sa-office-head-actions">
                           <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                           <span
+                            v-if="canToggleOffice(office)"
                             class="sa-office-drill-toggle"
                             :class="{ 'is-open': isOfficeExpanded(office.id) }"
                             :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, businessDrillReport)"
                           >
-                            <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '当前最细层' : '下钻') }}</span>
+                            <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
                             <i></i>
                           </span>
+                          <span v-else class="sa-office-leaf-pill">当前最细层</span>
                         </span>
                       </button>
                       <div class="sa-office-kpis">
                         <span v-for="item in office.kpis" :key="item.label">{{ item.label }} {{ item.value }}</span>
                       </div>
                       <p class="sa-office-copy">{{ office.summary }}</p>
-                      <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill">
+                      <div v-if="canToggleOffice(office) && isOfficeExpanded(office.id)" class="sa-office-drill">
                         <div class="sa-drill-path">
                           <span>{{ office.name }}</span>
                           <i></i>
@@ -829,6 +842,20 @@
             </section>
           </div>
 
+          <section v-if="dialogBusinessDrillReport?.primaryAnswer" class="sa-report-stage-section">
+            <div class="sa-filter-answer-card">
+              <div class="sa-filter-answer-head">
+                <div>
+                  <div class="sa-report-stage-title">{{ dialogBusinessDrillReport.primaryAnswer.title || '主回答' }}</div>
+                  <p class="sa-business-summary-text">{{ dialogBusinessDrillReport.primaryAnswer.text }}</p>
+                </div>
+                <span class="sa-business-risk-pill" :class="dialogBusinessDrillReport.answerMode === 'ranking' ? 'good' : 'warn'">
+                  {{ dialogBusinessDrillReport.primaryAnswer.targetLevel || dialogBusinessDrillReport.compareLevelLabel }}
+                </span>
+              </div>
+            </div>
+          </section>
+
           <section v-if="dialogBusinessDrillReport?.filterAnswer" class="sa-report-stage-section">
             <div class="sa-filter-answer-card">
               <div class="sa-filter-answer-head">
@@ -873,8 +900,8 @@
             </div>
           </section>
 
-          <section v-if="dialogBusinessDrillReport" class="sa-report-stage-section sa-office-report-stage">
-            <div class="sa-report-stage-title">{{ dialogBusinessDrillReport.compareLevelLabel }}下钻分析</div>
+          <section v-if="dialogBusinessDrillReport && reportHasDrillableOffices(dialogBusinessDrillReport)" class="sa-report-stage-section sa-office-report-stage">
+            <div class="sa-report-stage-title">{{ dialogReportStageTitle }}</div>
             <div v-if="dialogCoreConclusion" class="sa-report-core-conclusion">
               <span>核心判断</span>
               <strong>{{ dialogCoreConclusion }}</strong>
@@ -902,7 +929,7 @@
                   class="sa-compare-row"
                   :style="getOfficeAccentStyle(office, officeIndex)"
                   type="button"
-                  @click="toggleOfficeDrill(office.id)"
+                  @click="canToggleOffice(office) && toggleOfficeDrill(office.id)"
                 >
                   <span class="sa-detail-name">{{ office.name }}</span>
                   <span>{{ getOfficeKpiLabel(office, 'task') }}</span>
@@ -927,7 +954,7 @@
                   class="sa-office-card-head"
                   type="button"
                   :aria-expanded="String(isOfficeExpanded(office.id))"
-                  @click="toggleOfficeDrill(office.id)"
+                  @click="canToggleOffice(office) && toggleOfficeDrill(office.id)"
                 >
                   <div class="sa-office-head-main">
                     <div class="sa-office-name">{{ office.name }} <span class="sa-office-tag">{{ office.tag }}</span></div>
@@ -936,17 +963,19 @@
                   <span class="sa-office-head-actions">
                     <span class="sa-office-rate" :class="office.tone">{{ office.rateLabel }}<small v-if="office.rankLabel">{{ office.rankLabel }}</small></span>
                     <span
+                      v-if="canToggleOffice(office)"
                       class="sa-office-drill-toggle"
                       :class="{ 'is-open': isOfficeExpanded(office.id) }"
                       :title="isOfficeExpanded(office.id) ? '收起明细' : getOfficeToggleTitle(office, dialogBusinessDrillReport)"
                     >
-                      <span>{{ isOfficeExpanded(office.id) ? '收起' : (office.isLeafLevel ? '当前最细层' : '下钻') }}</span>
+                      <span>{{ isOfficeExpanded(office.id) ? '收起' : '下钻' }}</span>
                       <i></i>
                     </span>
+                    <span v-else class="sa-office-leaf-pill">当前最细层</span>
                   </span>
                 </button>
                 <p class="sa-office-copy">{{ office.summary }}</p>
-                <div v-if="isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
+                <div v-if="canToggleOffice(office) && isOfficeExpanded(office.id)" class="sa-office-drill is-dialog">
                   <div class="sa-drill-path">
                     <span>{{ office.name }}</span>
                     <i></i>
@@ -1865,7 +1894,13 @@ const getToneFromDisplayTag = (label = '', fallback = 'neutral') => {
   return fallback
 }
 
-const requestedLevelTokens = ['事业部', '业务部', '分公司', '代表处', '业务代表', '业务员', '城市公司', '部门', '条线']
+const requestedLevelTokens = ['城市分公司', '城市公司', '事业部', '业务部', '分公司', '代表处', '业务代表', '业务员', '部门', '条线']
+
+const canonicalRequestedLevel = (value) => {
+  const text = String(value || '').trim()
+  if (text === '城市分公司') return '城市公司'
+  return text
+}
 
 const getQuestionText = () => String(session.state.question || query.value || '').trim()
 
@@ -1876,7 +1911,8 @@ const getRequestedLevelValues = (questionText = getQuestionText(), config = {}) 
     .map(value => String(value || '').trim())
     .filter(Boolean)
   ;[...configuredValues, ...requestedLevelTokens].forEach((value) => {
-    if (value && questionText.includes(value) && !values.includes(value)) values.push(value)
+    const canonical = canonicalRequestedLevel(value)
+    if (value && questionText.includes(value) && !values.includes(canonical)) values.push(canonical)
   })
   return values
 }
@@ -1888,6 +1924,21 @@ const isNegativeRankingQuestion = (questionText = getQuestionText()) => (
 const isRateRankingQuestion = (questionText = getQuestionText()) => (
   /达成率|完成率|完成|进度|不好|最低|最差|排名|排行|承压|风险/.test(questionText || '')
 )
+
+const isAmountRankingQuestion = (questionText = getQuestionText()) => (
+  /排名|排行|Top\s*\d+|TOP\s*\d+|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最低|最好|最差/.test(questionText || '')
+  && /年度开单|开单金额|开单|实际|销售/.test(questionText || '')
+)
+
+const getQuestionRankingMetricLabel = (questionText = getQuestionText()) => {
+  const text = String(questionText || '')
+  if (!/排名|排行|Top\s*\d+|TOP\s*\d+|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最低|最好|最差/.test(text)) return ''
+  if (/年度开单|开单金额|开单|实际|销售/.test(text)) return '年度开单金额'
+  if (/总任务|任务金额|目标/.test(text)) return '总任务金额'
+  if (/剩余|缺口|差额|待完成/.test(text)) return '剩余任务金额'
+  if (/达成率|完成率|进度|完成/.test(text)) return '达成率'
+  return ''
+}
 
 const getRankingPolicy = (config = {}) => (
   config?.intentPolicies?.ranking && typeof config.intentPolicies.ranking === 'object'
@@ -1901,6 +1952,9 @@ const getConfiguredTopN = (report = null) => {
   const policy = getRankingPolicy(config)
   const defaultTopN = toNumber(policy.defaultTopN) ?? 3
   const maxTopN = toNumber(policy.maxTopN) ?? 20
+  if (report?.answerMode === 'ranking' && intentTopN === null) {
+    return Math.max(1, Array.isArray(report?.offices) && report.offices.length ? report.offices.length : defaultTopN)
+  }
   const value = intentTopN ?? defaultTopN
   return Math.max(1, Math.min(maxTopN, value))
 }
@@ -1925,6 +1979,7 @@ const normalizeOfficeCompareSpec = (chartSpec = {}, config = {}) => {
   return {
     ...chartSpec,
     columns: nextColumns,
+    sortColumn: chartSpec.sortColumn || '',
     rows: rows.map(row => ({
       ...row,
       标签: row?.标签 || getOfficeRateTag(row?.[rateColumn], config),
@@ -2014,6 +2069,13 @@ const getSingleOrgCounts = (report) => {
   }
 }
 
+const getKnownChildLevelLabel = (levelLabel = '') => {
+  const text = String(levelLabel || '').trim()
+  if (/分公司/.test(text) && !/城市/.test(text)) return '城市公司'
+  if (/代表处|业务部/.test(text)) return '业务代表'
+  return ''
+}
+
 const getOfficeSubtitle = (office, report) => {
   if (office?.isLeafLevel) {
     return `${office.leafLabel || '当前最细层'} · ${office.parentName || '当前口径'}`
@@ -2032,6 +2094,95 @@ const getOfficeEmptyDrillText = (office, report) => (
     ? `${office.name || '当前对象'}已到当前最细层，暂无可继续下钻的下级明细。`
     : `当前 SQL 结果未返回 ${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'} 明细。请重新问“${office?.name || '当前对象'}下${report?.detailLevelLabel || office?.detailLevelLabel || '明细层级'}业绩明细”或检查 SQL 是否包含下级层级。`
 )
+
+const reportHasDrillableOffices = (report) => (
+  Array.isArray(report?.offices) && report.offices.some(office => !office?.isLeafLevel)
+)
+
+const isLeafOnlyReport = (report) => (
+  Array.isArray(report?.offices) && report.offices.length > 0 && report.offices.every(office => office?.isLeafLevel)
+)
+
+const canToggleOffice = (office) => !office?.isLeafLevel
+
+const getReportRiskCount = (report) => {
+  const offices = Array.isArray(report?.offices) ? report.offices : []
+  if (!offices.length) return 0
+  const threshold = report?.answerMode === 'ranking' || report?.answerMode === 'filter' ? 10 : 15
+  return offices.filter(item => {
+    const rate = toNumber(item?.rate)
+    return rate !== null && rate < threshold
+  }).length
+}
+
+const getMetricValueFromOffice = (office, label = '') => {
+  const metricText = String(label || '')
+  const kpis = Array.isArray(office?.kpis) ? office.kpis : []
+  const direct = kpis.find(item => {
+    const itemLabel = String(item?.label || '')
+    return itemLabel && (itemLabel.includes(metricText) || metricText.includes(itemLabel))
+  })
+  const directValue = toNumber(direct?.value)
+  if (directValue !== null) return directValue
+  if (isRateMetricLabel(metricText)) return toNumber(office?.rate)
+  if (/开单|完成|实际|销售/i.test(metricText)) return toNumber(getOfficeKpiLabel(office, 'actual'))
+  if (/任务|目标/i.test(metricText)) return toNumber(getOfficeKpiLabel(office, 'task'))
+  if (/剩余|缺口|差额|remain/i.test(metricText)) return toNumber(getOfficeKpiLabel(office, 'remain'))
+  return toNumber(office?.rate)
+}
+
+const getReportSortSpec = (report = null) => {
+  const datasetSortSpec = report?.dataset?.report_spec?.sortSpec
+  const directSortSpec = report?.sortSpec
+  const source = (datasetSortSpec && typeof datasetSortSpec === 'object' ? datasetSortSpec : directSortSpec) || {}
+  const explicitMetricLabel = getQuestionRankingMetricLabel()
+  if (!explicitMetricLabel || report?.answerMode !== 'ranking') return source
+  return {
+    ...source,
+    metricLabel: explicitMetricLabel,
+    direction: source.direction || (isNegativeRankingQuestion() ? 'asc' : 'desc'),
+  }
+}
+
+const getSortMetricLabel = (report = null, fallback = '达成率') => (
+  (report?.answerMode === 'ranking' ? getQuestionRankingMetricLabel() : '')
+  || getReportSortSpec(report).metricLabel
+  || report?.primaryAnswer?.metricLabel
+  || report?.filterAnswer?.metricLabel
+  || fallback
+)
+
+const normalizeRankingPrimaryAnswer = (report, offices = []) => {
+  const answer = report?.primaryAnswer || {}
+  if (report?.answerMode !== 'ranking') return answer
+  const metricLabel = getQuestionRankingMetricLabel() || getReportSortSpec(report).metricLabel || answer?.metricLabel || '达成率'
+  const levelLabel = report?.compareLevelLabel || answer?.targetLevel || '对象'
+  const count = offices.length || Number(answer?.count || answer?.total || 0) || 0
+  return {
+    ...answer,
+    title: answer?.title || '排名结果',
+    text: `已按${metricLabel}输出${count ? ` ${count} 个` : ''}${levelLabel}的排序结果`,
+    metricLabel,
+    targetLevel: levelLabel,
+    direction: getReportSortSpec(report).direction || answer?.direction || (isNegativeRankingQuestion() ? 'asc' : 'desc'),
+  }
+}
+
+const sortOfficesByAnswerMetric = (offices = [], report = null) => {
+  if (!Array.isArray(offices) || !offices.length) return []
+  const sortSpec = getReportSortSpec(report)
+  const metricLabel = getSortMetricLabel(report, '')
+  if (!metricLabel) return [...offices]
+  const lowFirst = (sortSpec.direction || report?.primaryAnswer?.direction || '').toLowerCase() === 'asc'
+  return [...offices].sort((left, right) => {
+    const leftValue = getMetricValueFromOffice(left, metricLabel)
+    const rightValue = getMetricValueFromOffice(right, metricLabel)
+    if (leftValue === null && rightValue === null) return 0
+    if (leftValue === null) return 1
+    if (rightValue === null) return -1
+    return lowFirst ? leftValue - rightValue : rightValue - leftValue
+  })
+}
 
 const getSingleOrgRateTone = (report) => {
   const rate = toNumber(getReportKpiText(report, 'rate'))
@@ -2065,6 +2216,86 @@ const getSingleOrgRankContext = (report) => {
     ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
     : ''
   return { best, worst, diff }
+}
+
+const getReportMetricContext = (report) => {
+  const metricLabel = getSortMetricLabel(report, '达成率')
+  const sortSpec = getReportSortSpec(report)
+  const lowFirst = String(sortSpec.direction || report?.primaryAnswer?.direction || '').toLowerCase() === 'asc'
+  const ranked = sortOfficesByAnswerMetric(
+    (report?.offices || []).filter(item => getMetricValueFromOffice(item, metricLabel) !== null),
+    report,
+  )
+  const best = ranked[0] || null
+  const worst = ranked[ranked.length - 1] || null
+  const bestValue = best ? getMetricValueFromOffice(best, metricLabel) : null
+  const worstValue = worst ? getMetricValueFromOffice(worst, metricLabel) : null
+  const diff = bestValue !== null && worstValue !== null && best?.name !== worst?.name
+    ? (isRateMetricLabel(metricLabel)
+      ? `${Math.abs(bestValue - worstValue).toFixed(2).replace(/\.?0+$/, '')}个百分点`
+      : formatAmount(Math.abs(bestValue - worstValue)))
+    : ''
+  return { metricLabel, lowFirst, ranked, best, worst, diff }
+}
+
+const isCollectionAnswerMode = (report) => ['filter', 'ranking', 'drilldown'].includes(report?.answerMode || '')
+const isRateMetricLabel = (label = '') => /达成率|完成率|rate|percent/i.test(String(label || ''))
+const isAmountMetricLabel = (label = '') => /开单|金额|任务|销售|完成|实际/i.test(String(label || ''))
+const findOfficeMetricValueByLabel = (office, label = '') => {
+  const kpis = Array.isArray(office?.kpis) ? office.kpis : []
+  const text = String(label || '')
+  if (!text) return ''
+  const direct = kpis.find(item => {
+    const itemLabel = String(item?.label || '')
+    return itemLabel && (itemLabel.includes(text) || text.includes(itemLabel))
+  })
+  if (direct?.value) return direct.value
+  if (isRateMetricLabel(text)) return office?.rateLabel || ''
+  if (/开单|完成|实际|销售/i.test(text)) return getOfficeKpiLabel(office, 'actual')
+  if (/任务|目标/i.test(text)) return getOfficeKpiLabel(office, 'task')
+  if (/剩余|缺口|差额|remain/i.test(text)) return getOfficeKpiLabel(office, 'remain')
+  return ''
+}
+
+const buildCollectionMetricCards = (report) => {
+  const offices = sortOfficesByAnswerMetric(report?.offices, report)
+  if (!offices.length) return []
+  const leader = offices[0] || null
+  const tail = offices[offices.length - 1] || null
+  const metricLabel = getSortMetricLabel(report, '指标')
+  const metricValue = (office) => (
+    findOfficeMetricValueByLabel(office, metricLabel)
+    || (isAmountMetricLabel(metricLabel) ? getOfficeKpiLabel(office, 'actual') : '')
+    || office?.rateLabel
+    || '-'
+  )
+  const riskCount = getReportRiskCount(report)
+  return [
+    {
+      label: report?.answerMode === 'filter' ? '命中数量' : '结果数量',
+      value: `${offices.length} 个`,
+      hint: `${report?.compareLevelLabel || '对象'}结果集合`,
+      tone: 'neutral',
+    },
+    leader ? {
+      label: report?.answerMode === 'ranking' ? '榜首结果' : '最高结果',
+      value: leader.name,
+      hint: `${metricLabel} ${metricValue(leader)}`,
+      tone: 'good',
+    } : null,
+    tail ? {
+      label: report?.answerMode === 'ranking' ? '末位结果' : '边界结果',
+      value: tail.name,
+      hint: `${metricLabel} ${metricValue(tail)}`,
+      tone: report?.answerMode === 'ranking' ? 'warn' : 'neutral',
+    } : null,
+    {
+      label: '风险节点',
+      value: `${riskCount} 个`,
+      hint: riskCount ? '存在明显滞后对象，建议继续下钻' : '当前结果内暂无明显风险节点',
+      tone: riskCount ? 'danger' : 'good',
+    },
+  ].filter(Boolean)
 }
 
 const enrichSingleOrgMetricCards = (cards = [], report) => (
@@ -2183,8 +2414,8 @@ const getComparisonNodes = (model) => {
     const levelNodes = scopedNodes.filter(node => (
       node?.name
       && (
-        requestedLevels.includes(node.levelValue)
-        || requestedLevels.includes(node.levelName)
+        requestedLevels.includes(canonicalRequestedLevel(node.levelValue))
+        || requestedLevels.includes(canonicalRequestedLevel(node.levelName))
         || requestedLevels.some(value => value && String(node.name || '').includes(value))
       )
     ))
@@ -2220,6 +2451,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
   const requestedLevels = getRequestedLevelValues(getQuestionText(), config)
   const compareLevelLabel = requestedLevels[0] || spec.scope?.compareLevelLabel || '下一层级'
   const detailLevelLabel = spec.scope?.detailLevelLabel || '明细层级'
+  const inferredDetailLevelLabel = getKnownChildLevelLabel(compareLevelLabel) || detailLevelLabel
   const accordions = rawAccordions.length
     ? rawAccordions
     : overviewRows.map((row, index) => {
@@ -2229,9 +2461,9 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
           title: name,
           parentName: spec.scope?.focusNode || '',
           levelLabel: compareLevelLabel,
-          detailLevelLabel: compareLevelLabel,
-          isLeafLevel: true,
-          leafLabel: '当前最细层',
+          detailLevelLabel: inferredDetailLevelLabel,
+          isLeafLevel: !getKnownChildLevelLabel(compareLevelLabel),
+          leafLabel: getKnownChildLevelLabel(compareLevelLabel) ? '' : '当前最细层',
           childCount: 0,
           tag: row?.标签 || '',
           kpis: Object.entries(row || {})
@@ -2255,7 +2487,10 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       ))
     : []
   const sourceAccordions = requestedLevels.length && matchedAccordions.length ? matchedAccordions : accordions
-  const offices = sourceAccordions.map((item) => {
+  const mappedOffices = sourceAccordions.map((item) => {
+    const itemLevelLabel = item.levelLabel || compareLevelLabel
+    const knownChildLevelLabel = getKnownChildLevelLabel(itemLevelLabel)
+    const itemDetailLevelLabel = item.detailLevelLabel || knownChildLevelLabel || detailLevelLabel
     const rateKpi = (item.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
     const rateValue = toNumber(rateKpi?.value)
     const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
@@ -2304,17 +2539,39 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
       rateLabel: rateKpi?.value || '-',
       progress: Math.max(0, Math.min(100, rateValue || 0)),
       childCount: Number.isFinite(Number(item.childCount)) ? Number(item.childCount) : chartRows.length,
-      isLeafLevel: Boolean(item.isLeafLevel),
-      leafLabel: item.leafLabel || '',
+      isLeafLevel: knownChildLevelLabel ? false : Boolean(item.isLeafLevel),
+      leafLabel: knownChildLevelLabel ? '' : (item.leafLabel || ''),
       kpis: item.kpis || [],
       summary: summaryText,
-      chartText: item.detailNarrative || (detailRows.length ? '业务代表明细按达成率从高到低排序。' : ''),
+      chartText: item.detailNarrative || '',
       chartSpec: item.chart,
       detailRows,
       drillGroups,
+      detailLevelLabel: itemDetailLevelLabel,
     }
   })
-  const riskCount = offices.filter(item => item.tone === 'danger').length
+  const answerMode = spec.answerMode || spec.analysisMode || 'detail'
+  const answerSummary = spec.answerSummary || {}
+  const reportContext = {
+    dataset,
+    sortSpec: spec.sortSpec || {},
+    answerMode,
+    primaryAnswer: ['ranking', 'drilldown'].includes(answerMode) ? answerSummary : null,
+    filterAnswer: answerMode === 'filter' ? answerSummary : null,
+  }
+  const offices = sortOfficesByAnswerMetric(mappedOffices, reportContext).map((office, index) => {
+    if (answerMode !== 'ranking') return office
+    const childLevelLabel = getKnownChildLevelLabel(compareLevelLabel)
+    const summary = childLevelLabel
+      ? `${office.name}${office.tag ? ` ${office.tag}` : ''}；总任务金额 ${getOfficeKpiLabel(office, 'task')}，年度开单金额 ${getOfficeKpiLabel(office, 'actual')}，达成率 ${getOfficeKpiLabel(office, 'rate')}，剩余任务金额 ${getOfficeKpiLabel(office, 'remain')}。可继续下钻查看${childLevelLabel}明细。`
+      : String(office.summary || '').replace(/（排序第\d+）/g, '')
+    return {
+      ...office,
+      rankLabel: `排序第${index + 1}`,
+      summary,
+    }
+  })
+  const riskCount = getReportRiskCount({ ...reportContext, offices })
   const officeNames = new Set(offices.map(item => item.name))
   const filteredOverviewChart = overviewChart && officeNames.size
     ? {
@@ -2345,11 +2602,21 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
         }),
       }
     : null
+  let primaryAnswer = ['ranking', 'drilldown'].includes(spec.answerMode)
+    ? {
+        ...spec.answerSummary,
+      }
+    : null
+
+  const sortMetricLabel = getSortMetricLabel({ ...reportContext, primaryAnswer, filterAnswer }, '达成率')
+  primaryAnswer = normalizeRankingPrimaryAnswer({ ...reportContext, primaryAnswer, filterAnswer, compareLevelLabel }, offices)
 
   return {
     dataset,
+    sortSpec: spec.sortSpec || {},
     analysisMode: spec.analysisMode || 'detail',
-    answerMode: spec.answerMode || spec.analysisMode || 'detail',
+    answerMode,
+    primaryAnswer,
     filterAnswer,
     focusName: spec.scope?.focusNode || '',
     isSingleFocus: Boolean(spec.scope?.focusNode && spec.analysisMode !== 'comparative'),
@@ -2359,9 +2626,11 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     })).filter(item => item.label),
     offices,
     compareLevelLabel,
-    detailLevelLabel,
+    detailLevelLabel: inferredDetailLevelLabel,
     officeCompareSpec: normalizeOfficeCompareSpec(filteredOverviewChart, config),
-    officeCompareText: spec.sections?.find(section => section.key === 'drill')?.narrative || '一行一个同层级对象，对齐展示任务、开单、缺口、达成率和进度条；展开后查看下一层级。',
+    officeCompareText: getKnownChildLevelLabel(compareLevelLabel)
+      ? `当前结果按${compareLevelLabel}展示；${compareLevelLabel}下级为${inferredDetailLevelLabel}，可继续下钻查看${inferredDetailLevelLabel}明细。`
+      : spec.sections?.find(section => section.key === 'drill')?.narrative || `一行一个同层级对象，按${sortMetricLabel}排序；对齐展示任务、开单、缺口、达成率和进度条，必要时继续下钻。`,
     summary,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
@@ -2380,6 +2649,9 @@ const buildBusinessDrillReport = (dataset) => {
   const rateMetric = getMetricDefinition(config, 'rate', item => item.format === 'percent' || /率|rate/i.test(item.label || item.column || ''))
   const remainMetric = getMetricDefinition(config, 'remain', item => /剩余|缺口|差额/i.test(item.label || item.column || ''))
   if (!rateMetric) return null
+  const rankingMetric = isAmountRankingQuestion() ? (actualMetric || rateMetric) : rateMetric
+  const rankingMetricLabel = rankingMetric?.label || rankingMetric?.column || '达成率'
+  const rankingChartType = isAmountRankingQuestion() ? 'bar' : 'horizontalRateBar'
 
   const focusNode = findQuestionFocusNode(model.flatNodes || [])
   const isSingleFocus = Boolean(focusNode && !/对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b/i.test(session.state.question || query.value || ''))
@@ -2395,7 +2667,7 @@ const buildBusinessDrillReport = (dataset) => {
     const directChildren = people.length ? people : office.children || []
     const sortedPeople = [...directChildren]
       .filter(item => item?.name)
-      .sort((a, b) => (getNodeMetricValue(a, rateMetric) || 0) - (getNodeMetricValue(b, rateMetric) || 0))
+      .sort((a, b) => (getNodeMetricValue(a, rankingMetric) || 0) - (getNodeMetricValue(b, rankingMetric) || 0))
     const sortedPeopleDesc = [...sortedPeople].sort((a, b) => (getNodeMetricValue(b, rateMetric) || 0) - (getNodeMetricValue(a, rateMetric) || 0))
     const rate = getNodeMetricValue(office, rateMetric)
     const tone = getOfficeRateTone(rate, config)
@@ -2413,7 +2685,9 @@ const buildBusinessDrillReport = (dataset) => {
       const rateText = formatPersonMetric(person, rateMetric)
       return `${person.name}开单${actualText} / 任务${taskText}，达成率${rateText}${remainMetric ? `，剩余缺口${remainText}` : ''}`
     }
-    const chartPeople = isNegativeRankingQuestion() ? sortedPeople : sortedPeopleDesc
+    const chartPeople = isNegativeRankingQuestion() ? sortedPeople : [...directChildren]
+      .filter(item => item?.name)
+      .sort((a, b) => (getNodeMetricValue(b, rankingMetric) || 0) - (getNodeMetricValue(a, rankingMetric) || 0))
     const chartRows = chartPeople.map(person => {
       const personRate = getNodeMetricValue(person, rateMetric) || 0
       return {
@@ -2441,6 +2715,8 @@ const buildBusinessDrillReport = (dataset) => {
       rateLabel: formatMetricByDefinition(rate, rateMetric),
       progress: Math.max(0, Math.min(100, rate || 0)),
       childCount: sortedPeople.length,
+      isLeafLevel: sortedPeople.length === 0,
+      leafLabel: sortedPeople.length === 0 ? '当前最细层' : '',
       kpis: officeKpis,
       tag: getOfficeRateTag(rate, config, '区域标杆'),
       highlight: bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : '',
@@ -2458,17 +2734,18 @@ const buildBusinessDrillReport = (dataset) => {
         rows: chartRows,
       }, config),
     }
-  }).sort((a, b) => isNegativeRankingQuestion()
-    ? (a.rate || 0) - (b.rate || 0)
-    : (b.rate || 0) - (a.rate || 0)
-  )
+  }).sort((a, b) => {
+    const left = getMetricValueFromOffice(a, rankingMetricLabel) || 0
+    const right = getMetricValueFromOffice(b, rankingMetricLabel) || 0
+    return isNegativeRankingQuestion() ? left - right : right - left
+  })
 
   const kpis = (config.metrics || []).map(metric => ({
     label: metric.label || metric.column || metric.key,
     value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric),
   })).filter(item => item.value !== '-')
-  const bestOffice = [...offices].sort((a, b) => (b.rate || 0) - (a.rate || 0))[0]
-  const worstOffice = [...offices].sort((a, b) => (a.rate || 0) - (b.rate || 0))[0]
+  const bestOffice = offices[0]
+  const worstOffice = offices[offices.length - 1]
   const riskCount = offices.filter(item => item.tone === 'danger').length
   const officeCompareRows = offices.map(office => ({
     名称: office.name,
@@ -2478,16 +2755,17 @@ const buildBusinessDrillReport = (dataset) => {
     [rateMetric.label || rateMetric.column || '达成率']: office.rate || 0,
     标签: office.tag,
   })).sort((a, b) => {
-    const key = rateMetric.label || rateMetric.column || '达成率'
+    const key = rankingMetric.label || rankingMetric.column || '达成率'
     return isNegativeRankingQuestion()
       ? (a[key] || 0) - (b[key] || 0)
       : (b[key] || 0) - (a[key] || 0)
   })
   const officeCompareSpec = {
-    chartType: 'horizontalRateBar',
-    title: `各${compareLevelLabel}达成率排序`,
+    chartType: rankingChartType,
+    title: `各${compareLevelLabel}${rankingMetricLabel}排序`,
     columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率', '标签'].filter(Boolean),
     rows: officeCompareRows,
+    sortColumn: rankingMetricLabel,
     lowFirst: isNegativeRankingQuestion(),
   }
   return {
@@ -2502,10 +2780,10 @@ const buildBusinessDrillReport = (dataset) => {
     officeCompareSpec,
     officeCompareText: isNegativeRankingQuestion()
       ? `${worstOffice ? `${worstOffice.name}达成率最低，为${worstOffice.rateLabel}` : ''}${bestOffice ? `；最高为${bestOffice.name}，${bestOffice.rateLabel}` : ''}。按低达成率优先展示，便于定位承压节点。`
-      : `${bestOffice ? `${bestOffice.name}达成率最高，为${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}压力最大，为${worstOffice.rateLabel}` : ''}。一行一个同层级对象，对齐展示金额和进度条。`,
+      : `${bestOffice ? `${bestOffice.name}${rankingMetricLabel}最高，为${findOfficeMetricValueByLabel(bestOffice, rankingMetricLabel) || '-'}` : ''}${worstOffice ? `；${worstOffice.name}${rankingMetricLabel}最低，为${findOfficeMetricValueByLabel(worstOffice, rankingMetricLabel) || '-'}` : ''}。一行一个同层级对象，对齐展示金额和进度条。`,
     summary: isNegativeRankingQuestion()
       ? `本次结果覆盖 ${offices.length} 个${compareLevelLabel}，已按低达成率优先排序。${worstOffice ? `${worstOffice.name}当前完成最弱，达成率${worstOffice.rateLabel}` : ''}${bestOffice ? `；最高为${bestOffice.name}，达成率${bestOffice.rateLabel}` : ''}。`
-      : `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}表现最好，达成率${bestOffice.rateLabel}` : ''}${worstOffice ? `；${worstOffice.name}当前压力最大，达成率${worstOffice.rateLabel}` : ''}。`,
+      : `本次结果覆盖 ${offices.length} 个${compareLevelLabel}。${bestOffice ? `${bestOffice.name}${rankingMetricLabel}最高，为${findOfficeMetricValueByLabel(bestOffice, rankingMetricLabel) || '-'}` : ''}${worstOffice ? `；${worstOffice.name}${rankingMetricLabel}最低，为${findOfficeMetricValueByLabel(worstOffice, rankingMetricLabel) || '-'}` : ''}。`,
     riskTone: riskCount ? 'danger' : 'good',
     riskLabel: riskCount ? `风险 ${riskCount} 个` : '整体可控',
   }
@@ -2712,6 +2990,11 @@ const dedupeChartSpecs = (charts = []) => {
 
 const getDatasetChartSpecs = (dataset, { includeFallback = true } = {}) => {
   if (!dataset || typeof dataset !== 'object') return []
+  if (dataset?.report_spec?.scope?.focusNodeIsLeaf) {
+    const value = []
+    datasetChartSpecCache.set(dataset, { key: [getQuestionText(), includeFallback ? 'fallback' : 'strict', 'leaf-focus-none'].join('|'), value })
+    return value
+  }
   const cacheKey = [
     getQuestionText(),
     includeFallback ? 'fallback' : 'strict',
@@ -2825,6 +3108,9 @@ const reportDialogCharts = computed(() => {
 const reportDialogMetricCards = computed(() => {
   const source = reportSourceDatasets.value
   const drillReport = activeBusinessDrillReport.value
+  if (drillReport && isCollectionAnswerMode(drillReport)) {
+    return buildCollectionMetricCards(drillReport)
+  }
   if (drillReport?.kpis?.length) {
     const cards = drillReport.isSingleFocus
       ? drillReport.kpis.slice(0, 4).map(item => ({
@@ -2864,10 +3150,19 @@ const activeBusinessDrillReport = computed(() => (
     : businessDrillReport.value
 ))
 
+const sideBusinessSummaryText = computed(() => (
+  businessDrillReport.value?.primaryAnswer?.text
+  || businessDrillReport.value?.filterAnswer?.text
+  || businessDrillReport.value?.summary
+  || ''
+))
+
 const sideBusinessMetricCards = computed(() => (
   businessDrillReport.value
     ? (
-        businessDrillReport.value.isSingleFocus
+        isCollectionAnswerMode(businessDrillReport.value)
+          ? buildCollectionMetricCards(businessDrillReport.value)
+          : businessDrillReport.value.isSingleFocus
           ? enrichSingleOrgMetricCards(
               businessDrillReport.value.kpis.slice(0, 4).map(item => ({
                 label: item.label || item.key || '',
@@ -2884,20 +3179,57 @@ const dialogBusinessDrillReport = computed(() => activeBusinessDrillReport.value
 
 const dialogCoreConclusion = computed(() => {
   const report = dialogBusinessDrillReport.value
+  if (report?.answerMode === 'ranking') {
+    const metricContext = getReportMetricContext(report)
+    const leader = metricContext.best
+    const follower = metricContext.ranked[1] || null
+    if (leader) {
+      const leaderText = findOfficeMetricValueByLabel(leader, metricContext.metricLabel) || '-'
+      const followerText = follower ? (findOfficeMetricValueByLabel(follower, metricContext.metricLabel) || '-') : ''
+      const diffText = metricContext.diff ? `，较${follower?.name}${metricContext.lowFirst ? '更低' : '更高'}${metricContext.diff}` : ''
+      return `${leader.name}当前位于首位，${metricContext.metricLabel}${leaderText}${follower ? `${diffText}` : ''}；建议继续下钻定位差距来自哪些下级单元。`
+    }
+  }
+  if (report?.primaryAnswer?.text) return report.primaryAnswer.text
+  if (report?.filterAnswer?.text) return report.filterAnswer.text
   const offices = report?.offices || []
   if (offices.length >= 2) {
-    const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
+    const metricLabel = getSortMetricLabel(report, '达成率')
+    const lowFirst = (getReportSortSpec(report).direction || '').toLowerCase() === 'asc'
+    const ranked = sortOfficesByAnswerMetric(
+      offices.filter(item => getMetricValueFromOffice(item, metricLabel) !== null),
+      report,
+    )
     const leader = ranked[0]
     const follower = ranked[1]
     if (leader && follower) {
-      const diff = Math.abs((leader.rate || 0) - (follower.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
-      return `${leader.name}当前领先${follower.name}，达成率高${diff}个百分点；建议继续下钻代表处，定位差距来自哪些区域单元。`
+      const leaderValue = getMetricValueFromOffice(leader, metricLabel)
+      const followerValue = getMetricValueFromOffice(follower, metricLabel)
+      const diff = leaderValue !== null && followerValue !== null
+        ? Math.abs(leaderValue - followerValue)
+        : null
+      const diffText = diff === null
+        ? ''
+        : isRateMetricLabel(metricLabel)
+        ? `${diff.toFixed(2).replace(/\.?0+$/, '')} 个百分点`
+        : formatAmount(diff)
+      const relationText = lowFirst ? '更低' : '更高'
+      return `${leader.name}当前位于首位，较${follower.name}${metricLabel}${relationText}${diffText ? ` ${diffText}` : ''}；建议继续下钻定位差距来自哪些下级单元。`
     }
   }
   const reportText = String(reportViewerReport.value || latestReport.value || '').trim()
   const match = reportText.match(/(?:核心结论|结论)[:：]?\s*([^。\n]{12,120}。?)/)
   if (match?.[1]) return match[1].trim()
   return report?.summary || ''
+})
+
+const dialogReportStageTitle = computed(() => {
+  const report = dialogBusinessDrillReport.value
+  if (!report) return '下钻分析'
+  if (report.answerMode === 'ranking') return isLeafOnlyReport(report) ? `${report.compareLevelLabel}排名列表` : `${report.compareLevelLabel}排名结果`
+  if (report.answerMode === 'filter') return isLeafOnlyReport(report) ? `${report.compareLevelLabel}命中列表` : `${report.compareLevelLabel}命中结果`
+  if (report.answerMode === 'drilldown') return `${report.compareLevelLabel}下钻分析`
+  return isLeafOnlyReport(report) ? `${report.compareLevelLabel}结果列表` : `${report.compareLevelLabel}下钻分析`
 })
 
 const getOfficeMetricText = (office, type) => getOfficeKpiLabel(office, type) || '-'
@@ -3050,6 +3382,54 @@ const getPressureDiagnosis = (item, detailLabel = '下级节点') => {
 const buildBusinessNarrativeSections = (report) => {
   const offices = report?.offices || []
   if (!report || !offices.length) return []
+  if (report.answerMode === 'ranking') {
+    const metricContext = getReportMetricContext(report)
+    const configuredTopN = getConfiguredTopN(report)
+    const ranked = metricContext.ranked.length ? metricContext.ranked : offices
+    const topItems = ranked.slice(0, configuredTopN)
+    const bottomItems = [...ranked].reverse().slice(0, configuredTopN)
+    const riskCount = offices.filter(item => item.tone === 'danger').length
+    const metricTable = buildComparisonMetricTable(ranked)
+    return [
+      {
+        title: '一、核心结论',
+        body: [
+          report.primaryAnswer?.text || report.summary,
+          metricContext.best && metricContext.worst && metricContext.best.name !== metricContext.worst.name
+            ? `${metricContext.best.name}${metricContext.metricLabel}${findOfficeMetricValueByLabel(metricContext.best, metricContext.metricLabel) || '-'}位于榜首；${metricContext.worst.name}${metricContext.metricLabel}${findOfficeMetricValueByLabel(metricContext.worst, metricContext.metricLabel) || '-'}位于末位${metricContext.diff ? `，首尾相差${metricContext.diff}` : ''}。`
+            : '',
+          riskCount
+            ? `风险信号：当前结果中有${riskCount}个对象处于低达成风险，排名领先不代表进度无风险。`
+            : '风险信号：当前结果内暂无明显低达成风险对象。',
+        ].filter(Boolean).join('\n'),
+      },
+      {
+        title: '二、关键指标与排序结果',
+        body: [
+          metricTable,
+          `当前按${metricContext.metricLabel}${metricContext.lowFirst ? '由低到高' : '由高到低'}排序；右侧列表、图表与摘要已统一使用这一指标。`,
+        ].filter(Boolean).join('\n\n'),
+      },
+      {
+        title: `三、${report.compareLevelLabel}Top${configuredTopN}/末${configuredTopN}`,
+        body: [
+          `Top${configuredTopN}：`,
+          buildRankMetricTable(topItems, report.compareLevelLabel || '对象'),
+          '',
+          `末${configuredTopN}：`,
+          buildRankMetricTable(bottomItems, report.compareLevelLabel || '对象'),
+        ].filter(Boolean).join('\n\n'),
+      },
+      {
+        title: '四、后续动作',
+        body: [
+          metricContext.best ? `榜首复盘：优先复盘${metricContext.best.name}在${metricContext.metricLabel}上的领先做法，并核对其达成率与缺口是否同步健康。` : '',
+          metricContext.worst ? `末位下钻：围绕${metricContext.worst.name}继续下钻${report.detailLevelLabel}，确认是任务体量、项目阶段还是客户转化拖累。` : '',
+          '统一口径：排名按问题中的指标排序，风险继续看达成率与缺口，避免把“排位”和“健康度”混为一谈。',
+        ].filter(Boolean).join('\n'),
+      },
+    ]
+  }
   const ranked = [...offices].filter(item => item.rate !== null).sort((a, b) => (b.rate || 0) - (a.rate || 0))
   const best = ranked[0] || offices[0]
   const worst = ranked[ranked.length - 1] || offices[offices.length - 1]
@@ -3215,19 +3595,14 @@ const reportSummaryBullets = computed(() => {
     return bullets.filter(Boolean)
   }
   if (drillReport?.offices?.length) {
-    const ranked = [...drillReport.offices]
-      .filter(item => item.rate !== null && item.rate !== undefined)
-      .sort((a, b) => (b.rate || 0) - (a.rate || 0))
-    const best = ranked[0] || drillReport.offices[0]
-    const worst = ranked[ranked.length - 1] || drillReport.offices[drillReport.offices.length - 1]
-    const gap = best?.rate !== null && worst?.rate !== null && best?.name !== worst?.name
-      ? Math.abs((best.rate || 0) - (worst.rate || 0)).toFixed(2).replace(/\.?0+$/, '')
-      : ''
+    const metricContext = getReportMetricContext(drillReport)
+    const best = metricContext.best || drillReport.offices[0]
+    const worst = metricContext.worst || drillReport.offices[drillReport.offices.length - 1]
     const riskCount = drillReport.offices.filter(item => item.tone === 'danger').length
     bullets.push(`当前覆盖 ${drillReport.offices.length} 个${drillReport.compareLevelLabel}，先横向比较再下钻${drillReport.detailLevelLabel}。`)
     if (best && worst) {
-      bullets.push(gap
-        ? `${best.name}达成率${best.rateLabel}领先，${worst.name}达成率${worst.rateLabel}承压，首尾差${gap}个百分点。`
+      bullets.push(metricContext.diff
+        ? `${best.name}${metricContext.metricLabel}${findOfficeMetricValueByLabel(best, metricContext.metricLabel) || '-'}领先，${worst.name}${metricContext.metricLabel}${findOfficeMetricValueByLabel(worst, metricContext.metricLabel) || '-'}位于末位，首尾差${metricContext.diff}。`
         : `${best.name}表现靠前，${worst.name}需要优先下钻复核。`)
     }
     bullets.push(riskCount
@@ -4492,12 +4867,14 @@ const getMetricColor = (column) => {
   return '#597ef7'
 }
 
-const sortRowsByCompletionRate = (rows = [], columns = [], lowFirst = false) => {
-  const rateColumn = columns.find(column => isRateColumn(column)) || Object.keys(rows[0] || {}).find(column => isRateColumn(column))
-  if (!rateColumn) return rows
+const sortRowsForChart = (rows = [], columns = [], lowFirst = false, preferredColumn = '') => {
+  const targetColumn = preferredColumn
+    || columns.find(column => isRateColumn(column))
+    || Object.keys(rows[0] || {}).find(column => isRateColumn(column))
+  if (!targetColumn) return rows
   return [...rows].sort((a, b) => {
-    const left = toNumber(a?.[rateColumn]) || 0
-    const right = toNumber(b?.[rateColumn]) || 0
+    const left = toNumber(a?.[targetColumn]) || 0
+    const right = toNumber(b?.[targetColumn]) || 0
     return lowFirst ? left - right : right - left
   })
 }
@@ -4505,7 +4882,8 @@ const sortRowsByCompletionRate = (rows = [], columns = [], lowFirst = false) => 
 const renderChartSpec = (chart, data) => {
   const labelColumn = data.columns?.[0]
   const numericColumns = data.columns?.slice(1) || []
-  const sortedRows = sortRowsByCompletionRate(data.rows || [], data.columns || [], Boolean(data.lowFirst))
+  const preferredSortColumn = data.sortColumn || ''
+  const sortedRows = sortRowsForChart(data.rows || [], data.columns || [], Boolean(data.lowFirst), preferredSortColumn)
   const colorPalette = ['#1890ff', '#00b42a', '#faad14', '#f5222d', '#06b6d4', '#597ef7']
   const shortSeriesName = (name) => String(name || '')
     .replace(/^年度/, '')
@@ -6642,6 +7020,22 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.sa-office-leaf-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .sa-office-drill-toggle {

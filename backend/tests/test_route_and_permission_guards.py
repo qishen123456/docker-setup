@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from data_permission_store import apply_row_level_filter
 from four_agent_ask import FourAgentAskService
 from organization_route_resolver import OrganizationRouteResolver
+from report_spec_builder import build_report_spec
 from smartask_advanced.skills.dataset_route import DatasetRouteSkill
 from smartask_advanced.skills.route_guard import RouteGuardSkill
 
@@ -196,6 +197,186 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         self.assertIn("节点名称 IN ('赵标')", sql)
         self.assertIn("JOIN 命中链路 父节点", sql)
         self.assertIn("子节点.上级名称 = 父节点.节点名称", sql)
+
+    def test_business_person_role_prefix_extracts_person_name(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "resolved_entities": {},
+        }
+
+        names = service._question_subject_names("看下商用业务代表靳锋 的业绩情况", context)
+
+        self.assertEqual(names, ["靳锋"])
+
+    def test_business_person_role_prefix_uses_dynamic_rule_scope(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "resolved_entities": {},
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        sql = service._build_rule_based_sql("看下商用业务代表靳锋 的业绩情况", {}, context)
+
+        self.assertIn("'靳锋'", sql)
+        self.assertIn("WITH RECURSIVE", sql)
+        self.assertIn("节点名称 IN ('靳锋')", sql)
+        self.assertIn("JOIN 命中链路 父节点", sql)
+
+    def test_business_person_role_prefix_overrides_root_dataset_alias(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "resolved_entities": {
+                "all_members": ["商用事业部"],
+                "entities": [{"members": ["商用事业部"]}],
+            },
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        sql = service._build_rule_based_sql("看下商用业务代表靳锋 的业绩情况", {}, context)
+
+        self.assertIn("节点名称 IN ('靳锋')", sql)
+        self.assertNotIn("节点名称 IN ('商用事业部')", sql)
+
+    def test_question_subject_names_can_ignore_resolved_root_alias(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "resolved_entities": {
+                "all_members": ["商用事业部"],
+                "entities": [{"members": ["商用事业部"]}],
+            },
+        }
+
+        names = service._question_subject_names("看下赵标的业绩", context, include_resolved=False)
+
+        self.assertEqual(names, ["赵标"])
+
+    def test_business_person_question_overrides_resolved_root_alias(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "resolved_entities": {
+                "all_members": ["商用事业部"],
+                "entities": [{"members": ["商用事业部"]}],
+            },
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        sql = service._build_rule_based_sql("看下赵标的业绩", {}, context)
+
+        self.assertIn("节点名称 IN ('赵标')", sql)
+        self.assertNotIn("节点名称 IN ('商用事业部')", sql)
+
+    def test_single_person_layered_analysis_answers_person_first(self):
+        service = object.__new__(FourAgentAskService)
+        rows = [
+            {
+                "条线": "行业条线",
+                "层级": "业务代表",
+                "节点名称": "赵标",
+                "上级名称": "公共办公业务部",
+                "总任务金额": 7000000,
+                "年度开单金额": 4120000,
+                "达成率": 58.88,
+                "剩余任务金额": 2880000,
+            },
+            {
+                "条线": "行业条线",
+                "层级": "业务部",
+                "节点名称": "公共办公业务部",
+                "上级名称": "商用事业部",
+                "总任务金额": 230000000,
+                "年度开单金额": 135792000,
+                "达成率": 59.04,
+                "剩余任务金额": 94208000,
+            },
+        ]
+        report_config = {
+            "nameColumn": "节点名称",
+            "parentColumn": "上级名称",
+            "levelColumn": "层级",
+            "trackColumn": "条线",
+            "metrics": [
+                {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
+                {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
+                {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+                {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount"},
+            ],
+            "levels": [
+                {"name": "业务部", "values": ["业务部"]},
+                {"name": "业务代表", "values": ["业务代表"]},
+            ],
+        }
+
+        analysis = service._build_layered_management_report(
+            "看下赵标的业绩",
+            "商用事业部（阶段一升级版）",
+            rows,
+            list(rows[0].keys()),
+            "",
+            "",
+            report_config,
+            {"all_members": ["赵标"], "entities": [{"members": ["赵标"]}]},
+            {},
+        )
+
+        self.assertIn("赵标当前作为业务代表", analysis)
+        self.assertNotIn("商用事业部整体进度", analysis)
+
+    def test_single_person_report_spec_focuses_person_node(self):
+        rows = [
+            {
+                "条线": "行业条线",
+                "层级": "业务代表",
+                "节点名称": "赵标",
+                "上级名称": "公共办公业务部",
+                "总任务金额": 7000000,
+                "年度开单金额": 4120000,
+                "达成率": 58.88,
+                "剩余任务金额": 2880000,
+            },
+            {
+                "条线": "行业条线",
+                "层级": "业务部",
+                "节点名称": "公共办公业务部",
+                "上级名称": "商用事业部",
+                "总任务金额": 230000000,
+                "年度开单金额": 135792000,
+                "达成率": 59.04,
+                "剩余任务金额": 94208000,
+            },
+        ]
+        config = {
+            "nameColumn": "节点名称",
+            "parentColumn": "上级名称",
+            "levelColumn": "层级",
+            "trackColumn": "条线",
+            "metrics": [
+                {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
+                {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
+                {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+                {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount"},
+            ],
+            "levels": [
+                {"name": "业务部", "values": ["业务部"]},
+                {"name": "业务代表", "values": ["业务代表"]},
+            ],
+        }
+
+        spec = build_report_spec(
+            question="看下赵标的业绩",
+            rows=rows,
+            columns=list(rows[0].keys()),
+            report_config=config,
+            sql="",
+            dataset={"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            resolved_entities={"all_members": ["赵标"], "entities": [{"members": ["赵标"]}]},
+        )
+
+        self.assertEqual(spec.get("scope", {}).get("focusNode"), "赵标")
 
 
 if __name__ == "__main__":

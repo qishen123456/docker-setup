@@ -12,27 +12,32 @@ from typing import Any, Dict, Optional
 
 SCENES: Dict[str, Dict[str, Any]] = {
     "detail": {
-        "label": "单体/常规分析",
+        "label": "detail",
         "layout": "detail",
         "required_contract": ["nameColumn", "metrics"],
     },
     "comparative": {
-        "label": "对比分析",
+        "label": "comparative",
         "layout": "comparison",
         "required_contract": ["nameColumn", "metrics"],
     },
     "ranking": {
-        "label": "排名分析",
+        "label": "ranking",
         "layout": "ranking",
         "required_contract": ["nameColumn", "metrics"],
     },
     "filter": {
         "label": "filter",
+        "layout": "filter",
+        "required_contract": ["nameColumn", "metrics"],
+    },
+    "drilldown": {
+        "label": "drilldown",
         "layout": "detail",
         "required_contract": ["nameColumn", "metrics"],
     },
     "diagnostic": {
-        "label": "诊断/风险分析",
+        "label": "diagnostic",
         "layout": "detail",
         "required_contract": ["nameColumn", "metrics", "signalRules"],
     },
@@ -50,25 +55,25 @@ def detect_report_scene(
     selected_count: int,
     query_intent: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Return the final report scene and explain why it was selected.
+    """Return the final report scene and explain why it was selected."""
 
-    The priority intentionally mirrors the previous hard-coded logic:
-    ranking > comparative > diagnostic > focus detail > diagnostic risk fallback > detail.
-    """
     text = question or ""
     reasons = []
     if isinstance(query_intent, dict) and query_intent.get("intent") == "filter":
         key = "filter"
         reasons.append("命中数据集意图策略：filter")
+    elif isinstance(query_intent, dict) and query_intent.get("intent") == "drilldown":
+        key = "drilldown"
+        reasons.append("命中数据集意图策略：drilldown")
     elif _RANKING_RE.search(text):
         key = "ranking"
-        reasons.append("问题包含排名/最高/最低/Top 等关键词")
+        reasons.append("问题包含排名/最好/最差/Top 等关键词")
     elif selected_count > 1 or _COMPARATIVE_RE.search(text):
         key = "comparative"
         if selected_count > 1:
             reasons.append(f"命中 {selected_count} 个对比主体")
         if _COMPARATIVE_RE.search(text):
-            reasons.append("问题包含对比/比较/分别/差异等关键词")
+            reasons.append("问题包含对比/比较/差异等关键词")
     elif _DIAGNOSTIC_RE.search(text):
         key = "diagnostic"
         reasons.append("问题包含原因/异常/风险/缺口等诊断关键词")

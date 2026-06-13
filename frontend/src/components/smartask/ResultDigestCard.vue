@@ -15,9 +15,9 @@
     <div class="sa-core-section">
       <div class="sa-section-label">一、核心结论</div>
       <div class="sa-core-body">
-        <div v-if="isComparisonDigest" class="sa-comparison-digest">
+        <div v-if="showComparisonDigest" class="sa-comparison-digest">
           <div class="sa-comparison-verdict">{{ comparisonVerdict }}</div>
-          <div class="sa-comparison-card-grid" :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`">
+          <div v-if="!showComparisonChart" class="sa-comparison-card-grid" :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`">
             <article
               v-for="row in visibleComparisonDigestRows"
               :key="row.name"
@@ -35,22 +35,96 @@
               </div>
             </article>
           </div>
+          <div v-if="false" class="sa-comparison-lane" aria-label="同层对比速览">
+            <div
+              v-for="row in comparisonLaneRows"
+              :key="`lane-${row.name}`"
+              class="sa-comparison-lane-row"
+              :class="{ 'is-leader': row.name === comparisonLeader?.name }"
+            >
+              <div class="sa-comparison-lane-head">
+                <span>{{ row.name }}</span>
+                <strong>{{ row.rateText || '-' }}</strong>
+              </div>
+              <div class="sa-comparison-lane-bar" aria-hidden="true">
+                <i :style="{ width: row.laneWidth }"></i>
+              </div>
+              <div class="sa-comparison-lane-meta">
+                <span>开单 {{ row.actualText || '-' }}</span>
+                <span>任务 {{ row.taskText || '-' }}</span>
+                <span>缺口 {{ row.remainText || '-' }}</span>
+              </div>
+            </div>
+          </div>
           <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
             <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
           </div>
         </div>
         <p v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</p>
       </div>
+      <div v-if="false" class="sa-comparison-chart" aria-label="分公司达成率对比图">
+        <div class="sa-comparison-chart-head">
+          <strong>分公司达成率对比</strong>
+          <div class="sa-comparison-chart-scale">
+            <span>{{ comparisonChartTicks[0] }}</span>
+            <span>{{ comparisonChartTicks[1] }}</span>
+            <span>{{ comparisonChartTicks[2] }}</span>
+          </div>
+        </div>
+        <div class="sa-comparison-chart-body">
+          <div
+            v-for="row in comparisonChartRows"
+            :key="`chart-${row.name}`"
+            class="sa-comparison-chart-row"
+            :class="{ 'is-leader': row.name === comparisonLeader?.name }"
+          >
+            <div class="sa-comparison-chart-label">{{ row.name }}</div>
+            <div class="sa-comparison-chart-track" aria-hidden="true">
+              <i :style="{ width: row.barWidth }"></i>
+            </div>
+            <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
+            <div class="sa-comparison-chart-actual">开单 {{ row.actualText || '-' }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="primaryKpiCards.length" class="sa-report-mini-section">
       <div class="sa-section-label">二、关键指标</div>
       <div class="sa-kpi-grid" :class="`is-count-${Math.min(primaryKpiCards.length, 4)}`">
-        <article v-for="card in primaryKpiCards" :key="card.key" class="sa-kpi-card" :class="`is-${card.tone}`">
+        <article v-for="card in primaryKpiCards" :key="card.key" class="sa-kpi-card" :class="[`is-${card.tone}`, card.isLeader ? 'is-compare-leader' : '']">
           <div class="sa-kpi-value">{{ card.value }}</div>
           <div class="sa-kpi-label">{{ card.label }}</div>
           <div v-if="card.hint" class="sa-kpi-hint">{{ card.hint }}</div>
         </article>
+      </div>
+      <div v-if="showComparisonChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="branch-comparison-chart">
+        <div class="sa-comparison-chart-head">
+          <strong>Branch Comparison</strong>
+          <div class="sa-comparison-chart-scale">
+            <span>{{ comparisonChartTicks[0] }}</span>
+            <span>{{ comparisonChartTicks[1] }}</span>
+            <span>{{ comparisonChartTicks[2] }}</span>
+          </div>
+        </div>
+        <div class="sa-comparison-chart-body">
+          <div v-if="comparisonChartAverageText" class="sa-comparison-chart-average" :style="{ left: comparisonChartAverageOffset }">
+            <span>Avg {{ comparisonChartAverageText }}</span>
+          </div>
+          <div
+            v-for="row in comparisonChartRows"
+            :key="`chart-kpi-${row.name}`"
+            class="sa-comparison-chart-row"
+            :class="{ 'is-leader': row.name === comparisonLeader?.name }"
+          >
+            <div class="sa-comparison-chart-label">{{ row.name }}</div>
+            <div class="sa-comparison-chart-track" aria-hidden="true">
+              <i :style="{ width: row.barWidth }"></i>
+            </div>
+            <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
+            <div class="sa-comparison-chart-actual">{{ row.actualText ? `Actual ${row.actualText}` : 'Actual -' }}</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -75,14 +149,25 @@
           <span>节点</span>
           <span>任务 / 完成</span>
           <span>缺口</span>
-          <span>达成率</span>
+          <span>{{ secondaryMetricColumnLabel }}</span>
         </div>
         <template v-for="group in secondaryDrillGroups" :key="group.key">
-          <div v-if="group.title" class="sa-drill-group-row" :class="`is-group-${(group.index % 4) + 1}`" role="row">
+          <div
+            v-if="group.title"
+            class="sa-drill-group-row"
+            :class="[`is-group-${(group.index % 4) + 1}`, group.tone ? `is-${group.tone}` : '']"
+            role="row"
+          >
             <span>{{ group.title }}</span>
-            <small>{{ group.rows.length }}个{{ secondaryLevelLabel }}</small>
+            <small>{{ group.rows.length }}个{{ isRankingQuestion ? rankingLevelLabel : secondaryLevelLabel }}</small>
           </div>
-          <div v-for="(row, index) in group.rows" :key="`drill-${row.level}-${row.parent}-${row.name}-${index}`" class="sa-drill-row" role="row">
+          <div
+            v-for="(row, index) in group.rows"
+            :key="`drill-${row.level}-${row.parent}-${row.name}-${index}`"
+            class="sa-drill-row"
+            :class="row.rankGroup?.includes('后') ? 'is-rank-bottom' : row.rankGroup?.includes('前') ? 'is-rank-top' : ''"
+            role="row"
+          >
             <div class="sa-drill-node">
               <strong>{{ row.name }}</strong>
               <span>{{ drillNodeMeta(row) }}</span>
@@ -94,8 +179,8 @@
             <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
             <div class="sa-drill-rate" :class="secondaryRateTone(row)">
               <div class="sa-drill-rate-head">
-                <strong>{{ row.rateText || '-' }}</strong>
-                <span>{{ secondaryRateHint(row) }}</span>
+                <strong>{{ secondaryMetricText(row) }}</strong>
+                <span>{{ secondaryMetricHint(row) }}</span>
               </div>
               <div class="sa-drill-bar" aria-hidden="true">
                 <i :style="{ width: secondaryBarWidth(row) }"></i>
@@ -208,6 +293,7 @@ const reviewStatusText = computed(() => {
 const questionLabel = computed(() => cleanText(props.question || props.title || '本轮问数'))
 
 const rows = computed(() => (Array.isArray(props.dataset?.rows) ? props.dataset.rows : []))
+const isLeafFocus = computed(() => Boolean(reportSpec.value?.scope?.focusNodeIsLeaf))
 
 const cleanText = (value) => String(value ?? '').trim()
 const sameOrgName = (left, right) => {
@@ -271,10 +357,17 @@ const parseRankNumber = (value) => {
 const requestedRankLimit = computed(() => {
   const text = questionText.value
   const match = text.match(/(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)/)
+    || text.match(/(?:最高|最低|最好|最差)(?:的)?\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|名|位)?/)
   const count = parseRankNumber(match?.[1])
   if (count) return Math.max(1, Math.min(20, count))
-  if (/排名|排行|前|后/.test(text)) return 3
   return 0
+})
+const explicitRequestedRankLimit = computed(() => {
+  const text = questionText.value
+  const match = text.match(/(?:Top|TOP|top|前|后|倒数)\s*(\d+|[一二两三四五六七八九十]+)/)
+    || text.match(/(?:最高|最低|最好|最差)(?:的)?\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|名|位)?/)
+  const count = parseRankNumber(match?.[1])
+  return count ? Math.max(1, Math.min(20, count)) : 0
 })
 const isRankingQuestion = computed(() => Boolean(
   requestedRankLimit.value || /排名|排行|最高|最低|最好|最差|倒数|垫底/.test(questionText.value),
@@ -282,6 +375,14 @@ const isRankingQuestion = computed(() => Boolean(
 const rankDirection = computed(() => (
   /最低|最差|倒数|垫底|后/.test(questionText.value) ? 'asc' : 'desc'
 ))
+const rankSides = computed(() => {
+  const fromIntent = cleanText(queryIntent.value?.rank_sides).toLowerCase()
+  if (fromIntent === 'both') return 'both'
+  const text = questionText.value
+  const asksTop = /Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好/.test(text)
+  const asksBottom = /后\s*(?:\d+|[一二两三四五六七八九十]+)|倒数|最低|最差|垫底/.test(text)
+  return asksTop && asksBottom ? 'both' : fromIntent
+})
 const normalizeLevelHint = (value) => {
   const text = cleanText(value)
   if (!text || /^(对象|下一层级|明细层级|下级节点)$/.test(text)) return ''
@@ -363,6 +464,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   const taskKey = rowKeys.find(key => /总任务|任务金额|任务|目标/i.test(key) && !/剩余|缺口|差额|remain/i.test(key)) || ''
   const actualKey = rowKeys.find(key => /年度开单|开单金额|开单|完成|实际|销售/i.test(key) && !/达成率|完成率|率/i.test(key)) || ''
   const remainKey = rowKeys.find(key => /剩余任务|剩余|缺口|差额|remain/i.test(key)) || ''
+  const rankGroupKey = findColumn(row, [/排名分组/])
   return {
     name: cleanText(nameKey ? row[nameKey] : ''),
     parent: cleanText(parentKey ? row[parentKey] : ''),
@@ -376,6 +478,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     taskText: amountText(taskKey ? row[taskKey] : null),
     actualText: amountText(actualKey ? row[actualKey] : null),
     remainText: amountText(remainKey ? row[remainKey] : null),
+    rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
     raw: row,
   }
 }).filter(item => item.name))
@@ -431,6 +534,16 @@ const reportDebugItems = computed(() => {
 })
 
 const reportSpec = computed(() => props.dataset?.report_spec || datasetList.value.find(item => item?.report_spec)?.report_spec || {})
+const primaryAnswerSummary = computed(() => {
+  const summary = reportSpec.value?.answerSummary
+  return summary && typeof summary === 'object' ? summary : null
+})
+const primaryAnswerMode = computed(() => cleanText(reportSpec.value?.answerMode || reportSpec.value?.analysisMode || ''))
+const isRankingAnswerMode = computed(() => primaryAnswerMode.value === 'ranking')
+const isCollectionAnswerMode = computed(() => (
+  ['filter', 'ranking', 'drilldown'].includes(primaryAnswerMode.value)
+  || isRankingQuestion.value
+))
 const queryIntent = computed(() => {
   const intent = reportSpec.value?.debug?.query_intent
   return intent && typeof intent === 'object' ? intent : {}
@@ -469,6 +582,17 @@ const rankingMetricPhrase = (row) => {
   const value = rankingMetricText(row)
   return value ? `${rankingMetricMeta.value.label}${value}` : rankingMetricMeta.value.label
 }
+
+const shouldUsePrimaryAnswerSummary = computed(() => {
+  const text = cleanText(primaryAnswerSummary.value?.text || '')
+  if (!text || !['filter', 'ranking', 'drilldown'].includes(primaryAnswerMode.value)) return false
+  if (isRankingAnswerMode.value) return false
+  if (!isRankingAnswerMode.value) return true
+  const summaryMetricText = `${primaryAnswerSummary.value?.metricLabel || ''} ${text}`
+  if (rankingMetricMeta.value.key !== 'rate' && /达成率|完成率/.test(summaryMetricText)) return false
+  if (rankingMetricMeta.value.key === 'rate' && /开单金额|年度开单|销售金额|任务金额|剩余任务/.test(summaryMetricText)) return false
+  return true
+})
 
 const metricTone = (label, value) => {
   const text = `${label || ''} ${value || ''}`
@@ -533,6 +657,58 @@ const resolveFocusDrillRows = (items = []) => {
 }
 
 const primaryKpiCards = computed(() => {
+  if (showComparisonChart.value) {
+    return comparisonChartRows.value.map((row, index) => ({
+      key: `compare-${row.name}-${index}`,
+      label: row.name,
+      value: row.rateText || '-',
+      hint: row.actualText ? `开单 ${row.actualText}` : '当前无开单金额',
+      isLeader: index === 0,
+      tone: index === 0 ? 'good' : 'neutral',
+    }))
+  }
+  if (isCollectionAnswerMode.value) {
+    const collectionRows = rankedCollectionRows.value
+    const leader = collectionRows[0] || null
+    const tail = collectionRows[collectionRows.length - 1] || null
+    const metricLabel = cleanText(rankingMetricMeta.value?.label || primaryAnswerSummary.value?.metricLabel || '指标')
+    const leaderMetric = leader
+      ? (primaryAnswerMode.value === 'ranking' ? (rankingMetricText(leader) || '-') : (leader.rateText || '-'))
+      : '-'
+    const tailMetric = tail
+      ? (primaryAnswerMode.value === 'ranking' ? (rankingMetricText(tail) || '-') : (tail.rateText || '-'))
+      : '-'
+    return [
+      {
+        key: 'collection-count',
+        label: primaryAnswerMode.value === 'filter' ? '命中数量' : '结果数量',
+        value: `${collectionRows.length}个`,
+        hint: `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`,
+        tone: 'neutral',
+      },
+      leader ? {
+        key: 'collection-leader',
+        label: primaryAnswerMode.value === 'ranking' ? '榜首结果' : '最高结果',
+        value: leader.name,
+        hint: `${metricLabel} ${leaderMetric}`,
+        tone: 'good',
+      } : null,
+      tail ? {
+        key: 'collection-tail',
+        label: primaryAnswerMode.value === 'ranking' ? '末位结果' : '边界结果',
+        value: tail.name,
+        hint: `${metricLabel} ${tailMetric}`,
+        tone: primaryAnswerMode.value === 'ranking' ? 'warn' : 'neutral',
+      } : null,
+      {
+        key: 'collection-risk',
+        label: '风险节点',
+        value: `${riskRows.value.length}个`,
+        hint: riskRows.value.length ? `低于 ${riskThreshold.value}% 风险线` : '暂无明显风险节点',
+        tone: riskRows.value.length ? 'danger' : 'good',
+      },
+    ].filter(Boolean)
+  }
   const kpis = Array.isArray(reportSpec.value?.kpis) ? reportSpec.value.kpis : []
   const normalized = kpis.map(normalizeMetricCard).filter(Boolean)
   if (normalized.length) {
@@ -606,6 +782,53 @@ const bottomManagementRows = computed(() => (
     .sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity))
     .slice(0, requestedRankLimit.value || 3)
 ))
+
+const rankRowKey = (row) => `${row?.level || ''}|${row?.parent || ''}|${row?.name || ''}`
+
+const sortRankingRows = (items = [], direction = 'desc') => (
+  [...items]
+    .filter(item => item?.name)
+    .sort((left, right) => (
+      direction === 'asc'
+        ? (rankingMetricValue(left) ?? Infinity) - (rankingMetricValue(right) ?? Infinity)
+        : (rankingMetricValue(right) ?? -Infinity) - (rankingMetricValue(left) ?? -Infinity)
+    ))
+)
+
+const twoSidedRankRows = (items = []) => {
+  const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+  const source = items.filter(item => item?.name)
+  const groupedFromBackend = source.filter(item => item.rankGroup)
+  if (groupedFromBackend.length) {
+    return groupedFromBackend
+  }
+  const output = []
+  const seen = new Set()
+  for (const row of sortRankingRows(source, 'desc').slice(0, limit)) {
+    const key = rankRowKey(row)
+    if (seen.has(key)) continue
+    seen.add(key)
+    output.push({ ...row, rankGroup: `前${limit}` })
+  }
+  for (const row of sortRankingRows(source, 'asc').slice(0, limit)) {
+    const key = rankRowKey(row)
+    if (seen.has(key)) continue
+    seen.add(key)
+    output.push({ ...row, rankGroup: `后${limit}` })
+  }
+  return output
+}
+
+const rankedCollectionRows = computed(() => {
+  const source = secondaryDrillRows.value.length
+    ? secondaryDrillRows.value
+    : managementLayerRows.value.length
+      ? managementLayerRows.value
+      : normalizedRows.value
+  if (!isRankingQuestion.value) return source
+  if (rankSides.value === 'both') return twoSidedRankRows(source)
+  return sortRankingRows(source, rankDirection.value)
+})
 
 const rateDistribution = computed(() => {
   const source = managementLayerRows.value.filter(item => item.rate !== null)
@@ -683,6 +906,67 @@ const worstRow = computed(() => {
 })
 
 const insightCards = computed(() => {
+  if (isLeafFocus.value) {
+    const focus = singleFocusRow.value || resolveFocusRow(normalizedRows.value)
+    if (!focus) return []
+    return [
+      {
+        label: '数据覆盖',
+        value: `${rowCount.value || 1}行`,
+        desc: `${focus.level || '当前层级'} 1个具体主体`,
+        tone: 'info',
+      },
+      {
+        label: '归属上级',
+        value: focus.parent || '当前口径',
+        desc: '需要分析支撑原因时，建议回到上一级继续下钻',
+        tone: 'neutral',
+      },
+      {
+        label: '风险判断',
+        value: focus.rateText || '-',
+        desc: focus.rate !== null && focus.rate < riskThreshold.value
+          ? `低于 ${riskThreshold.value}% 风险线`
+          : '当前未命中明显风险红线',
+        tone: focus.rate !== null && focus.rate < riskThreshold.value ? 'warn' : 'good',
+      },
+    ]
+  }
+  if (isCollectionAnswerMode.value) {
+    const collectionRows = rankedCollectionRows.value
+    const leader = collectionRows[0] || null
+    const tail = collectionRows[collectionRows.length - 1] || null
+    return [
+      {
+        label: '数据覆盖',
+        value: `${collectionRows.length}行`,
+        desc: `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`,
+        tone: 'info',
+      },
+      leader ? {
+        label: primaryAnswerMode.value === 'ranking' ? '榜首对象' : '代表对象',
+        value: leader.name,
+        desc: primaryAnswerMode.value === 'ranking'
+          ? `${rankingMetricMeta.value.label}${rankingMetricText(leader) || leader.rateText || '-'}`
+          : `达成率${leader.rateText || '-'}`,
+        tone: 'good',
+      } : null,
+      tail ? {
+        label: primaryAnswerMode.value === 'ranking' ? '末位对象' : '重点压力',
+        value: tail.name,
+        desc: primaryAnswerMode.value === 'ranking'
+          ? `${rankingMetricMeta.value.label}${rankingMetricText(tail) || tail.rateText || '-'}`
+          : `达成率${tail.rateText || '-'}`,
+        tone: primaryAnswerMode.value === 'ranking' ? 'warn' : 'danger',
+      } : null,
+      {
+        label: '风险节点',
+        value: `${riskRows.value.length}个`,
+        desc: riskRows.value.length ? `低于 ${riskThreshold.value}% 风险线` : '暂无低于风险线节点',
+        tone: riskRows.value.length ? 'warn' : 'good',
+      },
+    ].filter(Boolean).slice(0, 4)
+  }
   const cards = []
   const compareCount = comparisonDigestRows.value.length
   const totalRows = rowCount.value || normalizedRows.value.length
@@ -837,6 +1121,7 @@ const comparisonDigestRows = computed(() => (
 ))
 
 const isComparisonDigest = computed(() => comparisonDigestRows.value.length >= 2)
+const showComparisonDigest = computed(() => isComparisonDigest.value && !isRankingAnswerMode.value)
 
 const comparisonParentNames = computed(() => {
   const names = []
@@ -879,6 +1164,65 @@ const visibleComparisonDigestRows = computed(() => {
   const leader = ranked[0] || rows[0]
   const laggard = ranked[ranked.length - 1] || rows[rows.length - 1]
   return [leader, laggard].filter((item, index, list) => item && list.findIndex(row => row.name === item.name) === index)
+})
+
+const showComparisonLane = computed(() => false)
+
+const showComparisonChart = computed(() => (
+  showComparisonDigest.value
+  && /分公司|branch/i.test(comparisonLevelLabel.value || comparisonDigestRows.value.map(item => item.level || item.name || '').join(' '))
+  && comparisonDigestRows.value.length >= 3
+  && comparisonDigestRows.value.length <= 4
+  && comparisonDigestRows.value.every(item => item.rate !== null)
+))
+
+const comparisonChartRows = computed(() => {
+  if (!showComparisonChart.value) return []
+  const rows = [...comparisonDigestRows.value].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+  const maxRate = Math.max(...rows.map(item => item.rate || 0), 0)
+  return rows.map((row) => ({
+    ...row,
+    barWidth: maxRate > 0 ? `${Math.max(10, ((row.rate || 0) / maxRate) * 100)}%` : '10%',
+  }))
+})
+
+const comparisonChartAverage = computed(() => {
+  if (!showComparisonChart.value || !comparisonChartRows.value.length) return null
+  const values = comparisonChartRows.value
+    .map(item => item.rate)
+    .filter(item => item !== null && item !== undefined && !Number.isNaN(Number(item)))
+    .map(Number)
+  if (!values.length) return null
+  return values.reduce((sum, item) => sum + item, 0) / values.length
+})
+
+const comparisonChartAverageText = computed(() => {
+  if (comparisonChartAverage.value === null) return ''
+  return `${Number(comparisonChartAverage.value).toFixed(2).replace(/\.?0+$/, '')}%`
+})
+
+const comparisonChartAverageOffset = computed(() => {
+  if (comparisonChartAverage.value === null) return '0%'
+  const maxRate = Math.max(...comparisonChartRows.value.map(item => item.rate || 0), 0)
+  if (!maxRate) return '0%'
+  return `${Math.max(0, Math.min(100, (comparisonChartAverage.value / maxRate) * 100))}%`
+})
+
+const comparisonChartTicks = computed(() => {
+  if (!showComparisonChart.value) return ['0%', '0%', '0%']
+  const maxRate = Math.max(...comparisonChartRows.value.map(item => item.rate || 0), 0)
+  const formatTick = (value) => `${Number(value || 0).toFixed(1).replace(/\.0$/, '')}%`
+  return ['0%', formatTick(maxRate / 2), formatTick(maxRate)]
+})
+
+const comparisonLaneRows = computed(() => {
+  if (!showComparisonLane.value) return []
+  const rows = [...comparisonDigestRows.value].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+  const maxRate = Math.max(...rows.map(item => item.rate || 0), 0)
+  return rows.map((row) => ({
+    ...row,
+    laneWidth: maxRate > 0 ? `${Math.max(16, ((row.rate || 0) / maxRate) * 100)}%` : '16%',
+  }))
 })
 
 const comparisonLeader = computed(() => {
@@ -1042,11 +1386,11 @@ const expectedDetailLevel = computed(() => {
 
 const secondaryDrillAllRows = computed(() => {
   const isComparisonScope = comparisonDigestRows.value.length >= 2
-  if (isComparisonScope && !comparisonDrillRows.value.length) return []
-  const source = isComparisonScope
+  if (isComparisonScope && !comparisonDrillRows.value.length && !isRankingQuestion.value) return []
+  const source = isComparisonScope && comparisonDrillRows.value.length
     ? comparisonDrillRows.value
     : (focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value)
-  const detailLevel = isComparisonScope ? expectedDetailLevel.value : ''
+  const detailLevel = isComparisonScope && comparisonDrillRows.value.length ? expectedDetailLevel.value : ''
   const unique = []
   const seen = new Set()
   source.forEach((item) => {
@@ -1065,15 +1409,13 @@ const secondaryDrillAllRows = computed(() => {
 })
 
 const secondaryDrillRows = computed(() => {
-  const rows = secondaryDrillAllRows.value
+  const rows = isRankingQuestion.value && managementLayerRows.value.length
+    ? managementLayerRows.value
+    : secondaryDrillAllRows.value
   if (!isRankingQuestion.value) return rows
-  const limit = requestedRankLimit.value || 3
-  return [...rows]
-    .sort((left, right) => (
-      rankDirection.value === 'asc'
-        ? (rankingMetricValue(left) ?? Infinity) - (rankingMetricValue(right) ?? Infinity)
-        : (rankingMetricValue(right) ?? -Infinity) - (rankingMetricValue(left) ?? -Infinity)
-    ))
+  const limit = explicitRequestedRankLimit.value || rows.length || requestedRankLimit.value || 3
+  if (rankSides.value === 'both') return twoSidedRankRows(rows)
+  return sortRankingRows(rows, rankDirection.value)
     .slice(0, limit)
 })
 
@@ -1083,8 +1425,31 @@ const drillSectionLabel = computed(() => (
 
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
+  if (rankSides.value === 'both') {
+    const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+    const topRows = rows.filter(item => item.rankGroup?.includes('前'))
+    const bottomRows = rows.filter(item => item.rankGroup?.includes('后'))
+    const fallbackTopRows = topRows.length ? topRows : sortRankingRows(rows, 'desc').slice(0, limit)
+    const fallbackBottomRows = bottomRows.length ? bottomRows : sortRankingRows(rows, 'asc').slice(0, limit)
+    return [
+      {
+        key: 'rank-top',
+        title: `前${limit}｜相对领先`,
+        index: 0,
+        tone: 'top',
+        rows: fallbackTopRows,
+      },
+      {
+        key: 'rank-bottom',
+        title: `后${limit}｜相对承压`,
+        index: 1,
+        tone: 'bottom',
+        rows: fallbackBottomRows,
+      },
+    ].filter(group => group.rows.length)
+  }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
-  const shouldGroup = comparisonParentNames.value.length >= 2 && parents.length >= 1
+  const shouldGroup = !explicitRequestedRankLimit.value && comparisonParentNames.value.length >= 2 && parents.length >= 1
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
 
   const parentOrder = comparisonParentNames.value
@@ -1113,6 +1478,14 @@ const secondaryLevelLabel = computed(() => {
   return level || '下级节点'
 })
 
+const rankingLevelLabel = computed(() => (
+  explicitQuestionLevel.value
+  || digestCompareLevel.value
+  || comparisonLevelLabel.value
+  || secondaryLevelLabel.value
+  || '对象'
+))
+
 const isBusinessPersonRanking = computed(() => (
   isRankingQuestion.value && secondaryLevelLabel.value === '业务代表'
 ))
@@ -1132,8 +1505,12 @@ const secondaryDrillSummary = computed(() => {
   if (!rows.length) return ''
   if (isRankingQuestion.value) {
     const shown = secondaryDrillRows.value
+    if (rankSides.value === 'both') {
+      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      return `按${rankingMetricMeta.value.label}取前${limit}和后${limit}个${rankingLevelLabel.value}，完整明细见下表`
+    }
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
-    return `按${rankingMetricMeta.value.label}取${directionText}${shown.length}个${secondaryLevelLabel.value}，完整明细见下表`
+    return `按${rankingMetricMeta.value.label}取${directionText}${shown.length}个${rankingLevelLabel.value}，完整明细见下表`
   }
   const ranked = rows.filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
   const best = ranked[0]
@@ -1147,16 +1524,38 @@ const secondaryDrillSummary = computed(() => {
   return parts.join('，')
 })
 
+const secondaryMetricColumnLabel = computed(() => (
+  isRankingQuestion.value ? rankingMetricMeta.value.label : '达成率'
+))
+
+const secondaryMetricValue = (row) => (
+  isRankingQuestion.value ? rankingMetricValue(row) : row?.rate
+)
+
+const secondaryMetricText = (row) => {
+  if (!isRankingQuestion.value) return row?.rateText || '-'
+  return rankingMetricText(row) || row?.rateText || '-'
+}
+
 const secondaryBarWidth = (row) => {
-  const value = row?.rate
+  const value = secondaryMetricValue(row)
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '0%'
-  return `${Math.max(0, Math.min(100, Number(value)))}%`
+  if (!isRankingQuestion.value || rankingMetricMeta.value.key === 'rate') {
+    return `${Math.max(0, Math.min(100, Number(value)))}%`
+  }
+  const values = rankedCollectionRows.value
+    .map(item => secondaryMetricValue(item))
+    .filter(item => item !== null && item !== undefined && !Number.isNaN(Number(item)))
+    .map(Number)
+  const max = Math.max(...values, 0)
+  if (!max) return '0%'
+  return `${Math.max(3, Math.min(100, Number(value) / max * 100))}%`
 }
 
 const secondaryRelativeTier = (row) => {
-  const rows = secondaryDrillAllRows.value
-    .filter(item => item?.rate !== null && item?.rate !== undefined)
-    .sort((left, right) => (right.rate ?? -Infinity) - (left.rate ?? -Infinity))
+  const rows = (isRankingQuestion.value ? rankedCollectionRows.value : secondaryDrillAllRows.value)
+    .filter(item => secondaryMetricValue(item) !== null && secondaryMetricValue(item) !== undefined)
+    .sort((left, right) => (secondaryMetricValue(right) ?? -Infinity) - (secondaryMetricValue(left) ?? -Infinity))
   const index = rows.findIndex(item => (
     item.name === row?.name &&
     item.parent === row?.parent &&
@@ -1175,7 +1574,7 @@ const secondaryRelativeTier = (row) => {
 }
 
 const secondaryRateTone = (row) => {
-  const value = row?.rate
+  const value = secondaryMetricValue(row)
   if (value === null || value === undefined) return 'is-neutral'
   const tier = secondaryRelativeTier(row)
   if (tier === 'leader') return 'is-success'
@@ -1185,14 +1584,14 @@ const secondaryRateTone = (row) => {
   return 'is-warn'
 }
 
-const secondaryRateHint = (row) => {
-  const value = row?.rate
+const secondaryMetricHint = (row) => {
+  const value = secondaryMetricValue(row)
   if (value === null || value === undefined) return '缺少口径'
   const tier = secondaryRelativeTier(row)
   if (tier === 'leader') return '相对领先'
   if (tier === 'steady') return '稳定推进'
-  if (tier === 'pressure') return value < riskThreshold.value ? '重点风险' : '相对承压'
-  if (value < riskThreshold.value) return '预警'
+  if (tier === 'pressure') return !isRankingQuestion.value && value < riskThreshold.value ? '重点风险' : '相对承压'
+  if (!isRankingQuestion.value && value < riskThreshold.value) return '预警'
   return '需推进'
 }
 
@@ -1205,13 +1604,23 @@ const focusDrillRank = computed(() => {
 })
 
 const singleOrgConclusion = computed(() => {
-  if (isComparisonDigest.value) return ''
+  if (showComparisonDigest.value) return ''
   const subject = singleFocusName.value || '当前主体'
   const task = getPrimaryKpiText(/总任务|任务金额|目标/i) || singleFocusRow.value?.taskText || ''
   const actual = getPrimaryKpiText(/年度开单|开单|完成|实际|销售/i) || singleFocusRow.value?.actualText || ''
   const rate = singleRateText.value
   const remain = getPrimaryKpiText(/剩余|缺口|差额|remain/i) || singleFocusRow.value?.remainText || ''
   if (!task && !actual && !rate && !remain) return ''
+  if (isLeafFocus.value) {
+    const parent = cleanText(singleFocusRow.value?.parent || '')
+    const metrics = [
+      task ? `年度总任务${task}` : '',
+      actual ? `当前开单${actual}` : '',
+      rate ? `达成率${rate}` : '',
+      remain ? `剩余缺口${remain}` : '',
+    ].filter(Boolean)
+    return `${subject}当前是最末端主体${parent ? `，归属${parent}` : ''}，${metrics.join('，')}。`
+  }
   const toneText = {
     good: '整体进度相对靠前',
     warn: '整体进度需要重点跟进',
@@ -1233,6 +1642,41 @@ const singleOrgConclusion = computed(() => {
 })
 
 const directAnswer = computed(() => {
+  if (shouldUsePrimaryAnswerSummary.value) {
+    return primaryAnswerSummary.value.text
+  }
+  if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
+    if (rankSides.value === 'both') {
+      const rows = rankedCollectionRows.value
+      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      const topRows = rows.filter(item => item.rankGroup.includes('前')).length
+        ? rows.filter(item => item.rankGroup.includes('前'))
+        : sortRankingRows(rows, 'desc').slice(0, limit)
+      const bottomRows = rows.filter(item => item.rankGroup.includes('后')).length
+        ? rows.filter(item => item.rankGroup.includes('后'))
+        : sortRankingRows(rows, 'asc').slice(0, limit)
+      const topNames = topRows.map(item => item.name).filter(Boolean).join('、')
+      const bottomNames = bottomRows.map(item => item.name).filter(Boolean).join('、')
+      return `本轮已按${rankingMetricMeta.value.label}生成${rankingLevelLabel.value}前${limit}和后${limit}结果；前${limit}为${topNames || '见下方明细'}，后${limit}为${bottomNames || '见下方明细'}。完整名单见排名结果。`
+    }
+    const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+    const rows = rankedCollectionRows.value
+    const leader = rows[0]
+    const topNames = rows
+      .slice(0, Math.min(3, rows.length))
+      .map(item => item.name)
+      .filter(Boolean)
+      .join('、')
+    const leaderMetrics = [
+      rankingMetricText(leader) ? `${rankingMetricMeta.value.label}${rankingMetricText(leader)}` : '',
+      rankingMetricMeta.value.key !== 'rate' && leader?.rateText ? `达成率${leader.rateText}` : '',
+      leader?.remainText ? `缺口${leader.remainText}` : '',
+    ].filter(Boolean).join('，')
+    const riskHint = leader?.rate !== null && leader?.rate !== undefined && Number(leader.rate) < 60
+      ? '，但达成率仍低于60%红线，需要把相对排名和绝对进度分开看'
+      : ''
+    return `本轮${rankingLevelLabel.value}${rankingMetricMeta.value.label}${directionText}${rows.length}名已生成，前三为${topNames || leader?.name || '见下方明细'}；榜首${leader?.name || '当前对象'}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}。完整名单见排名结果。`
+  }
   if (comparisonRows.value.length >= 2) {
     const rows = comparisonRows.value
     const metrics = rows.length <= 4
@@ -1243,24 +1687,6 @@ const directAnswer = computed(() => {
   }
   if (asksLowerNode.value && asksLowest.value && groupedWorstLines.value.length) {
     return `已按上级组织拆开看，不能把所有${lowerNodeLabel.value}直接混在一起比。`
-  }
-  if (isRankingQuestion.value && secondaryDrillRows.value.length) {
-    const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
-    const leader = secondaryDrillRows.value[0]
-    const topNames = secondaryDrillRows.value
-      .slice(0, Math.min(3, secondaryDrillRows.value.length))
-      .map(item => item.name)
-      .filter(Boolean)
-      .join('、')
-    const leaderMetrics = [
-      rankingMetricText(leader) ? `${rankingMetricMeta.value.label}${rankingMetricText(leader)}` : '',
-      rankingMetricMeta.value.key !== 'rate' && leader?.rateText ? `达成率${leader.rateText}` : '',
-      leader?.remainText ? `缺口${leader.remainText}` : '',
-    ].filter(Boolean).join('，')
-    const riskHint = leader?.rate !== null && leader?.rate !== undefined && Number(leader.rate) < 60
-      ? '，但达成率仍低于60%红线，需要把“相对领先”和“绝对进度风险”分开管理'
-      : ''
-    return `本轮${secondaryLevelLabel.value}${rankingMetricMeta.value.label}${directionText}${secondaryDrillRows.value.length}名已生成，前三为${topNames || leader?.name || '见下方明细'}；榜首${leader?.name || '当前对象'}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}。完整名单见排名结果。`
   }
   if (singleOrgConclusion.value) return singleOrgConclusion.value
   if (managementLayerRows.value.length >= 2) {
@@ -1288,7 +1714,7 @@ const directAnswer = computed(() => {
 })
 
 const supportLines = computed(() => {
-  if (comparisonDigestRows.value.length >= 2) {
+  if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {
     const detailRows = normalizedRows.value.filter(item => item.parent && comparisonDigestRows.value.some(row => row.name === item.parent))
     const sortedDetails = [...detailRows].filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
     const best = sortedDetails[0]
@@ -1319,8 +1745,22 @@ const supportLines = computed(() => {
     }
     return lines.filter(Boolean)
   }
-  if (isRankingQuestion.value && secondaryDrillRows.value.length) {
-    const shown = secondaryDrillRows.value
+  if (isRankingQuestion.value && rankedCollectionRows.value.length) {
+    const shown = rankedCollectionRows.value
+    if (rankSides.value === 'both') {
+      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      const topRows = shown.filter(item => item.rankGroup.includes('前')).length
+        ? shown.filter(item => item.rankGroup.includes('前'))
+        : sortRankingRows(shown, 'desc').slice(0, limit)
+      const bottomRows = shown.filter(item => item.rankGroup.includes('后')).length
+        ? shown.filter(item => item.rankGroup.includes('后'))
+        : sortRankingRows(shown, 'asc').slice(0, limit)
+      return [
+        topRows.length ? `前${limit}结果：${topRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
+        bottomRows.length ? `后${limit}结果：${bottomRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
+        `风险提醒：排名看${rankingMetricMeta.value.label}，健康度仍要结合达成率和缺口一起判断。`,
+      ].filter(Boolean)
+    }
     const leader = shown[0]
     const tail = shown[shown.length - 1]
     const leaderValue = rankingMetricValue(leader)
@@ -1335,7 +1775,7 @@ const supportLines = computed(() => {
     return [
       leader ? `榜首判断：${leader.name}${rankingMetricText(leader) ? `的${rankingMetricPhrase(leader)}` : ''}${leader.rateText && rankingMetricMeta.value.key !== 'rate' ? `，达成率${leader.rateText}` : ''}，可作为本轮复盘样本。` : '',
       tail && leader && tail.name !== leader.name && gapText
-        ? `榜内分化：第1名与第${shown.length}名相差${gapText}，说明头部${secondaryLevelLabel.value}之间仍需分层管理。`
+        ? `榜内分化：第1名与第${shown.length}名相差${gapText}，说明头部${rankingLevelLabel.value}之间仍需分层管理。`
         : '',
       riskCount
         ? `风险提醒：Top${shown.length}中仍有${riskCount}个低于${riskThreshold.value}%风险线，不能只看排名，还要看缺口消化。`
@@ -1384,7 +1824,15 @@ const supportLines = computed(() => {
 
 const actionItems = computed(() => {
   const actions = []
-  if (comparisonDigestRows.value.length >= 2) {
+  if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
+    const leader = rankedCollectionRows.value[0]
+    const tail = rankedCollectionRows.value[rankedCollectionRows.value.length - 1]
+    if (leader) actions.push(`复盘${leader.name}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
+    if (tail && tail.name !== leader?.name) actions.push(`对${tail.name}继续下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
+    actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，排名看${rankingMetricMeta.value.label}，风险继续看达成率和缺口。`)
+    return actions.slice(0, 3)
+  }
+  if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {
     const leader = comparisonLeader.value
     const pressure = worstRow.value
     if (leader) actions.push(`先复盘${leader.name}的高达成路径，提炼目标拆解、客户跟进和项目推进节奏。`)
@@ -1723,6 +2171,26 @@ const actionItems = computed(() => {
   color: #6d3cc7;
 }
 
+.sa-drill-group-row.is-top {
+  margin-top: 0;
+  border-left-color: #00b42a;
+  background: linear-gradient(90deg, rgba(0, 180, 42, 0.12), rgba(0, 180, 42, 0.025));
+}
+
+.sa-drill-group-row.is-top span {
+  color: #009a29;
+}
+
+.sa-drill-group-row.is-bottom {
+  border-top-color: rgba(255, 125, 0, 0.16);
+  border-left-color: #ff7d00;
+  background: linear-gradient(90deg, rgba(255, 125, 0, 0.14), rgba(255, 125, 0, 0.03));
+}
+
+.sa-drill-group-row.is-bottom span {
+  color: #d46b08;
+}
+
 .sa-drill-group-row span {
   min-width: 0;
   color: #165dff;
@@ -1738,6 +2206,14 @@ const actionItems = computed(() => {
   color: #4e5969;
   font-size: 12px;
   font-weight: 700;
+}
+
+.sa-drill-row.is-rank-top {
+  background: linear-gradient(90deg, rgba(0, 180, 42, 0.035), rgba(255, 255, 255, 0));
+}
+
+.sa-drill-row.is-rank-bottom {
+  background: linear-gradient(90deg, rgba(255, 125, 0, 0.045), rgba(255, 255, 255, 0));
 }
 
 .sa-drill-node,
@@ -1966,6 +2442,237 @@ const actionItems = computed(() => {
   white-space: nowrap;
 }
 
+.sa-comparison-lane {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 10px;
+}
+
+.sa-comparison-lane-row {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(22, 93, 255, 0.12);
+}
+
+.sa-comparison-lane-row.is-leader {
+  border-color: rgba(22, 93, 255, 0.24);
+  box-shadow: 0 6px 18px rgba(22, 93, 255, 0.08);
+}
+
+.sa-comparison-lane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sa-comparison-lane-head strong {
+  color: #165dff;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.sa-comparison-lane-bar {
+  position: relative;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(22, 93, 255, 0.08);
+  overflow: hidden;
+}
+
+.sa-comparison-lane-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #78a9ff 0%, #165dff 100%);
+}
+
+.sa-comparison-lane-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  color: #4e5969;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sa-comparison-lane-meta span:nth-child(n + 2) {
+  display: none;
+}
+
+.sa-comparison-chart {
+  margin-top: 12px;
+  padding: 14px 14px 12px;
+  border: 1px solid rgba(22, 93, 255, 0.12);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.sa-comparison-chart--in-kpi {
+  margin-top: 14px;
+}
+
+.sa-comparison-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sa-comparison-chart-head strong {
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.sa-comparison-chart-scale {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+  color: #86909c;
+  font-size: 11px;
+  text-align: right;
+}
+
+.sa-comparison-chart-scale span:first-child {
+  text-align: left;
+}
+
+.sa-comparison-chart-scale span:nth-child(2) {
+  text-align: center;
+}
+
+.sa-comparison-chart-body {
+  display: grid;
+  gap: 10px;
+  position: relative;
+}
+
+.sa-comparison-chart-row {
+  display: grid;
+  grid-template-columns: minmax(84px, 108px) minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid rgba(29, 33, 41, 0.06);
+}
+
+.sa-comparison-chart-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.sa-comparison-chart-row.is-leader .sa-comparison-chart-label,
+.sa-comparison-chart-row.is-leader .sa-comparison-chart-value {
+  color: #165dff;
+}
+
+.sa-comparison-chart-row.is-leader .sa-comparison-chart-track i {
+  background: linear-gradient(90deg, #7ba8ff 0%, #165dff 55%, #0040ff 100%);
+  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.3);
+}
+
+.sa-comparison-chart-average {
+  position: absolute;
+  top: -2px;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed rgba(255, 125, 0, 0.7);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sa-comparison-chart-average span {
+  position: absolute;
+  top: -18px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 125, 0, 0.12);
+  color: #d46b08;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sa-comparison-chart-label {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sa-comparison-chart-track {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(22, 93, 255, 0.08) 0%, rgba(22, 93, 255, 0.02) 100%);
+}
+
+.sa-comparison-chart-track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(22, 93, 255, 0.08) 0, rgba(22, 93, 255, 0.08) 1px, transparent 1px, transparent 50%);
+  background-size: 50% 100%;
+  pointer-events: none;
+}
+
+.sa-comparison-chart-track i {
+  position: relative;
+  display: block;
+  height: 100%;
+  min-width: 12px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8db7ff 0%, #165dff 100%);
+  box-shadow: 0 6px 14px rgba(22, 93, 255, 0.2);
+}
+
+.sa-comparison-chart-value {
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sa-comparison-chart-actual {
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sa-kpi-card.is-compare-leader {
+  border-color: rgba(22, 93, 255, 0.26);
+  background:
+    linear-gradient(180deg, rgba(247, 250, 255, 0.98) 0%, rgba(255, 255, 255, 1) 100%);
+  box-shadow: 0 14px 30px rgba(22, 93, 255, 0.1);
+}
+
+.sa-kpi-card.is-compare-leader .sa-kpi-label,
+.sa-kpi-card.is-compare-leader .sa-kpi-value {
+  color: #165dff;
+}
+
 .sa-comparison-gap-list span {
   padding: 4px 8px;
   border-radius: 7px;
@@ -2077,6 +2784,37 @@ const actionItems = computed(() => {
   .sa-comparison-card-grid.is-count-3,
   .sa-comparison-card-grid.is-count-4 {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-comparison-lane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-comparison-chart {
+    padding: 12px;
+  }
+
+  .sa-comparison-chart-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sa-comparison-chart-scale {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sa-comparison-chart-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .sa-comparison-chart-value {
+    text-align: left;
+  }
+
+  .sa-comparison-chart-actual {
+    grid-column: auto;
   }
 
   .sa-section-title-line {

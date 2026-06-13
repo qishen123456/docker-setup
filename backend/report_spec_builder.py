@@ -231,6 +231,14 @@ def _requested_level_values(question: str, config: Dict[str, Any]) -> List[str]:
     return values
 
 
+def _canonical_level_value(value: Any) -> str:
+    text = str(value or "").strip()
+    alias_map = {
+        "城市分公司": "城市公司",
+    }
+    return alias_map.get(text, text)
+
+
 def _negative_ranking_requested(question: str) -> bool:
     return bool(re.search(r"完成.*不好|不好|差|最差|最低|落后|承压|风险|低于|倒数|垫底|未完成|缺口", question or ""))
 
@@ -518,12 +526,16 @@ def build_report_spec(
             None,
         )
     sort_metric = ranking_sort_metric or rate_metric or actual_metric or task_metric or remain_metric or {}
+    is_ranking_mode = query_intent.get("intent") == "ranking"
 
     resolved_names = _resolved_member_names(resolved_entities)
     if not resolved_names:
         profile = get_dataset_profile(dataset.get("dataset_code") or dataset.get("code"), dataset.get("dataset_name") or dataset.get("name"))
         if profile:
             resolved_names = _resolved_member_names(resolve_member_mentions(question or "", profile))
+    explicit_single_focus_name = ""
+    if len(resolved_names) == 1 and any((node.get("name") or "") == resolved_names[0] for node in nodes):
+        explicit_single_focus_name = resolved_names[0]
     resolved_order = {name: index for index, name in enumerate(resolved_names)}
     if resolved_names:
         matched_nodes = [
@@ -536,7 +548,20 @@ def build_report_spec(
             if node.get("name") and _question_mentions_node(question or "", node["name"])
         ]
     explicit_comparative = len(matched_nodes) > 1 or bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
-    focus_node = next((node for node in matched_nodes if node.get("children")), None)
+    requested_levels = _requested_level_values(question or "", config)
+    query_target_level = _canonical_level_value(query_intent.get("target_level"))
+    if query_target_level and query_target_level not in requested_levels:
+        requested_levels.insert(0, query_target_level)
+    requested_level_set = {_canonical_level_value(value) for value in requested_levels if str(value or "").strip()}
+    focus_node = next(
+        (
+            node for node in matched_nodes
+            if not requested_level_set or _canonical_level_value(node.get("levelValue") or node.get("levelName")) not in requested_level_set
+        ),
+        None,
+    ) or next((node for node in matched_nodes if node.get("children")), None)
+    if explicit_single_focus_name:
+        focus_node = next((node for node in nodes if node.get("name") == explicit_single_focus_name), focus_node)
     if explicit_comparative and len(matched_nodes) > 1:
         comparison_nodes = sorted(
             matched_nodes,
@@ -551,7 +576,6 @@ def build_report_spec(
         max_depth = max([node.get("depth", 0) for node in parent_nodes] or [0])
         comparison_nodes = [node for node in parent_nodes if node.get("depth", 0) == max_depth]
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
-    requested_levels = _requested_level_values(question or "", config)
     if requested_levels:
         if explicit_comparative and len(comparison_nodes) > 1:
             scoped_nodes = []
@@ -569,13 +593,15 @@ def build_report_spec(
             node for node in scoped_nodes
             if node.get("name")
             and (
-                node.get("levelValue") in requested_levels
-                or node.get("levelName") in requested_levels
+                _canonical_level_value(node.get("levelValue")) in requested_level_set
+                or _canonical_level_value(node.get("levelName")) in requested_level_set
                 or any(value and value in str(node.get("name") or "") for value in requested_levels)
             )
         ]
         if level_nodes:
             comparison_nodes = level_nodes
+            if len(level_nodes) == 1:
+                focus_node = level_nodes[0]
     low_first = (
         str(query_intent.get("direction") or "").lower() == "asc"
         if query_intent.get("intent") == "ranking"
@@ -595,9 +621,17 @@ def build_report_spec(
         scene = {
             "key": "filter",
             "label": "filter",
-            "layout": "detail",
+            "layout": "filter",
             "required_contract": ["nameColumn", "metrics"],
             "reasons": ["query_intent.intent=filter"],
+        }
+    elif query_intent.get("intent") == "drilldown":
+        scene = {
+            "key": "drilldown",
+            "label": "drilldown",
+            "layout": "detail",
+            "required_contract": ["nameColumn", "metrics"],
+            "reasons": ["query_intent.intent=drilldown"],
         }
     mode = scene.get("key", "detail")
     contract_health = validate_report_contract(config, columns, scene)
@@ -626,6 +660,11 @@ def build_report_spec(
 
     def metric_label(metric: Optional[Dict[str, Any]], fallback: str) -> str:
         return (metric or {}).get("label") or (metric or {}).get("column") or (metric or {}).get("key") or fallback
+
+    def metric_value_text(node: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> str:
+        if not metric:
+            return "-"
+        return _format_value(_row_value(node.get("raw") or {}, metric), metric)
 
     def add_kpi(
         key: str,
@@ -727,12 +766,12 @@ def build_report_spec(
     thresholds = _effective_thresholds(config)
     ranked_comparison_nodes = sorted(
         comparison_nodes,
-        key=lambda item: _rate_sort_value(item, rate_metric),
+        key=lambda item: _row_sort_value(item.get("raw") or {}, sort_metric if sort_metric else rate_metric),
         reverse=not low_first,
     )
     high_ranked_comparison_nodes = sorted(
         comparison_nodes,
-        key=lambda item: _rate_sort_value(item, rate_metric),
+        key=lambda item: _row_sort_value(item.get("raw") or {}, sort_metric if sort_metric else rate_metric),
         reverse=True,
     )
     high_node_rank = {node.get("id"): index + 1 for index, node in enumerate(high_ranked_comparison_nodes)}
@@ -747,8 +786,15 @@ def build_report_spec(
         node_detail_label = _level_label(drill_children, detail_label)
         if is_leaf_level:
             node_detail_label = node.get("levelValue") or node.get("levelName") or compare_label or "当前层级"
-        sorted_children = sorted(drill_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0)
-        sorted_children_desc = sorted(sorted_children, key=lambda item: _row_sort_value(item["raw"], rate_metric) if rate_metric else 0, reverse=True)
+        sorted_children = sorted(
+            drill_children,
+            key=lambda item: _row_sort_value(item["raw"], sort_metric if sort_metric else rate_metric) if (sort_metric or rate_metric) else 0,
+        )
+        sorted_children_desc = sorted(
+            sorted_children,
+            key=lambda item: _row_sort_value(item["raw"], sort_metric if sort_metric else rate_metric) if (sort_metric or rate_metric) else 0,
+            reverse=True,
+        )
         child_groups = _dynamic_performance_groups(
             sorted_children_desc,
             lambda item: _row_value(item.get("raw") or {}, rate_metric) if rate_metric else None,
@@ -874,7 +920,7 @@ def build_report_spec(
             highlight = f"{node_detail_label}达成率接近，暂无明显领先节点"
             risk_text = "暂无明显落后节点"
         node_rank_value = high_node_rank.get(node.get("id"), 0)
-        node_rank_label = _rate_rank_label(node_rank_value)
+        node_rank_label = f"排序第{node_rank_value}" if is_ranking_mode and node_rank_value else _rate_rank_label(node_rank_value)
         node_rank_suffix = f"（{node_rank_label}）" if node_rank_value else ""
         detail_action_text = "当前最细层" if is_leaf_level else f"点击展开{len(sorted_children_desc)}个{node_detail_label}明细。"
         detail_narrative = (
@@ -1004,14 +1050,20 @@ def build_report_spec(
         summary_parts.append("当前可比对象不足 2 个，不做横向好坏对比。")
 
     overview_chart = {
-        "chartType": "horizontalRateBar",
+        "chartType": "horizontalRateBar" if (sort_metric or {}).get("format") == "percent" else "bar",
         "title": f"各{compare_label}{sort_metric.get('label') or sort_metric.get('column') or '达成率'}排序",
         "columns": compare_columns,
         "rows": compare_rows,
+        "sortColumn": sort_metric.get("label") or sort_metric.get("column") or sort_metric.get("key"),
         "lowFirst": low_first,
     } if compare_rows else None
 
-    answer_mode = "filter" if query_intent.get("intent") == "filter" else mode
+    answer_mode = (
+        "filter" if query_intent.get("intent") == "filter"
+        else "ranking" if query_intent.get("intent") == "ranking"
+        else "drilldown" if query_intent.get("intent") == "drilldown"
+        else mode
+    )
     matched_filter_nodes: List[Dict[str, Any]] = []
     answer_summary: Dict[str, Any] = {}
     if answer_mode == "filter":
@@ -1093,13 +1145,73 @@ def build_report_spec(
             ),
         }
 
+    if answer_mode == "ranking" and not answer_summary:
+        rank_sides = str(query_intent.get("rank_sides") or "")
+        rank_limit = max(1, min(len(ranked_comparison_nodes), int(query_intent.get("top_n") or 10) or 10)) if ranked_comparison_nodes else 0
+        if rank_sides == "both" and rank_limit:
+            bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:]))
+            ranked_nodes = []
+            seen_node_ids = set()
+            for node in [*ranked_comparison_nodes[:rank_limit], *bottom_nodes]:
+                node_id = node.get("id") or node.get("name")
+                if node_id in seen_node_ids:
+                    continue
+                seen_node_ids.add(node_id)
+                ranked_nodes.append(node)
+        else:
+            ranked_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
+        top_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
+        bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:])) if rank_sides == "both" and rank_limit else []
+        answer_summary = {
+            "mode": "ranking",
+            "title": "排名结果",
+            "targetLevel": compare_label,
+            "metricLabel": sort_metric.get("label") or sort_metric.get("column") or sort_metric.get("key"),
+            "direction": "asc" if low_first else "desc",
+            "rankSides": rank_sides,
+            "topN": len(ranked_nodes),
+            "leader": ranked_nodes[0].get("name") if ranked_nodes else "",
+            "tail": ranked_nodes[-1].get("name") if len(ranked_nodes) > 1 else "",
+            "text": (
+                f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出前{rank_limit}和后{rank_limit}个{compare_label}的排序结果"
+                if rank_sides == "both" and ranked_nodes
+                else f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出 {len(ranked_nodes)} 个{compare_label}的排序结果"
+                if ranked_nodes
+                else f"当前没有可排序的{compare_label}结果"
+            ),
+            "topNames": [node.get("name") for node in top_nodes],
+            "bottomNames": [node.get("name") for node in bottom_nodes],
+        }
+    elif answer_mode == "drilldown" and not answer_summary:
+        answer_summary = {
+            "mode": "drilldown",
+            "title": "下钻结果",
+            "targetLevel": compare_label,
+            "focusNode": focus_node.get("name") if focus_node else "",
+            "childCount": len(comparison_nodes),
+            "text": (
+                f"已定位到 {focus_node.get('name')}，当前展示其下一级 {len(comparison_nodes)} 个{compare_label}"
+                if focus_node and comparison_nodes
+                else f"当前展示 {len(comparison_nodes)} 个{compare_label}下级节点"
+            ),
+        }
+
     provenance_id = "p_sql_result_001"
+    sort_spec = {
+        "metricKey": sort_metric.get("key") or "",
+        "metricLabel": sort_metric.get("label") or sort_metric.get("column") or sort_metric.get("key") or "",
+        "metricColumn": sort_metric.get("column") or sort_metric.get("label") or "",
+        "direction": "asc" if low_first else "desc",
+        "appliesTo": answer_mode if answer_mode in {"ranking", "filter"} else mode,
+        "source": "query_intent" if query_intent.get("intent") == "ranking" else "default",
+    }
     return {
         "version": "2.0",
         "reportTitle": "业绩分析报告",
         "question": question,
         "answerMode": answer_mode,
         "answerSummary": answer_summary,
+        "sortSpec": sort_spec,
         "matchedNodes": matched_filter_nodes,
         "analysisMode": mode,
         "layoutTemplate": _layout_template(mode),
@@ -1122,6 +1234,7 @@ def build_report_spec(
         },
         "scope": {
             "focusNode": focus_node.get("name") if focus_node else None,
+            "focusNodeIsLeaf": bool(focus_node) and not bool(focus_node.get("children")),
             "compareLevelLabel": compare_label,
             "detailLevelLabel": detail_label,
         },
