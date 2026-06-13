@@ -98,9 +98,9 @@
           <div v-if="card.hint" class="sa-kpi-hint">{{ card.hint }}</div>
         </article>
       </div>
-      <div v-if="showComparisonChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="branch-comparison-chart">
+      <div v-if="showComparisonChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="对比图">
         <div class="sa-comparison-chart-head">
-          <strong>Branch Comparison</strong>
+          <strong>{{ comparisonChartTitle }}</strong>
           <div class="sa-comparison-chart-scale">
             <span>{{ comparisonChartTicks[0] }}</span>
             <span>{{ comparisonChartTicks[1] }}</span>
@@ -109,7 +109,7 @@
         </div>
         <div class="sa-comparison-chart-body">
           <div v-if="comparisonChartAverageText" class="sa-comparison-chart-average" :style="{ left: comparisonChartAverageOffset }">
-            <span>Avg {{ comparisonChartAverageText }}</span>
+            <span>平均 {{ comparisonChartAverageText }}</span>
           </div>
           <div
             v-for="row in comparisonChartRows"
@@ -122,7 +122,7 @@
               <i :style="{ width: row.barWidth }"></i>
             </div>
             <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
-            <div class="sa-comparison-chart-actual">{{ row.actualText ? `Actual ${row.actualText}` : 'Actual -' }}</div>
+            <div class="sa-comparison-chart-actual">{{ row.actualText ? `开单 ${row.actualText}` : '开单 -' }}</div>
           </div>
         </div>
       </div>
@@ -662,7 +662,7 @@ const primaryKpiCards = computed(() => {
       key: `compare-${row.name}-${index}`,
       label: row.name,
       value: row.rateText || '-',
-      hint: row.actualText ? `开单 ${row.actualText}` : '当前无开单金额',
+      hint: [row.taskText ? `?? ${row.taskText}` : '', row.actualText ? `?? ${row.actualText}` : ''].filter(Boolean).join(' / ') || '??????????',
       isLeader: index === 0,
       tone: index === 0 ? 'good' : 'neutral',
     }))
@@ -1170,11 +1170,12 @@ const showComparisonLane = computed(() => false)
 
 const showComparisonChart = computed(() => (
   showComparisonDigest.value
-  && /分公司|branch/i.test(comparisonLevelLabel.value || comparisonDigestRows.value.map(item => item.level || item.name || '').join(' '))
-  && comparisonDigestRows.value.length >= 3
+  && comparisonDigestRows.value.length >= 2
   && comparisonDigestRows.value.length <= 4
   && comparisonDigestRows.value.every(item => item.rate !== null)
 ))
+
+const comparisonChartTitle = computed(() => `${comparisonLevelLabel.value || '??'}??`)
 
 const comparisonChartRows = computed(() => {
   if (!showComparisonChart.value) return []
