@@ -223,7 +223,7 @@ def _requested_level_values(question: str, config: Dict[str, Any]) -> List[str]:
         if str(value or "").strip()
     ]
     common_values = ["城市分公司", "城市公司", "事业部", "业务部", "分公司", "代表处", "业务代表", "业务员", "部门", "条线"]
-    alias_map = {"城市分公司": "城市公司"}
+    alias_map = {"城市公司": "城市分公司"}
     for value in sorted([*configured_values, *common_values], key=len, reverse=True):
         canonical = alias_map.get(value, value)
         if value and value in text and canonical not in values:
@@ -234,7 +234,7 @@ def _requested_level_values(question: str, config: Dict[str, Any]) -> List[str]:
 def _canonical_level_value(value: Any) -> str:
     text = str(value or "").strip()
     alias_map = {
-        "城市分公司": "城市公司",
+        "城市公司": "城市分公司",
     }
     return alias_map.get(text, text)
 
@@ -415,6 +415,11 @@ def _question_mentions_node(question: str, name: str) -> bool:
     node_name = name or ""
     if node_name and node_name in text:
         return True
+    if text and node_name:
+        normalized_question = text.replace("城市分公司", "城市公司")
+        normalized_node = node_name.replace("城市分公司", "城市公司")
+        if normalized_node and normalized_node in normalized_question:
+            return True
     return False
 
 
@@ -433,7 +438,17 @@ def _resolved_member_names(resolved_entities: Optional[Dict[str, Any]]) -> List[
             value = str(name or "").strip()
             if value and value not in names:
                 names.append(value)
-    return names
+    expanded = []
+    for name in names:
+        if name not in expanded:
+            expanded.append(name)
+        alias = name.replace("城市分分公司", "城市公司").replace("城市分公司", "城市公司")
+        if alias and alias not in expanded:
+            expanded.append(alias)
+        reverse_alias = name.replace("城市公司", "城市分公司")
+        if reverse_alias and reverse_alias not in expanded:
+            expanded.append(reverse_alias)
+    return expanded
 
 
 def _question_node_order(question: str, name: str, resolved_order: Optional[Dict[str, int]] = None) -> int:
@@ -553,15 +568,20 @@ def build_report_spec(
     if query_target_level and query_target_level not in requested_levels:
         requested_levels.insert(0, query_target_level)
     requested_level_set = {_canonical_level_value(value) for value in requested_levels if str(value or "").strip()}
-    focus_node = next(
-        (
-            node for node in matched_nodes
-            if not requested_level_set or _canonical_level_value(node.get("levelValue") or node.get("levelName")) not in requested_level_set
-        ),
-        None,
-    ) or next((node for node in matched_nodes if node.get("children")), None)
+    focus_node = None
+    if len(matched_nodes) == 1:
+        focus_node = matched_nodes[0]
+    else:
+        focus_node = next(
+            (
+                node for node in matched_nodes
+                if not requested_level_set or _canonical_level_value(node.get("levelValue") or node.get("levelName")) not in requested_level_set
+            ),
+            None,
+        ) or next((node for node in matched_nodes if node.get("children")), None)
     if explicit_single_focus_name:
         focus_node = next((node for node in nodes if node.get("name") == explicit_single_focus_name), focus_node)
+    is_single_focus_question = bool(focus_node) and not explicit_comparative and len(matched_nodes) == 1
     if explicit_comparative and len(matched_nodes) > 1:
         comparison_nodes = sorted(
             matched_nodes,
@@ -569,9 +589,11 @@ def build_report_spec(
         )
     else:
         comparison_nodes = focus_node.get("children", []) if focus_node else []
-    if not comparison_nodes and len(tree["roots"]) == 1:
+    if is_single_focus_question and not comparison_nodes and focus_node:
+        comparison_nodes = [focus_node]
+    elif not comparison_nodes and len(tree["roots"]) == 1:
         comparison_nodes = tree["roots"][0].get("children", [])
-    if not comparison_nodes:
+    if not comparison_nodes and not is_single_focus_question:
         parent_nodes = [node for node in nodes if node.get("children")]
         max_depth = max([node.get("depth", 0) for node in parent_nodes] or [0])
         comparison_nodes = [node for node in parent_nodes if node.get("depth", 0) == max_depth]

@@ -147,7 +147,7 @@
         ],
         "child_dimensions": [
           "分公司",
-          "城市公司"
+          "城市分公司"
         ]
       },
       {
@@ -162,7 +162,7 @@
           "华南分公司"
         ],
         "child_dimensions": [
-          "城市公司"
+          "城市分公司"
         ],
         "groups": [
           {
@@ -182,9 +182,9 @@
         ]
       },
       {
-        "dimension_name": "城市公司",
+        "dimension_name": "城市分公司",
         "aliases": [
-          "城市公司",
+          "城市分公司",
           "城市"
         ],
         "child_dimensions": []
@@ -219,7 +219,7 @@
           "华南分公司"
         ],
         "child_dimensions": [
-          "城市公司"
+          "城市分公司"
         ],
         "groups": [
           {
@@ -239,9 +239,9 @@
         ]
       },
       {
-        "dimension_name": "城市公司",
+        "dimension_name": "城市分公司",
         "aliases": [
-          "城市公司",
+          "城市分公司",
           "城市"
         ],
         "child_dimensions": []

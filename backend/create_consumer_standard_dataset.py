@@ -77,7 +77,7 @@ FIELD_DEFINITIONS = [
     ("地产-年度开单金额", "地产年度开单", "数字"),
     ("地产-年度开单金额（万）", "地产年度开单(万)", "字符串"),
     ("地产（万）", "地产金额(万)", "字符串"),
-    ("城市公司", "城市公司名称", "字符串"),
+    ("城市分公司", "城市分公司名称", "字符串"),
     ("城市公司已分配金额-新零售", "城市公司新零售", "数字"),
     ("城市公司已分配金额-燃气定制", "城市公司燃气定制", "数字"),
     ("城市公司已分配金额-线下", "城市公司线下", "数字"),
@@ -162,17 +162,17 @@ BASE_STANDARD_SQL = f"""WITH 源数据 AS (
     '消费者事业部' AS 条线,
     CASE
       WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部总体'
-      WHEN NULLIF(fields ->> '城市公司', '') IS NULL THEN '分公司'
-      ELSE '城市公司'
+      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '分公司'
+      ELSE '城市分公司'
     END AS 层级,
     CASE
       WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部'
-      WHEN NULLIF(fields ->> '城市公司', '') IS NULL THEN fields ->> '分公司'
-      ELSE fields ->> '城市公司'
+      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN fields ->> '分公司'
+      ELSE fields ->> '城市分公司'
     END AS 节点名称,
     CASE
       WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN NULL
-      WHEN NULLIF(fields ->> '城市公司', '') IS NULL THEN '消费者事业部'
+      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '消费者事业部'
       ELSE fields ->> '分公司'
     END AS 上级名称,
     ROUND(总任务原值 / 10000, 2) AS 总任务金额,
@@ -213,17 +213,17 @@ def build_lld_content() -> str:
 ## 3. 组织层级规则
 
 事业部总体：`分公司` 为空。
-分公司：`分公司` 有值且 `城市公司` 为空。
-城市公司：`分公司` 有值且 `城市公司` 有值。
+分公司：`分公司` 有值且 `城市分公司` 为空。
+城市分公司：`分公司` 有值且 `城市分公司` 有值。
 
 SQL 必须投影标准列：
 
 | 标准列 | 生成规则 |
 | --- | --- |
 | 条线 | 固定为 `消费者事业部` |
-| 层级 | `消费者事业部总体` / `分公司` / `城市公司` |
-| 节点名称 | 总体显示 `消费者事业部`，分公司层显示分公司，城市公司层显示城市公司 |
-| 上级名称 | 总体为空，分公司上级为 `消费者事业部`，城市公司上级为所属分公司 |
+| 层级 | `消费者事业部总体` / `分公司` / `城市分公司` |
+| 节点名称 | 总体显示 `消费者事业部`，分公司层显示分公司，城市分公司层显示 `城市分公司` |
+| 上级名称 | 总体为空，分公司上级为 `消费者事业部`，城市分公司层上级为所属分公司 |
 
 ## 4. 指标口径
 
@@ -231,7 +231,7 @@ SQL 必须投影标准列：
 
 ## 5. 查询与报告原则
 
-用户问“消费者事业部业绩”时，需要返回事业部总体、各分公司、各城市公司三层数据；用户问某个分公司时，需要返回该分公司以及下属城市公司；用户问排名/最低/最高时，优先在同一层级内比较，不混合总体、分公司和城市公司。
+用户问“消费者事业部业绩”时，需要返回事业部总体、各分公司、各城市分公司三层数据；用户问某个分公司时，需要返回该分公司以及下属城市分公司；用户问排名/最低/最高时，优先在同一层级内比较，不混合总体、分公司和城市分公司。
 
 ## 6. 完整 fields 数据字典
 
@@ -318,7 +318,7 @@ def golden_sql_samples() -> List[Dict[str, Any]]:
 SELECT *
 FROM 标准结果
 ORDER BY
-  CASE 层级 WHEN '消费者事业部总体' THEN 1 WHEN '分公司' THEN 2 WHEN '城市公司' THEN 3 ELSE 9 END,
+  CASE 层级 WHEN '消费者事业部总体' THEN 1 WHEN '分公司' THEN 2 WHEN '城市分公司' THEN 3 ELSE 9 END,
   上级名称 NULLS FIRST,
   达成率 DESC,
   节点名称
@@ -349,7 +349,7 @@ FROM 标准结果
 WHERE 节点名称 = '华南分公司'
    OR 上级名称 = '华南分公司'
 ORDER BY
-  CASE 层级 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+  CASE 层级 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
   达成率 DESC,
   节点名称
 LIMIT 1000;""",
@@ -359,15 +359,29 @@ LIMIT 1000;""",
         },
         {
             "intent_type": "risk",
-            "question": "哪些城市公司达成率低于10%？",
+            "question": "哪些城市分公司达成率低于10%？",
             "sql_text": f"""{BASE_STANDARD_SQL}
 SELECT *
 FROM 标准结果
-WHERE 层级 = '城市公司'
+WHERE 层级 = '城市分公司'
   AND 达成率 < 10
 ORDER BY 达成率 ASC, 剩余任务金额 DESC, 上级名称, 节点名称
 LIMIT 200;""",
-            "tags": ["风险节点", "城市公司"],
+            "tags": ["风险节点", "城市分公司"],
+            "quality_score": 95,
+            "is_active": True,
+        },
+        {
+            "intent_type": "risk",
+            "question": "哪个分公司低于30%？",
+            "sql_text": f"""{BASE_STANDARD_SQL}
+SELECT *
+FROM 标准结果
+WHERE 层级 = '分公司'
+  AND 达成率 < 30
+ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
+LIMIT 200;""",
+            "tags": ["风险节点", "分公司"],
             "quality_score": 95,
             "is_active": True,
         },
@@ -401,7 +415,7 @@ ORDER BY 开单金额 DESC;""",
             "sql_text": f"""{BASE_STANDARD_SQL}
 SELECT *
 FROM 标准结果
-WHERE 层级 IN ('分公司', '城市公司')
+WHERE 层级 IN ('分公司', '城市分公司')
 ORDER BY 剩余任务金额 DESC, 达成率 ASC, 节点名称
 LIMIT 50;""",
             "tags": ["缺口", "压力"],
@@ -416,13 +430,13 @@ def agent_prompts() -> List[Dict[str, Any]]:
         {
             "agent_no": 1,
             "prompt_key": "consumer_standard_router",
-            "prompt_content": """识别消费者事业部年度任务达成场景。常见问法包括：消费者事业、消费者事业部、消费者业绩、分公司业绩、城市公司下钻、四条业务线贡献、达成率排名、剩余缺口。若用户没有指定组织，默认返回事业部总体+分公司+城市公司；若用户指定分公司，默认返回该分公司及其城市公司；若用户问排名/最好/最差/低于阈值，保持同层级比较。""",
+            "prompt_content": """识别消费者事业部年度任务达成场景。常见问法包括：消费者事业、消费者事业部、消费者业绩、分公司业绩、城市分公司下钻、四条业务线贡献、达成率排名、剩余缺口。若用户没有指定组织，默认返回事业部总体+分公司+城市分公司；若用户指定分公司，默认返回该分公司及其下属城市分公司；若用户问排名/最好/最差/低于阈值，保持同层级比较。""",
             "is_active": True,
         },
         {
             "agent_no": 2,
             "prompt_key": "consumer_standard_sql",
-            "prompt_content": """你负责为消费者事业部数据集生成 PostgreSQL 只读 SQL。物理表 public.feishu_tbl_xioafeizhe 只有 id、record_id、fields、created_time、updated_time、sync_time 六列，所有业务字段都在 fields JSONB 里。必须使用 fields ->> '字段名' 读取业务字段，转数字时使用 COALESCE(NULLIF(regexp_replace(fields ->> '字段名', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC。禁止直接引用 \"层级级别\"、\"分公司\"、\"城市公司\"、\"总任务（金额）\"、\"年度开单金额\" 等不存在的物理列。SQL 必须尽量投影标准列：条线、层级、节点名称、上级名称、总任务金额、年度开单金额、达成率、剩余任务金额。层级规则：分公司为空为消费者事业部总体；分公司有值且城市公司为空为分公司；城市公司有值为城市公司。金额统一输出万元，达成率输出 0-100 数字。用户问整体时返回总体+分公司+城市公司；问某分公司时返回该分公司+城市公司；问风险/排名时必须同层级比较。""",
+            "prompt_content": """你负责为消费者事业部数据集生成 PostgreSQL 只读 SQL。物理表 public.feishu_tbl_xioafeizhe 只有 id、record_id、fields、created_time、updated_time、sync_time 六列，所有业务字段都在 fields JSONB 里。必须使用 fields ->> '字段名' 读取业务字段，转数字时使用 COALESCE(NULLIF(regexp_replace(fields ->> '字段名', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC。禁止直接引用不存在的物理列。SQL 必须尽量投影标准列：条线、层级、节点名称、上级名称、总任务金额、年度开单金额、达成率、剩余任务金额。层级规则：分公司为空为消费者事业部总体；分公司有值且 `城市分公司` 为空为分公司；`城市分公司` 有值为城市分公司。金额统一输出万元，达成率输出 0-100 数字。用户问整体时返回总体+分公司+城市分公司；问某分公司时返回该分公司+城市分公司；问风险/排名时必须同层级比较。""",
             "is_active": True,
         },
         {
@@ -434,7 +448,7 @@ def agent_prompts() -> List[Dict[str, Any]]:
         {
             "agent_no": 4,
             "prompt_key": "consumer_standard_report",
-            "prompt_content": """生成报告时先直接回答用户问题，再展开数据证据。整体场景按“核心结论、关键指标、层级差异、业务线贡献、风险与建议”组织；单一分公司场景先讲该分公司整体进度，再讲下属城市公司分化；排名场景说明排名口径和阈值。不要把 SQL/DDL 放在正文前部。金额展示为万元或亿元，达成率保留 2 位小数；突出标杆、风险节点、剩余缺口和可执行建议。""",
+            "prompt_content": """生成报告时先直接回答用户问题，再展开数据证据。整体场景按“核心结论、关键指标、层级差异、业务线贡献、风险与建议”组织；单一分公司场景先讲该分公司整体进度，再讲下属城市分公司分化；排名场景说明排名口径和阈值。不要把 SQL/DDL 放在正文前部。金额展示为万元或亿元，达成率保留 2 位小数；突出标杆、风险节点、剩余缺口和可执行建议。""",
             "is_active": True,
         },
     ]
@@ -488,7 +502,8 @@ def build_payload(source_id: int) -> Dict[str, Any]:
         "common_questions": [
             {"question_text": "消费者事业部业绩怎么样？", "sort_order": 10},
             {"question_text": "各分公司业绩排名", "sort_order": 20},
-            {"question_text": "哪些城市公司达成率低于10%？", "sort_order": 30},
+            {"question_text": "哪些城市分公司达成率低于10%？", "sort_order": 30},
+            {"question_text": "哪个分公司低于30%？", "sort_order": 35},
             {"question_text": "消费者事业部剩余缺口最大的组织有哪些？", "sort_order": 40},
             {"question_text": "四条业务线贡献如何？", "sort_order": 50},
             {"question_text": "某个分公司业绩怎么样？", "sort_order": 60},
@@ -497,23 +512,30 @@ def build_payload(source_id: int) -> Dict[str, Any]:
             {
                 "case_type": "summary",
                 "question_text": "消费者事业的业绩咋样",
-                "expected_focus": "返回消费者事业部总体、分公司、城市公司，并说明总任务、开单、达成率、缺口。",
+                "expected_focus": "返回消费者事业部总体、分公司、城市分公司，并说明总任务、开单、达成率、缺口。",
                 "expected_intent": "generate_sql",
                 "sort_order": 10,
             },
             {
                 "case_type": "ranking",
                 "question_text": "消费者事业部哪个分公司完成最好？",
-                "expected_focus": "仅比较分公司层级，不混入城市公司。",
+                "expected_focus": "仅比较分公司层级，不混入城市分公司。",
                 "expected_intent": "generate_sql",
                 "sort_order": 20,
             },
             {
                 "case_type": "risk",
-                "question_text": "哪些城市公司低于10%风险线？",
-                "expected_focus": "城市公司层级风险列表，按达成率升序。",
+                "question_text": "哪些城市分公司低于10%风险线？",
+                "expected_focus": "城市分公司层级风险列表，按达成率升序。",
                 "expected_intent": "generate_sql",
                 "sort_order": 30,
+            },
+            {
+                "case_type": "risk",
+                "question_text": "哪个分公司低于30%？",
+                "expected_focus": "仅筛选分公司层级中达成率低于30%的对象，不回退到消费者事业部总体。",
+                "expected_intent": "generate_sql",
+                "sort_order": 35,
             },
         ],
         "external_configs": [],
@@ -524,7 +546,7 @@ def build_payload(source_id: int) -> Dict[str, Any]:
             "levelColumn": "层级",
             "businessContext": "消费者事业部年度任务达成分析。源表只有 6 个固定字段，业务字段来自 fields JSONB，SQL 负责投影标准报告列。",
             "sourceFields": {
-                "organization": ["事业部", "分公司", "城市公司"],
+                "organization": ["事业部", "分公司", "城市分公司"],
                 "time": ["当前年", "当前月", "当前日期"],
                 "metrics": ["总任务（金额）", "年度开单金额", "总任务达成率", "线下", "新零售", "燃气定制", "地产"],
             },
@@ -533,19 +555,19 @@ def build_payload(source_id: int) -> Dict[str, Any]:
                 "metricColumns": ["总任务金额", "年度开单金额", "达成率", "剩余任务金额"],
                 "notes": [
                     "源表没有标准报告列，必须在 SQL 中用 SELECT 别名生成。",
-                    "区域链路按 消费者事业部 -> 分公司 -> 城市公司 输出。",
-                    "统计上级节点时使用源表对应层级记录，不能把城市公司明细重复累加到分公司。",
-                    "用户问整体时返回总体、分公司和城市公司，便于前端动态下钻。",
+                    "区域链路按 消费者事业部 -> 分公司 -> 城市分公司 输出。",
+                    "统计上级节点时使用源表对应层级记录，不能把城市分公司明细重复累加到分公司。",
+                    "用户问整体时返回总体、分公司和城市分公司，便于前端动态下钻。",
                 ],
             },
             "analysisDimensions": [
                 {
                     "key": "consumer_org_chain",
                     "label": "消费者事业部组织链路",
-                    "path": ["消费者事业部", "分公司", "城市公司"],
-                    "sourceFields": ["分公司", "城市公司"],
+                    "path": ["消费者事业部", "分公司", "城市分公司"],
+                    "sourceFields": ["分公司", "城市分公司"],
                     "trackValue": "消费者事业部",
-                    "purpose": "分析消费者事业部整体、分公司、城市公司三级任务达成、缺口和风险。",
+                    "purpose": "分析消费者事业部整体、分公司、城市分公司三级任务达成、缺口和风险。",
                 },
                 {
                     "key": "consumer_business_line",
@@ -565,7 +587,7 @@ def build_payload(source_id: int) -> Dict[str, Any]:
             "levels": [
                 {"name": "整体层", "values": ["消费者事业部总体"]},
                 {"name": "管理层", "values": ["分公司"]},
-                {"name": "执行层", "values": ["城市公司"]},
+                {"name": "执行层", "values": ["城市分公司"]},
             ],
             "trackValues": {"org": "消费者事业部", "line": "业务线贡献"},
             "riskThreshold": 10,
@@ -581,7 +603,7 @@ def build_payload(source_id: int) -> Dict[str, Any]:
             ],
             "sections": ["core", "group", "line", "risk", "strategy"],
             "reportTitle": "消费者事业部业绩分析报告",
-            "agentReportGuidance": "报告由 SQL 标准列和动态树决定。整体场景先讲消费者事业部大盘，再比较分公司，再下钻城市公司；四条业务线作为贡献度补充，不替代组织层级判断。",
+            "agentReportGuidance": "报告由 SQL 标准列和动态树决定。整体场景先讲消费者事业部大盘，再比较分公司，再下钻城市分公司；四条业务线作为贡献度补充，不替代组织层级判断。",
         },
     }
 

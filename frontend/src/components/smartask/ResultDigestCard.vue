@@ -17,7 +17,11 @@
       <div class="sa-core-body">
         <div v-if="showComparisonDigest" class="sa-comparison-digest">
           <div class="sa-comparison-verdict">{{ comparisonVerdict }}</div>
-          <div v-if="!showComparisonChart" class="sa-comparison-card-grid" :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`">
+          <div
+            v-if="!showComparisonChart"
+            class="sa-comparison-card-grid"
+            :class="`is-count-${Math.min(visibleComparisonDigestRows.length, 4)}`"
+          >
             <article
               v-for="row in visibleComparisonDigestRows"
               :key="row.name"
@@ -35,57 +39,11 @@
               </div>
             </article>
           </div>
-          <div v-if="false" class="sa-comparison-lane" aria-label="同层对比速览">
-            <div
-              v-for="row in comparisonLaneRows"
-              :key="`lane-${row.name}`"
-              class="sa-comparison-lane-row"
-              :class="{ 'is-leader': row.name === comparisonLeader?.name }"
-            >
-              <div class="sa-comparison-lane-head">
-                <span>{{ row.name }}</span>
-                <strong>{{ row.rateText || '-' }}</strong>
-              </div>
-              <div class="sa-comparison-lane-bar" aria-hidden="true">
-                <i :style="{ width: row.laneWidth }"></i>
-              </div>
-              <div class="sa-comparison-lane-meta">
-                <span>开单 {{ row.actualText || '-' }}</span>
-                <span>任务 {{ row.taskText || '-' }}</span>
-                <span>缺口 {{ row.remainText || '-' }}</span>
-              </div>
-            </div>
-          </div>
           <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
             <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
           </div>
         </div>
         <p v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</p>
-      </div>
-      <div v-if="false" class="sa-comparison-chart" aria-label="分公司达成率对比图">
-        <div class="sa-comparison-chart-head">
-          <strong>分公司达成率对比</strong>
-          <div class="sa-comparison-chart-scale">
-            <span>{{ comparisonChartTicks[0] }}</span>
-            <span>{{ comparisonChartTicks[1] }}</span>
-            <span>{{ comparisonChartTicks[2] }}</span>
-          </div>
-        </div>
-        <div class="sa-comparison-chart-body">
-          <div
-            v-for="row in comparisonChartRows"
-            :key="`chart-${row.name}`"
-            class="sa-comparison-chart-row"
-            :class="{ 'is-leader': row.name === comparisonLeader?.name }"
-          >
-            <div class="sa-comparison-chart-label">{{ row.name }}</div>
-            <div class="sa-comparison-chart-track" aria-hidden="true">
-              <i :style="{ width: row.barWidth }"></i>
-            </div>
-            <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
-            <div class="sa-comparison-chart-actual">开单 {{ row.actualText || '-' }}</div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -93,37 +51,39 @@
       <div class="sa-section-label">二、关键指标</div>
       <div class="sa-kpi-grid" :class="`is-count-${Math.min(primaryKpiCards.length, 4)}`">
         <article v-for="card in primaryKpiCards" :key="card.key" class="sa-kpi-card" :class="[`is-${card.tone}`, card.isLeader ? 'is-compare-leader' : '']">
+          <div v-if="card.rankText || card.parentText" class="sa-kpi-card-top">
+            <span v-if="card.rankText" class="sa-kpi-rank-badge" :class="{ 'is-leader': card.isLeader }">{{ card.rankText }}</span>
+          </div>
           <div class="sa-kpi-value">{{ card.value }}</div>
           <div class="sa-kpi-label">{{ card.label }}</div>
-          <div v-if="card.hint" class="sa-kpi-hint">{{ card.hint }}</div>
+          <div v-if="card.parentText" class="sa-kpi-parent">{{ card.parentText }}</div>
+          <div v-if="card.hintParts?.length" class="sa-kpi-chip-row">
+            <span v-for="part in card.hintParts" :key="`${card.key}-${part}`" class="sa-kpi-chip">{{ part }}</span>
+          </div>
+          <div v-else-if="card.hint" class="sa-kpi-hint">{{ card.hint }}</div>
         </article>
       </div>
-      <div v-if="showComparisonChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="对比图">
-        <div class="sa-comparison-chart-head">
-          <strong>{{ comparisonChartTitle }}</strong>
-          <div class="sa-comparison-chart-scale">
-            <span>{{ comparisonChartTicks[0] }}</span>
-            <span>{{ comparisonChartTicks[1] }}</span>
-            <span>{{ comparisonChartTicks[2] }}</span>
+    </div>
+
+    <div v-if="showComparisonChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="对比图">
+      <div class="sa-comparison-chart-head">
+        <strong>{{ comparisonChartTitle }}</strong>
+      </div>
+      <div class="sa-comparison-chart-body">
+        <div
+          v-for="row in comparisonChartRows"
+          :key="`chart-kpi-${row.name}`"
+          class="sa-comparison-chart-row"
+          :class="{ 'is-leader': row.name === comparisonLeader?.name }"
+        >
+          <div class="sa-comparison-chart-label">
+            <strong>{{ row.name }}</strong>
+            <small v-if="row.parent">上级：{{ row.parent }}</small>
           </div>
-        </div>
-        <div class="sa-comparison-chart-body">
-          <div v-if="comparisonChartAverageText" class="sa-comparison-chart-average" :style="{ left: comparisonChartAverageOffset }">
-            <span>平均 {{ comparisonChartAverageText }}</span>
+          <div class="sa-comparison-chart-track" aria-hidden="true">
+            <i :style="{ width: row.barWidth }"></i>
           </div>
-          <div
-            v-for="row in comparisonChartRows"
-            :key="`chart-kpi-${row.name}`"
-            class="sa-comparison-chart-row"
-            :class="{ 'is-leader': row.name === comparisonLeader?.name }"
-          >
-            <div class="sa-comparison-chart-label">{{ row.name }}</div>
-            <div class="sa-comparison-chart-track" aria-hidden="true">
-              <i :style="{ width: row.barWidth }"></i>
-            </div>
-            <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
-            <div class="sa-comparison-chart-actual">{{ row.actualText ? `开单 ${row.actualText}` : '开单 -' }}</div>
-          </div>
+          <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
         </div>
       </div>
     </div>
@@ -389,7 +349,7 @@ const normalizeLevelHint = (value) => {
   if (text.includes('事业部')) return '事业部'
   if (text.includes('业务代表') || text.includes('业务员')) return '业务代表'
   if (text.includes('代表处')) return '代表处'
-  if (text.includes('城市公司') || text.includes('城市分公司')) return '城市公司'
+  if (text.includes('城市公司') || text.includes('城市分公司')) return '城市分公司'
   if (text.includes('分公司')) return '分公司'
   if (text.includes('业务部')) return '业务部'
   return ''
@@ -399,7 +359,7 @@ const explicitQuestionLevel = computed(() => {
   if (/事业部/.test(text)) return '事业部'
   if (/业务代表|业务员/.test(text)) return '业务代表'
   if (/代表处/.test(text)) return '代表处'
-  if (/城市公司|城市分公司/.test(text)) return '城市公司'
+  if (/城市公司|城市分公司/.test(text)) return '城市分公司'
   if (/业务部/.test(text)) return '业务部'
   if (/分公司/.test(text)) return '分公司'
   return ''
@@ -408,8 +368,14 @@ const specScope = computed(() => props.dataset?.report_spec?.scope || datasetLis
 const specCompareLevel = computed(() => normalizeLevelHint(specScope.value?.compareLevelLabel))
 const specDetailLevel = computed(() => normalizeLevelHint(specScope.value?.detailLevelLabel))
 const digestCompareLevel = computed(() => explicitQuestionLevel.value || specCompareLevel.value)
+const isOverviewQuestion = computed(() => Boolean(
+  !explicitQuestionLevel.value
+  && !specScope.value?.focusNode
+  && /整体|总体|总览|全盘|整体情况|总体情况|整体完成|完成的咋样|总体完成|整体业绩/.test(questionText.value)
+))
 const isPeerLevelQuestion = computed(() => Boolean(
   digestCompareLevel.value &&
+  !isOverviewQuestion.value &&
   !specScope.value?.focusNode &&
   /各|全部|所有|每个|四个|多个|分别|对比|比较|排名|排行|业绩|情况|怎么样|完成|达成/.test(questionText.value),
 ))
@@ -489,6 +455,20 @@ const asksRepresentative = computed(() => /代表处/.test(questionText.value))
 const asksBusinessPerson = computed(() => /业务代表|业务员/.test(questionText.value))
 const asksLowerNode = computed(() => asksRepresentative.value || asksBusinessPerson.value)
 const lowerNodeLabel = computed(() => (asksBusinessPerson.value ? '业务代表' : '代表处'))
+const rowHasChildren = (row, items = normalizedRows.value) => (
+  items.some(item => item?.parent && row?.name && sameOrgName(item.parent, row.name))
+)
+const isMultiChildCollectionMode = computed(() => {
+  if (!isCollectionAnswerMode.value || isComparisonDigest.value || rankSides.value === 'both') return false
+  if (specScope.value?.focusNode && resolvedMemberNames.value.length <= 1) return false
+  const rows = secondaryDrillRows.value
+  if (rows.length < 2) return false
+  const parents = [...new Set(rows.map(item => cleanText(item?.parent)).filter(Boolean))]
+  if (!parents.length) return false
+  const leafRows = rows.filter(item => !rowHasChildren(item))
+  if (!leafRows.length || leafRows.length !== rows.length) return false
+  return resolvedMemberNames.value.length !== 1
+})
 const reportConfig = computed(() => (
   props.dataset?.report_config
   || datasetList.value.find(item => item?.report_config)?.report_config
@@ -662,7 +642,10 @@ const primaryKpiCards = computed(() => {
       key: `compare-${row.name}-${index}`,
       label: row.name,
       value: row.rateText || '-',
-      hint: [row.taskText ? `?? ${row.taskText}` : '', row.actualText ? `?? ${row.actualText}` : ''].filter(Boolean).join(' / ') || '??????????',
+      hint: '',
+      parentText: row.parent ? `上级：${row.parent}` : '',
+      rankText: `第${index + 1}名`,
+      hintParts: [row.taskText ? `任务 ${row.taskText}` : '', row.actualText ? `开单 ${row.actualText}` : ''].filter(Boolean),
       isLeader: index === 0,
       tone: index === 0 ? 'good' : 'neutral',
     }))
@@ -1057,6 +1040,22 @@ const comparisonRows = computed(() => {
   return officeRows.length >= 2 ? officeRows.slice(0, 4) : []
 })
 
+const isFilterComparisonQuestion = computed(() => Boolean(
+  primaryAnswerMode.value === 'filter'
+  && digestCompareLevel.value
+  && !isOverviewQuestion.value
+  && !specScope.value?.focusNode
+))
+
+const filterComparisonRows = computed(() => {
+  if (!isFilterComparisonQuestion.value) return []
+  const scopedRows = normalizedRows.value
+    .filter(item => rowMatchesLevel(item, digestCompareLevel.value) && item.rate !== null)
+  return scopedRows.length >= 2
+    ? [...scopedRows].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+    : []
+})
+
 const comparisonMentionIndex = (name) => {
   const resolvedIndex = resolvedMemberNames.value.indexOf(name)
   if (resolvedIndex >= 0) return resolvedIndex
@@ -1116,9 +1115,11 @@ const parsedComparisonRows = computed(() => {
   return rows.slice(0, 4)
 })
 
-const comparisonDigestRows = computed(() => (
-  comparisonRows.value.length >= 2 ? comparisonRows.value : parsedComparisonRows.value
-))
+const comparisonDigestRows = computed(() => {
+  if (comparisonRows.value.length >= 2) return comparisonRows.value
+  if (filterComparisonRows.value.length >= 2) return filterComparisonRows.value
+  return parsedComparisonRows.value
+})
 
 const isComparisonDigest = computed(() => comparisonDigestRows.value.length >= 2)
 const showComparisonDigest = computed(() => isComparisonDigest.value && !isRankingAnswerMode.value)
@@ -1168,14 +1169,15 @@ const visibleComparisonDigestRows = computed(() => {
 
 const showComparisonLane = computed(() => false)
 
-const showComparisonChart = computed(() => (
+const shouldUseComparisonTemplate = computed(() => (
   showComparisonDigest.value
   && comparisonDigestRows.value.length >= 2
-  && comparisonDigestRows.value.length <= 4
   && comparisonDigestRows.value.every(item => item.rate !== null)
 ))
 
-const comparisonChartTitle = computed(() => `${comparisonLevelLabel.value || '??'}??`)
+const showComparisonChart = computed(() => shouldUseComparisonTemplate.value)
+
+const comparisonChartTitle = computed(() => `${comparisonLevelLabel.value || '对象'}对比`)
 
 const comparisonChartRows = computed(() => {
   if (!showComparisonChart.value) return []
@@ -1185,35 +1187,6 @@ const comparisonChartRows = computed(() => {
     ...row,
     barWidth: maxRate > 0 ? `${Math.max(10, ((row.rate || 0) / maxRate) * 100)}%` : '10%',
   }))
-})
-
-const comparisonChartAverage = computed(() => {
-  if (!showComparisonChart.value || !comparisonChartRows.value.length) return null
-  const values = comparisonChartRows.value
-    .map(item => item.rate)
-    .filter(item => item !== null && item !== undefined && !Number.isNaN(Number(item)))
-    .map(Number)
-  if (!values.length) return null
-  return values.reduce((sum, item) => sum + item, 0) / values.length
-})
-
-const comparisonChartAverageText = computed(() => {
-  if (comparisonChartAverage.value === null) return ''
-  return `${Number(comparisonChartAverage.value).toFixed(2).replace(/\.?0+$/, '')}%`
-})
-
-const comparisonChartAverageOffset = computed(() => {
-  if (comparisonChartAverage.value === null) return '0%'
-  const maxRate = Math.max(...comparisonChartRows.value.map(item => item.rate || 0), 0)
-  if (!maxRate) return '0%'
-  return `${Math.max(0, Math.min(100, (comparisonChartAverage.value / maxRate) * 100))}%`
-})
-
-const comparisonChartTicks = computed(() => {
-  if (!showComparisonChart.value) return ['0%', '0%', '0%']
-  const maxRate = Math.max(...comparisonChartRows.value.map(item => item.rate || 0), 0)
-  const formatTick = (value) => `${Number(value || 0).toFixed(1).replace(/\.0$/, '')}%`
-  return ['0%', formatTick(maxRate / 2), formatTick(maxRate)]
 })
 
 const comparisonLaneRows = computed(() => {
@@ -1449,6 +1422,17 @@ const secondaryDrillGroups = computed(() => {
       },
     ].filter(group => group.rows.length)
   }
+  if (isMultiChildCollectionMode.value) {
+    const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
+    return parents
+      .map((parent, index) => ({
+        key: `child-group-${parent}`,
+        title: parent,
+        index,
+        rows: rows.filter(item => sameOrgName(item.parent, parent)),
+      }))
+      .filter(group => group.rows.length)
+  }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
   const shouldGroup = !explicitRequestedRankLimit.value && comparisonParentNames.value.length >= 2 && parents.length >= 1
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
@@ -1496,8 +1480,7 @@ const drillNodeMeta = (row) => {
   if (path) return path
   const level = cleanText(row?.level || secondaryLevelLabel.value)
   const parent = cleanText(row?.parent)
-  if (parent && level === '业务代表') return `${level} · 上级：${parent}`
-  if (parent && isBusinessPersonRanking.value) return `上级：${parent}`
+  if (parent) return level ? `${level} · 上级：${parent}` : `上级：${parent}`
   return level
 }
 
@@ -1982,22 +1965,62 @@ const actionItems = computed(() => {
 
 .sa-kpi-card {
   min-width: 0;
-  padding: 12px 10px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.035);
+  padding: 11px 12px 12px;
+  border: 1px solid rgba(29, 33, 41, 0.07);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.96) 100%);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sa-kpi-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.sa-kpi-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(22, 93, 255, 0.08);
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sa-kpi-rank-badge.is-leader {
+  background: linear-gradient(90deg, rgba(22, 93, 255, 0.14) 0%, rgba(22, 93, 255, 0.08) 100%);
+  color: #165dff;
+}
+
+.sa-kpi-parent {
+  min-width: 0;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: -2px;
 }
 
 .sa-kpi-value {
   color: #165dff;
   font-size: 24px;
-  line-height: 1.2;
+  line-height: 1.1;
   font-weight: 800;
 }
 
 .sa-kpi-label {
-  margin-top: 5px;
+  margin-top: 1px;
   color: #1d2129;
   font-weight: 700;
   font-size: 12px;
@@ -2005,10 +2028,31 @@ const actionItems = computed(() => {
 }
 
 .sa-kpi-hint {
-  margin-top: 2px;
+  margin-top: 6px;
   color: #86909c;
   font-size: 11px;
   line-height: 1.4;
+}
+
+.sa-kpi-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.sa-kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(245, 247, 250, 0.95);
+  border: 1px solid rgba(29, 33, 41, 0.06);
+  color: #4e5969;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
 .sa-kpi-card.is-good .sa-kpi-value {
@@ -2510,16 +2554,16 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-chart {
-  margin-top: 12px;
-  padding: 14px 14px 12px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  border-radius: 14px;
+  margin-top: 10px;
+  padding: 15px 16px 13px;
+  border: 1px solid rgba(22, 93, 255, 0.1);
+  border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(248, 251, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+    linear-gradient(180deg, rgba(247, 250, 255, 0.98) 0%, rgba(255, 255, 255, 0.99) 100%);
 }
 
 .sa-comparison-chart--in-kpi {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .sa-comparison-chart-head {
@@ -2537,25 +2581,6 @@ const actionItems = computed(() => {
   line-height: 1.3;
 }
 
-.sa-comparison-chart-scale {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: 10px;
-  min-width: 180px;
-  color: #86909c;
-  font-size: 11px;
-  text-align: right;
-}
-
-.sa-comparison-chart-scale span:first-child {
-  text-align: left;
-}
-
-.sa-comparison-chart-scale span:nth-child(2) {
-  text-align: center;
-}
-
 .sa-comparison-chart-body {
   display: grid;
   gap: 10px;
@@ -2564,10 +2589,10 @@ const actionItems = computed(() => {
 
 .sa-comparison-chart-row {
   display: grid;
-  grid-template-columns: minmax(84px, 108px) minmax(0, 1fr) auto;
-  gap: 10px 12px;
+  grid-template-columns: minmax(120px, 168px) minmax(0, 1fr) auto;
+  gap: 10px 14px;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid rgba(29, 33, 41, 0.06);
 }
 
@@ -2586,43 +2611,36 @@ const actionItems = computed(() => {
   box-shadow: 0 8px 18px rgba(22, 93, 255, 0.3);
 }
 
-.sa-comparison-chart-average {
-  position: absolute;
-  top: -2px;
-  bottom: 0;
-  width: 0;
-  border-left: 1px dashed rgba(255, 125, 0, 0.7);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.sa-comparison-chart-average span {
-  position: absolute;
-  top: -18px;
-  left: 6px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: rgba(255, 125, 0, 0.12);
-  color: #d46b08;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 .sa-comparison-chart-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   color: #1d2129;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
 }
 
+.sa-comparison-chart-label strong {
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.sa-comparison-chart-label small {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
 .sa-comparison-chart-track {
   position: relative;
-  height: 16px;
+  height: 14px;
   border-radius: 999px;
   overflow: hidden;
   background:
-    linear-gradient(90deg, rgba(22, 93, 255, 0.08) 0%, rgba(22, 93, 255, 0.02) 100%);
+    linear-gradient(90deg, rgba(22, 93, 255, 0.08) 0%, rgba(22, 93, 255, 0.03) 100%);
 }
 
 .sa-comparison-chart-track::before {
@@ -2639,10 +2657,10 @@ const actionItems = computed(() => {
   position: relative;
   display: block;
   height: 100%;
-  min-width: 12px;
+  min-width: 10px;
   border-radius: inherit;
   background: linear-gradient(90deg, #8db7ff 0%, #165dff 100%);
-  box-shadow: 0 6px 14px rgba(22, 93, 255, 0.2);
+  box-shadow: 0 5px 12px rgba(22, 93, 255, 0.18);
 }
 
 .sa-comparison-chart-value {
@@ -2798,11 +2816,6 @@ const actionItems = computed(() => {
   .sa-comparison-chart-head {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .sa-comparison-chart-scale {
-    width: 100%;
-    min-width: 0;
   }
 
   .sa-comparison-chart-row {

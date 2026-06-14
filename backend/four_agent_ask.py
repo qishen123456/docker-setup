@@ -492,7 +492,7 @@ LIMIT {rank_limit}
             level_candidates = []
             for level, level_aliases in aliases.items():
                 candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
-                if str(level) == "城市公司":
+                if str(level) == "城市分公司":
                     candidates.append("城市分公司")
                 for candidate in candidates:
                     if candidate:
@@ -500,8 +500,8 @@ LIMIT {rank_limit}
             for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
                 if candidate in text:
                     return level
-            if "城市分公司" in text or "城市公司" in text:
-                return "城市公司"
+            if "城市分公司" in text:
+                return "城市分公司"
             for dimension in config.get("analysisDimensions") or []:
                 for level in dimension.get("path") or []:
                     if level and str(level) in text:
@@ -515,8 +515,12 @@ LIMIT {rank_limit}
             filter_operator = ">="
         filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
         filter_value = float(filter_value_match.group(1)) if filter_value_match else None
+        explicit_filter_question = bool(
+            re.search(r"(?:哪些|哪个|哪家|哪几个).*(?:低于|不足|小于|少于|高于|超过|大于).*\d+(?:\.\d+)?\s*%?", text)
+        )
         filter_problem = (
-            ("哪些" in text and bool(filter_operator))
+            explicit_filter_question
+            or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
             or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
         )
         target_level = resolve_target_level_from_text()
@@ -1607,10 +1611,10 @@ LIMIT {rank_limit}
         original_question = str(context.get("original_question") or "")
         level_hint_text = "\n".join(item for item in [str(question or ""), original_question] if item)
         requested_city_level = (
-            str(query_intent.get("target_level") or "") == "城市公司"
-            or "城市公司" in level_hint_text
+            str(query_intent.get("target_level") or "") == "城市分公司"
             or "城市分公司" in level_hint_text
         )
+        filter_intent = str(query_intent.get("intent") or "") == "filter"
 
         def question_key(value: Any) -> str:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
@@ -1632,7 +1636,7 @@ LIMIT {rank_limit}
                 return False
             compact_sql = re.sub(r"\s+", "", str(sql or ""))
             asks_branch_level = "层级='分公司'" in compact_sql or '层级="分公司"' in compact_sql
-            asks_city_level = "层级='城市公司'" in compact_sql or '层级="城市公司"' in compact_sql
+            asks_city_level = "层级='城市分公司'" in compact_sql or '层级="城市分公司"' in compact_sql
             return asks_branch_level and not asks_city_level
 
         def direct_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
@@ -1661,6 +1665,23 @@ LIMIT {rank_limit}
                 "sample_id": sample_id,
                 "sample_score": sample_score,
                 "sample_rewritten": prepared.get("rewritten", False),
+            }
+
+        # Filter questions should not be hijacked by ranking-style Golden SQL samples.
+        # Prefer deterministic rule SQL; if unavailable, fall back to fresh generation.
+        if filter_intent:
+            if rule_based_sql:
+                return {
+                    "mode": "rule_based",
+                    "sql": rule_based_sql,
+                    "sample_id": None,
+                    "sample_score": 0,
+                }
+            return {
+                "mode": "agent_generate",
+                "sql": "",
+                "sample_id": None,
+                "sample_score": 0,
             }
 
         exact_sample = next(
@@ -1735,9 +1756,8 @@ LIMIT {rank_limit}
             if str(item or "").strip()
         )
         return (
-            str(query_intent.get("target_level") or "") == "城市公司"
+            str(query_intent.get("target_level") or "") == "城市分公司"
             or "城市分公司" in text
-            or "城市公司" in text
         )
 
     def _coerce_city_company_level_sql(self, question: Any, context: Dict[str, Any], sql_text: str) -> str:
@@ -1748,19 +1768,19 @@ LIMIT {rank_limit}
         dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
         dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
         is_consumer_dataset = (
-            dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
+            dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826", "public_feishu_tbl_xioafeizhe"}
             or "消费者" in dataset_name
         )
         if not is_consumer_dataset:
             return sql
         sql = re.sub(
             r"(?P<col>\"?层级\"?)\s*=\s*(?P<quote>['\"])分公司(?P=quote)",
-            lambda match: f"{match.group('col')} = {match.group('quote')}城市公司{match.group('quote')}",
+            lambda match: f"{match.group('col')} = {match.group('quote')}城市分公司{match.group('quote')}",
             sql,
         )
         return re.sub(
             r"(?P<col>\"?层级\"?)\s+IN\s*\(\s*(?P<quote>['\"])分公司(?P=quote)\s*\)",
-            lambda match: f"{match.group('col')} IN ({match.group('quote')}城市公司{match.group('quote')})",
+            lambda match: f"{match.group('col')} IN ({match.group('quote')}城市分公司{match.group('quote')})",
             sql,
             flags=re.I,
         )
@@ -2460,7 +2480,6 @@ LIMIT {rank_limit}
             "业务员",
             "业务部",
             "行业业务部",
-            "城市公司",
             "城市分公司",
         }
         score = 0
@@ -2492,7 +2511,6 @@ LIMIT {rank_limit}
             "业务员",
             "业务部",
             "行业业务部",
-            "城市公司",
             "城市分公司",
         }
         asked = {item for item in specific_levels if item in normalized_question}
@@ -2592,7 +2610,7 @@ LIMIT {rank_limit}
         dataset_tokens = self._tokenize(dataset_text)
         synonym_overlap = len(q_tokens.intersection(dataset_tokens))
         sample_score = max([int(item.get("match_score", 0)) for item in context.get("golden_sql_samples", [])] or [0])
-        schema_hit = 1 if any(token in dataset_tokens for token in ("日期", "时间", "金额", "分公司", "事业部", "代表处", "业务代表", "业务部", "城市公司", "区域")) else 0
+        schema_hit = 1 if any(token in dataset_tokens for token in ("日期", "时间", "金额", "分公司", "事业部", "代表处", "业务代表", "业务部", "城市分公司", "区域")) else 0
         name_hit_score = self._dataset_alias_match_score(question, dataset)
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         score = synonym_overlap * 12 + min(sample_score, 90) + schema_hit * 4 + name_hit_score
@@ -3623,7 +3641,8 @@ LIMIT 100
                     return candidate
             return candidates[0]
 
-        city_field_key = consumer_key("城市公司", "城市分公司")
+        city_field_key = consumer_key("城市分公司")
+        city_field_expr = f"COALESCE(NULLIF(TRIM(fields->>'{city_field_key}'), ''), '')"
         query_intent = self._safe_dict(context.get("query_intent"))
         intent_is_ranking = query_intent.get("intent") == "ranking"
         intent_target_level = str(query_intent.get("target_level") or "")
@@ -3632,12 +3651,31 @@ LIMIT 100
             and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
             and any(token in normalized_question for token in ["对比", "比较", "差距", "差异", "二者", "两家", "任务体量", "实际开单", "缺口"])
         )
-        entity_names = self._resolved_entity_names(context)
+        def normalize_consumer_entity_name(value: str) -> str:
+            text = str(value or "").strip()
+            if not text:
+                return ""
+            text = re.sub(r"^(看下|看一下|查下|查一下|查询|看看|请看下|请查下)", "", text)
+            text = re.sub(r"(业绩如何了|业绩如何|业绩情况|完成的怎么样|完成情况|完成咋样|怎么样|如何了)$", "", text)
+            text = text.strip("，,、 和与及的")
+            if text in {"城市公司", "城市分公司", "分公司", "事业部"}:
+                return ""
+            if text.endswith("城市分公司"):
+                return text[:-5] + "城市公司"
+            return text
+
+        entity_names = [
+            normalized for normalized in
+            (normalize_consumer_entity_name(item) for item in self._resolved_entity_names(context))
+            if normalized
+        ]
         if not entity_names and not asks_branch_extremes:
-            for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:分公司|城市公司|城市分公司|事业部)", normalized_question):
+            for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:城市分公司|城市公司|分公司|事业部)", normalized_question):
                 cleaned = match.strip("，,、 和与及的业绩情况表现整体")
-                if cleaned and cleaned not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
-                    entity_names.append(cleaned)
+                normalized = normalize_consumer_entity_name(cleaned)
+                if normalized and normalized not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
+                    entity_names.append(normalized)
+        entity_names = list(dict.fromkeys(entity_names))
 
         scope_filter = ""
         if entity_names:
@@ -3673,7 +3711,7 @@ WITH 字段提取 AS (
         id,
         COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') AS 事业部,
         COALESCE(NULLIF(TRIM(fields->>'分公司'), ''), '') AS 分公司,
-        COALESCE(NULLIF(TRIM(fields->>'{city_field_key}'), ''), '') AS 城市公司,
+        {city_field_expr} AS 城市分公司,
         COALESCE(NULLIF(TRIM(fields->>'层级级别'), ''), '') AS 源层级,
         COALESCE(NULLIF(TRIM(fields->>'当前年'), ''), '2026') AS 当前年,
         NULLIF(regexp_replace(COALESCE(fields->>'总任务（金额）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 总任务原值,
@@ -3693,17 +3731,17 @@ WITH 字段提取 AS (
     SELECT
         id,
         CASE
-            WHEN 城市公司 <> '' THEN '城市公司'
+            WHEN 城市分公司 <> '' THEN '城市分公司'
             WHEN 分公司 <> '' THEN '分公司'
             ELSE '消费者事业部总体'
         END AS 层级,
         CASE
-            WHEN 城市公司 <> '' THEN 城市公司
+            WHEN 城市分公司 <> '' THEN 城市分公司
             WHEN 分公司 <> '' THEN 分公司
             ELSE 事业部
         END AS 节点名称,
         CASE
-            WHEN 城市公司 <> '' THEN 分公司
+            WHEN 城市分公司 <> '' THEN 分公司
             WHEN 分公司 <> '' THEN 事业部
             ELSE NULL
         END AS 上级名称,
@@ -3719,7 +3757,7 @@ WITH 字段提取 AS (
         COALESCE(地产实际万, 0) AS 地产实际_万元
     FROM 字段提取
     WHERE 当前年 = '2026'
-      AND (事业部 = '消费者事业部' OR 分公司 <> '' OR 城市公司 <> '')
+      AND (事业部 = '消费者事业部' OR 分公司 <> '' OR 城市分公司 <> '')
 ),
 汇总结果 AS (
     SELECT
@@ -3748,12 +3786,11 @@ WITH 字段提取 AS (
             metric_scope_expr=metric_scope_expr,
             task_metric_expr=task_metric_expr,
             actual_metric_expr=actual_metric_expr,
-            city_field_key=city_field_key,
+            city_field_expr=city_field_expr,
         ).strip()
 
         city_level_requested = (
-            intent_target_level == "城市公司"
-            or "城市公司" in normalized_question
+            intent_target_level == "城市分公司"
             or "城市分公司" in normalized_question
         )
         asks_best_branch = (
@@ -3778,6 +3815,24 @@ WITH 字段提取 AS (
                 intent_is_ranking
                 or any(token in normalized_question for token in ["排名", "排行", "Top", "top", "前", "后", "最高", "最好", "最佳", "完成好", "完成最好", "哪个", "最低", "最差"])
             )
+        )
+        intent_is_filter = query_intent.get("intent") == "filter"
+        filter_metric_column = str(query_intent.get("filter_metric_column") or "").strip()
+        filter_operator = str(query_intent.get("filter_operator") or "").strip()
+        filter_value = query_intent.get("filter_value")
+        allowed_filter_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
+        filter_level_map = {
+            "城市分公司": "城市分公司",
+            "分公司": "分公司",
+            "消费者事业部总体": "消费者事业部总体",
+        }
+        filter_level = filter_level_map.get(intent_target_level, "城市分公司" if city_level_requested else "")
+        asks_threshold_filter = (
+            intent_is_filter
+            and filter_metric_column in allowed_filter_columns
+            and filter_operator in {"<", "<=", ">", ">=", "="}
+            and filter_value is not None
+            and bool(filter_level)
         )
         rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
         rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
@@ -3814,6 +3869,24 @@ WITH 字段提取 AS (
             }
             return configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
 
+        if asks_threshold_filter:
+            try:
+                filter_value_sql = f"{float(filter_value):g}"
+            except (TypeError, ValueError):
+                filter_value_sql = ""
+            if filter_value_sql:
+                order_direction = "ASC" if filter_operator in {"<", "<="} else "DESC"
+                tie_breaker = "剩余任务金额 DESC, 上级名称, 节点名称" if filter_metric_column == "达成率" else "达成率 ASC, 上级名称, 节点名称"
+                return f"""
+{base_sql}
+SELECT *
+FROM 汇总结果
+WHERE 层级 = '{filter_level}'
+  AND {filter_metric_column} {filter_operator} {filter_value_sql}
+ORDER BY {filter_metric_column} {order_direction}, {tie_breaker}
+LIMIT 200
+""".strip()
+
         if asks_city_ranking:
             rank_limit = consumer_rank_limit()
             order_direction = consumer_order_direction()
@@ -3821,8 +3894,8 @@ WITH 字段提取 AS (
             return self._build_ranked_select_sql(
                 source_cte=base_sql,
                 source_name="汇总结果",
-                output_cte="城市公司排序",
-                where_clause="层级 = '城市公司'",
+                output_cte="城市分公司排序",
+                where_clause="层级 = '城市分公司'",
                 metric_column=sort_column,
                 direction=order_direction,
                 rank_limit=rank_limit,
@@ -3859,10 +3932,10 @@ SELECT r.*
 FROM 汇总结果 r
 JOIN 排名分公司 b
   ON (r.层级 = '分公司' AND r.节点名称 = b.节点名称)
-  OR (r.层级 = '城市公司' AND r.上级名称 = b.节点名称)
+  OR (r.层级 = '城市分公司' AND r.上级名称 = b.节点名称)
 ORDER BY
     b.排名序号,
-    CASE r.层级 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    CASE r.层级 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
     r.{sort_column} {order_direction},
     r.年度开单金额 DESC,
     r.剩余任务金额 DESC,
@@ -3891,7 +3964,7 @@ FROM 汇总结果
 WHERE 节点名称 IN (SELECT 节点名称 FROM 最佳分公司)
    OR 上级名称 IN (SELECT 节点名称 FROM 最佳分公司)
 ORDER BY
-    CASE 层级 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    CASE 层级 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
     达成率 DESC,
     节点名称
 LIMIT 1000
@@ -3953,7 +4026,7 @@ SELECT *
 FROM 汇总结果
 {scope_filter}
 ORDER BY
-    CASE 层级 WHEN '消费者事业部总体' THEN 0 WHEN '分公司' THEN 1 WHEN '城市公司' THEN 2 ELSE 9 END,
+    CASE 层级 WHEN '消费者事业部总体' THEN 0 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
     上级名称 NULLS FIRST,
     达成率 DESC,
     节点名称
