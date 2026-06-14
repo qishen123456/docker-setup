@@ -391,11 +391,12 @@ class FourAgentAskService:
         return (
             re.search(rf"(?:Top|TOP|top|前|后|倒数)\s*{pattern}", text or "")
             or re.search(rf"(?:最高|最低|最好|最差)(?:的)?\s*{pattern}\s*(?:个|名|位)?", text or "")
+            or re.search(rf"第\s*{pattern}\s*(?:名|位)?", text or "")
         )
 
     def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
         text = str(text or "")
-        top_requested = bool(re.search(r"(?:Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好)", text))
+        top_requested = bool(re.search(r"(?:Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好|第\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:名|位)?)", text))
         bottom_requested = bool(re.search(r"(?:后\s*(?:\d+|[一二两三四五六七八九十]+)|倒数|最低|最差|垫底)", text))
         match = self._rank_limit_match(text)
         limit = self._parse_cn_int(match.group(1), default_limit) if match else default_limit
@@ -1820,6 +1821,22 @@ LIMIT {rank_limit}
         ]
         return any(token in text for token in blocked)
 
+    @classmethod
+    def _looks_like_structural_subject_phrase(cls, value: str) -> bool:
+        text = str(value or "").strip()
+        if not text:
+            return True
+        structural_tokens = [
+            "第一", "第二", "第三", "倒数", "前三", "后三", "前十", "后十",
+            "最高", "最低", "最好", "最差", "低于", "高于", "超过", "不足",
+            "排名", "top", "bottom", "全部", "所有", "哪些", "哪个", "几个",
+        ]
+        if any(token in text for token in structural_tokens):
+            return True
+        if re.match(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", text):
+            return True
+        return False
+
     def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
         names = self._resolved_entity_names(context) if include_resolved else []
         text = str(question or "").replace("\n", " ").strip()
@@ -1846,6 +1863,8 @@ LIMIT {rank_limit}
             if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
                 continue
             if any(token in cleaned for token in ["哪些", "所有", "各", "每个", "业务线", "任务完成", "最好", "最高", "最低", "哪个"]):
+                continue
+            if self._looks_like_structural_subject_phrase(cleaned):
                 continue
             if cleaned and cleaned not in names:
                 names.append(cleaned)
@@ -2549,7 +2568,13 @@ LIMIT {rank_limit}
             "销售业绩分析",
             "业绩分析",
         )
-        generic_aliases = {"业绩", "分析", "数据", "指标", "结果", "结果指标", "销售业绩"}
+        generic_aliases = {
+            "业绩", "分析", "数据", "指标", "结果", "结果指标", "销售业绩",
+            "分公司", "代表处", "业务部", "城市公司", "城市分公司", "业务员", "业务代表", "事业部",
+        }
+        generic_business_terms = {
+            "分", "公司", "分公司", "代表", "代表处", "业务", "业务部", "城市", "城市公司", "城市分公司", "事业部",
+        }
         score = 0
         for alias in alias_candidates:
             normalized_alias = self._normalize_compact_text(alias)
@@ -2572,6 +2597,8 @@ LIMIT {rank_limit}
                 if len(match) >= 2:
                     business_terms.add(match)
             for term in business_terms:
+                if term in generic_business_terms:
+                    continue
                 if term and term in normalized_question:
                     score = max(score, 90)
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
@@ -2792,7 +2819,45 @@ LIMIT {rank_limit}
 
         candidate_ids = [item[0]["id"] for item in ranked_candidates[:3]]
         candidate_names = [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked_candidates[:3]]
+        compact_question = re.sub(r"\s+", "", str(question or ""))
         ambiguous_terms = ["分公司", "组织", "代表处", "条线", "事业部", "区域", "部门", "团队"]
+        branch_only_cross_bu = (
+            "分公司" in compact_question
+            and not any(token in compact_question for token in ["商用", "商用事业部", "消费者", "消费者事业部", "城市分公司", "城市公司", "代表处", "业务部", "业务员", "业务代表"])
+            and any("商用事业部" in name for name in candidate_names)
+            and any("消费者" in name for name in candidate_names)
+        )
+
+        if branch_only_cross_bu:
+            options = []
+            for dataset, _score in ranked_candidates[:3]:
+                dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
+                if "商用事业部" not in dataset_name and "消费者" not in dataset_name:
+                    continue
+                options.append(
+                    self._build_confirmation_option(
+                        option_id=f"dataset_scope_{dataset['id']}",
+                        label=dataset_name,
+                        description=f"按 {dataset_name} 的分公司口径继续。",
+                        dataset_ids=[dataset["id"]],
+                        option_type="dataset_disambiguation",
+                        extra={
+                            "confirmation_type": "dataset_disambiguation",
+                            "resolved_dataset_name": dataset_name,
+                            "scope_mode": "aggregate",
+                        },
+                    )
+                )
+            if len(options) >= 2:
+                return {
+                    "requires_confirmation": True,
+                    "confirmation_role": "boss",
+                    "confirmation_type": "dataset_disambiguation",
+                    "confirmation_question": "检测到“分公司”同时可能指向商用事业部和消费者事业部，请先确认要使用哪个数据集口径：",
+                    "confirmation_options": options,
+                    "candidate_dataset_ids": candidate_ids,
+                }
+
         if len(ranked_candidates) >= 2:
             top1_score = ranked_candidates[0][1]
             top2_score = ranked_candidates[1][1]
@@ -3275,8 +3340,11 @@ LIMIT {rank_limit}
             return ""
 
         syyb_base_sql = self._build_syyb_base_sql(context)
-        ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后"]
-        has_ranking_intent = any(token in normalized_question for token in ranking_tokens)
+        ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后", "第一", "倒数第一"]
+        has_ranking_intent = (
+            any(token in normalized_question for token in ranking_tokens)
+            or str((context.get("query_intent") or {}).get("intent") or "").strip() == "ranking"
+        )
         if is_phase1_dataset and has_ranking_intent:
             rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
             configured_limit = int(rank_spec.get("limit") or 0)
@@ -3790,8 +3858,9 @@ WITH 字段提取 AS (
         ).strip()
 
         city_level_requested = (
-            intent_target_level == "城市分公司"
+            intent_target_level in {"城市分公司", "城市公司"}
             or "城市分公司" in normalized_question
+            or "城市公司" in normalized_question
         )
         asks_best_branch = (
             "分公司" in normalized_question

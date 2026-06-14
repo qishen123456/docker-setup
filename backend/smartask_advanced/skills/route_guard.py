@@ -16,6 +16,19 @@ class RouteGuardSkill:
         self.organization_resolver = OrganizationRouteResolver()
 
     @staticmethod
+    def _looks_like_branch_dataset_ambiguity(question: str, candidates: List[Dict[str, Any]]) -> bool:
+        text = str(question or "").strip()
+        compact = re.sub(r"\s+", "", text)
+        if not compact or "分公司" not in compact:
+            return False
+        if any(token in compact for token in ["商用", "商用事业部", "消费者", "消费者事业部", "城市分公司", "城市公司", "代表处", "业务部", "业务员", "业务代表"]):
+            return False
+        names = [str(item.get("dataset_name") or "") for item in (candidates or [])[:3]]
+        has_commercial = any("商用事业部" in name for name in names)
+        has_consumer = any("消费者" in name for name in names)
+        return has_commercial and has_consumer
+
+    @staticmethod
     def _unique_int(values) -> List[int]:
         if values is None:
             values = []
@@ -219,6 +232,17 @@ class RouteGuardSkill:
         if not candidates:
             result.update({"action": "no_candidate", "reason": "未识别到可用候选数据集。"})
             result["warnings"].append("未识别到候选数据资产，建议手动选择数据集。")
+            return result
+
+        if self._looks_like_branch_dataset_ambiguity(question, candidates):
+            result.update(
+                {
+                    "action": "needs_confirmation",
+                    "confidence": "medium",
+                    "reason": "问题只提到“分公司”，但当前候选同时包含商用事业部和消费者事业部，存在数据集歧义，需要先确认口径。",
+                }
+            )
+            result["warnings"].append("请先确认是商用事业部分公司，还是消费者事业部分公司。")
             return result
 
         top_dataset_id = signal.get("top_dataset_id")

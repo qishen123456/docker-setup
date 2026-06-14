@@ -632,6 +632,7 @@ const resolveFocusDrillRows = (items = []) => {
   if (!focusName) return withRate(items)
   const directChildren = withRate(items.filter(item => item.parent === focusName))
   if (directChildren.length) return directChildren
+  if (isLeafFocus.value) return []
   const nextLevelRows = withRate(items.filter(item => item.level && item.level !== focusRow?.level))
   return nextLevelRows.length ? nextLevelRows : withRate(items)
 }
@@ -778,8 +779,22 @@ const sortRankingRows = (items = [], direction = 'desc') => (
     ))
 )
 
+const twoSidedRankDisplayLimit = (items = []) => {
+  const configured = requestedRankLimit.value || explicitRequestedRankLimit.value || 0
+  if (configured > 0) return configured
+  const source = items.filter(item => item?.name)
+  const groupedFromBackend = source.filter(item => item.rankGroup)
+  if (groupedFromBackend.length) {
+    const topCount = groupedFromBackend.filter(item => item.rankGroup?.includes('前')).length
+    const bottomCount = groupedFromBackend.filter(item => item.rankGroup?.includes('后')).length
+    return Math.max(topCount, bottomCount, 1)
+  }
+  if (!source.length) return 1
+  return Math.max(1, Math.ceil(source.length / 2))
+}
+
 const twoSidedRankRows = (items = []) => {
-  const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+  const limit = twoSidedRankDisplayLimit(items)
   const source = items.filter(item => item?.name)
   const groupedFromBackend = source.filter(item => item.rankGroup)
   if (groupedFromBackend.length) {
@@ -1361,6 +1376,7 @@ const expectedDetailLevel = computed(() => {
 const secondaryDrillAllRows = computed(() => {
   const isComparisonScope = comparisonDigestRows.value.length >= 2
   if (isComparisonScope && !comparisonDrillRows.value.length && !isRankingQuestion.value) return []
+  if (!isComparisonScope && isLeafFocus.value && !focusDrillRows.value.length) return []
   const source = isComparisonScope && comparisonDrillRows.value.length
     ? comparisonDrillRows.value
     : (focusDrillRows.value.length ? focusDrillRows.value : managementLayerRows.value)
@@ -1400,7 +1416,7 @@ const drillSectionLabel = computed(() => (
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
   if (rankSides.value === 'both') {
-    const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+    const limit = twoSidedRankDisplayLimit(rows)
     const topRows = rows.filter(item => item.rankGroup?.includes('前'))
     const bottomRows = rows.filter(item => item.rankGroup?.includes('后'))
     const fallbackTopRows = topRows.length ? topRows : sortRankingRows(rows, 'desc').slice(0, limit)
@@ -1475,11 +1491,21 @@ const isBusinessPersonRanking = computed(() => (
   isRankingQuestion.value && secondaryLevelLabel.value === '业务代表'
 ))
 
+const hasUnifiedSecondaryParent = computed(() => {
+  const parents = secondaryDrillRows.value
+    .map(item => cleanText(item?.parent))
+    .filter(Boolean)
+  if (!parents.length) return false
+  const first = parents[0]
+  return parents.every(parent => sameOrgName(parent, first))
+})
+
 const drillNodeMeta = (row) => {
   const path = cleanText(row?.path)
   if (path) return path
   const level = cleanText(row?.level || secondaryLevelLabel.value)
   const parent = cleanText(row?.parent)
+  if (hasUnifiedSecondaryParent.value) return level
   if (parent) return level ? `${level} · 上级：${parent}` : `上级：${parent}`
   return level
 }
@@ -1490,7 +1516,7 @@ const secondaryDrillSummary = computed(() => {
   if (isRankingQuestion.value) {
     const shown = secondaryDrillRows.value
     if (rankSides.value === 'both') {
-      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      const limit = twoSidedRankDisplayLimit(shown)
       return `按${rankingMetricMeta.value.label}取前${limit}和后${limit}个${rankingLevelLabel.value}，完整明细见下表`
     }
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
@@ -1632,7 +1658,7 @@ const directAnswer = computed(() => {
   if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
     if (rankSides.value === 'both') {
       const rows = rankedCollectionRows.value
-      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      const limit = twoSidedRankDisplayLimit(rows)
       const topRows = rows.filter(item => item.rankGroup.includes('前')).length
         ? rows.filter(item => item.rankGroup.includes('前'))
         : sortRankingRows(rows, 'desc').slice(0, limit)
@@ -1732,7 +1758,7 @@ const supportLines = computed(() => {
   if (isRankingQuestion.value && rankedCollectionRows.value.length) {
     const shown = rankedCollectionRows.value
     if (rankSides.value === 'both') {
-      const limit = requestedRankLimit.value || explicitRequestedRankLimit.value || 3
+      const limit = twoSidedRankDisplayLimit(shown)
       const topRows = shown.filter(item => item.rankGroup.includes('前')).length
         ? shown.filter(item => item.rankGroup.includes('前'))
         : sortRankingRows(shown, 'desc').slice(0, limit)

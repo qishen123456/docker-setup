@@ -89,6 +89,61 @@ class QueryIntentMetricTest(unittest.TestCase):
         self.assertEqual(intent["rank_sides"], "both")
         self.assertEqual(intent["direction"], "desc")
 
+    def test_first_and_last_branch_sets_both_sides(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("看下第一和倒数第一的分公司", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertEqual(intent["top_n"], 1)
+        self.assertEqual(intent["rank_sides"], "both")
+        self.assertEqual(intent["direction"], "desc")
+
+    def test_ranking_branch_question_is_not_misread_as_subject_name(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("看下第一和倒数第一的分公司", context, include_resolved=False)
+
+        self.assertEqual(names, [])
+
+    def test_consumer_first_and_last_branch_sql_uses_two_windows(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "consumer_business_standard_v1",
+                "dataset_name": "消费者事业部",
+            },
+            "query_intent": {
+                "intent": "ranking",
+                "target_level": "分公司",
+                "top_n": 1,
+                "sort_metric_key": "rate",
+                "sort_metric_column": "达成率",
+                "direction": "desc",
+                "rank_sides": "both",
+            },
+            "data_dictionary": [{"jsonb_key": "城市分公司"}],
+        }
+
+        sql = service._build_rule_based_sql("看下第一和倒数第一的分公司", {}, context)
+
+        self.assertIn("分公司排序", sql)
+        self.assertIn("前排名", sql)
+        self.assertIn("后排名", sql)
+        self.assertIn("WHERE 前排名 <= 1 OR 后排名 <= 1", sql)
+        self.assertIn("LIMIT 2", sql)
+
     def test_phase1_business_people_top_and_bottom_sql_uses_two_windows(self):
         service = self._service()
         context = {
@@ -115,6 +170,33 @@ class QueryIntentMetricTest(unittest.TestCase):
         self.assertIn("后排名", sql)
         self.assertIn("WHERE 前排名 <= 3 OR 后排名 <= 3", sql)
         self.assertIn("LIMIT 6", sql)
+
+    def test_phase1_first_and_last_branch_sql_uses_ranking_template(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "query_intent": {
+                "intent": "ranking",
+                "target_level": "分公司",
+                "top_n": 1,
+                "sort_metric_key": "rate",
+                "sort_metric_column": "达成率",
+                "direction": "desc",
+                "rank_sides": "both",
+            },
+            "data_dictionary": [],
+        }
+
+        sql = service._build_rule_based_sql("看下第一和倒数第一的分公司", {}, context)
+
+        self.assertIn("分公司排序", sql)
+        self.assertIn("前排名", sql)
+        self.assertIn("后排名", sql)
+        self.assertIn("WHERE 前排名 <= 1 OR 后排名 <= 1", sql)
+        self.assertIn("LIMIT 2", sql)
 
     def test_phase1_management_levels_share_two_sided_ranking(self):
         service = self._service()
@@ -166,7 +248,7 @@ class QueryIntentMetricTest(unittest.TestCase):
 
         sql = service._build_rule_based_sql("看下前三和后三的城市公司", {}, context)
 
-        self.assertIn("城市公司排序", sql)
+        self.assertIn("城市分公司排序", sql)
         self.assertIn("前排名", sql)
         self.assertIn("后排名", sql)
         self.assertIn("WHERE 前排名 <= 3 OR 后排名 <= 3", sql)

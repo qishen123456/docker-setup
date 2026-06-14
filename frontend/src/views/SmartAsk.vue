@@ -3914,17 +3914,20 @@ const latestAiMessage = computed(() => (
 
 const isLatestAiMessage = (msg) => latestAiMessage.value?.id === msg?.id
 
+const currentSessionAiMessage = computed(() => (
+  [...messages].reverse().find(item => item?.role === 'ai' && isCurrentSessionMessage(item)) || latestAiMessage.value || null
+))
+
 const syncPendingConfirmationMessage = () => {
   const result = session.state.result
   if (session.state.status !== 'waiting_confirmation' || !result?.requires_confirmation) return
 
-  const msg = latestAiMessage.value
+  const msg = currentSessionAiMessage.value
   if (!msg || msg.role !== 'ai') return
   if (msg.data?.requires_confirmation) return
-  if (!msg.loading && msg.data && !msg.data.aborted) return
 
   msg.loading = false
-  msg.data = result
+  msg.data = JSON.parse(JSON.stringify(result))
   thinkingOpen[msg.id] = false
   if (!(msg.id in confirmationDrafts)) confirmationDrafts[msg.id] = ''
   stopTimer()
@@ -3935,7 +3938,7 @@ const syncCompletedResultMessage = () => {
   const result = session.state.result
   if (session.state.status !== 'completed' || !result || result?.requires_confirmation || result?.error) return
 
-  const msg = latestAiMessage.value
+  const msg = currentSessionAiMessage.value
   if (!msg || msg.role !== 'ai') return
 
   const sameQuestion = !result.question || !session.state.question || result.question === session.state.question

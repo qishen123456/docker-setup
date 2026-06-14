@@ -1078,6 +1078,48 @@ class AdvancedAskService:
         fallback_kwargs = dict(kwargs)
         effective_dataset_ids = advanced_context.get("effective_preferred_dataset_ids") or []
         route_guard = advanced_context.get("route_guard") or {}
+        if route_guard.get("action") == "needs_confirmation":
+            org_route = route_guard.get("organization_route") or {}
+            confirmation_options = org_route.get("confirmation_options") or []
+            if not confirmation_options:
+                recommended_ids = route_guard.get("recommended_dataset_ids") or []
+                catalog = self.repository.get_agent1_catalog()
+                by_id = {
+                    int(item.get("id") or 0): item
+                    for item in catalog
+                    if int(item.get("id") or 0) > 0
+                }
+                confirmation_options = [
+                    {
+                        "id": f"dataset_{dataset_id}",
+                        "label": str((by_id.get(int(dataset_id)) or {}).get("dataset_name") or f"数据集{dataset_id}"),
+                        "description": "按该口径继续问数",
+                        "dataset_ids": [int(dataset_id)],
+                        "option_type": "dataset_disambiguation",
+                        "confirmation_type": "dataset_disambiguation",
+                        "resolved_members": [],
+                        "resolved_dataset_name": str((by_id.get(int(dataset_id)) or {}).get("dataset_name") or f"数据集{dataset_id}"),
+                    }
+                    for dataset_id in recommended_ids
+                    if int(dataset_id) > 0
+                ]
+            return {
+                "question": question,
+                "requires_confirmation": True,
+                "confirmation_question": route_guard.get("reason") or "检测到当前问题存在统计口径歧义，请先确认后再继续执行。",
+                "confirmation_options": confirmation_options,
+                "dataset_results": [],
+                "final_answer": "",
+                "diagnostics": {
+                    "advanced": {
+                        "trace_id": advanced_context.get("trace_id"),
+                        "route_guard": route_guard,
+                        "effective_preferred_dataset_ids": effective_dataset_ids,
+                        "cross_dataset_execution": False,
+                        "preserve_final_report_contract": True,
+                    }
+                },
+            }
         if effective_dataset_ids and not preferred_dataset_ids:
             fallback_kwargs["preferred_dataset_ids"] = effective_dataset_ids
         if route_guard.get("action") == "cross_dataset_compare":
