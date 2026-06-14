@@ -1304,6 +1304,7 @@ let timerInst = null
 let chatScrollTimer = null
 let panelScrollTimer = null
 let reportTopScrollTimers = []
+const activeRequestAiMessageId = ref(null)
 const pendingQuickDataset = ref(null)
 const isDatasetManuallySelected = ref(false)
 
@@ -1504,6 +1505,10 @@ const reportSceneTemplate = computed(() => {
   const sourceDatasets = reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
   const specTemplate = sourceDatasets.find(item => item?.report_spec?.layoutTemplate)?.report_spec?.layoutTemplate
   if (specTemplate) return specTemplate
+  const answerMode = String(sourceDatasets.find(item => item?.report_spec?.answerMode)?.report_spec?.answerMode || '').trim()
+  if (answerMode === 'comparison') return 'comparison'
+  if (answerMode === 'ranking') return 'ranking'
+  if (answerMode === 'drilldown' || answerMode === 'filter') return 'detail'
   const questionText = String(activeReportResult.value?.question || session.state.question || query.value || '')
   if (/对比|比较|哪个|谁更|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText)) return 'comparison'
   if (/排名|排行|前\s*(?:\d+|[一二两三四五六七八九十]+)|Top\s*\d+|TOP\s*\d+|最好|最差|最高|最低/.test(questionText)) return 'ranking'
@@ -3918,11 +3923,15 @@ const currentSessionAiMessage = computed(() => (
   [...messages].reverse().find(item => item?.role === 'ai' && isCurrentSessionMessage(item)) || latestAiMessage.value || null
 ))
 
+const activeRequestAiMessage = computed(() => (
+  messages.find(item => item?.id === activeRequestAiMessageId.value) || null
+))
+
 const syncPendingConfirmationMessage = () => {
   const result = session.state.result
   if (session.state.status !== 'waiting_confirmation' || !result?.requires_confirmation) return
 
-  const msg = currentSessionAiMessage.value
+  const msg = activeRequestAiMessage.value || currentSessionAiMessage.value
   if (!msg || msg.role !== 'ai') return
   if (msg.data?.requires_confirmation) return
 
@@ -3938,7 +3947,7 @@ const syncCompletedResultMessage = () => {
   const result = session.state.result
   if (session.state.status !== 'completed' || !result || result?.requires_confirmation || result?.error) return
 
-  const msg = currentSessionAiMessage.value
+  const msg = activeRequestAiMessage.value || currentSessionAiMessage.value
   if (!msg || msg.role !== 'ai') return
 
   const sameQuestion = !result.question || !session.state.question || result.question === session.state.question
@@ -4222,6 +4231,7 @@ const rerunQuestion = async (msg) => {
   const aid = ++msgCounter
   const aiMsg = { id: aid, role: 'ai', loading: true, data: null }
   messages.splice(userIndex + 1, 0, aiMsg)
+  activeRequestAiMessageId.value = aid
   thinkingOpen[aid] = true
 
   query.value = ''
@@ -4279,6 +4289,7 @@ const handleSend = async () => {
   const aid = ++msgCounter
   const aiMsg = { id: aid, role: 'ai', loading: true, data: null }
   messages.push(aiMsg)
+  activeRequestAiMessageId.value = aid
   thinkingOpen[aid] = true
 
   showPanel.value = true
@@ -4353,6 +4364,7 @@ const handleStop = () => {
 const resetForNewChat = () => {
   saveCurrentToHistory()
   messages.splice(0, messages.length)
+  activeRequestAiMessageId.value = null
   query.value = ''
   clearRestoreRequest()
   setActiveHistory('')
@@ -4615,6 +4627,7 @@ const doConfirm = async (opt, msg) => {
     if (last) {
       last.loading = false
       last.data = res
+      activeRequestAiMessageId.value = last.id
     }
     if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''

@@ -519,8 +519,14 @@ LIMIT {rank_limit}
         explicit_filter_question = bool(
             re.search(r"(?:哪些|哪个|哪家|哪几个).*(?:低于|不足|小于|少于|高于|超过|大于).*\d+(?:\.\d+)?\s*%?", text)
         )
+        threshold_filter_question = bool(
+            re.search(r"(?:低于|不足|小于|低过|少于|高于|超过|大于)", text)
+            and re.search(r"\d+(?:\.\d+)?\s*%?", text)
+            and re.search(r"(?:城市分公司|城市公司|分公司|代表处|业务部|业务员|业务代表)", text)
+        )
         filter_problem = (
             explicit_filter_question
+            or threshold_filter_question
             or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
             or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
         )
@@ -2548,6 +2554,49 @@ LIMIT {rank_limit}
         unsupported = [item for item in asked if item not in supported]
         return -min(60, 35 * len(unsupported))
 
+    @classmethod
+    def _question_target_level_hint(cls, question: str) -> str:
+        text = cls._normalize_compact_text(question)
+        if not text:
+            return ""
+        for level in ("城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "事业部"):
+            if cls._normalize_compact_text(level) in text:
+                return level
+        return ""
+
+    @classmethod
+    def _profile_supports_level(cls, profile: Optional[Dict[str, Any]], target_level: str) -> bool:
+        normalized_target = cls._normalize_compact_text(target_level)
+        if not profile or not normalized_target:
+            return False
+        for level in profile.get("levels") or []:
+            aliases = [
+                str(level.get("dimension_name") or ""),
+                *[str(item or "") for item in (level.get("aliases") or [])],
+            ]
+            for alias in aliases:
+                normalized_alias = cls._normalize_compact_text(alias)
+                if normalized_alias and normalized_alias == normalized_target:
+                    return True
+        return False
+
+    @classmethod
+    def _context_supports_level(cls, context: Dict[str, Any], target_level: str) -> bool:
+        normalized_target = cls._normalize_compact_text(target_level)
+        if not normalized_target:
+            return False
+        dictionary_values = [
+            str(item.get(key) or "")
+            for item in (context.get("data_dictionary") or [])
+            for key in ("semantic_name", "jsonb_key", "column_name")
+        ]
+        common_questions = [str(item.get("question_text") or "") for item in (context.get("common_questions") or [])]
+        lld_text = str(context.get("lld_content") or "")
+        haystack = cls._normalize_compact_text(" ".join([*dictionary_values, *common_questions, lld_text]))
+        if not haystack:
+            return False
+        return normalized_target in haystack
+
     def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any]) -> int:
         normalized_question = self._normalize_compact_text(question)
         if not normalized_question:
@@ -2678,6 +2727,45 @@ LIMIT {rank_limit}
             "schema_table_count": len(context.get("schema_definition", []) or []),
             "dictionary_count": len(context.get("data_dictionary", []) or []),
         }
+
+    @classmethod
+    def _extract_supported_levels(cls, dataset: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
+        ordered_levels = ["事业部", "分公司", "城市分公司", "城市公司", "代表处", "业务部", "业务代表", "业务员"]
+        seen: List[str] = []
+
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if profile:
+            for level in profile.get("levels") or []:
+                aliases = [
+                    str(level.get("dimension_name") or ""),
+                    *[str(item or "") for item in (level.get("aliases") or [])],
+                ]
+                for alias in aliases:
+                    normalized_alias = cls._normalize_compact_text(alias)
+                    for canonical in ordered_levels:
+                        if cls._normalize_compact_text(canonical) == normalized_alias and canonical not in seen:
+                            seen.append(canonical)
+
+        dictionary_values = [
+            str(item.get(key) or "")
+            for item in (context.get("data_dictionary") or [])
+            for key in ("semantic_name", "jsonb_key", "column_name")
+        ]
+        common_questions = [str(item.get("question_text") or "") for item in (context.get("common_questions") or [])]
+        schema_values = [
+            str(item.get(key) or "")
+            for item in (context.get("schema_definition") or [])
+            for key in ("table_name", "column_name", "semantic_name")
+        ]
+        haystack = cls._normalize_compact_text(
+            " ".join([*dictionary_values, *common_questions, *schema_values, str((context.get("lld_document") or {}).get("content") or "")])
+        )
+        for canonical in ordered_levels:
+            if canonical in seen:
+                continue
+            if cls._normalize_compact_text(canonical) in haystack:
+                seen.append(canonical)
+        return seen
 
     def _build_dataset_profile_confirmation(
         self,
@@ -2899,6 +2987,7 @@ LIMIT {rank_limit}
         for dataset, score in top_candidates:
             context = self.repository.get_dataset_context(int(dataset["id"]), question, top_k_samples=3)
             strengths = self._summarize_candidate_strengths(context)
+            supported_levels = self._extract_supported_levels(dataset, context)
             candidate_blocks.append(
                 {
                     "dataset_id": dataset["id"],
@@ -2906,6 +2995,7 @@ LIMIT {rank_limit}
                     "business_domain": dataset.get("business_domain"),
                     "synonyms": dataset.get("synonyms", []),
                     "score_hint": score,
+                    "supported_levels": supported_levels,
                     "candidate_strengths": strengths,
                     "dataset_agent1_fragments": [
                         item["prompt_content"] for item in context.get("agent_prompts", {}).get(1, [])
@@ -2942,9 +3032,11 @@ LIMIT {rank_limit}
 
 路由要求：
 1. 优先判断业务口径，而不是只看词面相似。
-2. 如果多个数据集都能回答问题，但统计口径不同，必须 requires_confirmation=true。
-3. refined_query 需要补齐时间范围、组织口径、统计对象，但不能虚构用户没有表达的事实。
-4. 只有在数据集明显唯一且口径无歧义时，才能给出 direct_execute 或 generate_sql。
+2. 必须优先参考候选数据集的 supported_levels、common_questions、schema_table_count、dictionary_count 和 Agent1 提示词片段来判断层级归属。
+3. 如果用户问到的组织层级只被一个数据集支持，例如某层级只在单个数据集的组织树/DDL/字段字典/常见问法里出现，则直接选择该数据集，不要要求确认。
+4. 只有多个数据集在同一层级、同一业务口径下都能回答时，才 requires_confirmation=true。
+5. refined_query 需要补齐时间范围、组织口径、统计对象，但不能虚构用户没有表达的事实。
+6. 只有在数据集明显唯一且口径无歧义时，才能给出 direct_execute 或 generate_sql。
 
 请输出 JSON：
 {{
@@ -3048,6 +3140,32 @@ LIMIT {rank_limit}
         best_dataset, best_context, best_score = candidate_contexts[0]
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
         route_margin = best_score - runner_up_score
+        target_level_hint = self._question_target_level_hint(question)
+        exclusive_level_hints = {"城市分公司", "城市公司"}
+        if target_level_hint in exclusive_level_hints:
+            supported_candidates = []
+            for dataset, context, score in candidate_contexts[:3]:
+                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                if self._profile_supports_level(profile, target_level_hint) or self._context_supports_level(context, target_level_hint):
+                    supported_candidates.append((dataset, score))
+            if len(supported_candidates) == 1:
+                selected_dataset, selected_score = supported_candidates[0]
+                return {
+                    "dataset_ids": [selected_dataset["id"]],
+                    "intent": "detail",
+                    "refined_query": question,
+                    "requires_confirmation": False,
+                    "decision": "generate_sql",
+                    "match_score": selected_score,
+                    "route_margin": 100,
+                    "matched_sample_id": None,
+                    "matched_sample_sql": "",
+                    "arbiter_reason": f"target_level_unique:{target_level_hint}",
+                    "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                    "split_queries": [
+                        {"dataset_id": selected_dataset["id"], "sub_query": question}
+                    ],
+                }
         best_alias_score = self._dataset_alias_match_score(question, best_dataset)
         runner_alias_score = (
             self._dataset_alias_match_score(question, candidate_contexts[1][0])
@@ -3317,12 +3435,16 @@ LIMIT {rank_limit}
 
     def _build_rule_based_sql(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> str:
         dataset = self._safe_dict(context.get("dataset"))
+        query_intent = self._safe_dict(context.get("query_intent"))
         dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
         dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
         original_question = str(context.get("original_question") or "").replace("\n", " ").strip()
         if original_question and original_question not in normalized_question:
             normalized_question = f"{normalized_question} {original_question}".strip()
+        intent_name = str(query_intent.get("intent") or "").strip()
+        intent_target_level = str(query_intent.get("target_level") or "").strip()
+        normalized_target_level = intent_target_level.replace(" ", "")
         is_consumer_dataset = (
             dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
             or "消费者" in dataset_name
@@ -3342,20 +3464,20 @@ LIMIT {rank_limit}
         syyb_base_sql = self._build_syyb_base_sql(context)
         ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后", "第一", "倒数第一"]
         has_ranking_intent = (
-            any(token in normalized_question for token in ranking_tokens)
-            or str((context.get("query_intent") or {}).get("intent") or "").strip() == "ranking"
+            intent_name == "ranking"
+            or any(token in normalized_question for token in ranking_tokens)
         )
         if is_phase1_dataset and has_ranking_intent:
             rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
             configured_limit = int(rank_spec.get("limit") or 0)
-            rank_sides = str((context.get("query_intent") or {}).get("rank_sides") or rank_spec.get("sides") or "")
+            rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
             default_rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
             rank_limit = max(1, min(20, configured_limit or default_rank_limit))
             is_top_rank = rank_sides != "bottom"
             order_direction = "DESC" if is_top_rank else "ASC"
             asks_grouped_rank = any(token in normalized_question for token in ["各", "每个", "分别", "各自", "按上级", "按代表处", "分组"])
             allowed_rank_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
-            intent_metric_column = str((context.get("query_intent") or {}).get("sort_metric_column") or "").strip()
+            intent_metric_column = str(query_intent.get("sort_metric_column") or "").strip()
             phase1_metric_column = intent_metric_column if intent_metric_column in allowed_rank_columns else ""
             if not phase1_metric_column:
                 if "剩余" in normalized_question or "缺口" in normalized_question or "待完成" in normalized_question:
@@ -3367,7 +3489,12 @@ LIMIT {rank_limit}
                 else:
                     phase1_metric_column = "达成率"
 
-            if "业务代表" in normalized_question or "业务员" in normalized_question:
+            target_is_business_person = normalized_target_level in {"业务代表", "业务员", "销售", "销售人员"}
+            target_is_office = normalized_target_level == "代表处"
+            target_is_business_dept = normalized_target_level == "业务部"
+            target_is_branch = normalized_target_level == "分公司"
+
+            if target_is_business_person or "业务代表" in normalized_question or "业务员" in normalized_question:
                 metric_column = phase1_metric_column
                 syyb_dictionary_keys = {
                     str(item.get("jsonb_key") or "").strip()
@@ -3475,7 +3602,7 @@ WHERE 全局排名 <= {rank_limit}
 ORDER BY 全局排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
 LIMIT {rank_limit}
 """.strip()
-            if "代表处" in normalized_question:
+            if target_is_office or "代表处" in normalized_question:
                 if rank_sides == "both":
                     return self._build_ranked_select_sql(
                         source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
@@ -3528,7 +3655,7 @@ WHERE 分公司内排名 <= {rank_limit}
 ORDER BY 上级名称, 分公司内排名, {phase1_metric_column} {order_direction}, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
-            if "业务部" in normalized_question:
+            if target_is_business_dept or "业务部" in normalized_question:
                 return self._build_ranked_select_sql(
                     source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
                     source_name="汇总结果",
@@ -3540,7 +3667,7 @@ LIMIT 50
                     rank_sides=rank_sides,
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
-            if "分公司" in normalized_question:
+            if target_is_branch or "分公司" in normalized_question:
                 return self._build_ranked_select_sql(
                     source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
                     source_name="汇总结果",
