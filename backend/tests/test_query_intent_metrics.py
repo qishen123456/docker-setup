@@ -117,6 +117,83 @@ class QueryIntentMetricTest(unittest.TestCase):
 
         self.assertEqual(names, [])
 
+    def test_business_person_comparison_question_splits_two_names(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("对比下业务员赵标和靳锋的业绩完成情况", context, include_resolved=False)
+
+        self.assertEqual(names, ["赵标", "靳锋"])
+
+    def test_branch_comparison_question_splits_two_full_branch_names(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("对比下东部分公司和西部分公司的业绩完成情况", context, include_resolved=False)
+
+        self.assertEqual(names, ["东部分公司", "西部分公司"])
+
+    def test_branch_comparison_question_splits_compound_branch_alias_without_and(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("对比下东部西部分公司业绩完成情况", context, include_resolved=False)
+
+        self.assertEqual(names, ["东部分公司", "西部分公司"])
+
+    def test_branch_comparison_question_splits_compound_short_alias(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("对比下东西部业绩完成情况", context, include_resolved=False)
+
+        self.assertEqual(names, ["东部分公司", "西部分公司"])
+
+    def test_branch_comparison_question_uses_parallel_compare_sql_not_recursive_drill(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+            "resolved_entities": {
+                "all_members": ["东部分公司", "西部分公司"],
+                "entities": [{"members": ["东部分公司", "西部分公司"]}],
+            },
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        sql = service._build_rule_based_sql("对比下东西部业绩完成情况", {}, context)
+
+        self.assertIn("WHERE 节点名称 IN ('东部分公司','西部分公司') OR 上级名称 IN ('东部分公司','西部分公司')", sql)
+        self.assertNotIn("WITH RECURSIVE", sql)
+        self.assertNotIn("JOIN 命中链路", sql)
+
     def test_consumer_first_and_last_branch_sql_uses_two_windows(self):
         service = self._service()
         context = {

@@ -1843,12 +1843,39 @@ LIMIT {rank_limit}
             return True
         return False
 
+    @classmethod
+    def _expand_coordinated_subject_names(cls, value: str) -> List[str]:
+        text = str(value or "").strip("，,。！？?、 的呢吗么吧")
+        text = re.sub(r"^(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下|对比下|比较下|对比一下|比较一下)\s*", "", text)
+        if not text:
+            return []
+        parts = [
+            item.strip("，,。！？?、 的呢吗么吧")
+            for item in re.split(r"[、,，]|(?:和|与|及|跟)", text)
+            if item and item.strip("，,。！？?、 的呢吗么吧")
+        ]
+        valid_parts = [
+            item
+            for item in parts
+            if re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", item) and not cls._looks_like_noise_subject(item)
+        ]
+        if len(valid_parts) >= 2:
+            return valid_parts
+        if re.fullmatch(r"[\u4e00-\u9fa5]{4,8}", text) and any(token in text for token in ["和", "与", "及", "跟"]):
+            rough_parts = [
+                item.strip()
+                for item in re.split(r"(?:和|与|及|跟)", text)
+                if item and item.strip()
+            ]
+            if len(rough_parts) >= 2 and all(re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", item) for item in rough_parts):
+                return rough_parts
+        if re.fullmatch(r"[\u4e00-\u9fa5]{2,6}", text) and not cls._looks_like_noise_subject(text):
+            return [text]
+        return []
+
     def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
         names = self._resolved_entity_names(context) if include_resolved else []
         text = str(question or "").replace("\n", " ").strip()
-        role_person_names = self._role_person_subject_names(text)
-        if role_person_names:
-            return role_person_names
 
         dataset = self._safe_dict(context.get("dataset"))
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
@@ -1858,6 +1885,12 @@ LIMIT {rank_limit}
                 value = str(name or "").strip()
                 if value and value not in names:
                     names.append(value)
+            if names:
+                return names
+
+        role_person_names = self._role_person_subject_names(text)
+        if role_person_names:
+            return role_person_names
 
         role_person_names = self._role_person_subject_names(text)
         for candidate in role_person_names:
@@ -1884,26 +1917,24 @@ LIMIT {rank_limit}
             for match in re.findall(pattern, text):
                 candidate = str(match or "").strip("，,、 的呢吗么吧")
                 candidate = re.sub(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", "", candidate).strip()
-                if self._looks_like_noise_subject(candidate):
-                    continue
-                if candidate not in names:
-                    names.append(candidate)
+                for value in self._expand_coordinated_subject_names(candidate):
+                    if value not in names:
+                        names.append(value)
         return names
 
     def _role_person_subject_names(self, question: str) -> List[str]:
         text = str(question or "").replace("\n", " ").strip()
         names: List[str] = []
         role_person_patterns = [
-            r"(?:商用事业部|商用|安吉尔商用事业部)?(?:的)?(?:业务代表|业务员|业务经理|销售人员|销售)\s*([\u4e00-\u9fa5]{2,4})(?=\s*(?:的|业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|$|[，,。？?]))",
+            r"(?:商用事业部|商用|安吉尔商用事业部)?(?:的)?(?:业务代表|业务员|业务经理|销售人员|销售)\s*([\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、|,|，)[\u4e00-\u9fa5]{2,4})+|[\u4e00-\u9fa5]{2,4})(?=\s*(?:的|业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|$|[，,。？?]))",
             r"(?:业务代表|业务员|业务经理|销售人员|销售)(?:是|为|叫|：|:)\s*([\u4e00-\u9fa5]{2,4})",
         ]
         for pattern in role_person_patterns:
             for match in re.findall(pattern, text):
                 candidate = str(match or "").strip("，,、 的呢吗么吧")
-                if self._looks_like_noise_subject(candidate):
-                    continue
-                if candidate not in names:
-                    names.append(candidate)
+                for value in self._expand_coordinated_subject_names(candidate):
+                    if value not in names:
+                        names.append(value)
         return names
 
     def _prepare_subject_safe_sample_sql(
@@ -3715,6 +3746,31 @@ LIMIT 50
             entity_names = self._question_subject_names(normalized_question, context)
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+            comparison_intent = (
+                len(entity_names) > 1
+                or bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|相比|和.+比|跟.+比|与.+比|\bvs\b", normalized_question, re.I))
+            )
+            if comparison_intent:
+                return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000
+""".strip()
             return f"""
 WITH RECURSIVE 汇总结果 AS (
 {syyb_base_sql}
