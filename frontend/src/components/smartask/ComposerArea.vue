@@ -1,160 +1,138 @@
 <template>
   <div class="sa-composer" :class="{ 'is-running': isRunning }">
     <div class="sa-composer-inner">
-      <div v-if="allowDatasetSelect || allowModelSelect" class="sa-composer-top">
-        <div class="sa-composer-selectors">
-          <div
-            v-if="allowDatasetSelect"
-            class="sa-composer-dataset-bar"
-            :class="{ active: !!selectedDatasetMeta }"
-          >
-            <div class="sa-composer-label-block">
-              <div class="sa-composer-label-row">
-                <div class="sa-composer-label">选择数据集</div>
-                <el-tooltip content="不预选时会按问题自动匹配最合适的数据集" placement="top" :show-after="300">
-                  <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
-                    {{ selectedDatasetMeta ? '已选择' : '自动路由' }}
-                  </span>
-                </el-tooltip>
-              </div>
-              <div class="sa-composer-caption">
-                {{ selectedDatasetMeta ? selectedDatasetMeta.dataset_name : '按问题自动匹配' }}
-              </div>
-            </div>
-            <el-select
-              v-model="datasetSelectValue"
-              placeholder="自动路由数据集"
-              size="small"
-              class="sa-ds-select"
-              popper-class="sa-ds-popper sa-dataset-popper"
-              placement="top-start"
-              :fallback-placements="['top-start']"
-              @change="$emit('datasetChange', $event || null)"
-            >
-              <template #prefix>
-                <span class="sa-ds-icon" aria-hidden="true"></span>
-              </template>
-              <el-option
-                label="自动路由数据集"
-                value=""
-              >
-                <div class="sa-ds-option sa-ds-option-auto">
-                  <div class="sa-ds-option-main">
-                    <div class="sa-ds-option-title">自动路由数据集</div>
-                  </div>
-                </div>
-              </el-option>
-              <el-option
-                v-for="d in datasets"
-                :key="d.id"
-                :label="d.dataset_name"
-                :value="d.id"
-              >
-                <div class="sa-ds-option">
-                  <div class="sa-ds-option-main">
-                    <div class="sa-ds-option-title">{{ d.dataset_name }}</div>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
+      <div class="sa-composer-body">
+        <div
+          v-if="allowDatasetSelect"
+          class="sa-side-dataset-card"
+          :class="{ active: !!selectedDatasetMeta }"
+        >
+          <div class="sa-side-dataset-head">
+            <div class="sa-side-dataset-label">数据集</div>
+            <span class="sa-ds-mode-chip" :class="{ active: !!selectedDatasetMeta }">
+              {{ selectedDatasetMeta ? '已选择' : '自动路由' }}
+            </span>
           </div>
-
-          <div
-            v-if="allowModelSelect"
-            class="sa-composer-model-bar"
-            :class="{ active: !!selectedModelMeta }"
+          <el-select
+            v-model="datasetSelectValue"
+            placeholder="自动路由数据集"
+            size="small"
+            class="sa-side-ds-select"
+            popper-class="sa-ds-popper sa-dataset-popper"
+            placement="top-start"
+            :fallback-placements="['top-start']"
+            @change="$emit('datasetChange', $event || null)"
           >
-            <div class="sa-composer-label-block">
-              <div class="sa-composer-label-row">
-                <div class="sa-composer-label">AI 模型</div>
-                <el-tooltip content="自动选择默认模型，失败时自动切换备用" placement="top" :show-after="300">
-                  <span class="sa-model-mode-chip" :class="{ active: !!selectedModelMeta }">
-                    {{ selectedModelMeta ? selectedModelMeta.name : 'AUTO' }}
-                  </span>
-                </el-tooltip>
-              </div>
-              <div class="sa-composer-caption">
-                {{ selectedModelMeta ? selectedModelMeta.model : '默认模型 · 自动切换' }}
-              </div>
-            </div>
-            <el-select
-              v-model="modelSelectValue"
-              placeholder="Auto"
-              size="small"
-              class="sa-model-select"
-              popper-class="sa-ds-popper sa-model-popper"
-              placement="top-start"
-              :fallback-placements="['top-start']"
-            >
-              <template #prefix>
-                <span class="sa-model-icon" aria-hidden="true">⚡</span>
-              </template>
-              <el-option
-                label="Auto"
-                value=""
-              >
-                <div class="sa-ds-option sa-model-option sa-ds-option-auto">
-                  <div class="sa-ds-option-main">
-                    <div class="sa-ds-option-title">Auto</div>
-                  </div>
+            <template #prefix>
+              <span class="sa-ds-icon" aria-hidden="true"></span>
+            </template>
+            <el-option label="自动路由数据集" value="">
+              <div class="sa-ds-option sa-ds-option-auto">
+                <div class="sa-ds-option-main">
+                  <div class="sa-ds-option-title">自动路由数据集</div>
                 </div>
-              </el-option>
-              <el-option
-                v-for="m in aiModels"
-                :key="m.id"
-                :label="m.name"
-                :value="m.id"
-              >
-                <div
-                  class="sa-ds-option sa-model-option"
-                  :class="{ 'is-default-model': m.is_default }"
+              </div>
+            </el-option>
+            <el-option
+              v-for="d in datasets"
+              :key="d.id"
+              :label="d.dataset_name"
+              :value="d.id"
+            >
+              <div class="sa-ds-option">
+                <div class="sa-ds-option-main">
+                  <div class="sa-ds-option-title">{{ d.dataset_name }}</div>
+                </div>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
+
+        <div class="sa-composer-main">
+          <div class="sa-textarea-wrap">
+            <div v-if="statusText" class="sa-composer-status-capsule" :class="statusTone">
+              <span class="sa-composer-status-dot"></span>
+              <span class="sa-composer-status-text">{{ statusText }}</span>
+              <span v-if="statusElapsed" class="sa-composer-status-time">{{ statusElapsed }}</span>
+            </div>
+
+            <span class="sa-textarea-leading" aria-hidden="true"></span>
+            <textarea
+              ref="inputRef"
+              v-model="modelQuery"
+              class="sa-textarea"
+              placeholder="请输入您的业务问题..."
+              rows="1"
+              :disabled="isRunning"
+              @input="autoGrow"
+              @keydown="handleKeydown"
+            ></textarea>
+
+            <div class="sa-composer-footer">
+              <div class="sa-composer-hint">Enter 发送，Shift + Enter 换行</div>
+
+              <div class="sa-composer-actions">
+                <el-select
+                  v-if="allowModelSelect"
+                  v-model="modelSelectValue"
+                  placeholder="Auto"
+                  size="small"
+                  class="sa-model-corner-select"
+                  popper-class="sa-ds-popper sa-model-popper"
+                  placement="top-start"
+                  :fallback-placements="['top-start']"
                 >
-                  <div class="sa-ds-option-main">
-                    <div class="sa-ds-option-title sa-model-option-title">
-                      <span>{{ m.name }}</span>
-                      <span v-if="m.is_default" class="sa-model-default-badge">默认模型</span>
+                  <template #prefix>
+                    <span class="sa-model-icon" aria-hidden="true">⚡</span>
+                  </template>
+                  <el-option label="Auto" value="">
+                    <div class="sa-ds-option sa-model-option sa-ds-option-auto">
+                      <div class="sa-ds-option-main">
+                        <div class="sa-ds-option-title">Auto</div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
+                  </el-option>
+                  <el-option
+                    v-for="m in aiModels"
+                    :key="m.id"
+                    :label="m.name"
+                    :value="m.id"
+                  >
+                    <div
+                      class="sa-ds-option sa-model-option"
+                      :class="{ 'is-default-model': m.is_default }"
+                    >
+                      <div class="sa-ds-option-main">
+                        <div class="sa-ds-option-title sa-model-option-title">
+                          <span>{{ m.name }}</span>
+                          <span v-if="m.is_default" class="sa-model-default-badge">默认模型</span>
+                        </div>
+                      </div>
+                    </div>
+                  </el-option>
+                </el-select>
+
+                <button
+                  v-if="!isRunning && allowSend"
+                  class="sa-send-btn"
+                  aria-label="发送问题"
+                  @click="$emit('send')"
+                >
+                  <span class="sa-send-icon" aria-hidden="true"></span>
+                </button>
+
+                <button
+                  v-else-if="isRunning && allowStop"
+                  class="sa-stop-btn"
+                  aria-label="停止执行"
+                  @click="$emit('stop')"
+                >
+                  <span class="sa-stop-icon" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="sa-composer-input-row">
-        <div class="sa-textarea-wrap">
-          <span class="sa-textarea-leading" aria-hidden="true"></span>
-          <textarea
-            ref="inputRef"
-            v-model="modelQuery"
-            class="sa-textarea"
-            placeholder="请输入您的业务问题..."
-            rows="1"
-            :disabled="isRunning"
-            @input="autoGrow"
-            @keydown="handleKeydown"
-          ></textarea>
-          <div class="sa-composer-hint">Enter / Alt + Enter 发送，Shift + Enter 换行</div>
-        </div>
-
-        <button
-          v-if="!isRunning && allowSend"
-          class="sa-send-btn"
-          aria-label="发送问题"
-          @click="$emit('send')"
-        >
-          <span class="sa-send-icon" aria-hidden="true"></span>
-        </button>
-
-        <button
-          v-else-if="isRunning && allowStop"
-          class="sa-stop-btn"
-          aria-label="停止执行"
-          @click="$emit('stop')"
-        >
-          <span class="sa-stop-icon" aria-hidden="true"></span>
-        </button>
       </div>
     </div>
   </div>
@@ -195,25 +173,37 @@ const props = defineProps({
   allowModelSelect: {
     type: Boolean,
     default: true
+  },
+  statusText: {
+    type: String,
+    default: ''
+  },
+  statusElapsed: {
+    type: String,
+    default: ''
+  },
+  statusTone: {
+    type: String,
+    default: ''
   }
 })
 
 const emit = defineEmits(['send', 'stop', 'datasetChange'])
 
 const inputRef = ref(null)
+
 const datasetSelectValue = computed({
   get: () => modelDatasetId.value ?? '',
-  set: value => { modelDatasetId.value = value === '' ? null : value },
+  set: value => { modelDatasetId.value = value === '' ? null : value }
 })
+
 const modelSelectValue = computed({
   get: () => modelModelId.value ?? '',
-  set: value => { modelModelId.value = value === '' ? null : value },
+  set: value => { modelModelId.value = value === '' ? null : value }
 })
+
 const selectedDatasetMeta = computed(() => (
   (props.datasets || []).find(item => Number(item?.id) === Number(modelDatasetId.value)) || null
-))
-const selectedModelMeta = computed(() => (
-  (props.aiModels || []).find(item => Number(item?.id) === Number(modelModelId.value)) || null
 ))
 
 const resizeTextarea = () => {
@@ -247,15 +237,15 @@ onMounted(() => {
 
 <style scoped>
 .sa-composer {
-  margin: 16px 22px 22px;
+  margin: 10px 18px 16px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(29, 33, 41, 0.07);
-  border-radius: 22px;
-  padding: 14px 15px 15px;
+  border-radius: 18px;
+  padding: 10px 11px 11px;
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 10px 26px rgba(15, 23, 42, 0.04),
+    0 8px 20px rgba(15, 23, 42, 0.04),
     0 1px 2px rgba(15, 23, 42, 0.03);
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -300,140 +290,104 @@ onMounted(() => {
 }
 
 .sa-composer-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   position: relative;
   z-index: 1;
 }
 
-.sa-composer-top {
+.sa-composer-body {
+  display: grid;
+  grid-template-columns: 154px minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sa-side-dataset-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 0 12px;
-  border-bottom: 1px solid rgba(229, 230, 235, 0.76);
-}
-
-.sa-composer-selectors {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.sa-composer-dataset-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 156px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  position: relative;
+  justify-content: space-between;
+  gap: 6px;
   min-width: 0;
-  padding: 10px 12px 10px 14px;
-  border-radius: 16px;
+  padding: 8px 9px;
+  border-radius: 12px;
   border: 1px solid rgba(30, 41, 59, 0.1);
-  background:
-    linear-gradient(90deg, rgba(30, 41, 59, 0.035), transparent 34%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
   box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.035),
-    inset 3px 0 0 rgba(37, 99, 235, 0.5);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    0 6px 14px rgba(15, 23, 42, 0.03),
+    inset 2px 0 0 rgba(37, 99, 235, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 76px;
 }
 
-.sa-composer-model-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 136px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  position: relative;
-  min-width: 0;
-  padding: 10px 12px 10px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(30, 41, 59, 0.1);
-  background:
-    linear-gradient(90deg, rgba(30, 41, 59, 0.035), transparent 34%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.035),
-    inset 3px 0 0 rgba(15, 118, 110, 0.5);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.sa-composer-dataset-bar:hover,
-.sa-composer-model-bar:hover,
-.sa-composer-dataset-bar.active,
-.sa-composer-model-bar.active {
-  transform: translateY(-1px);
-}
-
-.sa-composer-dataset-bar:hover,
-.sa-composer-dataset-bar.active {
+.sa-side-dataset-card.active,
+.sa-side-dataset-card:hover {
   border-color: rgba(37, 99, 235, 0.22);
-  background:
-    linear-gradient(90deg, rgba(37, 99, 235, 0.075), transparent 42%),
-    linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   box-shadow:
     0 0 0 1px rgba(37, 99, 235, 0.08),
     0 12px 24px rgba(15, 23, 42, 0.055),
     inset 3px 0 0 #2563eb;
 }
 
-.sa-composer-dataset-bar.active .sa-ds-select :deep(.el-select__wrapper) {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 246, 255, 0.98) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 3px rgba(37, 99, 235, 0.08),
-    0 12px 24px rgba(37, 99, 235, 0.055);
-}
-
-.sa-composer-model-bar:hover,
-.sa-composer-model-bar.active {
-  border-color: rgba(15, 118, 110, 0.24);
-  box-shadow:
-    0 12px 24px rgba(15, 23, 42, 0.055),
-    inset 3px 0 0 #0f766e;
-}
-
-.sa-composer-label-block {
+.sa-side-dataset-head {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sa-side-dataset-label {
+  font-size: 11px;
+  font-weight: 760;
+  color: #475569;
+  line-height: 1.2;
+}
+
+.sa-side-ds-select {
+  width: 100%;
+  margin-top: auto;
+}
+
+.sa-side-ds-select :deep(.el-select__wrapper) {
+  min-height: 31px;
+  padding-left: 28px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(30, 41, 59, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.sa-side-dataset-card.active .sa-side-ds-select :deep(.el-select__wrapper) {
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.sa-side-ds-select :deep(.el-select__selected-item),
+.sa-side-ds-select :deep(.el-select__placeholder) {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.sa-side-ds-select :deep(.el-select__caret) {
+  color: #94a3b8;
+}
+
+.sa-composer-main {
   min-width: 0;
 }
 
-.sa-composer-label-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sa-composer-label {
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0;
-  text-transform: uppercase;
-  color: #5b667a;
-}
-
 .sa-ds-mode-chip {
-  height: 20px;
-  padding: 0 8px;
+  height: 16px;
+  padding: 0 6px;
   border-radius: 999px;
   background: rgba(30, 41, 59, 0.06);
   color: #475569;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
-  cursor: default;
-  transition: all 0.2s ease;
-}
-
-.sa-ds-mode-chip:hover {
-  background: #eaecf0;
+  flex-shrink: 0;
 }
 
 .sa-ds-mode-chip.active {
@@ -442,95 +396,12 @@ onMounted(() => {
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
 }
 
-.sa-model-mode-chip {
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(30, 41, 59, 0.06);
-  color: #475569;
-  font-size: 10px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  max-width: 92px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: default;
-  transition: all 0.2s ease;
-}
-
-.sa-model-mode-chip:hover {
-  background: rgba(30, 41, 59, 0.09);
-}
-
-.sa-model-mode-chip.active {
-  background: #1e293b;
-  color: #ffffff;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
-}
-
-.sa-ds-mode-chip.active:hover {
-  background: #1e293b;
-  color: #ffffff;
-}
-
-.sa-composer-caption {
-  font-size: 11px;
-  line-height: 1.5;
-  color: #778397;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sa-ds-select {
-  width: 100%;
-}
-
-.sa-ds-select :deep(.el-select__wrapper) {
-  min-height: 42px;
-  padding-left: 34px;
-  padding-right: 12px;
-  border-radius: 13px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(30, 41, 59, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 8px 18px rgba(15, 23, 42, 0.035);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.sa-ds-select :deep(.el-select__wrapper.is-focused) {
-  box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 3px rgba(37, 99, 235, 0.08),
-    0 12px 24px rgba(15, 23, 42, 0.055);
-}
-
-.sa-ds-select :deep(.el-select__selected-item) {
-  font-size: 12px;
-  font-weight: 760;
-  color: #1e293b;
-}
-
-.sa-ds-select :deep(.el-select__placeholder) {
-  font-size: 12px;
-  color: #9aa3b2;
-}
-
-.sa-ds-select :deep(.el-select__caret) {
-  color: #64748b;
-}
-
 .sa-ds-icon {
   position: absolute;
-  left: 12px;
+  left: 9px;
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -548,8 +419,7 @@ onMounted(() => {
 .sa-ds-icon::before {
   inset: 1px;
   border: 1px solid rgba(30, 41, 59, 0.16);
-  background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
 }
 
 .sa-ds-icon::after {
@@ -585,17 +455,9 @@ onMounted(() => {
   background: #0f766e;
 }
 
-.sa-model-option.is-default-model {
-  padding-right: 0;
-}
-
 .sa-model-option.is-default-model::before {
   width: 4px;
   background: #0f766e;
-  opacity: 1;
-}
-
-.sa-ds-option-auto::before {
   opacity: 1;
 }
 
@@ -607,7 +469,7 @@ onMounted(() => {
 }
 
 .sa-ds-option-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #243041;
   line-height: 1.4;
@@ -628,19 +490,6 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.sa-ds-option-meta {
-  font-size: 10px;
-  line-height: 1.45;
-  color: #8a94a6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sa-ds-option-sep {
-  margin: 0 4px;
-}
-
 .sa-ds-option-auto .sa-ds-option-title {
   color: #165dff;
 }
@@ -650,30 +499,6 @@ onMounted(() => {
   border: 1px solid rgba(29, 33, 41, 0.08);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
   padding: 6px;
-}
-
-:deep(.sa-ds-popper .el-select-dropdown) {
-  max-height: min(320px, 42vh);
-}
-
-:deep(.sa-ds-popper .el-select-dropdown__wrap) {
-  max-height: min(308px, calc(42vh - 12px));
-  overflow-y: auto;
-}
-
-:deep(.sa-ds-popper .el-select-dropdown__wrap::-webkit-scrollbar) {
-  width: 8px;
-}
-
-:deep(.sa-ds-popper .el-select-dropdown__wrap::-webkit-scrollbar-thumb) {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background: rgba(100, 116, 139, 0.36);
-  background-clip: padding-box;
-}
-
-:deep(.sa-ds-popper .el-select-dropdown__wrap::-webkit-scrollbar-track) {
-  background: transparent;
 }
 
 :deep(.sa-ds-popper .el-select-dropdown__list) {
@@ -688,50 +513,9 @@ onMounted(() => {
   color: #3d4756;
 }
 
-:deep(.sa-ds-popper .el-select-dropdown__item.is-hovering),
-:deep(.sa-ds-popper .el-select-dropdown__item:hover) {
-  background: #f5f8ff;
-}
-
-:deep(.sa-ds-popper .el-select-dropdown__item.is-selected) {
-  background: #edf4ff;
-}
-
 :deep(.sa-dataset-popper .el-select-dropdown__item.is-hovering),
 :deep(.sa-dataset-popper .el-select-dropdown__item:hover) {
   background: rgba(37, 99, 235, 0.07);
-}
-
-:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected) {
-  background:
-    linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(37, 99, 235, 0.055));
-  box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.14),
-    inset 3px 0 0 #2563eb;
-}
-
-:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option) {
-  padding-right: 28px;
-}
-
-:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option::before) {
-  opacity: 0;
-}
-
-:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option::after) {
-  content: '';
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  width: 12px;
-  height: 7px;
-  border-left: 2px solid #2563eb;
-  border-bottom: 2px solid #2563eb;
-  transform: translateY(-65%) rotate(-45deg);
-}
-
-:deep(.sa-dataset-popper .el-select-dropdown__item.is-selected .sa-ds-option-title) {
-  color: #174ea6;
 }
 
 :deep(.sa-model-popper .el-select-dropdown__item.is-hovering),
@@ -739,38 +523,89 @@ onMounted(() => {
   background: rgba(15, 118, 110, 0.07);
 }
 
-:deep(.sa-model-popper .el-select-dropdown__item.is-selected) {
-  background: rgba(15, 118, 110, 0.11);
-}
-
-:deep(.sa-model-popper .el-select-dropdown__item) {
-  height: auto;
-  min-height: 42px;
-}
-
-.sa-composer-input-row {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-}
-
 .sa-textarea-wrap {
   position: relative;
-  flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  min-height: 76px;
+  padding: 7px 10px 8px 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(30, 41, 59, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 16px rgba(15, 23, 42, 0.03);
+}
+
+.sa-composer-status-capsule {
+  position: absolute;
+  top: 8px;
+  left: calc(100% - 170px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  padding: 2px 0 0 22px;
+  max-width: 250px;
+  min-width: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(29, 33, 41, 0.06);
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.sa-composer-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #165dff;
+  flex: 0 0 auto;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.sa-composer-status-capsule.completed .sa-composer-status-dot {
+  background: #00b42a;
+  animation: none;
+}
+
+.sa-composer-status-capsule.error .sa-composer-status-dot {
+  background: #f53f3f;
+  animation: none;
+}
+
+.sa-composer-status-text {
+  min-width: 0;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-composer-status-time {
+  color: #98a2b3;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .sa-textarea-leading {
   position: absolute;
-  left: 0;
-  top: 6px;
-  width: 14px;
-  height: 14px;
+  left: 10px;
+  top: 12px;
+  width: 12px;
+  height: 12px;
   pointer-events: none;
-  transition: color 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sa-textarea-leading::before,
@@ -779,7 +614,6 @@ onMounted(() => {
   position: absolute;
   border-radius: 999px;
   background: rgba(201, 205, 212, 0.8);
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sa-textarea-leading::before {
@@ -799,77 +633,95 @@ onMounted(() => {
   min-height: 24px;
   max-height: 132px;
   resize: none;
-  line-height: 1.7;
+  line-height: 1.45;
   color: #1d2129;
   background: transparent;
 }
 
 .sa-textarea::placeholder {
   color: #c9cdd4;
-  font-size: 12px;
+  font-size: 13px;
 }
 
-.sa-textarea:focus + .sa-composer-hint,
-.sa-textarea-wrap:focus-within .sa-composer-hint {
-  color: #6b7280;
-}
-
-.sa-textarea-wrap:focus-within .sa-textarea-leading {
-  color: #165dff;
-}
-
-.sa-textarea-wrap:focus-within .sa-textarea-leading::before {
-  background: rgba(22, 93, 255, 0.88);
-}
-
-.sa-textarea-wrap:focus-within .sa-textarea-leading::after {
-  background: rgba(22, 93, 255, 0.2);
-}
-
-.sa-composer.is-running .sa-textarea-leading::before {
-  background: rgba(20, 184, 166, 0.95);
-}
-
-.sa-composer.is-running .sa-textarea-leading::after {
-  background: rgba(20, 184, 166, 0.24);
-  animation: sa-leading-pulse 1.4s ease-in-out infinite;
-}
-
-.sa-composer:focus-within {
-  border-color: #165dff;
-  box-shadow:
-    0 10px 26px rgba(15, 23, 42, 0.04),
-    0 0 0 3px rgba(22, 93, 255, 0.1);
+.sa-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
 }
 
 .sa-composer-hint {
-  font-size: 11px;
+  font-size: 10px;
   color: #97a0b3;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1.2;
+}
+
+.sa-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.sa-model-corner-select {
+  width: 118px;
+}
+
+.sa-model-corner-select :deep(.el-select__wrapper) {
+  min-height: 31px;
+  padding-left: 30px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 0 0 1px rgba(30, 41, 59, 0.08),
+    0 6px 12px rgba(15, 23, 42, 0.035);
+}
+
+.sa-model-corner-select :deep(.el-select__selected-item),
+.sa-model-corner-select :deep(.el-select__placeholder) {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sa-model-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  color: #0f766e;
+  font-size: 10px;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.04);
+  pointer-events: none;
 }
 
 .sa-send-btn,
 .sa-stop-btn {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.08);
   cursor: pointer;
-  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
   color: #ffffff;
   box-shadow:
-    0 10px 20px rgba(15, 23, 42, 0.14),
+    0 8px 16px rgba(15, 23, 42, 0.13),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
@@ -881,10 +733,8 @@ onMounted(() => {
 }
 
 .sa-send-icon {
-  width: 18px;
-  height: 18px;
-  z-index: 1;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: 16px;
+  height: 16px;
 }
 
 .sa-send-icon::before,
@@ -911,175 +761,11 @@ onMounted(() => {
   transform: rotate(-8deg);
 }
 
-.sa-send-btn {
-  color: #ffffff;
-}
-
-.sa-send-btn::before,
-.sa-stop-btn::before {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  pointer-events: none;
-}
-
-.sa-send-btn:hover,
-.sa-stop-btn:hover {
-  transform: translateY(-1px);
-  background:
-    linear-gradient(180deg, #3b4a5f 0%, #233044 100%);
-  box-shadow:
-    0 12px 22px rgba(15, 23, 42, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
-.sa-send-btn:hover .sa-send-icon {
-  transform: translate(1px, -1px);
-}
-
-.sa-send-btn:active,
-.sa-stop-btn:active {
-  transform: translateY(0) scale(0.96);
-}
-
-.sa-stop-btn {
-  color: #ffffff;
-}
-
 .sa-stop-icon {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 2px;
   background: currentColor;
-}
-
-@property --sa-composer-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes sa-composer-marquee {
-  to { --sa-composer-angle: 360deg; }
-}
-
-@keyframes sa-leading-pulse {
-  0%, 100% { transform: scale(0.88); opacity: 0.55; }
-  50% { transform: scale(1.18); opacity: 0.9; }
-}
-
-@media (max-width: 900px) {
-  .sa-composer {
-    margin: 14px 16px 16px;
-  }
-
-  .sa-composer-selectors {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .sa-composer-dataset-bar,
-  .sa-composer-model-bar {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-}
-
-.sa-model-select {
-  width: 100%;
-}
-
-.sa-model-select :deep(.el-select__wrapper) {
-  min-height: 42px;
-  padding-left: 34px;
-  padding-right: 12px;
-  border-radius: 13px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(30, 41, 59, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 8px 18px rgba(15, 23, 42, 0.035);
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.sa-model-select :deep(.el-select__wrapper.is-focused) {
-  box-shadow:
-    inset 0 0 0 1px rgba(15, 118, 110, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 3px rgba(15, 118, 110, 0.08),
-    0 12px 24px rgba(15, 23, 42, 0.055);
-}
-
-.sa-model-select :deep(.el-select__selected-item) {
-  font-size: 12px;
-  font-weight: 760;
-  color: #1e293b;
-}
-
-.sa-model-select :deep(.el-select__placeholder) {
-  font-size: 12px;
-  color: #9aa3b2;
-}
-
-.sa-model-select :deep(.el-select__caret) {
-  color: #64748b;
-}
-
-.sa-model-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background:
-    linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  color: #ffffff;
-  font-size: 11px;
-  line-height: 1;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  color: #0f766e;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.045);
-  pointer-events: none;
-}
-
-.sa-model-mode-chip {
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-  font-size: 10px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  max-width: 92px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: default;
-  transition: all 0.2s ease;
-}
-
-.sa-model-mode-chip:hover {
-  background: rgba(245, 158, 11, 0.18);
-}
-
-.sa-model-mode-chip.active {
-  background: linear-gradient(135deg, #f59e0b 0%, #7c3aed 100%);
-  color: #ffffff;
-  box-shadow: 0 6px 14px rgba(124, 58, 237, 0.18);
-}
-
-.sa-model-mode-chip.active:hover {
-  background: linear-gradient(135deg, #e58f08 0%, #6d28d9 100%);
 }
 
 .sa-model-default-badge {
@@ -1093,7 +779,52 @@ onMounted(() => {
   color: #0f766e;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0;
   box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18);
+}
+
+@property --sa-composer-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes sa-composer-marquee {
+  to { --sa-composer-angle: 360deg; }
+}
+
+@media (max-width: 900px) {
+  .sa-composer {
+    margin: 10px 14px 14px;
+  }
+
+  .sa-composer-body {
+    grid-template-columns: 1fr;
+  }
+
+  .sa-side-dataset-card {
+    order: 2;
+  }
+
+  .sa-composer-main {
+    order: 1;
+  }
+
+  .sa-composer-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sa-composer-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .sa-model-corner-select {
+    flex: 1;
+  }
+
+  .sa-composer-status-capsule {
+    display: none;
+  }
 }
 </style>

@@ -6,14 +6,6 @@
           <div class="sa-title">当前会话</div>
           <span class="sa-workspace-badge">经营助手</span>
         </div>
-
-        <div class="sa-subtitle-row">
-          <span class="sa-subtitle-label">当前数据集</span>
-          <div class="sa-dataset-badge">
-            <span class="sa-dataset-dot"></span>
-            <span class="sa-dataset-name">{{ datasetName }}</span>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -32,10 +24,6 @@ defineProps({
     type: Boolean,
     default: true
   },
-  datasetName: {
-    type: String,
-    default: '自动路由数据集'
-  },
   allowTogglePanel: {
     type: Boolean,
     default: true
@@ -51,16 +39,15 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 
 <style scoped>
 .sa-header {
-  min-height: 54px;
-  padding: 8px 14px;
+  min-height: 46px;
+  padding: 6px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px;
   container-type: inline-size;
   border-bottom: 1px solid rgba(29, 33, 41, 0.08);
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.92);
   flex-shrink: 0;
 }
 
@@ -75,19 +62,18 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 .sa-header-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
   min-width: 0;
 }
 
 .sa-title-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .sa-title {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.2;
   font-weight: 700;
   color: #111827;
@@ -96,71 +82,20 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 .sa-workspace-badge {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 7px;
+  height: 17px;
+  padding: 0 6px;
   border-radius: 999px;
   background: #e8f3ff;
   color: #165dff;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-}
-
-.sa-subtitle-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.sa-subtitle-label {
-  font-size: 10px;
-  color: #86909c;
-}
-
-.sa-subtitle-sep {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #c9cdd4;
-  flex-shrink: 0;
-}
-
-.sa-dataset-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 320px;
-  min-width: 0;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #f7f8fa;
-  color: #4e5969;
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.sa-dataset-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #165dff;
-  flex-shrink: 0;
-}
-
-.sa-dataset-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sa-header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex: 0 1 auto;
-  flex-wrap: wrap;
   justify-content: flex-end;
   margin-left: auto;
   min-width: 0;
@@ -168,11 +103,11 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 
 .sa-solid-btn,
 .sa-text-btn {
-  height: 28px;
-  padding: 0 11px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -215,41 +150,13 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 
 @container (max-width: 760px) {
   .sa-header {
-    padding: 9px 12px;
-  }
-
-  .sa-header-copy {
-    gap: 3px;
-  }
-
-  .sa-dataset-badge {
-    max-width: 100%;
+    padding: 7px 12px;
   }
 }
 
 @container (max-width: 620px) {
   .sa-workspace-badge {
     display: none;
-  }
-
-  .sa-subtitle-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
-    align-items: start;
-  }
-
-  .sa-subtitle-sep {
-    display: none;
-  }
-
-  .sa-subtitle-label {
-    font-size: 9px;
-  }
-
-  .sa-dataset-badge {
-    width: fit-content;
-    max-width: 100%;
   }
 
   .sa-header-right {
@@ -260,8 +167,8 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 
   .sa-solid-btn,
   .sa-text-btn {
-    height: 26px;
-    padding: 0 10px;
+    height: 24px;
+    padding: 0 9px;
     font-size: 10px;
   }
 }

@@ -1720,7 +1720,7 @@ const directAnswer = computed(() => {
   if (best && worst) {
     return `本轮返回 ${rowCount.value || normalizedRows.value.length} 行结果，${best.name}达成最好${best.rateText ? `（${best.rateText}）` : ''}，${worst.name}压力最大${worst.rateText ? `（${worst.rateText}）` : ''}。`
   }
-  return usefulReportLines.value[0] || props.title || '本轮问数已完成。'
+  return usefulReportLines.value[0] || props.title || ''
 })
 
 const supportLines = computed(() => {

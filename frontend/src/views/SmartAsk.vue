@@ -253,23 +253,6 @@
             </div>
           </div>
 
-          <!-- 状态条 -->
-          <transition name="sa-slide-up">
-            <div v-if="isRunning || session.state.status === 'completed'" class="sa-status-bar" :class="session.state.status">
-              <div class="sa-status-left">
-                <span class="sa-status-dot"></span>
-                <span class="sa-status-text">{{ statusBarText }}</span>
-                <span v-if="activeAskFlowLabel" class="sa-status-flow-badge" :class="activeAskFlowClass">
-                  {{ activeAskFlowLabel }}
-                </span>
-                <span v-if="activeAskFlowLabel" class="sa-status-flow-hint">{{ activeAskFlowHint }}</span>
-              </div>
-              <div class="sa-status-right">
-                <span v-if="isRunning" class="sa-timer">{{ elapsed }}s</span>
-              </div>
-            </div>
-          </transition>
-
           <!-- 底部输入区-->
           <ComposerArea
             v-model:query="query"
@@ -282,6 +265,12 @@
             :allow-stop="featureAccess.smart_stop_run"
             :allow-dataset-select="featureAccess.smart_dataset_select"
             :allow-model-select="featureAccess.smart_model_select"
+            :status-text="isRunning || session.state.status === 'completed' ? statusBarText : ''"
+            :status-elapsed="isRunning ? `${elapsed}s` : ''"
+            :status-tone="session.state.status"
+            :status-flow-label="activeAskFlowLabel"
+            :status-flow-class="activeAskFlowClass"
+            :status-flow-hint="activeAskFlowLabel ? activeAskFlowHint : ''"
             @send="handleSend"
             @stop="handleStop"
             @dataset-change="handleDatasetChange"
@@ -1317,7 +1306,7 @@ const canViewFullscreenReport = computed(() => canUseFeature('report_fullscreen'
 const statusBarText = computed(() => {
   const m = {
     running: session.state.logs.slice(-1)[0]?.title || '任务执行中',
-    completed: '本轮问数已完成',
+    completed: '',
     canceled: '本轮问数已取消',
     error: '当前任务执行异常',
     waiting_confirmation: '等待确认统计口径'
@@ -5404,7 +5393,7 @@ onUnmounted(() => {
   font-family: var(--font-sans, 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif);
   font-size: 14px;
   color: var(--text-title);
-  padding: 16px;
+  padding: 12px;
   box-sizing: border-box;
 }
 
@@ -5431,9 +5420,9 @@ onUnmounted(() => {
   display: flex;
   overflow: hidden;
   border: 1px solid rgba(29, 33, 41, 0.08);
-  border-radius: 22px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.055);
   backdrop-filter: blur(14px);
 }
 
@@ -5456,22 +5445,22 @@ onUnmounted(() => {
 .sa-chat-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 22px 22px;
+  padding: 10px 16px 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-chat-body {
-  padding-left: clamp(18px, 2.6vw, 44px);
-  padding-right: clamp(18px, 2.6vw, 44px);
+  padding-left: clamp(14px, 2vw, 28px);
+  padding-right: clamp(14px, 2vw, 28px);
 }
 
 /* 消息 */
 .sa-msg-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
 }
 .sa-msg-wrap {
@@ -6133,75 +6122,6 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.6;
   color: #53657c;
-}
-
-/* 状态栏 */
-.sa-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 20px;
-  font-size: 12px;
-  border-top: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.96);
-  flex-shrink: 0;
-}
-.sa-status-left {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.sa-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-.sa-status-bar.completed .sa-status-dot {
-  background: var(--success);
-  animation: none;
-}
-.sa-status-bar.error .sa-status-dot {
-  background: var(--error);
-  animation: none;
-}
-.sa-status-text {
-  color: var(--text-body);
-  font-weight: 500;
-  line-height: 1.5;
-}
-.sa-status-flow-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid rgba(22, 93, 255, 0.16);
-  border-radius: 999px;
-  background: #f4f8ff;
-  color: #165dff;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
-}
-.sa-status-flow-badge.is-advanced {
-  border-color: rgba(0, 180, 42, 0.2);
-  background: #f3fff7;
-  color: #178a3b;
-}
-.sa-status-flow-hint {
-  color: #86909c;
-  font-size: 11px;
-  line-height: 1.4;
-}
-.sa-status-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.sa-timer {
-  color: var(--text-muted);
-  font-size: 11px;
 }
 
 .sa-link-btn {
@@ -8447,7 +8367,7 @@ button.sa-compare-row:hover {
 
 @media (max-width: 1280px) {
   .sa-page {
-    padding: 16px;
+    padding: 10px;
   }
 
   .sa-detail-panel {

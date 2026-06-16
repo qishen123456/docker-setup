@@ -89,51 +89,51 @@ onMounted(() => {
 .sa-welcome {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 28px 10px 14px;
-  max-width: 800px;
+  gap: 14px;
+  padding: 12px 8px 6px;
+  max-width: 760px;
 }
 
 .sa-welcome-head {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
 }
 
 .sa-welcome-avatar {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   color: #fff;
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   box-shadow:
-    0 12px 24px rgba(15, 23, 42, 0.12),
-    inset 0 -3px 0 rgba(37, 99, 235, 0.55);
+    0 8px 18px rgba(15, 23, 42, 0.1),
+    inset 0 -2px 0 rgba(37, 99, 235, 0.55);
 }
 
 .sa-welcome-copy {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 
 .sa-welcome-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #165dff;
   letter-spacing: 0.03em;
 }
 
 .sa-welcome-text {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1d2129;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .sa-welcome-text::after {
@@ -144,7 +144,7 @@ onMounted(() => {
 }
 
 .sa-quick-questions {
-  margin-left: 56px;
+  margin-left: 46px;
   padding-top: 0;
 }
 
@@ -152,20 +152,20 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .sa-quick-title {
   font-size: 11px;
   font-weight: 700;
   color: #86909c;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .sa-quick-tip {
-  margin-bottom: 10px;
-  font-size: 11px;
+  margin-bottom: 6px;
+  font-size: 10px;
   color: #a0a7b4;
 }
 
@@ -221,25 +221,25 @@ onMounted(() => {
 .sa-quick-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 14px;
+  gap: 10px 12px;
 }
 
 .sa-quick-btn {
   text-align: left;
-  min-height: 44px;
-  padding: 12px 16px;
+  min-height: 40px;
+  padding: 10px 14px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
   border: 1px solid rgba(29, 33, 41, 0.08);
-  border-radius: 14px;
-  font-size: 12px;
+  border-radius: 12px;
+  font-size: 11px;
   color: #4e5969;
   cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
-  line-height: 1.45;
+  line-height: 1.4;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sa-quick-btn:hover {
@@ -309,7 +309,7 @@ onMounted(() => {
   }
 
   .sa-welcome-text {
-    font-size: 16px;
+    font-size: 15px;
   }
 }
 </style>
