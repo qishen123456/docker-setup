@@ -255,6 +255,7 @@
 
           <!-- 底部输入区-->
           <ComposerArea
+            :class="{ 'sa-composer-narrow': !detailPanelVisible }"
             v-model:query="query"
             v-model:dataset-id="datasetId"
             v-model:model-id="modelId"
@@ -5441,6 +5442,12 @@ onUnmounted(() => {
   background: transparent;
 }
 
+.sa-chat-panel.is-detail-hidden {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+}
+
 /* 聊天区 */
 .sa-chat-body {
   flex: 1;
@@ -5469,12 +5476,22 @@ onUnmounted(() => {
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-list {
-  max-width: 1420px;
+  max-width: 920px;
   margin: 0 auto;
+  width: 100%;
+  align-items: center;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-wrap {
-  max-width: 1360px;
+  width: min(100%, 920px);
+  max-width: 920px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-composer) {
+  max-width: 920px;
+  width: min(calc(100% - 24px), 920px);
+  margin-left: auto;
+  margin-right: auto;
 }
 @keyframes sa-fadein {
   from { opacity: 0; transform: translateY(16px); }
@@ -5551,7 +5568,7 @@ onUnmounted(() => {
 }
 
 .sa-chat-panel.is-detail-hidden .sa-ai-cards {
-  max-width: 1240px;
+  max-width: 880px;
 }
 
 .sa-result-chain {
@@ -5574,7 +5591,7 @@ onUnmounted(() => {
 .sa-chat-panel.is-detail-hidden .sa-inline-visuals,
 .sa-chat-panel.is-detail-hidden .sa-flow-handoff,
 .sa-chat-panel.is-detail-hidden .sa-confirm-card {
-  max-width: 1240px;
+  max-width: 880px;
 }
 
 .sa-inline-visuals {
