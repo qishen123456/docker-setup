@@ -290,6 +290,33 @@ const amountText = (value) => {
   return numeric.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
+const formatAmountInWan = (value) => {
+  const numeric = toNumber(value)
+  if (numeric === null) return ''
+  const abs = Math.abs(numeric)
+  if (abs >= 10000) return `${(numeric / 10000).toFixed(2).replace(/\.?0+$/, '')}亿`
+  return `${numeric.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}万`
+}
+
+const parseAmountInWan = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const text = String(value).trim()
+  const numeric = Number(text.replace(/[^0-9.-]/g, ''))
+  if (!Number.isFinite(numeric)) return null
+  if (text.includes('亿')) return numeric * 10000
+  if (text.includes('万')) return numeric
+  return numeric
+}
+
+const deriveRemain = (task, actual, remain) => {
+  if (remain !== null && remain !== undefined && !Number.isNaN(Number(remain))) return Number(remain)
+  if (task === null || task === undefined || actual === null || actual === undefined) return null
+  const diff = Number(task) - Number(actual)
+  if (!Number.isFinite(diff)) return null
+  return Math.max(diff, 0)
+}
+
 const questionText = computed(() => cleanText(props.question || props.title))
 const chineseNumberMap = {
   一: 1,
@@ -406,12 +433,12 @@ const specDigestRows = computed(() => {
       level: cleanText(item?.levelLabel || props.dataset?.report_spec?.scope?.compareLevelLabel || ''),
       rate: rateValue,
       rateText: rate?.value || (rateValue !== null ? `${rateValue.toFixed(2).replace(/\.?0+$/, '')}%` : ''),
-      task: toNumber(task?.value),
-      actual: toNumber(actual?.value),
-      remain: toNumber(remain?.value),
+      task: parseAmountInWan(task?.value),
+      actual: parseAmountInWan(actual?.value),
+      remain: deriveRemain(parseAmountInWan(task?.value), parseAmountInWan(actual?.value), parseAmountInWan(remain?.value)),
       taskText: task?.value || '',
       actualText: actual?.value || '',
-      remainText: remain?.value || '',
+      remainText: remain?.value || formatAmountInWan(deriveRemain(parseAmountInWan(task?.value), parseAmountInWan(actual?.value), parseAmountInWan(remain?.value))),
     }
   }).filter(item => item.name)
   const level = digestCompareLevel.value
@@ -431,6 +458,9 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   const actualKey = rowKeys.find(key => /年度开单|开单金额|开单|完成|实际|销售/i.test(key) && !/达成率|完成率|率/i.test(key)) || ''
   const remainKey = rowKeys.find(key => /剩余任务|剩余|缺口|差额|remain/i.test(key)) || ''
   const rankGroupKey = findColumn(row, [/排名分组/])
+  const taskValue = parseAmountInWan(taskKey ? row[taskKey] : null)
+  const actualValue = parseAmountInWan(actualKey ? row[actualKey] : null)
+  const remainValue = deriveRemain(taskValue, actualValue, parseAmountInWan(remainKey ? row[remainKey] : null))
   return {
     name: cleanText(nameKey ? row[nameKey] : ''),
     parent: cleanText(parentKey ? row[parentKey] : ''),
@@ -438,12 +468,12 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     level: cleanText(levelKey ? row[levelKey] : ''),
     rate: toNumber(rateKey ? row[rateKey] : null),
     rateText: rateText(row),
-    task: toNumber(taskKey ? row[taskKey] : null),
-    actual: toNumber(actualKey ? row[actualKey] : null),
-    remain: toNumber(remainKey ? row[remainKey] : null),
-    taskText: amountText(taskKey ? row[taskKey] : null),
-    actualText: amountText(actualKey ? row[actualKey] : null),
-    remainText: amountText(remainKey ? row[remainKey] : null),
+    task: taskValue,
+    actual: actualValue,
+    remain: remainValue,
+    taskText: formatAmountInWan(taskValue),
+    actualText: formatAmountInWan(actualValue),
+    remainText: formatAmountInWan(remainValue),
     rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
     raw: row,
   }
@@ -734,7 +764,6 @@ const sortedByRateAsc = computed(() => (
 const sortedByRateDesc = computed(() => [...sortedByRateAsc.value].reverse())
 
 const managementLayerRows = computed(() => {
-  if (specDigestRows.value.length >= 2) return specDigestRows.value
   const focus = resolveFocusRow(normalizedRows.value)
   const focusName = cleanText(reportSpec.value?.scope?.focusNode || focus?.name || '')
   if (focusName) {
@@ -1237,7 +1266,7 @@ const comparisonGapItems = computed(() => {
     const diff = Math.abs(left.actual - right.actual)
     const winner = left.actual >= right.actual ? left.name : right.name
     const loser = left.actual >= right.actual ? right.name : left.name
-    items.push({ label: rows.length > 2 ? '首尾开单差' : '开单差', value: `${winner} 比 ${loser} 多 ${amountText(diff)}` })
+    items.push({ label: rows.length > 2 ? '首尾开单差' : '开单差', value: `${winner} 比 ${loser} 多 ${formatAmountInWan(diff)}` })
   }
   return items
 })
@@ -1278,7 +1307,7 @@ const comparisonGapLine = computed(() => {
     const diff = Math.abs(left.actual - right.actual)
     const winner = left.actual >= right.actual ? left.name : right.name
     const loser = left.actual >= right.actual ? right.name : left.name
-    lines.push(`${winner}开单金额比${loser}高${amountText(diff)}`)
+    lines.push(`${winner}开单金额比${loser}高${formatAmountInWan(diff)}`)
   }
   return lines.length ? `差异：${lines.join('，')}。` : ''
 })
@@ -1748,10 +1777,10 @@ const supportLines = computed(() => {
       lines.push(`达成率差距：${leader.name}${leader.rateText || ''}，${pressure.name}${pressure.rateText || ''}，相差${diff}个百分点。`)
     }
     if (taskRows.length >= 2) {
-      lines.push(`任务体量：${taskRows[0].name}任务${taskRows[0].taskText || amountText(taskRows[0].task)}，${taskRows[taskRows.length - 1].name}任务${taskRows[taskRows.length - 1].taskText || amountText(taskRows[taskRows.length - 1].task)}。`)
+      lines.push(`任务体量：${taskRows[0].name}任务${taskRows[0].taskText || formatAmountInWan(taskRows[0].task)}，${taskRows[taskRows.length - 1].name}任务${taskRows[taskRows.length - 1].taskText || formatAmountInWan(taskRows[taskRows.length - 1].task)}。`)
     }
     if (remainRows.length >= 2) {
-      lines.push(`缺口压力：${remainRows[0].name}缺口${remainRows[0].remainText || amountText(remainRows[0].remain)}，${remainRows[remainRows.length - 1].name}缺口${remainRows[remainRows.length - 1].remainText || amountText(remainRows[remainRows.length - 1].remain)}。`)
+      lines.push(`缺口压力：${remainRows[0].name}缺口${remainRows[0].remainText || formatAmountInWan(remainRows[0].remain)}，${remainRows[remainRows.length - 1].name}缺口${remainRows[remainRows.length - 1].remainText || formatAmountInWan(remainRows[remainRows.length - 1].remain)}。`)
     }
     return lines.filter(Boolean)
   }
@@ -1779,7 +1808,7 @@ const supportLines = computed(() => {
       ? Math.abs(leaderValue - tailValue)
       : null
     const gapText = metricGap !== null
-      ? (rankingMetricMeta.value.key === 'rate' ? `${metricGap.toFixed(2).replace(/\.?0+$/, '')}个百分点` : amountText(metricGap))
+      ? (rankingMetricMeta.value.key === 'rate' ? `${metricGap.toFixed(2).replace(/\.?0+$/, '')}个百分点` : formatAmountInWan(metricGap))
       : ''
     const riskCount = shown.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
     return [
@@ -2766,18 +2795,20 @@ const actionItems = computed(() => {
 .sa-report-debug-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 3px;
+  margin-top: 6px;
 }
 
 .sa-report-debug-strip span {
-  padding: 3px 8px;
+  padding: 1px 5px;
   border-radius: 999px;
   border: 1px solid rgba(29, 33, 41, 0.08);
   background: #f7f8fa;
   color: #4e5969;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 9px;
+  line-height: 1.2;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .sa-report-debug-strip .is-success {

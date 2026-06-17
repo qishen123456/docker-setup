@@ -190,6 +190,17 @@
                     />
 
                     <div
+                      v-else-if="shouldShowResultChain(msg)"
+                      class="sa-result-empty"
+                    >
+                      <div class="sa-result-empty-icon">📭</div>
+                      <div class="sa-result-empty-title">未查询到可用数据</div>
+                      <div class="sa-result-empty-desc">
+                        执行链路已完成，但当前结果中没有可展示的数据。可能原因：当前账号权限范围未覆盖该对象、问题条件未命中任何记录，或数据集配置已变更。可尝试切换账号、调整问题范围，或联系管理员检查数据权限。
+                      </div>
+                    </div>
+
+                    <div
                       v-if="getVisualPreviews(msg).length"
                       class="sa-inline-visuals"
                       :class="{ 'is-single': getVisualPreviews(msg).length === 1 }"
@@ -3966,6 +3977,9 @@ const shouldShowLiveFeed = (msg) => {
 
 const getLiveFeedMode = (msg) => {
   if (msg?.data?.aborted || session.state.status === 'canceled') return 'canceled'
+  if (!msg?.data?.aborted && session.state.status === 'completed' && (isCurrentSessionMessage(msg) || isLatestAiMessage(msg))) {
+    return 'completed'
+  }
   if (msg?.loading) return 'live'
   return 'completed'
 }
@@ -4093,10 +4107,6 @@ const isAbortLikeInteractionError = (error) => {
 const getMessageElapsedLabel = (msg) => {
   if (msg?.loading && isCurrentSessionMessage(msg)) {
     return formatElapsedLabel(elapsed.value)
-  }
-  const totalDuration = Number(msg?.data?.total_duration || 0)
-  if (totalDuration > 0) {
-    return formatElapsedLabel(totalDuration > 120 ? totalDuration / 1000 : totalDuration)
   }
   return ''
 }
@@ -5585,6 +5595,40 @@ onUnmounted(() => {
 
 .sa-result-chain > * {
   width: 100%;
+}
+
+.sa-result-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 720px;
+  padding: 28px 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed rgba(29, 33, 41, 0.12);
+  text-align: center;
+}
+
+.sa-result-empty-icon {
+  font-size: 32px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.sa-result-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-title, #1d2129);
+}
+
+.sa-result-empty-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary, #4e5969);
+  max-width: 520px;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-result-chain,

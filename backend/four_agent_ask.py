@@ -1877,23 +1877,34 @@ LIMIT {rank_limit}
         names = self._resolved_entity_names(context) if include_resolved else []
         text = str(question or "").replace("\n", " ").strip()
 
+        # 优先提取带角色前缀的具体人名（如“业务代表靳锋”），角色前缀比语义解析更精确，
+        # 避免把“商用事业部”这样的数据集根节点别名误判为查询主体。
+        role_person_names = self._role_person_subject_names(text)
+        if role_person_names:
+            for candidate in role_person_names:
+                if candidate not in names:
+                    names.append(candidate)
+            return names
+
         dataset = self._safe_dict(context.get("dataset"))
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         if profile:
             semantic = resolve_member_mentions(question, profile)
             for name in semantic.get("all_members") or []:
                 value = str(name or "").strip()
-                if value and value not in names:
+                if not value:
+                    continue
+                expanded = self._expand_coordinated_subject_names(value)
+                if expanded:
+                    for item in expanded:
+                        if item and item not in names:
+                            names.append(item)
+                elif value not in names:
                     names.append(value)
             if names:
                 return names
 
-        role_person_names = self._role_person_subject_names(text)
-        if role_person_names:
-            return role_person_names
-
-        role_person_names = self._role_person_subject_names(text)
-        for candidate in role_person_names:
+        for candidate in self._role_person_subject_names(text):
             if candidate not in names:
                 names.append(candidate)
 
@@ -1908,10 +1919,12 @@ LIMIT {rank_limit}
             if cleaned and cleaned not in names:
                 names.append(cleaned)
 
+        # 支持并列人名："赵标和靳锋的业绩"、"赵标、靳锋及钱明的业绩"
+        coordinated_name = r"[\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、|,|，)[\u4e00-\u9fa5]{2,4})*"
         person_patterns = [
-            r"(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)\s*([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现)",
-            r"(?:问的是|查询的是|看的是|主体是|节点是|人员是|业务员是|业务代表是)\s*([\u4e00-\u9fa5]{2,6})",
-            r"([\u4e00-\u9fa5]{2,4})(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)",
+            r"(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)\s*(" + coordinated_name + r")(?:的)?(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现)",
+            r"(?:问的是|查询的是|看的是|主体是|节点是|人员是|业务员是|业务代表是)\s*(" + coordinated_name + r")",
+            r"(?<![\u4e00-\u9fa5])(" + coordinated_name + r")(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)",
         ]
         for pattern in person_patterns:
             for match in re.findall(pattern, text):
@@ -2289,7 +2302,11 @@ LIMIT {rank_limit}
             dimension_name = str(entity.get("dimension_name") or "").strip()
             for member in entity.get("members") or []:
                 member_name = str(member or "").strip()
-                if not member_name or member_name not in member_map:
+                if not member_name:
+                    continue
+                # 允许不在画像中的人名（如业务代表）
+                is_person_name = re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", member_name) is not None
+                if not is_person_name and member_name not in member_map:
                     continue
                 resolved_dimension = dimension_name or member_map.get(member_name) or ""
                 if member_name not in ordered_members:
@@ -2376,6 +2393,9 @@ LIMIT {rank_limit}
             for term in terms:
                 if term and str(term) in normalized_question:
                     return True
+        # 问题中包含显式人名（如"赵标和靳锋的业绩"、"赵标的业绩"）也应触发 Agent1.5 解析
+        if re.search(r"[\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、)[\u4e00-\u9fa5]{2,4})?(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)", normalized_question):
+            return True
         return False
 
     def _resolve_question_entities(
@@ -2939,6 +2959,15 @@ LIMIT {rank_limit}
         candidate_ids = [item[0]["id"] for item in ranked_candidates[:3]]
         candidate_names = [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked_candidates[:3]]
         compact_question = re.sub(r"\s+", "", str(question or ""))
+        alias_scores = [
+            (item[0], self._dataset_alias_match_score(question, item[0]))
+            for item in ranked_candidates[:3]
+        ]
+        alias_scores.sort(key=lambda item: item[1], reverse=True)
+        best_alias_score = alias_scores[0][1] if alias_scores else 0
+        second_alias_score = alias_scores[1][1] if len(alias_scores) > 1 else 0
+        if best_alias_score >= 90 and best_alias_score > second_alias_score:
+            return None
         ambiguous_terms = ["分公司", "组织", "代表处", "条线", "事业部", "区域", "部门", "团队"]
         branch_only_cross_bu = (
             "分公司" in compact_question
@@ -3723,9 +3752,12 @@ ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
 
-        role_person_entity_names = self._role_person_subject_names(normalized_question)
-        explicit_subject_names = self._question_subject_names(normalized_question, context, include_resolved=False)
-        entity_names = role_person_entity_names or explicit_subject_names or self._resolved_entity_names(context)
+        # 优先使用 Agent1 解析的实体（准确性最高），兜底再用本地规则
+        entity_names = self._resolved_entity_names(context)
+        if not entity_names:
+            entity_names = self._role_person_subject_names(normalized_question)
+        if not entity_names:
+            entity_names = self._question_subject_names(normalized_question, context, include_resolved=False)
         if not entity_names:
             profile = get_dataset_profile(dataset_code, dataset_name)
             if profile:
@@ -5092,30 +5124,7 @@ Agent3 复核结果：
                 context,
                 trace=trace,
             )
-            explicit_subject_names = self._question_subject_names(
-                route.get("refined_query", question),
-                context,
-                include_resolved=False,
-            )
-            resolved_names = self._resolved_entity_names(context)
-            explicit_subject_keys = {self._normalize_entity_key(item) for item in explicit_subject_names}
-            resolved_name_keys = {self._normalize_entity_key(item) for item in resolved_names}
-            if explicit_subject_names and not explicit_subject_keys.intersection(resolved_name_keys):
-                context["resolved_entities"] = {
-                    "intent": "single" if len(explicit_subject_names) == 1 else "compare",
-                    "scope_mode": "single" if len(explicit_subject_names) == 1 else "compare",
-                    "entities": [
-                        {
-                            "dimension_name": "业务主体",
-                            "members": explicit_subject_names,
-                            "matched_aliases": explicit_subject_names,
-                            "source": "question_subject_override",
-                        }
-                    ],
-                    "all_members": explicit_subject_names,
-                    "confidence": 0.72 if len(explicit_subject_names) == 1 else 0.68,
-                    "source": "question_subject_override",
-                }
+            # Agent1 解析结果优先；仅当 Agent1 完全未解析出实体时，才用本地规则兜底
             if not self._resolved_entity_names(context):
                 subject_names = self._question_subject_names(route.get("refined_query", question), context)
                 if subject_names:

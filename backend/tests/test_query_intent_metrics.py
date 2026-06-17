@@ -131,6 +131,20 @@ class QueryIntentMetricTest(unittest.TestCase):
 
         self.assertEqual(names, ["赵标", "靳锋"])
 
+    def test_business_person_question_splits_two_names_without_role_prefix(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "angel_business_2026_phase1",
+                "dataset_name": "商用事业部（阶段一升级版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        names = service._question_subject_names("看下赵标和靳锋的业绩", context, include_resolved=False)
+
+        self.assertEqual(names, ["赵标", "靳锋"])
+
     def test_branch_comparison_question_splits_two_full_branch_names(self):
         service = self._service()
         context = {

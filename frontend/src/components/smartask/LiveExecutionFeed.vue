@@ -77,7 +77,9 @@ const props = defineProps({
 
 const clockNow = ref(Date.now())
 const thoughtRef = ref(null)
-const clockTimer = setInterval(() => {
+const frozenElapsedLabel = ref('')
+const hasFrozenElapsed = ref(false)
+let clockTimer = setInterval(() => {
   clockNow.value = Date.now()
 }, 1000)
 let thoughtScrollTimer = null
@@ -92,14 +94,46 @@ const formatDuration = (duration) => {
   return `${totalSeconds}s`
 }
 
-const feedElapsedLabel = computed(() => {
-  if (props.mode === 'canceled') return props.elapsedLabel || ''
-  const starts = (props.logs || [])
+const computeElapsedLabel = (elapsedLabel, logs) => {
+  if (elapsedLabel) return elapsedLabel
+  const starts = (logs || [])
     .map(log => Number(log?.startedAtMs))
     .filter(value => Number.isFinite(value) && value > 0)
   if (starts.length > 0) return formatDuration(clockNow.value - Math.min(...starts))
-  return props.elapsedLabel || ''
+  return ''
+}
+
+const feedElapsedLabel = computed(() => {
+  if (props.mode === 'canceled' || props.mode === 'completed') {
+    // 完成/取消后必须冻结，不再受外部 elapsedLabel 影响，防止时间继续跳动
+    return frozenElapsedLabel.value || ''
+  }
+  return computeElapsedLabel(props.elapsedLabel, props.logs)
 })
+
+watch(
+  () => [props.mode, props.elapsedLabel, props.logs],
+  ([mode, elapsedLabel, logs]) => {
+    if (mode !== 'completed' && mode !== 'canceled') {
+      frozenElapsedLabel.value = ''
+      hasFrozenElapsed.value = false
+      if (!clockTimer) {
+        clockTimer = setInterval(() => {
+          clockNow.value = Date.now()
+        }, 1000)
+      }
+      return
+    }
+    if (hasFrozenElapsed.value) return
+    hasFrozenElapsed.value = true
+    frozenElapsedLabel.value = computeElapsedLabel(elapsedLabel, logs)
+    if (clockTimer) {
+      clearInterval(clockTimer)
+      clockTimer = null
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 const headBadge = computed(() => {
   if (props.mode === 'completed') return '执行完成'
@@ -323,7 +357,10 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  clearInterval(clockTimer)
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
   clearThoughtScrollTimer()
 })
 </script>

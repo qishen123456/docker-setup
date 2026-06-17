@@ -1554,11 +1554,12 @@ const settleRealtimeTimeline = () => {
   }
 
   const settledAt = new Date().toISOString()
+  const settledAtMs = Date.parse(settledAt) || Date.now()
   state.logs = state.logs.map((log) => {
     const status = ['error', 'warning'].includes(log?.status) ? log.status : 'success'
     const startedAtMs = Number(log?.startedAtMs)
     const duration = Number.isFinite(startedAtMs)
-      ? Math.max(Number(log?.duration || 0), Date.now() - startedAtMs)
+      ? Math.max(Number(log?.duration || 0), settledAtMs - startedAtMs)
       : log?.duration
     return createTimelineEvent({
       ...log,
@@ -1568,6 +1569,7 @@ const settleRealtimeTimeline = () => {
       durationLabel: formatDuration(duration),
       time: log?.time || nowText(),
       updatedAt: settledAt,
+      settledAtMs,
     })
   })
   return true

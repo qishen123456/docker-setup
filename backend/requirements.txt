@@ -32,3 +32,5 @@ psycopg2-binary>=2.9.0   # PostgreSQL 支持
 python-dotenv>=1.0.0
 requests>=2.31.0
 typing-inspection>=0.4.2
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

@@ -224,21 +224,23 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         self.assertIn("节点名称 IN ('靳锋')", sql)
         self.assertIn("JOIN 命中链路 父节点", sql)
 
-    def test_business_person_role_prefix_overrides_root_dataset_alias(self):
+    def test_agent1_resolved_entities_take_priority_over_local_rules(self):
+        """Agent1 解析结果优先，本地规则兜底"""
         service = object.__new__(FourAgentAskService)
         context = {
             "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
             "resolved_entities": {
-                "all_members": ["商用事业部"],
-                "entities": [{"members": ["商用事业部"]}],
+                "all_members": ["赵标", "靳锋"],
+                "entities": [{"members": ["赵标", "靳锋"]}],
             },
             "data_dictionary": [{"jsonb_key": "业务部"}],
         }
 
-        sql = service._build_rule_based_sql("看下商用业务代表靳锋 的业绩情况", {}, context)
+        sql = service._build_rule_based_sql("看下赵标和靳锋的业绩", {}, context)
 
-        self.assertIn("节点名称 IN ('靳锋')", sql)
-        self.assertNotIn("节点名称 IN ('商用事业部')", sql)
+        # 多主体对比走并行查询，不是递归 CTE
+        self.assertIn("节点名称 IN ('赵标','靳锋')", sql)
+        self.assertNotIn("节点名称 IN ('标和靳锋')", sql)
 
     def test_question_subject_names_can_ignore_resolved_root_alias(self):
         service = object.__new__(FourAgentAskService)
@@ -254,7 +256,8 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
 
         self.assertEqual(names, ["赵标"])
 
-    def test_business_person_question_overrides_resolved_root_alias(self):
+    def test_agent1_resolved_root_alias_used_when_no_explicit_person(self):
+        """Agent1 解析出根节点别名且无显式人名时，使用 Agent1 结果"""
         service = object.__new__(FourAgentAskService)
         context = {
             "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
@@ -265,10 +268,9 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
             "data_dictionary": [{"jsonb_key": "业务部"}],
         }
 
-        sql = service._build_rule_based_sql("看下赵标的业绩", {}, context)
+        sql = service._build_rule_based_sql("看下商用事业部的业绩", {}, context)
 
-        self.assertIn("节点名称 IN ('赵标')", sql)
-        self.assertNotIn("节点名称 IN ('商用事业部')", sql)
+        self.assertIn("节点名称 IN ('商用事业部')", sql)
 
     def test_single_person_layered_analysis_answers_person_first(self):
         service = object.__new__(FourAgentAskService)
