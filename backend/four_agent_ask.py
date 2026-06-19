@@ -498,8 +498,9 @@ LIMIT {rank_limit}
                 for candidate in candidates:
                     if candidate:
                         level_candidates.append((candidate, str(level)))
+            # Prefer the rightmost/longest level mention so that "东部分公司...代表处" targets 代表处
             for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
-                if candidate in text:
+                if text.rfind(candidate) != -1:
                     return level
             if "城市分公司" in text:
                 return "城市分公司"
@@ -542,19 +543,140 @@ LIMIT {rank_limit}
             })
             return intent
 
+        # Aggregate intent: grouping + aggregation keywords without numeric threshold
+        aggregate_tokens = ["每个", "各", "分别", "按.*汇总", "按.*统计", "按.*分组", "汇总", "统计每个", "统计各", "按.*算", "按.*计算"]
+        aggregate_metric_tokens = ["平均", "总和", "总额", "总量", "总数", "数量", "个数", "合计", "统计"]
+        has_aggregate_structure = any(re.search(token, text) for token in aggregate_tokens)
+        has_aggregate_metric = any(token in text for token in aggregate_metric_tokens)
+        asks_aggregate = has_aggregate_structure or has_aggregate_metric
+        if asks_aggregate and not re.search(r"\d+(?:\.\d+)?\s*%?", text):
+            intent.update({
+                "intent": "aggregate",
+                "target_level": target_level,
+                "output_mode": "aggregation",
+                "matched_triggers": ["aggregate"],
+            })
+            return intent
+
+        # Comparison intent: A 超过/大于/小于/等于 B (B is not a pure number)
+        # 1) Symbol comparison (e.g. A > B, A >= B)
+        symbol_match = re.search(r"(.+?)\s*([><=≥≤]+)\s*(.+)", text)
+        if symbol_match:
+            left_text = symbol_match.group(1).strip()
+            right_text = symbol_match.group(3).strip()
+            if not re.match(r"^\d+(?:\.\d+)?\s*%?", right_text):
+                symbol_op_map = {">": ">", "<": "<", "=": "=", "≥": ">=", "<=": "<=", ">=": ">=", "<=": "<="}
+                matched_op = symbol_match.group(2).strip()
+                if matched_op in symbol_op_map:
+                    intent.update({
+                        "intent": "comparison",
+                        "target_level": target_level,
+                        "comparison_left": left_text,
+                        "comparison_right": right_text,
+                        "comparison_operator": symbol_op_map[matched_op],
+                        "output_mode": "matched_nodes_first",
+                        "matched_triggers": ["comparison_symbol"],
+                    })
+                    return intent
+
+        # 2) Chinese comparison (e.g. A 大于 B)
+        comparison_match = re.search(r"(.+?)(超过|大于|高于|多于|不小于|小于|低于|少于|等于)(.+)", text)
+        if comparison_match:
+            left_text = comparison_match.group(1).strip()
+            right_text = comparison_match.group(3).strip()
+            # Exclude numeric comparisons handled by filter intent
+            if not re.match(r"^\d+(?:\.\d+)?\s*%?", right_text):
+                operator_map = {
+                    "超过": ">", "大于": ">", "高于": ">", "多于": ">", "不小于": ">=",
+                    "小于": "<", "低于": "<", "少于": "<",
+                    "等于": "=",
+                }
+                matched_op = comparison_match.group(2)
+                intent.update({
+                    "intent": "comparison",
+                    "target_level": target_level,
+                    "comparison_left": left_text,
+                    "comparison_right": right_text,
+                    "comparison_operator": operator_map.get(matched_op, ">"),
+                    "output_mode": "matched_nodes_first",
+                    "matched_triggers": ["comparison_chinese"],
+                })
+                return intent
+
+        # 3) "A 和 B 比/比较" structure
+        vs_match = re.search(r"(.+?)(?:和|与|跟|同)(.+?)(?:相比|比较|比|哪个|谁更)", text)
+        if vs_match:
+            left_text = vs_match.group(1).strip()
+            right_text = vs_match.group(2).strip()
+            if left_text and right_text:
+                intent.update({
+                    "intent": "comparison",
+                    "target_level": target_level,
+                    "comparison_left": left_text,
+                    "comparison_right": right_text,
+                    "comparison_operator": ">",
+                    "output_mode": "matched_nodes_first",
+                    "matched_triggers": ["comparison_vs"],
+                })
+                return intent
+
+        # 口语化意图映射
+        zero_actual_tokens = ["没有开张", "未开张", "零开单", "没开单", "无开单", "未开单", "没业绩", "零业绩", "无业绩", "未业绩"]
+        if any(token in text for token in zero_actual_tokens):
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": "actual",
+                "filter_metric_column": "年度开单金额",
+                "filter_operator": "=",
+                "filter_value": 0,
+                "direction": "asc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["spoken_zero_actual"],
+            })
+            return intent
+
+        lagging_tokens = ["拖后腿", "严重落后", "完成不好", "完成得不好", "承压", "风险大"]
+        if any(token in text for token in lagging_tokens):
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": "rate",
+                "filter_metric_column": "达成率",
+                "filter_operator": "<",
+                "filter_value": 10.0,
+                "direction": "asc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["spoken_lagging"],
+            })
+            return intent
+
         if filter_problem:
-            metric = next(
-                (
-                    item for item in (config.get("metrics") or [])
-                    if isinstance(item, dict)
-                    and (
-                        str(item.get("key") or "") == "rate"
-                        or "率" in str(item.get("label") or item.get("column") or "")
-                        or "rate" in str(item.get("key") or item.get("column") or "").lower()
-                    )
-                ),
-                {},
-            )
+            metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
+            text_lower = text.lower()
+            metric_scores = []
+            for m in metrics:
+                key = str(m.get("key") or "").lower()
+                label = str(m.get("label") or "").lower()
+                col = str(m.get("column") or "").lower()
+                score = 0
+                if label and label in text_lower:
+                    score += 100
+                if col and col in text_lower:
+                    score += 100
+                if key == "rate" and any(t in text_lower for t in ["达成率", "完成率"]):
+                    score += 80
+                if key == "actual" and any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"]):
+                    score += 80
+                if key == "task" and any(t in text_lower for t in ["任务", "目标"]):
+                    score += 80
+                if key == "remain" and any(t in text_lower for t in ["剩余", "缺口", "差额", "待完成"]):
+                    score += 80
+                if score > 0:
+                    metric_scores.append((score, m))
+            metric = max(metric_scores, key=lambda x: x[0])[1] if metric_scores else {}
+            if not metric:
+                metric = next((m for m in metrics if str(m.get("key") or "") == "rate"), {})
             if not filter_operator:
                 filter_operator = "<"
             if filter_value is None and filter_operator == "<":
@@ -1622,6 +1744,8 @@ LIMIT {rank_limit}
             or "城市分公司" in level_hint_text
         )
         filter_intent = str(query_intent.get("intent") or "") == "filter"
+        comparison_intent = str(query_intent.get("intent") or "") == "comparison"
+        aggregate_intent = str(query_intent.get("intent") or "") == "aggregate"
 
         def question_key(value: Any) -> str:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
@@ -1674,9 +1798,9 @@ LIMIT {rank_limit}
                 "sample_rewritten": prepared.get("rewritten", False),
             }
 
-        # Filter questions should not be hijacked by ranking-style Golden SQL samples.
+        # Filter/comparison/aggregate questions should not be hijacked by ranking-style Golden SQL samples.
         # Prefer deterministic rule SQL; if unavailable, fall back to fresh generation.
-        if filter_intent:
+        if filter_intent or comparison_intent or aggregate_intent:
             if rule_based_sql:
                 return {
                     "mode": "rule_based",
@@ -3522,6 +3646,164 @@ LIMIT {rank_limit}
             return ""
 
         syyb_base_sql = self._build_syyb_base_sql(context)
+
+        intent_is_filter = query_intent.get("intent") == "filter"
+        intent_is_comparison = query_intent.get("intent") == "comparison"
+        intent_is_aggregate = query_intent.get("intent") == "aggregate"
+        filter_metric_column = str(query_intent.get("filter_metric_column") or "").strip()
+        filter_operator = str(query_intent.get("filter_operator") or "").strip()
+        filter_value = query_intent.get("filter_value")
+        allowed_filter_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
+
+        syyb_metric_map = {
+            "总任务金额": "总任务金额",
+            "总任务": "总任务金额",
+            "任务金额": "总任务金额",
+            "年度开单金额": "年度开单金额",
+            "年度开单": "年度开单金额",
+            "开单金额": "年度开单金额",
+            "开单": "年度开单金额",
+            "实际": "年度开单金额",
+            "达成率": "达成率",
+            "剩余任务金额": "剩余任务金额",
+            "剩余任务": "剩余任务金额",
+            "缺口": "剩余任务金额",
+        }
+
+        def map_syyb_metric(text: str) -> str:
+            for key, col in sorted(syyb_metric_map.items(), key=lambda x: -len(x[0])):
+                if key in text:
+                    return col
+            return ""
+
+        if intent_is_filter and filter_metric_column in allowed_filter_columns and filter_operator in {"<", "<=", ">", ">=", "="} and filter_value is not None:
+            try:
+                filter_value_sql = f"{float(filter_value):g}"
+            except (TypeError, ValueError):
+                filter_value_sql = ""
+            if filter_value_sql:
+                where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
+                if intent_target_level:
+                    where_parts.insert(0, f"层级 = '{intent_target_level}'")
+                spoken_filter_triggers = {"spoken_zero_actual", "spoken_lagging"}
+                matched_triggers = set(query_intent.get("matched_triggers") or [])
+                if not (matched_triggers & spoken_filter_triggers):
+                    level_values = {"分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司", "业务代表"}
+                    entity_names = [
+                        n for n in self._resolved_entity_names(context) if n
+                        and n not in level_values
+                        and len(n) >= 4
+                        and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
+                        and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到"])
+                    ]
+                    if entity_names:
+                        quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+                        where_parts.append(f"上级名称 IN ({quoted_entities})")
+                where_clause = " AND ".join(where_parts)
+                order_direction = "ASC" if filter_operator in {"<", "<="} else "DESC"
+                tie_breaker = "剩余任务金额 DESC, 条线 DESC, 节点名称" if filter_metric_column == "达成率" else "达成率 ASC, 条线 DESC, 节点名称"
+                return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+ORDER BY {filter_metric_column} {order_direction}, {tie_breaker}
+LIMIT 200
+""".strip()
+
+        if intent_is_comparison:
+            left_text = str(query_intent.get("comparison_left") or "").strip()
+            right_text = str(query_intent.get("comparison_right") or "").strip()
+            left_col = map_syyb_metric(left_text)
+            right_col = map_syyb_metric(right_text)
+            op = str(query_intent.get("comparison_operator") or ">")
+            if left_col and right_col:
+                where_parts = [f"{left_col} {op} {right_col}"]
+                if intent_target_level:
+                    where_parts.insert(0, f"层级 = '{intent_target_level}'")
+                elif "代表处" in normalized_question:
+                    where_parts.insert(0, "层级 = '代表处'")
+                elif "业务代表" in normalized_question:
+                    where_parts.insert(0, "层级 = '业务代表'")
+                elif "分公司" in normalized_question or "业务部" in normalized_question:
+                    where_parts.insert(0, "层级 IN ('分公司', '业务部')")
+                where_clause = " AND ".join(where_parts)
+                return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+ORDER BY {left_col} DESC, 条线 DESC, 节点名称
+LIMIT 200
+""".strip()
+
+        if intent_is_aggregate:
+            group_level = intent_target_level
+            if not group_level:
+                if "业务代表" in normalized_question:
+                    group_level = "业务代表"
+                elif "代表处" in normalized_question:
+                    group_level = "代表处"
+                elif "分公司" in normalized_question or "业务部" in normalized_question:
+                    group_level = "分公司"
+                elif "条线" in normalized_question:
+                    group_level = "条线"
+                else:
+                    group_level = "分公司"
+
+            group_by_field = "节点名称"
+            where_level = f"层级 = '{group_level}'"
+            if group_level == "条线":
+                group_by_field = "条线"
+                where_level = "条线 IN ('区域条线', '行业条线')"
+            elif "下属" in normalized_question and "代表处" in normalized_question:
+                group_by_field = "上级名称"
+                where_level = "层级 = '代表处'"
+
+            if "平均" in normalized_question:
+                if "达成率" in normalized_question:
+                    agg_select = "AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量"
+                elif "任务" in normalized_question:
+                    agg_select = "AVG(总任务金额) AS 平均任务金额, SUM(总任务金额) AS 总任务金额"
+                elif "开单" in normalized_question or "实际" in normalized_question:
+                    agg_select = "AVG(年度开单金额) AS 平均开单金额, SUM(年度开单金额) AS 总开单金额"
+                else:
+                    agg_select = "AVG(达成率) AS 平均达成率, SUM(年度开单金额) AS 总开单金额"
+            elif "数量" in normalized_question or "个数" in normalized_question or "多少个" in normalized_question:
+                agg_select = "COUNT(*) AS 节点数量"
+            else:
+                if "任务" in normalized_question:
+                    agg_select = "SUM(总任务金额) AS 总任务金额, AVG(达成率) AS 平均达成率"
+                else:
+                    agg_select = "SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率"
+
+            if "总开单金额" in agg_select:
+                order_by = "总开单金额 DESC NULLS LAST"
+            elif "总任务金额" in agg_select:
+                order_by = "总任务金额 DESC NULLS LAST"
+            elif "节点数量" in agg_select:
+                order_by = "节点数量 DESC NULLS LAST"
+            else:
+                order_by = "分组名称"
+
+            return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT
+    {group_by_field} AS 分组名称,
+    {agg_select}
+FROM 汇总结果
+WHERE {where_level}
+GROUP BY {group_by_field}
+ORDER BY {order_by}
+LIMIT 200
+""".strip()
+
         ranking_tokens = ["排名", "最低", "最高", "最好", "最差", "Top", "top", "前", "后", "第一", "倒数第一"]
         has_ranking_intent = (
             intent_name == "ranking"
@@ -3663,6 +3945,7 @@ ORDER BY 全局排名, {metric_column} {order_direction}, 剩余任务金额 DES
 LIMIT {rank_limit}
 """.strip()
             if target_is_office or "代表处" in normalized_question:
+                asks_extreme_rank = any(token in normalized_question for token in ["最好", "最差", "最高", "最低", "哪个", "第一", "倒数第一"])
                 if rank_sides == "both":
                     return self._build_ranked_select_sql(
                         source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
@@ -3675,7 +3958,7 @@ LIMIT {rank_limit}
                         rank_sides=rank_sides,
                         tie_breaker="剩余任务金额 DESC, 节点名称",
                     )
-                if configured_limit > 0:
+                if configured_limit > 0 or asks_extreme_rank:
                     return f"""
 WITH 汇总结果 AS (
 {syyb_base_sql}
@@ -3723,7 +4006,7 @@ LIMIT 50
                     where_clause="层级 = '业务部'",
                     metric_column=phase1_metric_column,
                     direction=order_direction,
-                    rank_limit=rank_limit if configured_limit or rank_sides == "both" else 20,
+                    rank_limit=rank_limit,
                     rank_sides=rank_sides,
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
@@ -3735,7 +4018,7 @@ LIMIT 50
                     where_clause="层级 = '分公司'",
                     metric_column=phase1_metric_column,
                     direction=order_direction,
-                    rank_limit=rank_limit if configured_limit or rank_sides == "both" else 20,
+                    rank_limit=rank_limit,
                     rank_sides=rank_sides,
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
@@ -3974,11 +4257,15 @@ WHERE 节点名称 = '消费者事业部'
    )
 """
 
+        intent_is_comparison = query_intent.get("intent") == "comparison"
+        intent_is_aggregate = query_intent.get("intent") == "aggregate"
+
         channel_metric = ""
-        for candidate in ["燃气定制", "新零售", "线下", "地产"]:
-            if candidate in normalized_question:
-                channel_metric = candidate
-                break
+        if not intent_is_comparison and not intent_is_aggregate:
+            for candidate in ["燃气定制", "新零售", "线下", "地产"]:
+                if candidate in normalized_question:
+                    channel_metric = candidate
+                    break
         if channel_metric:
             task_metric_expr = f"COALESCE({channel_metric}任务_万元, 0) * 10000"
             actual_metric_expr = f"COALESCE({channel_metric}实际_万元, 0) * 10000"
@@ -4159,15 +4446,138 @@ WITH 字段提取 AS (
             except (TypeError, ValueError):
                 filter_value_sql = ""
             if filter_value_sql:
+                where_parts = [f"层级 = '{filter_level}'", f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
+                spoken_filter_triggers = {"spoken_zero_actual", "spoken_lagging"}
+                matched_triggers = set(query_intent.get("matched_triggers") or [])
+                if not (matched_triggers & spoken_filter_triggers):
+                    level_values = {"分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司", "业务代表"}
+                    entity_names = [
+                        n for n in self._resolved_entity_names(context) if n
+                        and n not in level_values
+                        and len(n) >= 4
+                        and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
+                        and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到"])
+                    ]
+                    if entity_names:
+                        quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+                        where_parts.append(f"上级名称 IN ({quoted_entities})")
                 order_direction = "ASC" if filter_operator in {"<", "<="} else "DESC"
                 tie_breaker = "剩余任务金额 DESC, 上级名称, 节点名称" if filter_metric_column == "达成率" else "达成率 ASC, 上级名称, 节点名称"
+                where_clause = " AND ".join(where_parts)
                 return f"""
 {base_sql}
 SELECT *
 FROM 汇总结果
-WHERE 层级 = '{filter_level}'
-  AND {filter_metric_column} {filter_operator} {filter_value_sql}
+WHERE {where_clause}
 ORDER BY {filter_metric_column} {order_direction}, {tie_breaker}
+LIMIT 200
+""".strip()
+
+        consumer_metric_map = {
+            "总实际_万": "年度开单金额",
+            "总实际": "年度开单金额",
+            "线下实际_万": "线下实际_万元",
+            "线下实际": "线下实际_万元",
+            "新零售实际_万": "新零售实际_万元",
+            "新零售实际": "新零售实际_万元",
+            "燃气定制实际_万": "燃气定制实际_万元",
+            "燃气定制实际": "燃气定制实际_万元",
+            "地产实际_万": "地产实际_万元",
+            "地产实际": "地产实际_万元",
+            "总任务_万": "总任务金额",
+            "总任务": "总任务金额",
+            "线下任务_万": "线下任务_万元",
+            "线下任务": "线下任务_万元",
+            "新零售任务_万": "新零售任务_万元",
+            "新零售任务": "新零售任务_万元",
+            "燃气定制任务_万": "燃气定制任务_万元",
+            "燃气定制任务": "燃气定制任务_万元",
+            "地产任务_万": "地产任务_万元",
+            "地产任务": "地产任务_万元",
+            "达成率": "达成率",
+        }
+
+        def map_consumer_metric(text: str) -> str:
+            for key, col in sorted(consumer_metric_map.items(), key=lambda x: -len(x[0])):
+                if key in text:
+                    return col
+            return ""
+
+        if intent_is_comparison:
+            left_text = str(query_intent.get("comparison_left") or "").strip()
+            right_text = str(query_intent.get("comparison_right") or "").strip()
+            left_col = map_consumer_metric(left_text)
+            right_col = map_consumer_metric(right_text)
+            op = str(query_intent.get("comparison_operator") or ">")
+            if left_col and right_col:
+                where_parts = []
+                if intent_target_level:
+                    where_parts.append(f"层级 = '{intent_target_level}'")
+                elif city_level_requested:
+                    where_parts.append("层级 = '城市分公司'")
+                elif "分公司" in normalized_question and "城市分公司" not in normalized_question:
+                    where_parts.append("层级 = '分公司'")
+                where_parts.append(f"{left_col} {op} {right_col}")
+                where_clause = " AND ".join(where_parts)
+                return f"""
+{base_sql}
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+ORDER BY {left_col} DESC, 节点名称
+LIMIT 200
+""".strip()
+
+        if intent_is_aggregate:
+            group_level = intent_target_level
+            if not group_level:
+                if "分公司" in normalized_question and "城市分公司" not in normalized_question:
+                    group_level = "分公司"
+                elif "城市分公司" in normalized_question:
+                    group_level = "城市分公司"
+                else:
+                    group_level = "分公司"
+            group_by_field = "节点名称"
+            where_level = f"层级 = '{group_level}'"
+            if "下属" in normalized_question and "城市分公司" in normalized_question:
+                group_by_field = "上级名称"
+                where_level = "层级 = '城市分公司'"
+
+            if "平均" in normalized_question:
+                if "达成率" in normalized_question:
+                    agg_select = "AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量"
+                elif "任务" in normalized_question:
+                    agg_select = "AVG(总任务金额) AS 平均任务金额, SUM(总任务金额) AS 总任务金额"
+                elif "实际" in normalized_question:
+                    agg_select = "AVG(年度开单金额) AS 平均实际金额, SUM(年度开单金额) AS 总实际金额"
+                else:
+                    agg_select = "AVG(达成率) AS 平均达成率, SUM(年度开单金额) AS 总实际金额"
+            elif "数量" in normalized_question or "个数" in normalized_question or "多少个" in normalized_question:
+                agg_select = "COUNT(*) AS 节点数量"
+            else:
+                if "任务" in normalized_question:
+                    agg_select = "SUM(总任务金额) AS 总任务金额, AVG(达成率) AS 平均达成率"
+                else:
+                    agg_select = "SUM(年度开单金额) AS 总实际金额, AVG(达成率) AS 平均达成率"
+
+            if "总实际金额" in agg_select:
+                order_by = "总实际金额 DESC NULLS LAST"
+            elif "总任务金额" in agg_select:
+                order_by = "总任务金额 DESC NULLS LAST"
+            elif "节点数量" in agg_select:
+                order_by = "节点数量 DESC NULLS LAST"
+            else:
+                order_by = "分组名称"
+
+            return f"""
+{base_sql}
+SELECT
+    {group_by_field} AS 分组名称,
+    {agg_select}
+FROM 汇总结果
+WHERE {where_level}
+GROUP BY {group_by_field}
+ORDER BY {order_by}
 LIMIT 200
 """.strip()
 
