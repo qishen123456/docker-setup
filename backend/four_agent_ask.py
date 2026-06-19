@@ -1418,6 +1418,86 @@ LIMIT {rank_limit}
                     lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
                 return "\n".join(lines)
 
+        filter_intent = str(query_intent.get("intent") or "") == "filter"
+        if filter_intent:
+            filter_metric_column = str(query_intent.get("filter_metric_column") or "").strip()
+            filter_metric_key = str(query_intent.get("filter_metric_key") or "").strip()
+            filter_metric = metric_by_key.get(filter_metric_key) or {}
+            if not filter_metric and filter_metric_column:
+                filter_metric = next(
+                    (item for item in metrics if filter_metric_column in {
+                        str(item.get("column") or ""),
+                        str(item.get("label") or ""),
+                    }),
+                    {},
+                )
+            filter_metric_column = filter_metric_column or str(filter_metric.get("column") or rate_col or "")
+            filter_metric_label = str(filter_metric.get("label") or filter_metric_column or "指标")
+            filter_operator = str(query_intent.get("filter_operator") or "").strip()
+            filter_value = query_intent.get("filter_value")
+            operator_text = {"<": "低于", "<=": "不高于", ">": "高于", ">=": "不低于", "=": "等于"}.get(filter_operator, filter_operator)
+            is_rate_metric = (
+                filter_metric.get("format") == "percent"
+                or "率" in filter_metric_label
+                or filter_metric_key == "rate"
+            )
+            threshold_text = self._format_metric(filter_value, "%" if is_rate_metric else "")
+            scoped_rows = [
+                row for row in valid_rows
+                if not target_level or normalized_text(row, level_col) == target_level
+            ]
+            if not scoped_rows:
+                scoped_rows = valid_rows
+            level_label = target_level or (normalized_text(scoped_rows[0], level_col) if scoped_rows else "节点")
+            lines = [
+                "## 业绩分析报告",
+                "",
+                "### 核心结论",
+                f"本轮筛选出 {len(scoped_rows)} 个{level_label}的{filter_metric_label}{operator_text}{threshold_text}。",
+                "",
+                "### 关键指标",
+            ]
+            for row in scoped_rows[:20]:
+                name = row_name(row)
+                rate = row_rate(row)
+                rate_text = self._format_metric(rate, "%") if rate is not None else "-"
+                task = format_metric_value(row_metric_value(row, task_col), task_metric)
+                actual = format_metric_value(row_metric_value(row, actual_col), actual_metric)
+                remain = format_metric_value(row_metric_value(row, remain_col), remain_metric)
+                if filter_metric_column == rate_col or filter_metric_key == "rate":
+                    lines.append(
+                        f"• **{name}**：达成率{rate_text}，任务{task}，开单{actual}，剩余{remain}"
+                    )
+                else:
+                    metric_value = row_metric_value(row, filter_metric_column) if filter_metric_column else None
+                    metric_text = format_metric_value(metric_value, filter_metric) if metric_value is not None else "-"
+                    lines.append(
+                        f"• **{name}**：{filter_metric_label}{metric_text}，达成率{rate_text}，"
+                        f"任务{task}，开单{actual}，剩余{remain}"
+                    )
+            if len(scoped_rows) > 20:
+                lines.append(f"• ... 以上展示前 20 个，共 {len(scoped_rows)} 个节点。")
+            risk_rows = [row for row in scoped_rows if row_rate(row) is not None and (row_rate(row) or 0) < 20]
+            lines.extend(
+                [
+                    "",
+                    "### 问题诊断",
+                    (
+                        f"• **风险节点：** 低于20%红线的节点 {len(risk_rows)} 个"
+                        + (f"，包括 {format_rank(risk_rows[:5])}。" if risk_rows else "，当前筛选结果中暂无。")
+                    ),
+                    "",
+                    "### 改进建议",
+                    "• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。",
+                    "• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。",
+                ]
+            )
+            if review_summary:
+                lines.extend(["", f"> SQL复核：{review_summary}"])
+            if error_message:
+                lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
+            return "\n".join(lines)
+
         if explicit_person_focus and focus_person_row:
             person_name = row_name(focus_person_row)
             parent_name = normalized_text(focus_person_row, parent_col) if parent_col else ""
