@@ -1,0 +1,1802 @@
+[
+  {
+    "no": 1,
+    "question": "朱卫锋的总任务金额是多少？",
+    "status": "success",
+    "duration": 25.36,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“朱卫锋的总任务金额是多少？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "朱卫锋的总任务金额是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "朱卫锋的总任务金额是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 2,
+    "question": "哪些节点的上级是“东部分公司”？",
+    "status": "success",
+    "duration": 13.52,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('东部分公司')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 28,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n东部分公司当前作为分公司，归属商用事业部：年度任务9500万，年度开单1270万，达成率13.37%，剩余任务8230万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 东部分公司 -> 年度开单1270万，任务9500万，达成率13.37%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务8230万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕东部分公司核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪些节点的上级是“东部分公司”？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪些节点的上级是“东部分公司”？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 3,
+    "question": "帮我查一下“上海代表处”的达成率。",
+    "status": "success",
+    "duration": 7.31,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('上海代表处')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n上海代表处当前作为代表处，归属东部分公司：年度任务1060万，年度开单208万，达成率19.64%，剩余任务852万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 上海代表处 -> 年度开单208万，任务1060万，达成率19.64%。\n• **归属链路：** 东部分公司 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务852万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕上海代表处核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合东部分公司横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "帮我查一下“上海代表处”的达成率。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "帮我查一下“上海代表处”的达成率。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 4,
+    "question": "属于“业务部”层级的节点有哪些？",
+    "status": "success",
+    "duration": 44.27,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“属于“业务部”层级的节点有哪些？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "属于“业务部”层级的节点有哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "属于“业务部”层级的节点有哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 5,
+    "question": "找出所有属于“区域条线”的数据。",
+    "status": "success",
+    "duration": 45.12,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“找出所有属于“区域条线”的数据。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出所有属于“区域条线”的数据。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出所有属于“区域条线”的数据。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 6,
+    "question": "商用事业部的年度开单是多少？",
+    "status": "success",
+    "duration": 10.55,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('商用事业部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 114,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n商用事业部当前作为事业部：年度任务4.55亿，年度开单7027万，达成率15.44%，剩余任务3.85亿。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 商用事业部 -> 年度开单7027万，任务4.55亿，达成率15.44%。\n• **归属链路：** 未识别上级 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务3.85亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕商用事业部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合上级组织横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "商用事业部的年度开单是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "商用事业部的年度开单是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 7,
+    "question": "谁是“餐饮业务部”的业务代表？",
+    "status": "success",
+    "duration": 17.69,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('餐饮业务部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n餐饮业务部当前作为业务部，归属商用事业部：年度任务1.05亿，年度开单1351万，达成率12.87%，剩余任务9149万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 餐饮业务部 -> 年度开单1351万，任务1.05亿，达成率12.87%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务9149万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕餐饮业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "谁是“餐饮业务部”的业务代表？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "谁是“餐饮业务部”的业务代表？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 8,
+    "question": "哪些代表处属于“南部分公司”？",
+    "status": "success",
+    "duration": 10.03,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('南部分公司')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 27,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n南部分公司当前作为分公司，归属商用事业部：年度任务8200万，年度开单1091万，达成率13.31%，剩余任务7109万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 南部分公司 -> 年度开单1091万，任务8200万，达成率13.31%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务7109万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕南部分公司核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪些代表处属于“南部分公司”？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪些代表处属于“南部分公司”？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 9,
+    "question": "筛选出剩余任务金额大于0的节点。",
+    "status": "success",
+    "duration": 30.26,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“筛选出剩余任务金额大于0的节点。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "筛选出剩余任务金额大于0的节点。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "筛选出剩余任务金额大于0的节点。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 10,
+    "question": "“甘青宁代表处”的各项指标数据是多少？",
+    "status": "success",
+    "duration": 9.56,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率\nFROM 汇总结果\nWHERE 层级 = '代表处'\nGROUP BY 节点名称\nORDER BY 总开单金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 25,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕““甘青宁代表处”的各项指标数据是多少？”返回 25 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 25 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=粤东代表处；总开单金额=5252840.1；平均达成率=18.43 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "“甘青宁代表处”的各项指标数据是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "“甘青宁代表处”的各项指标数据是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 11,
+    "question": "区域条线的总任务金额是多少？",
+    "status": "success",
+    "duration": 34.77,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“区域条线的总任务金额是多少？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "区域条线的总任务金额是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "区域条线的总任务金额是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 12,
+    "question": "行业条线下所有业务代表的年度开单总和是多少？",
+    "status": "success",
+    "duration": 10.56,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率\nFROM 汇总结果\nWHERE 层级 = '业务代表'\nGROUP BY 节点名称\nORDER BY 总开单金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 81,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“行业条线下所有业务代表的年度开单总和是多少？”返回 81 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 81 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=靳锋；总开单金额=8550967.9；平均达成率=9.5 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "行业条线下所有业务代表的年度开单总和是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "行业条线下所有业务代表的年度开单总和是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 13,
+    "question": "统计一下每个分公司的平均达成率。",
+    "status": "success",
+    "duration": 10.52,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量\nFROM 汇总结果\nWHERE 层级 = '分公司'\nGROUP BY 节点名称\nORDER BY 节点数量 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“统计一下每个分公司的平均达成率。”返回 4 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 4 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=东部分公司；平均达成率=13.37；节点数量=1 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "统计一下每个分公司的平均达成率。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "统计一下每个分公司的平均达成率。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 14,
+    "question": "业务部层级的总剩余任务是多少？",
+    "status": "success",
+    "duration": 41.35,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“业务部层级的总剩余任务是多少？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "业务部层级的总剩余任务是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "业务部层级的总剩余任务是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 15,
+    "question": "代表处层级一共有多少个节点？",
+    "status": "success",
+    "duration": 38.97,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“代表处层级一共有多少个节点？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "代表处层级一共有多少个节点？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "代表处层级一共有多少个节点？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 16,
+    "question": "按条线汇总他们的年度开单金额。",
+    "status": "success",
+    "duration": 13.0,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    条线 AS 分组名称,\n    SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率\nFROM 汇总结果\nWHERE 条线 IN ('区域条线', '行业条线')\nGROUP BY 条线\nORDER BY 总开单金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 2,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“按条线汇总他们的年度开单金额。”返回 2 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 2 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=区域条线；总开单金额=117134572.5；平均达成率=11.6971 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "按条线汇总他们的年度开单金额。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "按条线汇总他们的年度开单金额。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 17,
+    "question": "计算一下公共办公业务部的总任务金额。",
+    "status": "success",
+    "duration": 12.57,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('公共办公业务部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 5,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n公共办公业务部当前作为业务部，归属商用事业部：年度任务3000万，年度开单1771万，达成率59.04%，剩余任务1229万。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 公共办公业务部 -> 年度开单1771万，任务3000万，达成率59.04%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务1229万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕公共办公业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "计算一下公共办公业务部的总任务金额。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "计算一下公共办公业务部的总任务金额。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 18,
+    "question": "每个层级的平均任务金额是多少？",
+    "status": "success",
+    "duration": 0.16,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    AVG(总任务金额) AS 平均任务金额, SUM(总任务金额) AS 总任务金额\nFROM 汇总结果\nWHERE 层级 = '分公司'\nGROUP BY 节点名称\nORDER BY 总任务金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“每个层级的平均任务金额是多少？”返回 4 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 4 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=东部分公司；平均任务金额=95000000.0；总任务金额=95000000.0 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "每个层级的平均任务金额是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "每个层级的平均任务金额是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 19,
+    "question": "统计所有业务代表的平均剩余任务。",
+    "status": "success",
+    "duration": 7.31,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    AVG(总任务金额) AS 平均任务金额, SUM(总任务金额) AS 总任务金额\nFROM 汇总结果\nWHERE 层级 = '业务代表'\nGROUP BY 节点名称\nORDER BY 总任务金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 81,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“统计所有业务代表的平均剩余任务。”返回 81 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 81 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=靳锋；平均任务金额=90000000.0；总任务金额=90000000.0 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "统计所有业务代表的平均剩余任务。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "统计所有业务代表的平均剩余任务。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 20,
+    "question": "东部分公司下属所有代表处的年度开单总额是多少？",
+    "status": "success",
+    "duration": 12.08,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('东部分公司')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 28,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n东部分公司当前作为分公司，归属商用事业部：年度任务9500万，年度开单1270万，达成率13.37%，剩余任务8230万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 东部分公司 -> 年度开单1270万，任务9500万，达成率13.37%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务8230万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕东部分公司核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "东部分公司下属所有代表处的年度开单总额是多少？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "东部分公司下属所有代表处的年度开单总额是多少？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 21,
+    "question": "哪个业务代表的达成率最高？",
+    "status": "success",
+    "duration": 7.15,
+    "error": null,
+    "sql": "WITH 业务代表原始 AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        '' AS 业务部,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\n业务代表汇总 AS (\n    SELECT\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        '业务代表' AS 层级,\n        业务代表 AS 节点名称,\n        COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部') AS 上级名称,\n        NULLIF(分公司, '') AS 分公司,\n        NULLIF(代表处, '') AS 代表处,\n        NULLIF(业务部, '') AS 业务部,\n        concat_ws(' / ', NULLIF(分公司, ''), NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(业务代表, '')) AS 组织路径,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM 业务代表原始\n    WHERE 业务代表 <> ''\n    GROUP BY 分公司, 代表处, 业务部, 业务代表\n),\n业务代表结果 AS (\n    SELECT\n        条线,\n        层级,\n        组织路径,\n        节点名称,\n        上级名称,\n        分公司,\n        代表处,\n        业务部,\n        总任务金额,\n        年度开单金额,\n        CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n        ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\n    FROM 业务代表汇总\n)\n,\n业务代表全局排序 AS (\n    SELECT\n        *,\n        ROW_NUMBER() OVER (\n            ORDER BY 达成率 DESC, 剩余任务金额 DESC, 组织路径\n        ) AS 全局排名\n    FROM 业务代表结果\n)\nSELECT *\nFROM 业务代表全局排序\nWHERE 全局排名 <= 1\nORDER BY 全局排名, 达成率 DESC, 剩余任务金额 DESC, 组织路径\nLIMIT 1",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 1 个业务代表的排名结果：韩晓娇位列第1，达成率70.07%；韩晓娇位于末位，达成率70.07%。\n\n### 亮点分析\n• **榜首对象：** 韩晓娇 -> 达成率 70.07% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 韩晓娇 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 韩晓娇 -> 达成率 70.07% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 0 个，暂无明显低于20%的节点。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 1 个业务代表名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪个业务代表的达成率最高？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪个业务代表的达成率最高？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 22,
+    "question": "年度开单金额最低的3个代表处是谁？",
+    "status": "success",
+    "duration": 12.01,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n代表处全局排序 AS (\n    SELECT\n        *,\n        ROW_NUMBER() OVER (\n            ORDER BY 年度开单金额 ASC, 剩余任务金额 DESC, 节点名称\n        ) AS 全局排名\n    FROM 汇总结果\n    WHERE 层级 = '代表处'\n)\nSELECT *\nFROM 代表处全局排序\nWHERE 全局排名 <= 3\nORDER BY 全局排名, 年度开单金额 ASC, 剩余任务金额 DESC, 节点名称\nLIMIT 3",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按年度开单金额输出 3 个代表处的排名结果：黑龙江代表处位列第1，年度开单金额8.1万；吉林代表处位于末位，年度开单金额27.9万，首尾相差19.7万；但黑龙江代表处达成率仅4.06%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 黑龙江代表处 -> 年度开单金额 8.1万 -> 达成率 4.06% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 黑龙江代表处、餐饮、吉林代表处 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 吉林代表处 -> 年度开单金额 27.9万 -> 达成率 13.93% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 3 个，重点关注 黑龙江代表处 4.06%、餐饮 8.78%、吉林代表处 13.93%。\n\n### 改进建议\n• 先按年度开单金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个代表处名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "年度开单金额最低的3个代表处是谁？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "年度开单金额最低的3个代表处是谁？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 23,
+    "question": "任务金额排名前五的节点有哪些？",
+    "status": "success",
+    "duration": 29.98,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“任务金额排名前五的节点有哪些？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "任务金额排名前五的节点有哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "任务金额排名前五的节点有哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 24,
+    "question": "区域条线中，哪家分公司的剩余任务最多？",
+    "status": "success",
+    "duration": 9.68,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('哪家分公司')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“区域条线中，哪家分公司的剩余任务最多？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "区域条线中，哪家分公司的剩余任务最多？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "区域条线中，哪家分公司的剩余任务最多？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 25,
+    "question": "找出达成率最低的业务部。",
+    "status": "success",
+    "duration": 9.22,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n业务部排序 AS (\n    SELECT\n        *,\n        ROW_NUMBER() OVER (\n            ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称\n        ) AS 全局排名\n    FROM 汇总结果\n    WHERE 层级 = '业务部'\n)\nSELECT *\nFROM 业务部排序\nWHERE 全局排名 <= 1\nORDER BY 全局排名, 达成率 ASC, 剩余任务金额 DESC, 节点名称\nLIMIT 1",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 1 个业务部的排名结果：餐饮业务部位列第1，达成率12.87%；餐饮业务部位于末位，达成率12.87%。\n\n### 亮点分析\n• **榜首对象：** 餐饮业务部 -> 达成率 12.87% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 餐饮业务部 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 餐饮业务部 -> 达成率 12.87% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 餐饮业务部 12.87%。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 1 个业务部名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出达成率最低的业务部。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出达成率最低的业务部。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 26,
+    "question": "把所有代表处按照达成率从高到低排序。",
+    "status": "success",
+    "duration": 47.48,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“把所有代表处按照达成率从高到低排序。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "把所有代表处按照达成率从高到低排序。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "把所有代表处按照达成率从高到低排序。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 27,
+    "question": "行业条线里开单金额最高的人是谁？",
+    "status": "success",
+    "duration": 35.97,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“行业条线里开单金额最高的人是谁？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "行业条线里开单金额最高的人是谁？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "行业条线里开单金额最高的人是谁？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 28,
+    "question": "剩余任务最少的前三个节点是哪些？",
+    "status": "success",
+    "duration": 0.18,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('哪些')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“剩余任务最少的前三个节点是哪些？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "剩余任务最少的前三个节点是哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "剩余任务最少的前三个节点是哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 29,
+    "question": "哪个层级的平均达成率最高？",
+    "status": "success",
+    "duration": 10.97,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量\nFROM 汇总结果\nWHERE 层级 = '分公司'\nGROUP BY 节点名称\nORDER BY 节点数量 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“哪个层级的平均达成率最高？”返回 4 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 4 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=东部分公司；平均达成率=13.37；节点数量=1 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪个层级的平均达成率最高？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪个层级的平均达成率最高？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 30,
+    "question": "找出总任务金额最大和最小的节点。",
+    "status": "success",
+    "duration": 33.57,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“找出总任务金额最大和最小的节点。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出总任务金额最大和最小的节点。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出总任务金额最大和最小的节点。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 31,
+    "question": "属于“东部分公司”且达成率低于60%的代表处有哪些？",
+    "status": "success",
+    "duration": 12.37,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 层级 = '代表处' AND 达成率 < 60 AND 上级名称 IN ('东部分公司')\nORDER BY 达成率 ASC, 剩余任务金额 DESC, 条线 DESC, 节点名称\nLIMIT 200",
+    "row_count": 7,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 河南代表处、安徽代表处、湖北代表处、浙江代表处、江苏代表处、上海代表处 展开，共识别 1 个分析层级。代表处综合达成率 12.43%，代表处综合达成率 12.43%。\n\n### 亮点分析\n• **亮点：** 代表处 -> 综合达成率 12.43% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 代表处 -> 综合达成率 12.43% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 代表处 -> 用于定位问题落点。\n\n#### 区域条线｜代表处\n• **亮点：** 表现较好节点 -> 山东代表处 21.46%、上海代表处 19.64% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 河南代表处 4.26%、安徽代表处 7.77% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 河南代表处, 安徽代表处, 湖北代表处, 浙江代表处, 江苏代表处, 上海代表处, 山东代表处（共 7 个） -> 上级分组：东部分公司(7)。\n\n### 改进建议\n• 代表处：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 代表处：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 2 个相对承压节点，建议优先查看 河南代表处 4.26%、安徽代表处 7.77%；表现较好节点可参考 山东代表处 21.46%、上海代表处 19.64%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "属于“东部分公司”且达成率低于60%的代表处有哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "属于“东部分公司”且达成率低于60%的代表处有哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 32,
+    "question": "找出“行业条线”中，年度开单大于 5000000 且达成率大于80%的人。",
+    "status": "success",
+    "duration": 15.09,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('年度')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“找出“行业条线”中，年度开单大于 5000000 且达成率大于80%的人。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出“行业条线”中，年度开单大于 5000000 且达成率大于80%的人。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出“行业条线”中，年度开单大于 5000000 且达成率大于80%的人。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 33,
+    "question": "统计“南部分公司”下属代表处中，剩余任务不为0的节点数量。",
+    "status": "success",
+    "duration": 7.42,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('南部分公司')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 27,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n南部分公司当前作为分公司，归属商用事业部：年度任务8200万，年度开单1091万，达成率13.31%，剩余任务7109万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 南部分公司 -> 年度开单1091万，任务8200万，达成率13.31%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务7109万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕南部分公司核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "统计“南部分公司”下属代表处中，剩余任务不为0的节点数量。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "统计“南部分公司”下属代表处中，剩余任务不为0的节点数量。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 34,
+    "question": "哪些业务代表的任务金额超过了 10000000，但开单金额为0？",
+    "status": "success",
+    "duration": 9.37,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 层级 = '业务代表' AND 总任务金额 > 年度开单金额\nORDER BY 总任务金额 DESC, 条线 DESC, 节点名称\nLIMIT 200",
+    "row_count": 81,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 靳锋、付滨、韩晓娇、贾希、吴三英、徐会峰 展开，共识别 1 个分析层级。业务代表综合达成率 14.31%，业务代表综合达成率 14.31%。\n\n### 亮点分析\n• **亮点：** 业务代表 -> 综合达成率 14.31% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务代表 -> 综合达成率 14.31% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务代表 -> 用于定位问题落点。\n\n#### 行业条线 / 区域条线｜业务代表\n• **亮点：** 表现较好节点 -> 韩晓娇 70.07%、赵标 58.88%、贾希 38.22% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 董峰 0%、张松 0%、迟昊 0% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 靳锋, 付滨, 韩晓娇, 贾希, 吴三英, 徐会峰, 李文子, 丁杰, 史利伟, 王向辉, 朱小波, 王志军（共 81 个） -> 上级分组：餐饮业务部(3)、晋蒙（蒙西）代表处(1)、公共办公业务部(4)、粤东代表处(6)、浙江代表处(3)、江西代表处(3)。\n\n### 改进建议\n• 业务代表：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务代表：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 3 个相对承压节点，建议优先查看 董峰 0%、张松 0%、迟昊 0%；表现较好节点可参考 韩晓娇 70.07%、赵标 58.88%、贾希 38.22%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪些业务代表的任务金额超过了 10000000，但开单金额为0？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪些业务代表的任务金额超过了 10000000，但开单金额为0？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 35,
+    "question": "找出达成率在80%到100%之间的代表处。",
+    "status": "success",
+    "duration": 11.15,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 节点名称 IN ('之间的代表处','找出') OR 上级名称 IN ('之间的代表处','找出')\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“找出达成率在80%到100%之间的代表处。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出达成率在80%到100%之间的代表处。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出达成率在80%到100%之间的代表处。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 36,
+    "question": "属于“区域条线”且上级不是“商用事业部”的节点有哪些？",
+    "status": "success",
+    "duration": 13.39,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('商用事业部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 114,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n商用事业部当前作为事业部：年度任务4.55亿，年度开单7027万，达成率15.44%，剩余任务3.85亿。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 商用事业部 -> 年度开单7027万，任务4.55亿，达成率15.44%。\n• **归属链路：** 未识别上级 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务3.85亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕商用事业部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合上级组织横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "属于“区域条线”且上级不是“商用事业部”的节点有哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "属于“区域条线”且上级不是“商用事业部”的节点有哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 37,
+    "question": "行业条线里，剩余任务大于 1000000 的业务代表有哪些？",
+    "status": "success",
+    "duration": 12.05,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 层级 = '业务代表' AND 总任务金额 >= 1e+06\nORDER BY 总任务金额 DESC, 达成率 ASC, 条线 DESC, 节点名称\nLIMIT 200",
+    "row_count": 81,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 靳锋、付滨、韩晓娇、贾希、吴三英、李文子 展开，共识别 1 个分析层级。业务代表综合达成率 14.31%，业务代表综合达成率 14.31%。\n\n### 亮点分析\n• **亮点：** 业务代表 -> 综合达成率 14.31% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务代表 -> 综合达成率 14.31% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务代表 -> 用于定位问题落点。\n\n#### 行业条线 / 区域条线｜业务代表\n• **亮点：** 表现较好节点 -> 韩晓娇 70.07%、赵标 58.88%、贾希 38.22% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 董峰 0%、张松 0%、迟昊 0% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 靳锋, 付滨, 韩晓娇, 贾希, 吴三英, 李文子, 徐会峰, 丁杰, 史利伟, 王向辉, 朱小波, 王志军（共 81 个） -> 上级分组：餐饮业务部(3)、晋蒙（蒙西）代表处(1)、公共办公业务部(4)、粤东代表处(6)、江西代表处(3)、浙江代表处(3)。\n\n### 改进建议\n• 业务代表：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务代表：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 3 个相对承压节点，建议优先查看 董峰 0%、张松 0%、迟昊 0%；表现较好节点可参考 韩晓娇 70.07%、赵标 58.88%、贾希 38.22%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "行业条线里，剩余任务大于 1000000 的业务代表有哪些？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "行业条线里，剩余任务大于 1000000 的业务代表有哪些？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 38,
+    "question": "找出达成率高于平均水平的代表处。",
+    "status": "success",
+    "duration": 28.44,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    节点名称 AS 分组名称,\n    AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量\nFROM 汇总结果\nWHERE 层级 = '代表处'\nGROUP BY 节点名称\nORDER BY 节点数量 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 25,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“找出达成率高于平均水平的代表处。”返回 25 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 25 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=上海代表处；平均达成率=19.64；节点数量=1 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出达成率高于平均水平的代表处。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出达成率高于平均水平的代表处。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 39,
+    "question": "筛选出开单金额大于总任务金额的节点。",
+    "status": "success",
+    "duration": 9.68,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 年度开单金额 > 总任务金额\nORDER BY 年度开单金额 DESC, 条线 DESC, 节点名称\nLIMIT 200",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“筛选出开单金额大于总任务金额的节点。”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "筛选出开单金额大于总任务金额的节点。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "筛选出开单金额大于总任务金额的节点。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 40,
+    "question": "找出西部分公司里达成率排前两名的代表处。",
+    "status": "success",
+    "duration": 9.97,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n代表处全局排序 AS (\n    SELECT\n        *,\n        ROW_NUMBER() OVER (\n            ORDER BY 达成率 DESC, 剩余任务金额 DESC, 节点名称\n        ) AS 全局排名\n    FROM 汇总结果\n    WHERE 层级 = '代表处'\n)\nSELECT *\nFROM 代表处全局排序\nWHERE 全局排名 <= 2\nORDER BY 全局排名, 达成率 DESC, 剩余任务金额 DESC, 节点名称\nLIMIT 2",
+    "row_count": 2,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 2 个代表处的排名结果：山东代表处位列第1，达成率21.46%；上海代表处位于末位，达成率19.64%，首尾相差1.82 个百分点。\n\n### 亮点分析\n• **榜首对象：** 山东代表处 -> 达成率 21.46% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 山东代表处、上海代表处 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 上海代表处 -> 达成率 19.64% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 上海代表处 19.64%。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 2 个代表处名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "找出西部分公司里达成率排前两名的代表处。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "找出西部分公司里达成率排前两名的代表处。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 41,
+    "question": "大家今年一共完成了多少业绩？",
+    "status": "success",
+    "duration": 40.94,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“大家今年一共完成了多少业绩？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "大家今年一共完成了多少业绩？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "大家今年一共完成了多少业绩？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 42,
+    "question": "还有多少销售指标没有完成？",
+    "status": "success",
+    "duration": 15.84,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('指标没有')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“还有多少销售指标没有完成？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "还有多少销售指标没有完成？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "还有多少销售指标没有完成？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 43,
+    "question": "哪些人已经提前完成了全年的任务？",
+    "status": "success",
+    "duration": 28.19,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“哪些人已经提前完成了全年的任务？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪些人已经提前完成了全年的任务？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪些人已经提前完成了全年的任务？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 44,
+    "question": "帮我算一下商用事业部整体的实际达成率。",
+    "status": "success",
+    "duration": 10.9,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('商用事业部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 114,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n商用事业部当前作为事业部：年度任务4.55亿，年度开单7027万，达成率15.44%，剩余任务3.85亿。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 商用事业部 -> 年度开单7027万，任务4.55亿，达成率15.44%。\n• **归属链路：** 未识别上级 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务3.85亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕商用事业部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合上级组织横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "帮我算一下商用事业部整体的实际达成率。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "帮我算一下商用事业部整体的实际达成率。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 45,
+    "question": "“东部”和“南部”两个分公司，哪个的任务完成得更好？",
+    "status": "success",
+    "duration": 13.17,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 15,
+    "analysis": "# 东部分公司 vs 南部分公司 业绩对比分析报告\n\n## 一、核心结论\n东部分公司整体达成率13.37%，比南部分公司的13.31%高0.06个百分点；当前对标方向是 南部分公司 向 东部分公司 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 东部分公司 | 南部分公司 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 9500万 | 8200万 | - |\n| 已完成金额 | 1270万 | 1091万 | 179万 |\n| 整体达成率 | 13.37% | 13.31% | 0.06pct |\n| 剩余缺口金额 | 8230万 | 7109万 | 1121万 |\n\n## 三、层级差异核心看点\n1. **代表处表现较好节点**：山东代表处 21.46%、上海代表处 19.64%、粤东代表处 18.43%，优先复盘其客户跟进节奏和目标拆解方式。\n2. **代表处相对承压节点**：河南代表处 4.26%、安徽代表处 7.77%、餐饮 8.78%，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **南部分公司向东部分公司对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **东部分公司保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成代表处建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "“东部”和“南部”两个分公司，哪个的任务完成得更好？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "“东部”和“南部”两个分公司，哪个的任务完成得更好？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 46,
+    "question": "哪些地方的开单进度落后了（比如达成率低于50%）？",
+    "status": "success",
+    "duration": 16.95,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT *\nFROM 汇总结果\nWHERE 达成率 < 50\nORDER BY 达成率 ASC, 剩余任务金额 DESC, 条线 DESC, 节点名称\nLIMIT 200",
+    "row_count": 111,
+    "analysis": "# 商用事业部 vs 朱卫锋 业绩对比分析报告\n\n## 一、核心结论\n商用事业部整体达成率15.44%，比朱卫锋的4.09%高11.35个百分点；当前对标方向是 朱卫锋 向 商用事业部 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 商用事业部 | 朱卫锋 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 4.55亿 | 400万 | - |\n| 已完成金额 | 7027万 | 16.3万 | 7010万 |\n| 整体达成率 | 15.44% | 4.09% | 11.35pct |\n| 剩余缺口金额 | 3.85亿 | 384万 | 3.81亿 |\n\n## 三、层级差异核心看点\n1. **分公司 / 业务部表现较好节点**：东部分公司 13.37%、南部分公司 13.31%，优先复盘其客户跟进节奏和目标拆解方式。\n2. **分公司 / 业务部相对承压节点**：西部分公司 10.68%、餐饮业务部 12.87%，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **朱卫锋向商用事业部对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **商用事业部保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成分公司 / 业务部建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "哪些地方的开单进度落后了（比如达成率低于50%）？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "哪些地方的开单进度落后了（比如达成率低于50%）？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 47,
+    "question": "给我一份“行业条线”各成员的业绩排行榜。",
+    "status": "success",
+    "duration": 15.91,
+    "error": null,
+    "sql": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n)\nSELECT\n    条线 AS 分组名称,\n    SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率\nFROM 汇总结果\nWHERE 条线 IN ('区域条线', '行业条线')\nGROUP BY 条线\nORDER BY 总开单金额 DESC NULLS LAST\nLIMIT 200",
+    "row_count": 2,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n当前围绕“给我一份“行业条线”各成员的业绩排行榜。”返回 2 行结果，可结合明细字段进一步判断经营动作。\n\n### 亮点分析\n• **亮点：** 数据可用性 -> 返回 2 行、3 个字段 -> 可支撑后续关键指标核对。\n\n### 问题诊断\n• **痛点：** SQL复核 -> 规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。 -> 请优先确认口径边界。\n• **痛点：** 样例结果 -> 分组名称=区域条线；总开单金额=117134572.5；平均达成率=11.6971 -> 需要继续结合完整明细判断风险。\n\n### 改进建议\n• 先结合右侧明细结果确认统计口径与字段含义。\n• 如需更完整报告，可补充业务口径或检查该数据集的 Agent4 提示词与 LLD 文档。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "给我一份“行业条线”各成员的业绩排行榜。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "给我一份“行业条线”各成员的业绩排行榜。"
+        }
+      ]
+    }
+  },
+  {
+    "no": 48,
+    "question": "谁的任务缺口最大？",
+    "status": "success",
+    "duration": 31.32,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“谁的任务缺口最大？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "谁的任务缺口最大？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "谁的任务缺口最大？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 49,
+    "question": "代表处里有哪些已经超额完成了指标？",
+    "status": "success",
+    "duration": 38.89,
+    "error": null,
+    "sql": "",
+    "row_count": 0,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次围绕“代表处里有哪些已经超额完成了指标？”未查询到匹配数据，暂不能判断业绩好坏。\n\n### 问题诊断\n• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。\n• **痛点：** 数据集口径 -> 当前命中“商用事业部（阶段一升级版）”，路由把握为高，若问题中的组织属于其他事业部，请切换数据源后重试。\n• **痛点：** SQL复核 -> agent2 fallback -> SQL 语法通过不代表业务过滤条件一定命中数据。\n\n### 改进建议\n• 数据集与业务场景可能不匹配，建议先在“自动路由数据集”中切换正确数据源再执行。\n• 先核对组织名称是否与数据集字段完全一致，例如“东部分公司”是否存在别名或上级层级差异。\n• 再检查时间范围和过滤条件，必要时放宽条件后重新查询。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "代表处里有哪些已经超额完成了指标？",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "代表处里有哪些已经超额完成了指标？"
+        }
+      ]
+    }
+  },
+  {
+    "no": 50,
+    "question": "算一下餐饮业务部下属员工的平均开单金额。",
+    "status": "success",
+    "duration": 13.35,
+    "error": null,
+    "sql": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,\n        '' AS 业务部,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,\n        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额\n    FROM angel_group_data\n    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'\n    GROUP BY 1, 2, 3, 4\n),\nflattened_tree AS (\n    SELECT\n        CASE\n            WHEN 业务代表 <> '' THEN '业务代表'\n            WHEN 代表处 <> '' THEN '代表处'\n            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'\n            WHEN 业务部 <> '' THEN '业务部'\n            WHEN 分公司 <> '' THEN '分公司'\n            ELSE '事业部'\n        END AS 层级,\n        CASE\n            WHEN 业务代表 <> '' THEN COALESCE(NULLIF(代表处, ''), NULLIF(业务部, ''), NULLIF(分公司, ''), '商用事业部')\n            WHEN 代表处 <> '' THEN NULLIF(分公司, '')\n            WHEN 分公司 <> '' OR 业务部 <> '' THEN '商用事业部'\n            ELSE NULL\n        END AS 上级名称,\n        CASE\n            WHEN 业务代表 <> '' THEN 业务代表\n            WHEN 代表处 <> '' THEN 代表处\n            WHEN 分公司 <> '' THEN 分公司\n            WHEN 业务部 <> '' THEN 业务部\n            ELSE '商用事业部'\n        END AS 节点名称,\n        CASE\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%业务部' THEN '行业条线'\n            WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'\n            ELSE '事业部层级'\n        END AS 条线,\n        总任务金额,\n        年度开单金额\n    FROM raw_data\n),\nsummarized_nodes AS (\n    SELECT\n        条线,\n        层级,\n        上级名称,\n        节点名称,\n        SUM(总任务金额) AS 总任务金额,\n        SUM(年度开单金额) AS 年度开单金额\n    FROM flattened_tree\n    WHERE 节点名称 <> ''\n    GROUP BY 条线, 层级, 上级名称, 节点名称\n)\nSELECT\n    条线,\n    层级,\n    节点名称,\n    上级名称,\n    总任务金额,\n    年度开单金额,\n    CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,\n    ROUND(总任务金额 - 年度开单金额, 2) AS 剩余任务金额\nFROM summarized_nodes\n),\n命中链路 AS (\n    SELECT *\n    FROM 汇总结果\n    WHERE 节点名称 IN ('餐饮业务部')\n    UNION ALL\n    SELECT 子节点.*\n    FROM 汇总结果 子节点\n    JOIN 命中链路 父节点\n      ON 子节点.上级名称 = 父节点.节点名称\n)\nSELECT *\nFROM 命中链路\nORDER BY 条线 DESC,\n  CASE 层级\n    WHEN '事业部' THEN 0\n    WHEN '分公司' THEN 1\n    WHEN '业务部' THEN 1\n    WHEN '代表处' THEN 2\n    WHEN '业务代表' THEN 3\n    ELSE 9\n  END,\n  上级名称,\n  节点名称\nLIMIT 10000",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n餐饮业务部当前作为业务部，归属商用事业部：年度任务1.05亿，年度开单1351万，达成率12.87%，剩余任务9149万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 餐饮业务部 -> 年度开单1351万，任务1.05亿，达成率12.87%。\n• **归属链路：** 商用事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务9149万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕餐饮业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合商用事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。",
+    "route": {
+      "dataset_ids": [
+        3
+      ],
+      "intent": "detail",
+      "refined_query": "算一下餐饮业务部下属员工的平均开单金额。",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        3
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 3,
+          "sub_query": "算一下餐饮业务部下属员工的平均开单金额。"
+        }
+      ]
+    }
+  }
+]
