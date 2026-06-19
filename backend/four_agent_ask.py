@@ -2045,16 +2045,25 @@ LIMIT {rank_limit}
 
         # 支持并列人名："赵标和靳锋的业绩"、"赵标、靳锋及钱明的业绩"
         coordinated_name = r"[\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、|,|，)[\u4e00-\u9fa5]{2,4})*"
+        metric_person_suffix = r"(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|总任务金额|任务金额|年度开单金额|开单金额|剩余任务金额|剩余金额|缺口|金额|总数|总量|总额|数量)"
         person_patterns = [
-            r"(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)\s*(" + coordinated_name + r")(?:的)?(?:业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现)",
+            r"(?:帮我)?(?:看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)\s*(" + coordinated_name + r")(?:的)?" + metric_person_suffix,
             r"(?:问的是|查询的是|看的是|主体是|节点是|人员是|业务员是|业务代表是)\s*(" + coordinated_name + r")",
-            r"(?<![\u4e00-\u9fa5])(" + coordinated_name + r")(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)",
+            r"(?<![\u4e00-\u9fa5])(" + coordinated_name + r")(?:的)?" + metric_person_suffix,
         ]
+        non_person_terms = {
+            "业务代表", "业务员", "业务经理", "销售人员", "销售", "代表处",
+            "分公司", "业务部", "事业部", "城市公司", "城市分公司", "商用事业部",
+        }
         for pattern in person_patterns:
             for match in re.findall(pattern, text):
                 candidate = str(match or "").strip("，,、 的呢吗么吧")
                 candidate = re.sub(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", "", candidate).strip()
+                # 正则贪婪可能把"的"吞入人名，如"靳锋的总任务金额" -> "靳锋的总"
+                candidate = candidate.split("的")[0].strip()
                 for value in self._expand_coordinated_subject_names(candidate):
+                    if value in non_person_terms:
+                        continue
                     if value not in names:
                         names.append(value)
         return names
@@ -2063,12 +2072,13 @@ LIMIT {rank_limit}
         text = str(question or "").replace("\n", " ").strip()
         names: List[str] = []
         role_person_patterns = [
-            r"(?:商用事业部|商用|安吉尔商用事业部)?(?:的)?(?:业务代表|业务员|业务经理|销售人员|销售)\s*([\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、|,|，)[\u4e00-\u9fa5]{2,4})+|[\u4e00-\u9fa5]{2,4})(?=\s*(?:的|业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|$|[，,。？?]))",
+            r"(?:商用事业部|商用|安吉尔商用事业部)?(?:的)?(?:业务代表|业务员|业务经理|销售人员|销售)\s*([\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、|,|，)[\u4e00-\u9fa5]{2,4})+|[\u4e00-\u9fa5]{2,4})(?=\s*(?:的|业绩|绩效|达成率|达成|开单|完成情况|完成|情况|表现|总任务金额|任务金额|年度开单金额|开单金额|剩余任务金额|剩余金额|缺口|金额|总数|总量|总额|数量|$|[，,。？?]))",
             r"(?:业务代表|业务员|业务经理|销售人员|销售)(?:是|为|叫|：|:)\s*([\u4e00-\u9fa5]{2,4})",
         ]
         for pattern in role_person_patterns:
             for match in re.findall(pattern, text):
                 candidate = str(match or "").strip("，,、 的呢吗么吧")
+                candidate = candidate.split("的")[0].strip()
                 for value in self._expand_coordinated_subject_names(candidate):
                     if value not in names:
                         names.append(value)
