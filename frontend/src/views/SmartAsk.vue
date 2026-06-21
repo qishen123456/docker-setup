@@ -1703,16 +1703,32 @@ const detailPanelDesc = computed(() => {
 const amountColumnPattern = /金额|开单|任务|销售|收入|成本|利润|缺口|剩余|回款|费用|价格|单价|amount|sales|revenue|cost|profit|remain/i
 const rateColumnPattern = /率|percent|rate/i
 
-const formatAmount = (value) => {
+const formatAmount = (value, metric = {}) => {
   const numeric = typeof value === 'number'
     ? value
     : Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
   if (!Number.isFinite(numeric)) return '-'
-  const absValue = Math.abs(numeric)
-  if (absValue < 10000) return Number.isInteger(numeric) ? String(numeric) : String(numeric)
-  if (absValue < 1000000) return `${(numeric / 10000).toFixed(1)}万`
-  if (absValue < 100000000) return `${Math.round(numeric / 10000)}万`
-  return `${(numeric / 100000000).toFixed(2)}亿`
+
+  const unit = String(metric.unit || '').trim()
+  const scale = Number(metric.scale) || 1
+  const display = numeric / scale
+  const absDisplay = Math.abs(display)
+
+  const fmt = (num, digits = 2) => {
+    if (Number.isInteger(num)) return String(num)
+    return Number(num).toFixed(digits).replace(/\.?0+$/, '')
+  }
+
+  if (unit === '万元') {
+    if (absDisplay < 10000) return `${fmt(display)}万`
+    return `${fmt(display / 10000)}亿`
+  }
+
+  // 默认按 "元" 口径展示
+  if (absDisplay < 10000) return fmt(display)
+  if (absDisplay < 1000000) return `${(display / 10000).toFixed(1).replace(/\.?0+$/, '')}万`
+  if (absDisplay < 100000000) return `${Math.round(display / 10000)}万`
+  return `${(display / 100000000).toFixed(2).replace(/\.?0+$/, '')}亿`
 }
 
 const isAmountColumn = (column = '') => amountColumnPattern.test(String(column || ''))
@@ -1831,7 +1847,7 @@ const formatBusinessAmount = (value) => {
 const formatMetricByDefinition = (value, metric = {}) => {
   if (value === null || value === undefined) return '-'
   if (metric.format === 'percent') return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`
-  if (metric.format === 'amount') return formatBusinessAmount(value)
+  if (metric.format === 'amount' || metric.format === 'currency') return formatAmount(value, metric)
   return formatDisplayValue(value)
 }
 

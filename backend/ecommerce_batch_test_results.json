@@ -1,0 +1,1902 @@
+[
+  {
+    "no": 1,
+    "question": "电商事业部的业绩",
+    "status": "success",
+    "duration": 5.56,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 组织路径 LIKE '电商事业部%' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 15,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n电商事业部当前作为事业部：年度任务8.95亿，年度开单2.42亿，达成率26.98%，剩余任务6.54亿。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 电商事业部 -> 年度开单2.42亿，任务8.95亿，达成率26.98%。\n• **归属链路：** 未识别上级 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务6.54亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕电商事业部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合上级组织横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-37e036e1-72a6-96df-b483-2c519c743979', 'request_id': '37e036e1-72a6-96df-b483-2c519c743979'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部的业绩",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部的业绩"
+        }
+      ]
+    }
+  },
+  {
+    "no": 2,
+    "question": "国内业务部的业绩",
+    "status": "success",
+    "duration": 4.66,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;国内业务部%' OR (业务部 = '国内业务部' AND 层级级别 = '业务部')) ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 5,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n国内业务部当前作为业务部，归属电商事业部：年度任务8.80亿，年度开单2.41亿，达成率27.39%，剩余任务6.39亿。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 国内业务部 -> 年度开单2.41亿，任务8.80亿，达成率27.39%。\n• **归属链路：** 电商事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务6.39亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕国内业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合电商事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-7dd264d2-3f6e-9a30-9c59-5335118721be', 'request_id': '7dd264d2-3f6e-9a30-9c59-5335118721be'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部的业绩",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部的业绩"
+        }
+      ]
+    }
+  },
+  {
+    "no": 3,
+    "question": "直营零售部的达成率",
+    "status": "success",
+    "duration": 4.92,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;直营零售部%' OR (业务部 = '直营零售部' AND 层级级别 = '业务部')) ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 5,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n直营零售部当前作为业务部，归属电商事业部：年度任务6.01亿，年度开单1.43亿，达成率23.73%，剩余任务4.58亿。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 直营零售部 -> 年度开单1.43亿，任务6.01亿，达成率23.73%。\n• **归属链路：** 电商事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务4.58亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕直营零售部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合电商事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-781e6ef5-b996-9c97-8c0a-eaab680fe3aa', 'request_id': '781e6ef5-b996-9c97-8c0a-eaab680fe3aa'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "直营零售部的达成率",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "直营零售部的达成率"
+        }
+      ]
+    }
+  },
+  {
+    "no": 4,
+    "question": "跨境业务部的年度开单",
+    "status": "success",
+    "duration": 4.94,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;跨境业务部%' OR (业务部 = '跨境业务部' AND 层级级别 = '业务部')) ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n跨境业务部当前作为业务部，归属电商事业部：年度任务1500万，年度开单44.0万，达成率2.93%，剩余任务1456万。当前达成承压，建议优先跟进缺口转化。\n\n### 亮点分析\n• **当前主体：** 跨境业务部 -> 年度开单44.0万，任务1500万，达成率2.93%。\n• **归属链路：** 电商事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务1456万，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 达成率低于20%，属于重点承压节点。\n\n### 改进建议\n• 先围绕跨境业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合电商事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-49b91ffd-86aa-969a-9ec1-3af737613c68', 'request_id': '49b91ffd-86aa-969a-9ec1-3af737613c68'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "跨境业务部的年度开单",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "跨境业务部的年度开单"
+        }
+      ]
+    }
+  },
+  {
+    "no": 5,
+    "question": "净水业务的总任务金额",
+    "status": "success",
+    "duration": 4.57,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 = '净水业务' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 陈小斌 展开，共识别 1 个分析层级。业务经理综合达成率 22.95%，业务经理综合达成率 22.95%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 22.95% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 22.95% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 样本不足或差异不明显 -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 样本不足或差异不明显 -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 陈小斌（共 1 个） -> 上级分组：净水业务(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 0 个相对承压节点，建议优先查看 暂无；表现较好节点可参考 暂无。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-46b3d6d6-0c7a-98af-9374-cade78e98816', 'request_id': '46b3d6d6-0c7a-98af-9374-cade78e98816'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "净水业务的总任务金额",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "净水业务的总任务金额"
+        }
+      ]
+    }
+  },
+  {
+    "no": 6,
+    "question": "天猫直营的开单金额",
+    "status": "success",
+    "duration": 4.65,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 = '天猫直营' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 罗湾湾 展开，共识别 1 个分析层级。业务经理综合达成率 30.42%，业务经理综合达成率 30.42%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 30.42% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 30.42% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 样本不足或差异不明显 -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 样本不足或差异不明显 -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 罗湾湾（共 1 个） -> 上级分组：天猫直营(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 0 个相对承压节点，建议优先查看 暂无；表现较好节点可参考 暂无。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-62f7b23c-8452-93bd-ba5a-6a94e3e10cb6', 'request_id': '62f7b23c-8452-93bd-ba5a-6a94e3e10cb6'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "天猫直营的开单金额",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "天猫直营的开单金额"
+        }
+      ]
+    }
+  },
+  {
+    "no": 7,
+    "question": "陈小斌的业绩",
+    "status": "success",
+    "duration": 5.01,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 11,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 净水业务、天猫直营、京东直营、抖音直营、滤芯、饮水业务 展开，共识别 1 个分析层级。业务经理综合达成率 22.69%，业务经理综合达成率 22.69%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 22.69% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 22.69% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 滤芯 42.08%、抖音直营 37.80%、天猫直营 30.42% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 台净业务 -2.65%、其他 -0.02%、亚马逊 3.33% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 净水业务, 天猫直营, 京东直营, 抖音直营, 滤芯, 饮水业务, 达播, 亚马逊, 东南亚, 其他, 台净业务（共 11 个） -> 上级分组：国内业务部(4)、直营零售部(4)、跨境业务部(3)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 3 个相对承压节点，建议优先查看 台净业务 -2.65%、其他 -0.02%、亚马逊 3.33%；表现较好节点可参考 滤芯 42.08%、抖音直营 37.80%、天猫直营 30.42%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-3b55c514-f795-98e9-b16e-78f9e8c8a9b4', 'request_id': '3b55c514-f795-98e9-b16e-78f9e8c8a9b4'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "陈小斌的业绩",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "陈小斌的业绩"
+        }
+      ]
+    }
+  },
+  {
+    "no": 8,
+    "question": "电商事业部的年度目标营收",
+    "status": "success",
+    "duration": 4.78,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 组织路径 LIKE '电商事业部%' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 15,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n电商事业部当前作为事业部：年度任务8.95亿，年度开单2.42亿，达成率26.98%，剩余任务6.54亿。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 电商事业部 -> 年度开单2.42亿，任务8.95亿，达成率26.98%。\n• **归属链路：** 未识别上级 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务6.54亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕电商事业部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合上级组织横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-006e563d-c781-97d4-a8a5-7ef7f5a59f40', 'request_id': '006e563d-c781-97d4-a8a5-7ef7f5a59f40'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部的年度目标营收",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部的年度目标营收"
+        }
+      ]
+    }
+  },
+  {
+    "no": 9,
+    "question": "国内业务部的剩余任务金额",
+    "status": "success",
+    "duration": 4.82,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;国内业务部%' OR (业务部 = '国内业务部' AND 层级级别 = '业务部')) ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 5,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n国内业务部当前作为业务部，归属电商事业部：年度任务8.80亿，年度开单2.41亿，达成率27.39%，剩余任务6.39亿。当前进度已明确，可继续结合上级链路判断支撑与压力来源。\n\n### 亮点分析\n• **当前主体：** 国内业务部 -> 年度开单2.41亿，任务8.80亿，达成率27.39%。\n• **归属链路：** 电商事业部 -> 可继续下钻查看所属业务部/代表处的整体支撑情况。\n\n### 问题诊断\n• **缺口判断：** 当前剩余任务6.39亿，需要把个人开单进度和上级组织支撑拆开看。\n• **风险提示：** 当前未落入重点风险红线，但仍需关注后续缺口消化。\n\n### 改进建议\n• 先围绕国内业务部核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。\n• 再结合电商事业部横向比较，判断问题更偏个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-6a663b0d-89ff-94b1-b8fb-a6384168d9ff', 'request_id': '6a663b0d-89ff-94b1-b8fb-a6384168d9ff'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部的剩余任务金额",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部的剩余任务金额"
+        }
+      ]
+    }
+  },
+  {
+    "no": 10,
+    "question": "抖音直营的达成率",
+    "status": "success",
+    "duration": 4.68,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 = '抖音直营' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 邓梦竹 展开，共识别 1 个分析层级。业务经理综合达成率 37.80%，业务经理综合达成率 37.80%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 37.80% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 37.80% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 样本不足或差异不明显 -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 样本不足或差异不明显 -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 邓梦竹（共 1 个） -> 上级分组：抖音直营(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 0 个相对承压节点，建议优先查看 暂无；表现较好节点可参考 暂无。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-20f98aa3-d2d6-99c5-927c-f91aecdd0d28', 'request_id': '20f98aa3-d2d6-99c5-927c-f91aecdd0d28'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "抖音直营的达成率",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "抖音直营的达成率"
+        }
+      ]
+    }
+  },
+  {
+    "no": 11,
+    "question": "电商事业部业务部业绩排名",
+    "status": "success",
+    "duration": 5.31,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务部' ORDER BY 总任务达成率 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 3 个业务部的排名结果：国内业务部位列第1，达成率27.39%；跨境业务部位于末位，达成率2.93%，首尾相差24.46 个百分点。\n\n### 亮点分析\n• **榜首对象：** 国内业务部 -> 达成率 27.39% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 国内业务部、直营零售部、跨境业务部 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 跨境业务部 -> 达成率 2.93% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 跨境业务部 2.93%。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务部名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-8ff29fdf-ca48-97cd-8bde-713642d14824', 'request_id': '8ff29fdf-ca48-97cd-8bde-713642d14824'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部业务部业绩排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部业务部业绩排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 12,
+    "question": "电商事业部细分业务达成率排名",
+    "status": "success",
+    "duration": 5.28,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 总任务达成率 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 3 个细分业务的排名结果：滤芯位列第1，达成率42.08%；天猫直营位于末位，达成率30.42%，首尾相差11.66 个百分点。\n\n### 亮点分析\n• **榜首对象：** 滤芯 -> 达成率 42.08% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 滤芯、抖音直营、天猫直营 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 天猫直营 -> 达成率 30.42% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 0 个，暂无明显低于20%的节点。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个细分业务名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-a445785b-9cac-995e-92a6-c30a3d194518', 'request_id': 'a445785b-9cac-995e-92a6-c30a3d194518'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部细分业务达成率排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部细分业务达成率排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 13,
+    "question": "业务经理开单金额排名前3的是谁",
+    "status": "success",
+    "duration": 4.64,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按年度开单金额输出 3 个业务经理的排名结果：陈小斌位列第1，年度开单金额1.56亿；刘志伟位于末位，年度开单金额4297万，首尾相差1.13亿；但陈小斌达成率仅22.95%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 陈小斌 -> 年度开单金额 1.56亿 -> 达成率 22.95% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 陈小斌、罗湾湾、刘志伟 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 刘志伟 -> 年度开单金额 4297万 -> 达成率 19.09% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 刘志伟 19.09%。\n\n### 改进建议\n• 先按年度开单金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务经理名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-1ecdea28-ab52-9088-8f44-193a0b9dde16', 'request_id': '1ecdea28-ab52-9088-8f44-193a0b9dde16'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "业务经理开单金额排名前3的是谁",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "业务经理开单金额排名前3的是谁"
+        }
+      ]
+    }
+  },
+  {
+    "no": 14,
+    "question": "业务部总任务金额排名",
+    "status": "success",
+    "duration": 4.99,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务部' ORDER BY 年度目标营收 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按总任务金额输出 3 个业务部的排名结果：国内业务部位列第1，总任务金额8.80亿；跨境业务部位于末位，总任务金额1500万，首尾相差8.65亿；但国内业务部达成率仅27.39%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 国内业务部 -> 总任务金额 8.80亿 -> 达成率 27.39% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 国内业务部、直营零售部、跨境业务部 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 跨境业务部 -> 总任务金额 1500万 -> 达成率 2.93% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 跨境业务部 2.93%。\n\n### 改进建议\n• 先按总任务金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务部名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-50782533-591b-9a19-a5cd-5d74e308d689', 'request_id': '50782533-591b-9a19-a5cd-5d74e308d689'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "业务部总任务金额排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "业务部总任务金额排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 15,
+    "question": "细分业务开单金额排名",
+    "status": "success",
+    "duration": 4.71,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按年度开单金额输出 3 个细分业务的排名结果：净水业务位列第1，年度开单金额1.56亿；京东直营位于末位，年度开单金额4297万，首尾相差1.13亿；但净水业务达成率仅22.95%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 净水业务 -> 年度开单金额 1.56亿 -> 达成率 22.95% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 净水业务、天猫直营、京东直营 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 京东直营 -> 年度开单金额 4297万 -> 达成率 19.09% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 京东直营 19.09%。\n\n### 改进建议\n• 先按年度开单金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个细分业务名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-c71e2848-d42a-9dc3-acb9-f67ee5de775c', 'request_id': 'c71e2848-d42a-9dc3-acb9-f67ee5de775c'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "细分业务开单金额排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "细分业务开单金额排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 16,
+    "question": "业务经理达成率排名",
+    "status": "success",
+    "duration": 4.51,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 总任务达成率 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 3 个业务经理的排名结果：刘志伟位列第1，达成率42.08%；罗湾湾位于末位，达成率30.42%，首尾相差11.66 个百分点。\n\n### 亮点分析\n• **榜首对象：** 刘志伟 -> 达成率 42.08% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 刘志伟、邓梦竹、罗湾湾 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 罗湾湾 -> 达成率 30.42% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 0 个，暂无明显低于20%的节点。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务经理名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-ac5ec7a4-f885-9d2f-abbd-ad373d47e1a1', 'request_id': 'ac5ec7a4-f885-9d2f-abbd-ad373d47e1a1'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "业务经理达成率排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "业务经理达成率排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 17,
+    "question": "业务部达成率排名",
+    "status": "success",
+    "duration": 5.85,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务部' ORDER BY 总任务达成率 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 3 个业务部的排名结果：国内业务部位列第1，达成率27.39%；跨境业务部位于末位，达成率2.93%，首尾相差24.46 个百分点。\n\n### 亮点分析\n• **榜首对象：** 国内业务部 -> 达成率 27.39% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 国内业务部、直营零售部、跨境业务部 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 跨境业务部 -> 达成率 2.93% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 跨境业务部 2.93%。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务部名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-c8434686-a92b-94fc-816d-2ef6d90591f3', 'request_id': 'c8434686-a92b-94fc-816d-2ef6d90591f3'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "业务部达成率排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "业务部达成率排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 18,
+    "question": "细分业务剩余任务金额排名",
+    "status": "success",
+    "duration": 4.81,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度目标营收 - 年度开单金额 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按剩余任务金额输出 3 个细分业务的排名结果：净水业务位列第1，剩余任务金额5.24亿；天猫直营位于末位，剩余任务金额1.48亿，首尾相差3.76亿；但净水业务达成率仅22.95%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 净水业务 -> 剩余任务金额 5.24亿 -> 达成率 22.95% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 净水业务、京东直营、天猫直营 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 天猫直营 -> 剩余任务金额 1.48亿 -> 达成率 30.42% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 京东直营 19.09%。\n\n### 改进建议\n• 先按剩余任务金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个细分业务名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-78c06e8d-5bd5-956a-915e-17a562ac8c97', 'request_id': '78c06e8d-5bd5-956a-915e-17a562ac8c97'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "细分业务剩余任务金额排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "细分业务剩余任务金额排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 19,
+    "question": "业务经理剩余任务金额排名",
+    "status": "success",
+    "duration": 4.6,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度目标营收 - 年度开单金额 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按剩余任务金额输出 3 个业务经理的排名结果：陈小斌位列第1，剩余任务金额5.24亿；罗湾湾位于末位，剩余任务金额1.48亿，首尾相差3.76亿；但陈小斌达成率仅22.95%，仍低于60%红线。\n\n### 亮点分析\n• **榜首对象：** 陈小斌 -> 剩余任务金额 5.24亿 -> 达成率 22.95% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 陈小斌、刘志伟、罗湾湾 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 罗湾湾 -> 剩余任务金额 1.48亿 -> 达成率 30.42% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 刘志伟 19.09%。\n\n### 改进建议\n• 先按剩余任务金额复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个业务经理名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-5c184e29-0e3d-9aa4-896c-a7b5538e1d05', 'request_id': '5c184e29-0e3d-9aa4-896c-a7b5538e1d05'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "业务经理剩余任务金额排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "业务经理剩余任务金额排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 20,
+    "question": "国内业务部细分业务达成率排名",
+    "status": "success",
+    "duration": 4.86,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND 组织路径 LIKE '电商事业部;国内业务部%' ORDER BY 总任务达成率 DESC LIMIT 3;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本次已按达成率输出 3 个细分业务的排名结果：滤芯位列第1，达成率42.08%；饮水业务位于末位，达成率18.10%，首尾相差23.98 个百分点。\n\n### 亮点分析\n• **榜首对象：** 滤芯 -> 达成率 42.08% -> 可作为当前口径的优先复盘样本。\n• **前三结果：** 滤芯、净水业务、饮水业务 -> 先看头部样本，再结合完整排名表继续核对差距来源。\n\n### 问题诊断\n• **末位对象：** 饮水业务 -> 达成率 18.10% -> 建议优先核对任务缺口、项目推进和资源投入。\n• **风险提示：** 当前结果内低于20%风险线的节点 1 个，重点关注 饮水业务 18.10%。\n\n### 改进建议\n• 先按达成率复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。\n• 完整 3 个细分业务名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。\n• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-1bf1f9cc-932a-9dbc-8f1e-21c81a10613c', 'request_id': '1bf1f9cc-932a-9dbc-8f1e-21c81a10613c'}",
+    "scene": "ranking",
+    "analysis_mode": "ranking",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部细分业务达成率排名",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部细分业务达成率排名"
+        }
+      ]
+    }
+  },
+  {
+    "no": 21,
+    "question": "电商事业部达成率低于30%的细分业务有哪些",
+    "status": "success",
+    "duration": 5.34,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND (总任务达成率) < 0.3 ORDER BY 总任务达成率 asc LIMIT 200;",
+    "row_count": 8,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 8 个细分业务的达成率低于30%。\n\n### 关键指标\n• **台净业务**：达成率-2.65%，任务5000万，开单-132万，剩余5132万\n• **其他**：达成率-0.02%，任务400万，开单-966.96，剩余400万\n• **亚马逊**：达成率3.33%，任务1000万，开单33.3万，剩余967万\n• **达播**：达成率5.60%，任务8300万，开单465万，剩余7835万\n• **东南亚**：达成率10.76%，任务100万，开单10.8万，剩余89.2万\n• **饮水业务**：达成率18.10%，任务9000万，开单1629万，剩余7371万\n• **京东直营**：达成率19.09%，任务2.25亿，开单4297万，剩余1.82亿\n• **净水业务**：达成率22.95%，任务6.80亿，开单1.56亿，剩余5.24亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 7 个，包括 台净业务 -2.65%、其他 -0.02%、亚马逊 3.33%、达播 5.60%、东南亚 10.76%。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-bc96c327-11c9-9974-bec6-c37ec9234a4d', 'request_id': 'bc96c327-11c9-9974-bec6-c37ec9234a4d'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部达成率低于30%的细分业务有哪些",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部达成率低于30%的细分业务有哪些"
+        }
+      ]
+    }
+  },
+  {
+    "no": 22,
+    "question": "开单金额超过1亿的业务经理有哪些",
+    "status": "success",
+    "duration": 4.42,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND (年度开单金额) > 100000000.0 ORDER BY 年度开单金额 desc LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 1 个业务经理的年度开单金额高于1。\n\n### 关键指标\n• **陈小斌**：年度开单金额1.56亿，达成率22.95%，任务6.80亿，开单1.56亿，剩余5.24亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 0 个，当前筛选结果中暂无。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-132d861f-5fa2-95af-bec9-022d7d3da62a', 'request_id': '132d861f-5fa2-95af-bec9-022d7d3da62a'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "开单金额超过1亿的业务经理有哪些",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "开单金额超过1亿的业务经理有哪些"
+        }
+      ]
+    }
+  },
+  {
+    "no": 23,
+    "question": "总任务金额大于5亿的业务部有哪些",
+    "status": "success",
+    "duration": 5.2,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务部' AND (年度目标营收) > 500000000.0 ORDER BY 年度目标营收 desc LIMIT 200;",
+    "row_count": 2,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 2 个业务部的总任务金额高于5。\n\n### 关键指标\n• **国内业务部**：总任务金额8.80亿，达成率27.39%，任务8.80亿，开单2.41亿，剩余6.39亿\n• **直营零售部**：总任务金额6.01亿，达成率23.73%，任务6.01亿，开单1.43亿，剩余4.58亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 0 个，当前筛选结果中暂无。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-16de0bd4-703d-9152-bedd-74b7df180d1a', 'request_id': '16de0bd4-703d-9152-bedd-74b7df180d1a'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "总任务金额大于5亿的业务部有哪些",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "总任务金额大于5亿的业务部有哪些"
+        }
+      ]
+    }
+  },
+  {
+    "no": 24,
+    "question": "达成率高于40%的细分业务有哪些",
+    "status": "success",
+    "duration": 5.71,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND (总任务达成率) > 0.4 ORDER BY 总任务达成率 desc LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 1 个细分业务的达成率高于40%。\n\n### 关键指标\n• **滤芯**：达成率42.08%，任务6000万，开单2525万，剩余3475万\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 0 个，当前筛选结果中暂无。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-e83699bc-64f0-9bd6-90ba-2c5e806154b1', 'request_id': 'e83699bc-64f0-9bd6-90ba-2c5e806154b1'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "达成率高于40%的细分业务有哪些",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "达成率高于40%的细分业务有哪些"
+        }
+      ]
+    }
+  },
+  {
+    "no": 25,
+    "question": "剩余任务金额大于0的细分业务有哪些",
+    "status": "success",
+    "duration": 4.89,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND (年度目标营收 - 年度开单金额) > 0.0 ORDER BY 年度目标营收 - 年度开单金额 desc LIMIT 200;",
+    "row_count": 11,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 11 个细分业务的剩余任务金额高于0。\n\n### 关键指标\n• **净水业务**：剩余任务金额5.24亿，达成率22.95%，任务6.80亿，开单1.56亿，剩余5.24亿\n• **京东直营**：剩余任务金额1.82亿，达成率19.09%，任务2.25亿，开单4297万，剩余1.82亿\n• **天猫直营**：剩余任务金额1.48亿，达成率30.42%，任务2.13亿，开单6480万，剩余1.48亿\n• **达播**：剩余任务金额7835万，达成率5.60%，任务8300万，开单465万，剩余7835万\n• **饮水业务**：剩余任务金额7371万，达成率18.10%，任务9000万，开单1629万，剩余7371万\n• **台净业务**：剩余任务金额5132万，达成率-2.65%，任务5000万，开单-132万，剩余5132万\n• **抖音直营**：剩余任务金额4976万，达成率37.80%，任务8000万，开单3024万，剩余4976万\n• **滤芯**：剩余任务金额3475万，达成率42.08%，任务6000万，开单2525万，剩余3475万\n• **亚马逊**：剩余任务金额967万，达成率3.33%，任务1000万，开单33.3万，剩余967万\n• **其他**：剩余任务金额400万，达成率-0.02%，任务400万，开单-966.96，剩余400万\n• **东南亚**：剩余任务金额89.2万，达成率10.76%，任务100万，开单10.8万，剩余89.2万\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 7 个，包括 京东直营 19.09%、达播 5.60%、饮水业务 18.10%、台净业务 -2.65%、亚马逊 3.33%。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-bf1fefb5-7ec3-9a47-86de-24d68fa43315', 'request_id': 'bf1fefb5-7ec3-9a47-86de-24d68fa43315'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "剩余任务金额大于0的细分业务有哪些",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "剩余任务金额大于0的细分业务有哪些"
+        }
+      ]
+    }
+  },
+  {
+    "no": 26,
+    "question": "国内业务部达成率低于30%的细分业务",
+    "status": "success",
+    "duration": 5.76,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND 组织路径 LIKE '电商事业部;国内业务部%' AND (总任务达成率) < 0.3 ORDER BY 总任务达成率 asc LIMIT 200;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 3 个细分业务的达成率低于30%。\n\n### 关键指标\n• **台净业务**：达成率-2.65%，任务5000万，开单-132万，剩余5132万\n• **饮水业务**：达成率18.10%，任务9000万，开单1629万，剩余7371万\n• **净水业务**：达成率22.95%，任务6.80亿，开单1.56亿，剩余5.24亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 2 个，包括 台净业务 -2.65%、饮水业务 18.10%。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-48da94d8-474e-9422-8917-a5589fe98ec7', 'request_id': '48da94d8-474e-9422-8917-a5589fe98ec7'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部达成率低于30%的细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部达成率低于30%的细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 27,
+    "question": "跨境业务部开单金额低于1000万的细分业务",
+    "status": "success",
+    "duration": 5.37,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND 组织路径 LIKE '电商事业部;跨境业务部%' AND (年度开单金额) < 10000000.0 ORDER BY 年度开单金额 asc LIMIT 200;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 3 个细分业务的年度开单金额低于1000。\n\n### 关键指标\n• **其他**：年度开单金额-966.96，达成率-0.02%，任务400万，开单-966.96，剩余400万\n• **东南亚**：年度开单金额10.8万，达成率10.76%，任务100万，开单10.8万，剩余89.2万\n• **亚马逊**：年度开单金额33.3万，达成率3.33%，任务1000万，开单33.3万，剩余967万\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 3 个，包括 其他 -0.02%、东南亚 10.76%、亚马逊 3.33%。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-69a14886-c5e4-93b5-a7e2-515dfedb3560', 'request_id': '69a14886-c5e4-93b5-a7e2-515dfedb3560'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "跨境业务部开单金额低于1000万的细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "跨境业务部开单金额低于1000万的细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 28,
+    "question": "年度开单金额在1亿到3亿之间的细分业务",
+    "status": "success",
+    "duration": 5.23,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 11,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 净水业务、天猫直营、京东直营、抖音直营、滤芯、饮水业务 展开，共识别 1 个分析层级。业务经理综合达成率 22.69%，业务经理综合达成率 22.69%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 22.69% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 22.69% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 滤芯 42.08%、抖音直营 37.80%、天猫直营 30.42% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 台净业务 -2.65%、其他 -0.02%、亚马逊 3.33% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 净水业务, 天猫直营, 京东直营, 抖音直营, 滤芯, 饮水业务, 达播, 亚马逊, 东南亚, 其他, 台净业务（共 11 个） -> 上级分组：国内业务部(4)、直营零售部(4)、跨境业务部(3)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 3 个相对承压节点，建议优先查看 台净业务 -2.65%、其他 -0.02%、亚马逊 3.33%；表现较好节点可参考 滤芯 42.08%、抖音直营 37.80%、天猫直营 30.42%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-86b6c84b-486f-942d-9d77-d4e8ef019267', 'request_id': '86b6c84b-486f-942d-9d77-d4e8ef019267'}",
+    "scene": "detail",
+    "analysis_mode": "detail",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "年度开单金额在1亿到3亿之间的细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "年度开单金额在1亿到3亿之间的细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 29,
+    "question": "达成率在20%到50%之间的业务经理",
+    "status": "success",
+    "duration": 4.79,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND (总任务达成率) BETWEEN 0.2 AND 0.5 ORDER BY 总任务达成率 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 4 个业务经理的达成率between20%。\n\n### 关键指标\n• **刘志伟**：达成率42.08%，任务6000万，开单2525万，剩余3475万\n• **邓梦竹**：达成率37.80%，任务8000万，开单3024万，剩余4976万\n• **罗湾湾**：达成率30.42%，任务2.13亿，开单6480万，剩余1.48亿\n• **陈小斌**：达成率22.95%，任务6.80亿，开单1.56亿，剩余5.24亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 0 个，当前筛选结果中暂无。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-5f097d09-c650-914d-bac7-831e8f474447', 'request_id': '5f097d09-c650-914d-bac7-831e8f474447'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "达成率在20%到50%之间的业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "达成率在20%到50%之间的业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 30,
+    "question": "直营零售部达成率低于20%的细分业务",
+    "status": "success",
+    "duration": 5.3,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 层级级别 = '业务经理' AND 组织路径 LIKE '电商事业部;直营零售部%' AND (总任务达成率) < 0.2 ORDER BY 总任务达成率 asc LIMIT 200;",
+    "row_count": 2,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮筛选出 2 个细分业务的达成率低于20%。\n\n### 关键指标\n• **达播**：达成率5.60%，任务8300万，开单465万，剩余7835万\n• **京东直营**：达成率19.09%，任务2.25亿，开单4297万，剩余1.82亿\n\n### 问题诊断\n• **风险节点：** 低于20%红线的节点 2 个，包括 达播 5.60%、京东直营 19.09%。\n\n### 改进建议\n• 对筛选出的节点优先核对任务缺口、项目推进节奏和资源投入是否匹配。\n• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-8d9cef7e-2446-92b0-92ba-866e3743f359', 'request_id': '8d9cef7e-2446-92b0-92ba-866e3743f359'}",
+    "scene": "filter",
+    "analysis_mode": "filter",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "直营零售部达成率低于20%的细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "直营零售部达成率低于20%的细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 31,
+    "question": "国内业务部和直营零售部对比",
+    "status": "success",
+    "duration": 5.45,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 业务部 IN ('国内业务部','直营零售部') AND 层级级别 = '业务部' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 国内业务部 vs 直营零售部 业绩对比分析报告\n\n## 一、核心结论\n国内业务部整体达成率27.39%，比直营零售部的23.73%高3.66个百分点；当前对标方向是 直营零售部 向 国内业务部 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 国内业务部 | 直营零售部 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 8.80亿 | 6.01亿 | - |\n| 已完成金额 | 2.41亿 | 1.43亿 | 9840万 |\n| 整体达成率 | 27.39% | 23.73% | 3.66pct |\n| 剩余缺口金额 | 6.39亿 | 4.58亿 | 1.81亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **直营零售部向国内业务部对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **国内业务部保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-6caee74e-3247-9bd4-938d-32219537c91f', 'request_id': '6caee74e-3247-9bd4-938d-32219537c91f'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部和直营零售部对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部和直营零售部对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 32,
+    "question": "净水业务和饮水业务对比",
+    "status": "success",
+    "duration": 4.89,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 IN ('净水业务','饮水业务') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 净水业务 vs 饮水业务 业绩对比分析报告\n\n## 一、核心结论\n净水业务整体达成率22.95%，比饮水业务的18.10%高4.85个百分点；当前对标方向是 饮水业务 向 净水业务 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 净水业务 | 饮水业务 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 6.80亿 | 9000万 | - |\n| 已完成金额 | 1.56亿 | 1629万 | 1.40亿 |\n| 整体达成率 | 22.95% | 18.10% | 4.85pct |\n| 剩余缺口金额 | 5.24亿 | 7371万 | 4.50亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **饮水业务向净水业务对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **净水业务保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-85ccc44c-9bdd-9999-9057-ebe97992acbb', 'request_id': '85ccc44c-9bdd-9999-9057-ebe97992acbb'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "净水业务和饮水业务对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "净水业务和饮水业务对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 33,
+    "question": "京东直营和天猫直营对比",
+    "status": "success",
+    "duration": 4.61,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 IN ('京东直营','天猫直营') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 天猫直营 vs 京东直营 业绩对比分析报告\n\n## 一、核心结论\n天猫直营整体达成率30.42%，比京东直营的19.09%高11.33个百分点；当前对标方向是 京东直营 向 天猫直营 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 天猫直营 | 京东直营 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 2.13亿 | 2.25亿 | - |\n| 已完成金额 | 6480万 | 4297万 | 2183万 |\n| 整体达成率 | 30.42% | 19.09% | 11.33pct |\n| 剩余缺口金额 | 1.48亿 | 1.82亿 | -3393万 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **京东直营向天猫直营对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **天猫直营保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-6b9fa9cb-717a-9447-af9e-024cbecdebec', 'request_id': '6b9fa9cb-717a-9447-af9e-024cbecdebec'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "京东直营和天猫直营对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "京东直营和天猫直营对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 34,
+    "question": "国内业务部和跨境业务部对比",
+    "status": "success",
+    "duration": 5.0,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 业务部 IN ('国内业务部','跨境业务部') AND 层级级别 = '业务部' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 国内业务部 vs 跨境业务部 业绩对比分析报告\n\n## 一、核心结论\n国内业务部整体达成率27.39%，比跨境业务部的2.93%高24.46个百分点；当前对标方向是 跨境业务部 向 国内业务部 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 国内业务部 | 跨境业务部 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 8.80亿 | 1500万 | - |\n| 已完成金额 | 2.41亿 | 44.0万 | 2.41亿 |\n| 整体达成率 | 27.39% | 2.93% | 24.46pct |\n| 剩余缺口金额 | 6.39亿 | 1456万 | 6.24亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **跨境业务部向国内业务部对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **国内业务部保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-663d4efc-7218-9092-a412-f2c95c43f88a', 'request_id': '663d4efc-7218-9092-a412-f2c95c43f88a'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部和跨境业务部对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部和跨境业务部对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 35,
+    "question": "抖音直营和达播对比",
+    "status": "success",
+    "duration": 5.96,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 IN ('抖音直营','达播') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 抖音直营 vs 达播 业绩对比分析报告\n\n## 一、核心结论\n抖音直营整体达成率37.80%，比达播的5.60%高32.2个百分点；当前对标方向是 达播 向 抖音直营 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 抖音直营 | 达播 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 8000万 | 8300万 | - |\n| 已完成金额 | 3024万 | 465万 | 2559万 |\n| 整体达成率 | 37.80% | 5.60% | 32.2pct |\n| 剩余缺口金额 | 4976万 | 7835万 | -2859万 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **达播向抖音直营对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **抖音直营保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-d2dfb8f4-3529-90e6-8f57-4e2fe03f64bf', 'request_id': 'd2dfb8f4-3529-90e6-8f57-4e2fe03f64bf'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "抖音直营和达播对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "抖音直营和达播对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 36,
+    "question": "直营零售部和跨境业务部对比",
+    "status": "success",
+    "duration": 4.93,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 业务部 IN ('直营零售部','跨境业务部') AND 层级级别 = '业务部' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 直营零售部 vs 跨境业务部 业绩对比分析报告\n\n## 一、核心结论\n直营零售部整体达成率23.73%，比跨境业务部的2.93%高20.8个百分点；当前对标方向是 跨境业务部 向 直营零售部 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 直营零售部 | 跨境业务部 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 6.01亿 | 1500万 | - |\n| 已完成金额 | 1.43亿 | 44.0万 | 1.42亿 |\n| 整体达成率 | 23.73% | 2.93% | 20.8pct |\n| 剩余缺口金额 | 4.58亿 | 1456万 | 4.44亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **跨境业务部向直营零售部对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **直营零售部保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-9d3d1236-42d4-908f-a807-691a8795d36b', 'request_id': '9d3d1236-42d4-908f-a807-691a8795d36b'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "直营零售部和跨境业务部对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "直营零售部和跨境业务部对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 37,
+    "question": "净水业务和滤芯对比",
+    "status": "success",
+    "duration": 4.78,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 IN ('净水业务','滤芯') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 滤芯 vs 净水业务 业绩对比分析报告\n\n## 一、核心结论\n滤芯整体达成率42.08%，比净水业务的22.95%高19.13个百分点；当前对标方向是 净水业务 向 滤芯 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 滤芯 | 净水业务 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 6000万 | 6.80亿 | - |\n| 已完成金额 | 2525万 | 1.56亿 | -1.31亿 |\n| 整体达成率 | 42.08% | 22.95% | 19.13pct |\n| 剩余缺口金额 | 3475万 | 5.24亿 | -4.89亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **净水业务向滤芯对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **滤芯保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-f6449556-9214-9170-85b3-d43a028205ac', 'request_id': 'f6449556-9214-9170-85b3-d43a028205ac'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "净水业务和滤芯对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "净水业务和滤芯对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 38,
+    "question": "天猫直营和抖音直营对比",
+    "status": "success",
+    "duration": 4.66,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 IN ('天猫直营','抖音直营') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 抖音直营 vs 天猫直营 业绩对比分析报告\n\n## 一、核心结论\n抖音直营整体达成率37.80%，比天猫直营的30.42%高7.38个百分点；当前对标方向是 天猫直营 向 抖音直营 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 抖音直营 | 天猫直营 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 8000万 | 2.13亿 | - |\n| 已完成金额 | 3024万 | 6480万 | -3456万 |\n| 整体达成率 | 37.80% | 30.42% | 7.38pct |\n| 剩余缺口金额 | 4976万 | 1.48亿 | -9844万 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **天猫直营向抖音直营对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **抖音直营保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-ba6c2476-4831-90db-a3c2-141f3a925d2a', 'request_id': 'ba6c2476-4831-90db-a3c2-141f3a925d2a'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "天猫直营和抖音直营对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "天猫直营和抖音直营对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 39,
+    "question": "国内业务部和直营零售部开单对比",
+    "status": "success",
+    "duration": 5.15,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 业务部 IN ('国内业务部','直营零售部') AND 层级级别 = '业务部' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 国内业务部 vs 直营零售部 业绩对比分析报告\n\n## 一、核心结论\n国内业务部整体达成率27.39%，比直营零售部的23.73%高3.66个百分点；当前对标方向是 直营零售部 向 国内业务部 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 国内业务部 | 直营零售部 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 8.80亿 | 6.01亿 | - |\n| 已完成金额 | 2.41亿 | 1.43亿 | 9840万 |\n| 整体达成率 | 27.39% | 23.73% | 3.66pct |\n| 剩余缺口金额 | 6.39亿 | 4.58亿 | 1.81亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **直营零售部向国内业务部对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **国内业务部保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-55ed54ce-2ec1-9305-9cd6-b78cc4fd2cc7', 'request_id': '55ed54ce-2ec1-9305-9cd6-b78cc4fd2cc7'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部和直营零售部开单对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部和直营零售部开单对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 40,
+    "question": "陈小斌和李金良对比",
+    "status": "success",
+    "duration": 2.5,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                        '业务经理' AS 层级,\n                        COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                        COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                        年度目标营收 AS 总任务金额,\n                        年度开单金额 AS 年度开单金额,\n                        ROUND(总任务达成率 * 100, 2) AS 达成率,\n                        ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 负责人 IN ('陈小斌','李金良') AND 层级级别 = '业务经理' ORDER BY 年度开单金额 DESC LIMIT 50;",
+    "row_count": 2,
+    "analysis": "# 陈小斌 vs 李金良 业绩对比分析报告\n\n## 一、核心结论\n陈小斌整体达成率22.95%，比李金良的-2.65%高25.6个百分点；当前对标方向是 李金良 向 陈小斌 学习高达成节点的目标拆解和项目推进节奏。\n\n## 二、关键指标对标\n| 指标 | 陈小斌 | 李金良 | 差距 |\n|---|---:|---:|---:|\n| 总任务金额 | 6.80亿 | 5000万 | - |\n| 已完成金额 | 1.56亿 | -132万 | 1.57亿 |\n| 整体达成率 | 22.95% | -2.65% | 25.6pct |\n| 剩余缺口金额 | 5.24亿 | 5132万 | 4.73亿 |\n\n## 三、层级差异核心看点\n1. **下级节点表现较好节点**：样本不足或差异不明显，优先复盘其客户跟进节奏和目标拆解方式。\n2. **下级节点相对承压节点**：样本不足或差异不明显，优先跟进缺口和过程动作。\n\n## 四、落地建议\n✅ **李金良向陈小斌对标学习**：复制高达成单元的周度目标拆解、客户推进节奏和项目转化复盘。\n⚠️ **陈小斌保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。\n🔴 **共同改进项**：先针对低达成下级节点建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-13f5df48-ca75-9d20-91d9-d1f1d2d8edb4', 'request_id': '13f5df48-ca75-9d20-91d9-d1f1d2d8edb4'}",
+    "scene": "comparative",
+    "analysis_mode": "comparative",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "陈小斌和李金良对比",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "陈小斌和李金良对比"
+        }
+      ]
+    }
+  },
+  {
+    "no": 41,
+    "question": "国内业务部有哪些细分业务",
+    "status": "success",
+    "duration": 4.74,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;国内业务部%' OR (业务部 = '国内业务部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 净水业务、滤芯、饮水业务、台净业务 展开，共识别 1 个分析层级。细分业务综合达成率 22.31%，细分业务综合达成率 22.31%。\n\n### 亮点分析\n• **亮点：** 细分业务 -> 综合达成率 22.31% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 细分业务 -> 综合达成率 22.31% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 细分业务 -> 用于定位问题落点。\n\n#### 电商业务｜细分业务\n• **亮点：** 表现较好节点 -> 滤芯 42.08% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 台净业务 -2.65% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 净水业务, 滤芯, 饮水业务, 台净业务（共 4 个） -> 上级分组：国内业务部(4)。\n\n### 改进建议\n• 细分业务：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 细分业务：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 台净业务 -2.65%；表现较好节点可参考 滤芯 42.08%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-80e41459-e4ed-96bf-8fb2-75d5f2c6acbb', 'request_id': '80e41459-e4ed-96bf-8fb2-75d5f2c6acbb'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部有哪些细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部有哪些细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 42,
+    "question": "国内业务部有哪些业务经理",
+    "status": "success",
+    "duration": 4.73,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;国内业务部%' OR (业务部 = '国内业务部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 陈小斌、刘志伟、郑燕美、李金良 展开，共识别 1 个分析层级。业务经理综合达成率 22.31%，业务经理综合达成率 22.31%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 22.31% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 22.31% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 刘志伟 42.08% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 李金良 -2.65% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 陈小斌, 刘志伟, 郑燕美, 李金良（共 4 个） -> 上级分组：净水业务(1)、滤芯(1)、饮水业务(1)、台净业务(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 李金良 -2.65%；表现较好节点可参考 刘志伟 42.08%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-8b813adf-a0aa-970c-8acc-0c9ea7b27338', 'request_id': '8b813adf-a0aa-970c-8acc-0c9ea7b27338'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部有哪些业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部有哪些业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 43,
+    "question": "直营零售部下有哪些细分业务",
+    "status": "success",
+    "duration": 4.6,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;直营零售部%' OR (业务部 = '直营零售部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 天猫直营、京东直营、抖音直营、达播 展开，共识别 1 个分析层级。细分业务综合达成率 23.73%，细分业务综合达成率 23.73%。\n\n### 亮点分析\n• **亮点：** 细分业务 -> 综合达成率 23.73% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 细分业务 -> 综合达成率 23.73% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 细分业务 -> 用于定位问题落点。\n\n#### 电商业务｜细分业务\n• **亮点：** 表现较好节点 -> 抖音直营 37.80% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 达播 5.60% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 天猫直营, 京东直营, 抖音直营, 达播（共 4 个） -> 上级分组：直营零售部(4)。\n\n### 改进建议\n• 细分业务：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 细分业务：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 达播 5.60%；表现较好节点可参考 抖音直营 37.80%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-cfad2c98-6b25-9630-8b55-bfc003f0943f', 'request_id': 'cfad2c98-6b25-9630-8b55-bfc003f0943f'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "直营零售部下有哪些细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "直营零售部下有哪些细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 44,
+    "question": "直营零售部有哪些业务经理",
+    "status": "success",
+    "duration": 5.25,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;直营零售部%' OR (业务部 = '直营零售部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 罗湾湾、刘志伟、邓梦竹、谢均伟 展开，共识别 1 个分析层级。业务经理综合达成率 23.73%，业务经理综合达成率 23.73%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 23.73% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 23.73% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 邓梦竹 37.80% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 谢均伟 5.60% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 罗湾湾, 刘志伟, 邓梦竹, 谢均伟（共 4 个） -> 上级分组：天猫直营(1)、京东直营(1)、抖音直营(1)、达播(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 谢均伟 5.60%；表现较好节点可参考 邓梦竹 37.80%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-58fbfe6b-055b-90ef-9bd7-718b0370c9c6', 'request_id': '58fbfe6b-055b-90ef-9bd7-718b0370c9c6'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "直营零售部有哪些业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "直营零售部有哪些业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 45,
+    "question": "跨境业务部有哪些细分业务",
+    "status": "success",
+    "duration": 4.69,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;跨境业务部%' OR (业务部 = '跨境业务部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 亚马逊、东南亚、其他 展开，共识别 1 个分析层级。细分业务综合达成率 2.93%，细分业务综合达成率 2.93%。\n\n### 亮点分析\n• **亮点：** 细分业务 -> 综合达成率 2.93% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 细分业务 -> 综合达成率 2.93% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 细分业务 -> 用于定位问题落点。\n\n#### 电商业务｜细分业务\n• **亮点：** 表现较好节点 -> 东南亚 10.76% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 其他 -0.02% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 亚马逊, 东南亚, 其他（共 3 个） -> 上级分组：跨境业务部(3)。\n\n### 改进建议\n• 细分业务：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 细分业务：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 其他 -0.02%；表现较好节点可参考 东南亚 10.76%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-cf2451c4-a4af-9605-b3cc-774415647e4e', 'request_id': 'cf2451c4-a4af-9605-b3cc-774415647e4e'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "跨境业务部有哪些细分业务",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "跨境业务部有哪些细分业务"
+        }
+      ]
+    }
+  },
+  {
+    "no": 46,
+    "question": "跨境业务部有哪些业务经理",
+    "status": "success",
+    "duration": 4.93,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;跨境业务部%' OR (业务部 = '跨境业务部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 胡根、曾庆凌、刘志伟 展开，共识别 1 个分析层级。业务经理综合达成率 2.93%，业务经理综合达成率 2.93%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 2.93% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 2.93% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 曾庆凌 10.76% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 刘志伟 -0.02% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 胡根, 曾庆凌, 刘志伟（共 3 个） -> 上级分组：亚马逊(1)、东南亚(1)、其他(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 刘志伟 -0.02%；表现较好节点可参考 曾庆凌 10.76%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-1eda4409-6df5-9734-981a-cda52a99aa6e', 'request_id': '1eda4409-6df5-9734-981a-cda52a99aa6e'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "跨境业务部有哪些业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "跨境业务部有哪些业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 47,
+    "question": "电商事业部下有哪些业务部",
+    "status": "success",
+    "duration": 4.79,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                层级级别 AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 组织路径 LIKE '电商事业部%' AND 层级级别 = '业务部' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 3,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 国内业务部、直营零售部、跨境业务部 展开，共识别 1 个分析层级。业务部综合达成率 25.68%，业务部综合达成率 25.68%。\n\n### 亮点分析\n• **亮点：** 业务部 -> 综合达成率 25.68% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务部 -> 综合达成率 25.68% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务部 -> 用于定位问题落点。\n\n#### 电商业务｜业务部\n• **亮点：** 表现较好节点 -> 国内业务部 27.39% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 跨境业务部 2.93% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 国内业务部, 直营零售部, 跨境业务部（共 3 个） -> 上级分组：电商事业部(3)。\n\n### 改进建议\n• 业务部：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务部：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 跨境业务部 2.93%；表现较好节点可参考 国内业务部 27.39%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-5870ce25-5374-9b7f-af20-ca02a0a3c342', 'request_id': '5870ce25-5374-9b7f-af20-ca02a0a3c342'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "电商事业部下有哪些业务部",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "电商事业部下有哪些业务部"
+        }
+      ]
+    }
+  },
+  {
+    "no": 48,
+    "question": "净水业务下有哪些业务经理",
+    "status": "success",
+    "duration": 4.61,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 = '净水业务' AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 陈小斌 展开，共识别 1 个分析层级。业务经理综合达成率 22.95%，业务经理综合达成率 22.95%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 22.95% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 22.95% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 样本不足或差异不明显 -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 样本不足或差异不明显 -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 陈小斌（共 1 个） -> 上级分组：净水业务(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 0 个相对承压节点，建议优先查看 暂无；表现较好节点可参考 暂无。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-2f058e04-ce89-9de0-8f87-6789653b0a81', 'request_id': '2f058e04-ce89-9de0-8f87-6789653b0a81'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "净水业务下有哪些业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "净水业务下有哪些业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 49,
+    "question": "京东直营下有哪些业务经理",
+    "status": "success",
+    "duration": 4.91,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '业务经理' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND 细分业务 = '京东直营' AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 1,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 刘志伟 展开，共识别 1 个分析层级。业务经理综合达成率 19.09%，业务经理综合达成率 19.09%。\n\n### 亮点分析\n• **亮点：** 业务经理 -> 综合达成率 19.09% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 业务经理 -> 综合达成率 19.09% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 业务经理 -> 用于定位问题落点。\n\n#### 电商业务｜业务经理\n• **亮点：** 表现较好节点 -> 样本不足或差异不明显 -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 样本不足或差异不明显 -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 刘志伟（共 1 个） -> 上级分组：京东直营(1)。\n\n### 改进建议\n• 业务经理：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 业务经理：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 0 个相对承压节点，建议优先查看 暂无；表现较好节点可参考 暂无。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-2620364e-82be-989b-ad4c-62116e0cda28', 'request_id': '2620364e-82be-989b-ad4c-62116e0cda28'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "京东直营下有哪些业务经理",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "京东直营下有哪些业务经理"
+        }
+      ]
+    }
+  },
+  {
+    "no": 50,
+    "question": "国内业务部下属明细",
+    "status": "success",
+    "duration": 5.01,
+    "error": null,
+    "sql": "SELECT '电商业务' AS 条线,\n                '细分业务' AS 层级,\n                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,\n                CASE\n                    WHEN 层级级别 = '事业部' THEN NULL\n                    WHEN 层级级别 = '业务部' THEN '电商事业部'\n                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')\n                END AS 上级名称,\n                年度目标营收 AS 总任务金额,\n                年度开单金额 AS 年度开单金额,\n                ROUND(总任务达成率 * 100, 2) AS 达成率,\n                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额 FROM v_feishu_tbldianshang WHERE 当前年 = '2026' AND (组织路径 LIKE '电商事业部;国内业务部%' OR (业务部 = '国内业务部' AND 层级级别 = '业务部')) AND 层级级别 = '业务经理' ORDER BY 层级级别, 年度开单金额 DESC LIMIT 200;",
+    "row_count": 4,
+    "analysis": "## 业绩分析报告\n\n### 核心结论\n本轮围绕 净水业务、滤芯、饮水业务、台净业务 展开，共识别 1 个分析层级。细分业务综合达成率 22.31%，细分业务综合达成率 22.31%。\n\n### 亮点分析\n• **亮点：** 细分业务 -> 综合达成率 22.31% -> 可作为当前层级的优先复盘样本。\n\n### 问题诊断\n• **痛点：** 细分业务 -> 综合达成率 22.31% -> 需要关注目标拆解、项目推进和资源投入。\n• **结构：** 拆分维度 -> 细分业务 -> 用于定位问题落点。\n\n#### 电商业务｜细分业务\n• **亮点：** 表现较好节点 -> 滤芯 42.08% -> 可沉淀可复制动作。\n• **痛点：** 相对承压节点 -> 台净业务 -2.65% -> 需要短周期跟进缺口。\n• **结构：** 下级单元 -> 净水业务, 滤芯, 饮水业务, 台净业务（共 4 个） -> 上级分组：国内业务部(4)。\n\n### 改进建议\n• 细分业务：优先聚焦相对承压节点，复盘目标拆解、项目推进和资源投入是否匹配。\n• 细分业务：对低达成节点做短周期跟进，对高达成节点沉淀可复制动作。\n• 当前动态识别 1 个相对承压节点，建议优先查看 台净业务 -2.65%；表现较好节点可参考 滤芯 42.08%。\n\n> SQL复核：规则 SQL 已通过只读与字段字典校验，Agent3 不改写系统规则 SQL。\n\n> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-5997ab7f-0665-94e6-91fd-15cb8548ff34', 'request_id': '5997ab7f-0665-94e6-91fd-15cb8548ff34'}",
+    "scene": "drilldown",
+    "analysis_mode": "drilldown",
+    "route": {
+      "dataset_ids": [
+        62
+      ],
+      "intent": "detail",
+      "refined_query": "国内业务部下属明细",
+      "requires_confirmation": false,
+      "decision": "generate_sql",
+      "match_score": 100,
+      "route_margin": 100,
+      "confirmation_role": "boss",
+      "confirmation_question": "",
+      "confirmation_options": [],
+      "candidate_dataset_ids": [
+        62
+      ],
+      "preferred_dataset_override": true,
+      "matched_sample_id": null,
+      "matched_sample_sql": "",
+      "split_queries": [
+        {
+          "dataset_id": 62,
+          "sub_query": "国内业务部下属明细"
+        }
+      ]
+    }
+  }
+]

@@ -247,5 +247,98 @@
         "child_dimensions": []
       }
     ]
+  },
+  "feishu_tbldianshang": {
+    "dataset_name": "飞书电商事业部经营预算",
+    "business_domain": "电商事业部",
+    "dataset_aliases": [
+      "电商事业部",
+      "飞书电商",
+      "电商预算",
+      "feishu_tbldianshang",
+      "电商",
+      "电商经营预算"
+    ],
+    "root_nodes": [
+      "电商事业部"
+    ],
+    "default_drill_depth": 2,
+    "max_drill_depth": 3,
+    "levels": [
+      {
+        "dimension_name": "事业部",
+        "aliases": [
+          "事业部",
+          "电商事业部"
+        ],
+        "members": [
+          "电商事业部"
+        ],
+        "child_dimensions": [
+          "业务部"
+        ]
+      },
+      {
+        "dimension_name": "业务部",
+        "aliases": [
+          "业务部"
+        ],
+        "members": [
+          "国内业务部",
+          "直营零售部",
+          "跨境业务部"
+        ],
+        "child_dimensions": [
+          "细分业务"
+        ],
+        "groups": [
+          {
+            "group_name": "3大业务部",
+            "aliases": [
+              "3大业务部",
+              "三大业务部",
+              "三个业务部"
+            ],
+            "members": [
+              "国内业务部",
+              "直营零售部",
+              "跨境业务部"
+            ],
+            "description": "电商事业部下属的三大业务部。"
+          }
+        ]
+      },
+      {
+        "dimension_name": "细分业务",
+        "aliases": [
+          "细分业务",
+          "业务线"
+        ],
+        "members": [
+          "净水业务",
+          "饮水业务",
+          "台净业务",
+          "滤芯",
+          "京东直营",
+          "天猫直营",
+          "抖音直营",
+          "达播",
+          "亚马逊",
+          "东南亚",
+          "其他"
+        ],
+        "child_dimensions": [
+          "业务经理"
+        ]
+      },
+      {
+        "dimension_name": "业务经理",
+        "aliases": [
+          "业务经理",
+          "负责人"
+        ],
+        "child_dimensions": []
+      }
+    ]
   }
 }

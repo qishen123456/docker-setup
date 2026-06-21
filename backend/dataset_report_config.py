@@ -198,10 +198,10 @@ def get_default_config() -> dict:
             },
         ],
         "metrics": [
-            {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
-            {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
+            {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount", "unit": "元", "scale": 1},
+            {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount", "unit": "元", "scale": 1},
             {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
-            {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount"},
+            {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount", "unit": "元", "scale": 1},
         ],
         "levels": [
             {"name": "机构层", "values": ["代表处", "分公司", "业务部"]},

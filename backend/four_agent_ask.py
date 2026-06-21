@@ -488,27 +488,40 @@ LIMIT {rank_limit}
         if not text:
             return intent
 
+        # 根层级通常是 analysisDimensions 中每条 path 的第一个节点（如 电商事业部/消费者事业部）。
+        # 识别 target_level 时，如果问题里同时提到根节点别名和更细层级别名，应优先取更细层级。
+        root_level_values = {
+            str(dimension.get("path")[0]).strip()
+            for dimension in (config.get("analysisDimensions") or [])
+            if isinstance(dimension.get("path") or [], list) and (dimension.get("path") or [])
+        }
+
         def resolve_target_level_from_text() -> str:
             aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
-            level_candidates = []
+            matches = []
             for level, level_aliases in aliases.items():
                 candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
                 if str(level) == "城市分公司":
                     candidates.append("城市分公司")
                 for candidate in candidates:
-                    if candidate:
-                        level_candidates.append((candidate, str(level)))
-            # Prefer the rightmost/longest level mention so that "东部分公司...代表处" targets 代表处
-            for candidate, level in sorted(level_candidates, key=lambda item: len(item[0]), reverse=True):
-                if text.rfind(candidate) != -1:
-                    return level
-            if "城市分公司" in text:
-                return "城市分公司"
+                    if not candidate:
+                        continue
+                    pos = text.rfind(candidate)
+                    if pos != -1:
+                        matches.append({"candidate": candidate, "level": str(level), "pos": pos, "is_root": str(level) in root_level_values})
+            if "城市分公司" in text and "城市分公司" not in {m["candidate"] for m in matches}:
+                matches.append({"candidate": "城市分公司", "level": "城市分公司", "pos": text.rfind("城市分公司"), "is_root": False})
             for dimension in config.get("analysisDimensions") or []:
                 for level in dimension.get("path") or []:
                     if level and str(level) in text:
-                        return str(level)
-            return ""
+                        matches.append({"candidate": str(level), "level": str(level), "pos": text.rfind(str(level)), "is_root": str(level) in root_level_values})
+            if not matches:
+                return ""
+            non_root = [m for m in matches if not m["is_root"]]
+            pool = non_root if non_root else matches
+            # 优先取最右边（最晚提到）的层级；同位置取更长的候选词
+            best = max(pool, key=lambda m: (m["pos"], len(m["candidate"])))
+            return best["level"]
 
         filter_operator = ""
         if re.search(r"低于|不足|小于|低过|少于", text):
@@ -517,13 +530,20 @@ LIMIT {rank_limit}
             filter_operator = ">="
         filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
         filter_value = float(filter_value_match.group(1)) if filter_value_match else None
+        level_only_filter = bool(
+            re.search(r'''属于['""“”](?:业务部|代表处|分公司|城市分公司|业务代表|城市公司|区域条线|行业条线)['""“”](?:层级|层|节点|数据)?''', text)
+            or re.search(r"(?:哪些|哪个|哪家|哪几个|找出|筛选出).*(?:区域条线|行业条线)", text)
+        )
         explicit_filter_question = bool(
             re.search(r"(?:哪些|哪个|哪家|哪几个).*(?:低于|不足|小于|少于|高于|超过|大于).*\d+(?:\.\d+)?\s*%?", text)
+            or level_only_filter
+            or re.search(r"(?:筛选出|找出).*(?:大于|小于|高于|低于|超过|不少于|不超过|等于|大于等于|小于等于)\s*0(?:\D|$)", text)
+            or re.search(r"(?:达成率|完成率).*在\s*\d+(?:\.\d+)?\s*%?\s*到\s*\d+(?:\.\d+)?\s*%?\s*之间", text)
         )
         threshold_filter_question = bool(
             re.search(r"(?:低于|不足|小于|低过|少于|高于|超过|大于)", text)
             and re.search(r"\d+(?:\.\d+)?\s*%?", text)
-            and re.search(r"(?:城市分公司|城市公司|分公司|代表处|业务部|业务员|业务代表)", text)
+            and re.search(r"(?:城市分公司|城市公司|分公司|代表处|业务部|业务员|业务代表|业务经理|细分业务)", text)
         )
         filter_problem = (
             explicit_filter_question
@@ -532,9 +552,55 @@ LIMIT {rank_limit}
             or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
         )
         target_level = resolve_target_level_from_text()
+        if not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
+            target_level = "业务代表"
 
-        drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻", text))
-        if drilldown_problem:
+        # 解析可能的多个数值过滤条件
+        filter_conditions = []
+        _metric_op_map = {
+            "大于": ">", "大于等于": ">=", "高于": ">", "超过": ">", "不少于": ">=",
+            "小于": "<", "小于等于": "<=", "低于": "<", "不超过": "<=", "少于": "<",
+            "等于": "=", ">=": ">=", "<=": "<=", ">": ">", "<": "<", "=": "=",
+        }
+        _metric_name_map = {
+            "年度开单金额": "年度开单金额",
+            "年度开单": "年度开单金额",
+            "开单金额": "年度开单金额",
+            "开单": "年度开单金额",
+            "总任务金额": "总任务金额",
+            "总任务": "总任务金额",
+            "任务金额": "总任务金额",
+            "任务": "总任务金额",
+            "达成率": "达成率",
+            "完成率": "达成率",
+            "剩余任务金额": "剩余任务金额",
+            "剩余任务": "剩余任务金额",
+            "缺口": "剩余任务金额",
+        }
+        _metric_pattern = re.compile(
+            r"(年度开单金额|年度开单|开单金额|开单|总任务金额|总任务|任务金额|任务|达成率|完成率|剩余任务金额|剩余任务|缺口)"
+            r"\s*(大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|等于|>=|<=|>|<|=)"
+            r"\s*(\d+(?:\.\d+)?)\s*%?"
+        )
+        for m in _metric_pattern.finditer(text):
+            col = _metric_name_map.get(m.group(1), "")
+            op = _metric_op_map.get(m.group(2), ">=" if any(t in m.group(2) for t in ["大", "高", "超"]) else "<=")
+            if col:
+                filter_conditions.append({"column": col, "operator": op, "value": float(m.group(3))})
+        # 达成率范围也作为 between 条件加入
+        for m in re.finditer(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text):
+            filter_conditions.append({"column": "达成率", "operator": "between", "value": float(m.group(1)), "value2": float(m.group(2))})
+
+        drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻|下有哪些|有哪些下属|下都", text))
+        # “国内业务部的业务经理有哪些”这类“有哪些”列表问法，如果没有数值过滤，也视为下钻取子节点
+        list_children_question = bool(
+            target_level
+            and not explicit_filter_question
+            and not threshold_filter_question
+            and re.search(r"(?:有哪些|有什么|包含哪些|名单|列表)", text)
+            and re.search(r"(?:业务经理|负责人|细分业务|业务线|业务部)", text)
+        )
+        if drilldown_problem or list_children_question:
             intent.update({
                 "intent": "drilldown",
                 "target_level": target_level,
@@ -543,20 +609,51 @@ LIMIT {rank_limit}
             })
             return intent
 
+        # "A 比 B 重/大/高" 应优先于聚合意图
+        bi_compare = re.search(r"(.+?)比(.+?)(重|大|高|多|低|小|少)$", text)
+        if bi_compare and not re.search(r"\d+(?:\.\d+)?\s*%?", text):
+            intent.update({
+                "intent": "comparison",
+                "target_level": target_level,
+                "comparison_left": bi_compare.group(1).strip(),
+                "comparison_right": bi_compare.group(2).strip(),
+                "comparison_operator": "<" if bi_compare.group(3) in {"低", "小", "少"} else ">",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["comparison_bi"],
+            })
+            return intent
+
         # Aggregate intent: grouping + aggregation keywords without numeric threshold
         aggregate_tokens = ["每个", "各", "分别", "按.*汇总", "按.*统计", "按.*分组", "汇总", "统计每个", "统计各", "按.*算", "按.*计算"]
         aggregate_metric_tokens = ["平均", "总和", "总额", "总量", "总数", "数量", "个数", "合计", "统计"]
         has_aggregate_structure = any(re.search(token, text) for token in aggregate_tokens)
         has_aggregate_metric = any(token in text for token in aggregate_metric_tokens)
-        asks_aggregate = has_aggregate_structure or has_aggregate_metric
+        asks_count = any(token in text for token in ["多少", "几个", "数量", "个数", "一共有", "总共有"])
+        asks_total = (
+            any(token in text for token in ["总和", "一共", "总共", "总计", "合计"])
+            or bool(re.search(r"总[^的\s]*(?:金额|业绩|任务|开单|指标).*?(?:是多少|多少|怎么样|如何)", text))
+        )
+        asks_aggregate = has_aggregate_structure or has_aggregate_metric or asks_count or asks_total
         if asks_aggregate and not re.search(r"\d+(?:\.\d+)?\s*%?", text):
-            intent.update({
-                "intent": "aggregate",
-                "target_level": target_level,
-                "output_mode": "aggregation",
-                "matched_triggers": ["aggregate"],
-            })
-            return intent
+            resolved_names = self._resolved_entity_names(context)
+            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+            org_suffixes = ["分公司", "代表处", "业务部", "事业部", "城市分公司", "城市公司", "业务代表"]
+            # 仅当 resolved 的是具体组织/人名实体时才跳过聚合；指标、动作类 token 仍走聚合
+            non_level_resolved = [
+                n for n in resolved_names
+                if n and n not in level_like_values
+                and any(n.endswith(suffix) for suffix in org_suffixes)
+            ]
+            if non_level_resolved:
+                pass
+            else:
+                intent.update({
+                    "intent": "aggregate",
+                    "target_level": target_level,
+                    "output_mode": "aggregation",
+                    "matched_triggers": ["aggregate"],
+                })
+                return intent
 
         # Comparison intent: A 超过/大于/小于/等于 B (B is not a pure number)
         # 1) Symbol comparison (e.g. A > B, A >= B)
@@ -606,8 +703,8 @@ LIMIT {rank_limit}
         # 3) "A 和 B 比/比较" structure
         vs_match = re.search(r"(.+?)(?:和|与|跟|同)(.+?)(?:相比|比较|比|哪个|谁更)", text)
         if vs_match:
-            left_text = vs_match.group(1).strip()
-            right_text = vs_match.group(2).strip()
+            left_text = re.sub(r"[的对比]+$", "", vs_match.group(1)).strip()
+            right_text = re.sub(r"[的对比]+$", "", vs_match.group(2)).strip()
             if left_text and right_text:
                 intent.update({
                     "intent": "comparison",
@@ -651,7 +748,98 @@ LIMIT {rank_limit}
             })
             return intent
 
+        # 提前/超额完成 → 达成率 >= 100%
+        completion_tokens = ["提前完成", "超额完成", "完成全年", "完成指标", "已经超额", "已超额"]
+        if any(token in text for token in completion_tokens):
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": "rate",
+                "filter_metric_column": "达成率",
+                "filter_operator": ">=",
+                "filter_value": 100.0,
+                "direction": "desc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["spoken_completion"],
+            })
+            return intent
+
+        # 达成率在 X% 到 Y% 之间
+        rate_range_match = re.search(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text)
+        if rate_range_match:
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": "rate",
+                "filter_metric_column": "达成率",
+                "filter_operator": "between",
+                "filter_value": float(rate_range_match.group(1)),
+                "filter_value2": float(rate_range_match.group(2)),
+                "direction": "asc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["filter_range"],
+            })
+            return intent
+
+        # 金额类指标在 X 到 Y 之间
+        amount_range_match = re.search(
+            r"(年度开单金额|开单金额|总任务金额|年度目标营收|任务金额|剩余任务金额).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间",
+            text,
+        )
+        if amount_range_match:
+            metric_name = amount_range_match.group(1)
+            key_map = {
+                "年度开单金额": "actual", "开单金额": "actual",
+                "总任务金额": "task", "年度目标营收": "task", "任务金额": "task",
+                "剩余任务金额": "remain",
+            }
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": key_map.get(metric_name, "actual"),
+                "filter_metric_column": metric_name,
+                "filter_operator": "between",
+                "filter_value": float(amount_range_match.group(2)),
+                "filter_value2": float(amount_range_match.group(3)),
+                "direction": "asc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["filter_amount_range"],
+            })
+            return intent
+
         if filter_problem:
+            if filter_conditions:
+                primary = filter_conditions[0]
+                intent.update({
+                    "intent": "filter",
+                    "target_level": target_level,
+                    "filter_metric_key": primary["column"],
+                    "filter_metric_column": primary["column"],
+                    "filter_operator": primary["operator"],
+                    "filter_value": primary["value"],
+                    "filter_value2": primary.get("value2"),
+                    "direction": "asc" if primary["operator"] in {"<", "<="} else "desc",
+                    "output_mode": "matched_nodes_first",
+                    "matched_triggers": ["filter"],
+                })
+                if len(filter_conditions) > 1:
+                    intent["filter_conditions"] = filter_conditions
+                return intent
+
+            # 纯层级/条线过滤，没有附带数值阈值，不要把题干里的数字当成阈值
+            if level_only_filter:
+                intent.update({
+                    "intent": "filter",
+                    "target_level": target_level,
+                    "filter_metric_key": "level_only",
+                    "filter_metric_column": "",
+                    "filter_operator": "",
+                    "filter_value": None,
+                    "output_mode": "matched_nodes_first",
+                    "matched_triggers": ["level_only_filter"],
+                })
+                return intent
+
             metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
             text_lower = text.lower()
             metric_scores = []
@@ -747,6 +935,9 @@ LIMIT {rank_limit}
             return item.lower() in text.lower()
 
         matched_triggers = [item for item in triggers if item and trigger_matched(item)]
+        extra_ranking_tokens = ["排序", "从高到低", "从低到高", "最多", "最少", "最大", "最小", "缺口最大"]
+        if any(token in text for token in extra_ranking_tokens):
+            matched_triggers.append("extra_sort")
         if not matched_triggers:
             if target_level:
                 intent["target_level"] = target_level
@@ -760,6 +951,9 @@ LIMIT {rank_limit}
             top_n = max(1, min(max_top_n, top_n))
 
         negative_triggers = [str(item) for item in (ranking_policy.get("negativeTriggers") or []) if str(item).strip()]
+        for nt in ["最少", "最小"]:
+            if nt not in negative_triggers:
+                negative_triggers.append(nt)
         direction = (
             "desc"
             if rank_spec.get("sides") == "both"
@@ -1895,6 +2089,19 @@ LIMIT {rank_limit}
                 "sample_score": 0,
             }
 
+        # 电商数据集已有专门维护的规则 SQL，优先使用规则 SQL，避免旧 Golden SQL 样本列不标准导致图表异常。
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_code = str(dataset.get("dataset_code") or "")
+        dataset_name = str(dataset.get("dataset_name") or "")
+        is_ecommerce_dataset = dataset_code == "feishu_tbldianshang" or "电商事业部" in dataset_name
+        if is_ecommerce_dataset and rule_based_sql:
+            return {
+                "mode": "rule_based",
+                "sql": rule_based_sql,
+                "sample_id": None,
+                "sample_score": 0,
+            }
+
         exact_sample = next(
             (
                 item for item in sql_samples
@@ -2897,7 +3104,13 @@ LIMIT {rank_limit}
             if normalized_alias in generic_aliases:
                 continue
             if normalized_alias in normalized_question:
-                score = max(score, 95)
+                # 数据集名称 / 业务域精确命中优先级高于同义词
+                if alias == dataset.get("dataset_name"):
+                    score = max(score, 100)
+                elif alias == dataset.get("business_domain"):
+                    score = max(score, 98)
+                else:
+                    score = max(score, 95)
             elif len(normalized_alias) >= 3 and normalized_alias in normalized_question.replace("的", ""):
                 score = max(score, 90)
 
@@ -3182,19 +3395,65 @@ LIMIT {rank_limit}
         second_alias_score = alias_scores[1][1] if len(alias_scores) > 1 else 0
         if best_alias_score >= 90 and best_alias_score > second_alias_score:
             return None
-        ambiguous_terms = ["分公司", "组织", "代表处", "条线", "事业部", "区域", "部门", "团队"]
+
+        # 通用层级口径歧义消解：根据问题里提到的真实层级，只保留profile支持该层级的候选数据集
+        level_terms = ["分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "条线"]
+        matched_levels = [term for term in level_terms if term in question]
+        if matched_levels and len(ranked_candidates) >= 2:
+            supported_candidates = []
+            for dataset, score in ranked_candidates[:3]:
+                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                if any(self._profile_supports_level(profile, term) for term in matched_levels):
+                    supported_candidates.append((dataset, score))
+
+            if len(supported_candidates) == 1:
+                # 仅一个数据集支持该口径，不构成歧义
+                return None
+
+            if len(supported_candidates) >= 2:
+                options = []
+                for dataset, _score in supported_candidates:
+                    dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
+                    options.append(
+                        self._build_confirmation_option(
+                            option_id=f"dataset_scope_{dataset['id']}",
+                            label=dataset_name,
+                            description=f"按 {dataset_name} 的“{'/'.join(matched_levels)}”口径继续。",
+                            dataset_ids=[dataset["id"]],
+                            option_type="dataset_disambiguation",
+                            extra={
+                                "confirmation_type": "dataset_disambiguation",
+                                "resolved_dataset_name": dataset_name,
+                                "scope_mode": "aggregate",
+                            },
+                        )
+                    )
+                return {
+                    "requires_confirmation": True,
+                    "confirmation_role": "boss",
+                    "confirmation_type": "dataset_disambiguation",
+                    "confirmation_question": f"问题中的“{'/'.join(matched_levels)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
+                    "confirmation_options": options,
+                    "candidate_dataset_ids": candidate_ids,
+                }
+
+        # 如果用户只提到“分公司”且同时命中商用/消费者两个数据集，按数据集口径确认
         branch_only_cross_bu = (
             "分公司" in compact_question
             and not any(token in compact_question for token in ["商用", "商用事业部", "消费者", "消费者事业部", "城市分公司", "城市公司", "代表处", "业务部", "业务员", "业务代表"])
             and any("商用事业部" in name for name in candidate_names)
             and any("消费者" in name for name in candidate_names)
         )
-
         if branch_only_cross_bu:
             options = []
             for dataset, _score in ranked_candidates[:3]:
                 dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
-                if "商用事业部" not in dataset_name and "消费者" not in dataset_name:
+                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                # 只保留真实支持“分公司/城市分公司”口径的数据集，避免把无关数据集列进来
+                if not (
+                    self._profile_supports_level(profile, "分公司")
+                    or self._profile_supports_level(profile, "城市分公司")
+                ):
                     continue
                 options.append(
                     self._build_confirmation_option(
@@ -3215,39 +3474,93 @@ LIMIT {rank_limit}
                     "requires_confirmation": True,
                     "confirmation_role": "boss",
                     "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": "检测到“分公司”同时可能指向商用事业部和消费者事业部，请先确认要使用哪个数据集口径：",
+                    "confirmation_question": "检测到“分公司”同时可能指向多个数据集，请确认要使用哪个数据集口径：",
                     "confirmation_options": options,
                     "candidate_dataset_ids": candidate_ids,
                 }
 
+        # 分数接近时，按真实数据集名称确认，不再使用无意义的“分公司层级”文案
         if len(ranked_candidates) >= 2:
             top1_score = ranked_candidates[0][1]
             top2_score = ranked_candidates[1][1]
             if abs(top1_score - top2_score) <= 12 and top2_score >= 60:
+                options = []
+                for idx, (dataset, _score) in enumerate(ranked_candidates[:3]):
+                    dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
+                    options.append(
+                        self._build_confirmation_option(
+                            option_id=f"dataset_disambiguation_{dataset['id']}",
+                            label=f"{dataset_name}{'（优先）' if idx == 0 else ''}",
+                            description=f"按 {dataset_name} 口径继续分析。",
+                            dataset_ids=[dataset["id"]],
+                            option_type="dataset_disambiguation",
+                            extra={"confirmation_type": "dataset_disambiguation", "resolved_dataset_name": dataset_name},
+                        )
+                    )
+                options.append(
+                    self._build_confirmation_option(
+                        option_id="dataset_disambiguation_cross",
+                        label="跨数据集汇总（拆分子任务）",
+                        description="同时按多个数据集口径输出并对比。",
+                        dataset_ids=candidate_ids,
+                        option_type="dataset_disambiguation",
+                        extra={"confirmation_type": "dataset_disambiguation", "scope_mode": "cross"},
+                    )
+                )
                 return {
                     "requires_confirmation": True,
                     "confirmation_role": "boss",
-                    "confirmation_question": "请老板确认本次问数优先使用哪个数据集口径？",
-                    "confirmation_options": [
-                        f"{ranked_candidates[0][0]['dataset_name']}（优先）",
-                        f"{ranked_candidates[1][0]['dataset_name']}",
-                        "跨数据集汇总（拆分子任务）",
-                    ],
+                    "confirmation_type": "dataset_disambiguation",
+                    "confirmation_question": "当前问题可能命中多个数据集，请确认要使用哪个口径：",
+                    "confirmation_options": options,
                     "candidate_dataset_ids": candidate_ids,
                 }
 
-        if len(ranked_candidates) >= 2 and any(term in question for term in ambiguous_terms):
-            return {
-                "requires_confirmation": True,
-                "confirmation_role": "boss",
-                "confirmation_question": "请老板确认组织统计口径：",
-                "confirmation_options": [
-                    "仅按分公司字段统计（推荐）",
-                    "按所有名称包含分公司的组织节点统计",
-                    "两种口径同时输出对比",
-                ],
-                "candidate_dataset_ids": candidate_ids,
-            }
+        # 组织口径类歧义：根据问题里的关键词在各候选数据集中的真实支持度生成选项，
+        # 如果只有单个数据集支持该口径，则不视为歧义。
+        ambiguous_terms = ["条线", "区域", "团队", "组织"]
+        matched_terms = [term for term in ambiguous_terms if term in question]
+        if len(ranked_candidates) >= 2 and matched_terms:
+            supported_candidates = []
+            for dataset, score in ranked_candidates[:3]:
+                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                if any(
+                    self._profile_supports_level(profile, term)
+                    for term in matched_terms
+                ):
+                    supported_candidates.append((dataset, score))
+
+            if len(supported_candidates) == 1:
+                # 仅一个数据集支持该口径，直接放行，由后续路由选中它
+                return None
+
+            if len(supported_candidates) >= 2:
+                options = []
+                for dataset, _score in supported_candidates:
+                    dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
+                    options.append(
+                        self._build_confirmation_option(
+                            option_id=f"dataset_scope_{dataset['id']}",
+                            label=dataset_name,
+                            description=f"按 {dataset_name} 的“{'/'.join(matched_terms)}”口径继续。",
+                            dataset_ids=[dataset["id"]],
+                            option_type="dataset_disambiguation",
+                            extra={
+                                "confirmation_type": "dataset_disambiguation",
+                                "resolved_dataset_name": dataset_name,
+                                "scope_mode": "aggregate",
+                            },
+                        )
+                    )
+                return {
+                    "requires_confirmation": True,
+                    "confirmation_role": "boss",
+                    "confirmation_type": "dataset_disambiguation",
+                    "confirmation_question": f"问题中的“{'/'.join(matched_terms)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
+                    "confirmation_options": options,
+                    "candidate_dataset_ids": candidate_ids,
+                }
+
         return None
 
     def _agent1_route_with_llm(
@@ -3403,13 +3716,34 @@ LIMIT {rank_limit}
             )
             return org_route
 
+        # 当用户只有一个可访问数据集时，直接命中该数据集，不再走任何歧义确认
+        if len(catalog) == 1:
+            only_dataset = catalog[0]
+            return {
+                "dataset_ids": [only_dataset["id"]],
+                "intent": "detail",
+                "refined_query": question,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": 100,
+                "route_margin": 100,
+                "candidate_dataset_ids": [only_dataset["id"]],
+                "arbiter_reason": "single_allowed_dataset",
+                "split_queries": [
+                    {"dataset_id": only_dataset["id"], "sub_query": question}
+                ],
+            }
+
         candidate_contexts: List[Tuple[Dict[str, Any], Dict[str, Any], int]] = []
         for dataset in catalog:
             context = self.repository.get_dataset_context(dataset["id"], question, top_k_samples=5)
             score = self._compute_dataset_match(question, dataset, context)
-            candidate_contexts.append((dataset, context, score))
+            alias_score = self._dataset_alias_match_score(question, dataset)
+            candidate_contexts.append((dataset, context, score, alias_score))
 
-        candidate_contexts.sort(key=lambda item: item[2], reverse=True)
+        # 总分相同时，别名/业务域命中分高的优先，避免“电商事业部年度开单”被同义词“年度开单”顶到前面
+        candidate_contexts.sort(key=lambda item: (item[2], item[3]), reverse=True)
+        candidate_contexts = [(dataset, context, score) for dataset, context, score, _alias in candidate_contexts]
         ranked = [(item[0], item[2]) for item in candidate_contexts]
         best_dataset, best_context, best_score = candidate_contexts[0]
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
@@ -3446,6 +3780,24 @@ LIMIT {rank_limit}
             if len(candidate_contexts) > 1
             else 0
         )
+        # 业务域 / 数据集名称精确命中（>=98）且唯一，直接命中，不受 route_margin 限制
+        if best_alias_score >= 98 and best_alias_score > runner_alias_score:
+            return {
+                "dataset_ids": [best_dataset["id"]],
+                "intent": "detail",
+                "refined_query": question,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": best_score,
+                "route_margin": route_margin,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": "explicit_dataset_domain",
+                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                "split_queries": [
+                    {"dataset_id": best_dataset["id"], "sub_query": question}
+                ],
+            }
         if best_alias_score >= 90 and best_alias_score > runner_alias_score and route_margin >= 12:
             return {
                 "dataset_ids": [best_dataset["id"]],
@@ -3464,6 +3816,66 @@ LIMIT {rank_limit}
                 ],
             }
 
+        # 实体口径唯一性消解：问题提到具体组织/成员名称时，
+        # 若只有单个候选数据集能在 profile 中解析出该成员，直接命中该数据集。
+        resolved_dataset = None
+        resolved_count = 0
+        for dataset, context, score in candidate_contexts[:3]:
+            profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+            if profile:
+                resolved = resolve_member_mentions(question, profile)
+                if resolved.get("all_members"):
+                    resolved_dataset = dataset
+                    resolved_count += 1
+        if resolved_count == 1 and resolved_dataset is not None:
+            return {
+                "dataset_ids": [resolved_dataset["id"]],
+                "intent": "detail",
+                "refined_query": question,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": next((score for d, c, score in candidate_contexts if d["id"] == resolved_dataset["id"]), 0),
+                "route_margin": 100,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": "entity_mention_unique",
+                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                "split_queries": [
+                    {"dataset_id": resolved_dataset["id"], "sub_query": question}
+                ],
+            }
+
+        # 层级口径快速消解：问题提到具体层级/维度时，
+        # 只保留 profile 或字段字典里真正支持该口径的候选数据集，避免把无关数据集摆出来。
+        level_terms = ["分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "条线"]
+        matched_levels = [term for term in level_terms if term in question]
+        supported_candidates = []
+        supported_dataset_ids = set()
+        if matched_levels and len(candidate_contexts) >= 2:
+            for dataset, context, score in candidate_contexts[:3]:
+                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                if any(
+                    self._profile_supports_level(profile, term) or self._context_supports_level(context, term)
+                    for term in matched_levels
+                ):
+                    supported_candidates.append((dataset, score))
+                    supported_dataset_ids.add(int(dataset["id"]))
+
+            if len(supported_candidates) == 1:
+                selected_dataset, selected_score = supported_candidates[0]
+                return {
+                    "dataset_ids": [selected_dataset["id"]],
+                    "intent": "detail",
+                    "refined_query": question,
+                    "requires_confirmation": False,
+                    "decision": "generate_sql",
+                    "match_score": selected_score,
+                    "route_margin": 100,
+                    "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                    "arbiter_reason": f"target_level_unique:{matched_levels[0]}",
+                    "split_queries": [{"dataset_id": selected_dataset["id"], "sub_query": question}],
+                }
+
         history = conversation_context or []
         arbiter_result = self.disambiguation_arbiter.evaluate(
             question=question,
@@ -3478,6 +3890,34 @@ LIMIT {rank_limit}
                 [item[0]["id"] for item in ranked[:3]],
                 [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked[:3]],
             )
+            # 若问题包含具体层级，过滤掉不支持该层级的候选；跨数据集选项在单一层级口径下也不适合自动命中
+            if matched_levels and supported_dataset_ids:
+                filtered_options = [
+                    option for option in options
+                    if option.get("option_type") != "cross_dataset"
+                    and any(int(did) in supported_dataset_ids for did in option.get("dataset_ids", []))
+                ]
+                if len(filtered_options) == 1 and filtered_options[0].get("dataset_ids"):
+                    selected_id = int(filtered_options[0]["dataset_ids"][0])
+                    selected_score = next(
+                        (score for dataset, score in supported_candidates if int(dataset["id"]) == selected_id),
+                        ranked[0][1],
+                    )
+                    return {
+                        "dataset_ids": [selected_id],
+                        "intent": "detail",
+                        "refined_query": question,
+                        "requires_confirmation": False,
+                        "decision": "generate_sql",
+                        "match_score": selected_score,
+                        "route_margin": 100,
+                        "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                        "arbiter_reason": f"target_level_unique:{matched_levels[0]}",
+                        "split_queries": [{"dataset_id": selected_id, "sub_query": question}],
+                    }
+                if filtered_options:
+                    options = filtered_options
+
             return {
                 "dataset_ids": options[0].get("dataset_ids", [ranked[0][0]["id"]]) if options else [ranked[0][0]["id"]],
                 "intent": "confirm",
@@ -3728,9 +4168,13 @@ LIMIT {rank_limit}
             "商用事业部（阶段一升级版）",
         }
         is_phase1_dataset = dataset_code == "angel_business_2026_phase1" or dataset_name == "商用事业部（阶段一升级版）"
+        is_ecommerce_dataset = dataset_code == "feishu_tbldianshang" or "电商事业部" in dataset_name
 
         if is_consumer_dataset:
             return self._build_consumer_business_sql(normalized_question, context)
+
+        if is_ecommerce_dataset:
+            return self._build_ecommerce_sql(normalized_question, context)
 
         if not is_syyb_dataset:
             return ""
@@ -3766,15 +4210,73 @@ LIMIT {rank_limit}
                     return col
             return ""
 
-        if intent_is_filter and filter_metric_column in allowed_filter_columns and filter_operator in {"<", "<=", ">", ">=", "="} and filter_value is not None:
+        # 纯层级/条线过滤，不附带数值阈值
+        if intent_is_filter and query_intent.get("filter_metric_key") == "level_only":
+            where_parts = []
+            if intent_target_level:
+                where_parts.append(f"层级 = '{intent_target_level}'")
+            elif "业务部" in normalized_question:
+                where_parts.append("层级 = '业务部'")
+            elif "代表处" in normalized_question:
+                where_parts.append("层级 = '代表处'")
+            elif "分公司" in normalized_question:
+                where_parts.append("层级 IN ('分公司', '业务部')")
+            if "行业条线" in normalized_question:
+                where_parts.append("条线 = '行业条线'")
+            elif "区域条线" in normalized_question:
+                where_parts.append("条线 = '区域条线'")
+            where_clause = " AND ".join(where_parts) if where_parts else "TRUE"
+            return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+ORDER BY 达成率 DESC, 剩余任务金额 DESC, 条线 DESC, 节点名称
+LIMIT 200
+""".strip()
+
+        if intent_is_filter and filter_metric_column in allowed_filter_columns and filter_operator in {"<", "<=", ">", ">=", "=", "between"} and filter_value is not None:
             try:
                 filter_value_sql = f"{float(filter_value):g}"
             except (TypeError, ValueError):
                 filter_value_sql = ""
             if filter_value_sql:
-                where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
+                all_conditions = query_intent.get("filter_conditions") or []
+                if not all_conditions:
+                    all_conditions = [{"column": filter_metric_column, "operator": filter_operator, "value": filter_value, "value2": query_intent.get("filter_value2")}]
+                where_parts = []
+                for cond in all_conditions:
+                    col = cond["column"]
+                    op = cond["operator"]
+                    val = cond["value"]
+                    val2 = cond.get("value2")
+                    if col not in allowed_filter_columns:
+                        continue
+                    try:
+                        val_sql = f"{float(val):g}"
+                    except (TypeError, ValueError):
+                        continue
+                    if op == "between":
+                        try:
+                            val2_sql = f"{float(val2):g}"
+                        except (TypeError, ValueError):
+                            val2_sql = ""
+                        if val2_sql:
+                            where_parts.append(f"{col} BETWEEN {val_sql} AND {val2_sql}")
+                        else:
+                            where_parts.append(f"{col} >= {val_sql}")
+                    else:
+                        where_parts.append(f"{col} {op} {val_sql}")
+                if not where_parts:
+                    where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
                 if intent_target_level:
                     where_parts.insert(0, f"层级 = '{intent_target_level}'")
+                if "行业条线" in normalized_question:
+                    where_parts.append("条线 = '行业条线'")
+                elif "区域条线" in normalized_question:
+                    where_parts.append("条线 = '区域条线'")
                 spoken_filter_triggers = {"spoken_zero_actual", "spoken_lagging"}
                 matched_triggers = set(query_intent.get("matched_triggers") or [])
                 if not (matched_triggers & spoken_filter_triggers):
@@ -3784,7 +4286,8 @@ LIMIT {rank_limit}
                         and n not in level_values
                         and len(n) >= 4
                         and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
-                        and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到"])
+                        and not re.search(r"\d|万", n)
+                        and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到", "之间", "范围"])
                     ]
                     if entity_names:
                         quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
@@ -4113,6 +4616,52 @@ LIMIT 50
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
 
+        # phase1 通用排名兜底：命中 ranking 意图但没有进入具体层级分支时，按指标全局/按目标层级排序
+        if is_phase1_dataset and intent_name == "ranking":
+            allowed_rank_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
+            intent_metric_column = str(query_intent.get("sort_metric_column") or "").strip()
+            phase1_metric_column = intent_metric_column if intent_metric_column in allowed_rank_columns else ""
+            if not phase1_metric_column:
+                if "剩余" in normalized_question or "缺口" in normalized_question or "待完成" in normalized_question:
+                    phase1_metric_column = "剩余任务金额"
+                elif "任务" in normalized_question or "目标" in normalized_question:
+                    phase1_metric_column = "总任务金额"
+                elif "开单" in normalized_question or "金额" in normalized_question or "销售" in normalized_question:
+                    phase1_metric_column = "年度开单金额"
+                else:
+                    phase1_metric_column = "达成率"
+
+            rank_spec_fallback = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
+            rank_limit_fallback = max(1, min(20, int(query_intent.get("top_n") or rank_spec_fallback.get("limit") or 1)))
+            rank_sides_fallback = str(query_intent.get("rank_sides") or rank_spec_fallback.get("sides") or "")
+            order_direction_fallback = "ASC" if rank_sides_fallback == "bottom" else "DESC"
+
+            where_clause = "TRUE"
+            if normalized_target_level:
+                where_clause = f"层级 = '{normalized_target_level}'"
+            elif "代表处" in normalized_question:
+                where_clause = "层级 = '代表处'"
+            elif "分公司" in normalized_question or "业务部" in normalized_question:
+                where_clause = "层级 IN ('分公司', '业务部')"
+            elif "业务代表" in normalized_question or "人" in normalized_question:
+                where_clause = "层级 = '业务代表'"
+            if "区域条线" in normalized_question:
+                where_clause = f"{where_clause} AND 条线 = '区域条线'" if where_clause != "TRUE" else "条线 = '区域条线'"
+            elif "行业条线" in normalized_question:
+                where_clause = f"{where_clause} AND 条线 = '行业条线'" if where_clause != "TRUE" else "条线 = '行业条线'"
+
+            return self._build_ranked_select_sql(
+                source_cte=f"WITH 汇总结果 AS (\n{syyb_base_sql}\n)",
+                source_name="汇总结果",
+                output_cte="通用排序",
+                where_clause=where_clause,
+                metric_column=phase1_metric_column,
+                direction=order_direction_fallback,
+                rank_limit=rank_limit_fallback,
+                rank_sides=rank_sides_fallback,
+                tie_breaker="剩余任务金额 DESC, 节点名称",
+            )
+
         if is_phase1_dataset and any(token in normalized_question for token in ["低于10", "低于 10", "小于10", "小于 10", "风险"]):
             return f"""
 WITH 汇总结果 AS (
@@ -4139,6 +4688,8 @@ LIMIT 50
         if not entity_names:
             for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
                 cleaned = match.strip("，,、 和与及的业绩情况表现")
+                if re.search(r"\d|万", cleaned):
+                    continue
                 if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
                     continue
                 if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
@@ -4285,6 +4836,317 @@ LIMIT 100
 
         return ""
 
+    def _build_ecommerce_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
+        q = str(normalized_question or "").strip()
+        if not q:
+            return ""
+
+        dataset = self._safe_dict(context.get("dataset")) or {}
+        query_intent = self._safe_dict(context.get("query_intent"))
+        intent = str(query_intent.get("intent") or "").strip()
+        intent_target_level = str(query_intent.get("target_level") or "").strip()
+
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        resolved = resolve_member_mentions(q, profile or {})
+        entities = resolved.get("entities") or []
+        all_members = resolved.get("all_members") or []
+        is_comparison = bool(
+            intent == "comparison"
+            or resolved.get("intent") == "compare"
+            or re.search(r"对比|比较|分别|各自|哪个|谁更|和.+比|跟.+比|与.+比|\bvs\b", q, re.I)
+        )
+
+        focus_member = ""
+        focus_dimension = ""
+        if not is_comparison and len(all_members) == 1 and entities:
+            focus_member = all_members[0]
+            focus_dimension = next(
+                (e.get("dimension_name") for e in entities if focus_member in (e.get("members") or [])),
+                "",
+            )
+
+        report_config = self._safe_dict(context.get("report_config")) or {}
+        ranking_policy = self._safe_dict((report_config.get("intentPolicies") or {}).get("ranking"))
+
+        def quote(value: str) -> str:
+            return "'" + str(value or "").replace("'", "''") + "'"
+
+        def clean_cmp_text(text: str) -> str:
+            return re.sub(r"^(?:看下|看一下|查下|查一下|查询|看看|请看下|请查下)", "", str(text or "")).strip("，,、 和与及的对比")
+
+        def is_likely_person_name(text: str) -> bool:
+            return bool(re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", str(text or "").strip()))
+
+        def metric_key_from_text(text: str) -> str:
+            if any(t in text for t in ["目标营收", "目标", "任务金额", "总任务"]):
+                return "task"
+            if any(t in text for t in ["开单金额", "开单", "实际", "营收", "毛利", "完成金额"]):
+                return "actual"
+            if any(t in text for t in ["达成率", "完成率", "进度"]):
+                return "rate"
+            if any(t in text for t in ["剩余任务", "缺口", "差额", "待完成"]):
+                return "remain"
+            return "actual" if intent == "ranking" else "task"
+
+        def metric_key_from_query(key: str) -> str:
+            key = str(key or "").strip()
+            if key in {"rate", "达成率", "完成率"}:
+                return "rate"
+            if key in {"actual", "年度开单金额", "开单金额", "开单", "实际", "完成金额"}:
+                return "actual"
+            if key in {"task", "总任务金额", "年度目标营收", "总任务", "任务", "目标"}:
+                return "task"
+            if key in {"remain", "剩余任务金额", "剩余任务", "缺口", "差额", "待完成"}:
+                return "remain"
+            return metric_key_from_text(q)
+
+        def source_metric_expr(key: str) -> str:
+            return {
+                "task": "年度目标营收",
+                "actual": "年度开单金额",
+                "rate": "总任务达成率",
+                "remain": "年度目标营收 - 年度开单金额",
+            }.get(key, "年度目标营收")
+
+        def normalize_threshold_value(raw: Optional[float], metric_key: str) -> Optional[float]:
+            if raw is None:
+                return None
+            if metric_key == "rate":
+                return raw / 100.0
+            if "亿" in q and raw < 10000:
+                return raw * 100000000
+            if "万" in q and raw < 10000:
+                return raw * 10000
+            return raw
+
+        # 用户层级 -> 实际层级 + 投影模式
+        # 电商视图物理层级只有 事业部/业务部/业务经理；细分业务是业务经理行的属性
+        USER_LEVELS = {
+            "事业部": {"actual": "事业部", "mode": "segment"},
+            "业务部": {"actual": "业务部", "mode": "segment"},
+            "细分业务": {"actual": "业务经理", "mode": "segment"},
+            "业务线": {"actual": "业务经理", "mode": "segment"},
+            "业务经理": {"actual": "业务经理", "mode": "manager"},
+            "负责人": {"actual": "业务经理", "mode": "manager"},
+        }
+
+        def infer_user_level() -> str:
+            # 下钻时如果 target_level 和聚焦维度相同（如“国内业务部下属明细”里的“业务部”），应下钻到子层级
+            if intent == "drilldown" and focus_dimension and intent_target_level == focus_dimension:
+                return {"事业部": "业务部", "业务部": "细分业务", "细分业务": "业务经理", "业务经理": "业务经理"}.get(focus_dimension, "细分业务")
+            if intent_target_level:
+                return intent_target_level
+            if focus_dimension and focus_dimension != "事业部":
+                return {"业务部": "细分业务", "细分业务": "业务经理", "业务经理": "业务经理"}.get(focus_dimension, "细分业务")
+            if "业务经理" in q or "负责人" in q:
+                return "业务经理"
+            if "细分业务" in q or "业务线" in q:
+                return "细分业务"
+            if "业务部" in q:
+                return "业务部"
+            if "事业部" in q or "整体" in q or "全部" in q:
+                return "事业部"
+            return "细分业务"
+
+        user_level = infer_user_level()
+        level_cfg = USER_LEVELS.get(user_level, {"actual": "业务经理", "mode": "segment"})
+        actual_level = level_cfg["actual"]
+        projection_mode = level_cfg["mode"]
+
+        # 投影列：
+        # - manager 模式把负责人作为节点，细分业务/业务部作为上级；
+        # - segment 模式在明确按某个逻辑层级查询时，把 层级 投影为该逻辑层级名，
+        #   方便 report_spec_builder 的层级匹配与前端展示（电商视图里“细分业务”由业务经理行承载）。
+        use_logical_level = intent in {"ranking", "filter", "comparison", "drilldown"} and user_level
+        if projection_mode == "manager":
+            select_cols = """
+                '电商业务' AS 条线,
+                '业务经理' AS 层级,
+                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,
+                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,
+                年度目标营收 AS 总任务金额,
+                年度开单金额 AS 年度开单金额,
+                ROUND(总任务达成率 * 100, 2) AS 达成率,
+                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
+            """.strip()
+        elif use_logical_level and user_level == "细分业务":
+            select_cols = """
+                '电商业务' AS 条线,
+                '细分业务' AS 层级,
+                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,
+                CASE
+                    WHEN 层级级别 = '事业部' THEN NULL
+                    WHEN 层级级别 = '业务部' THEN '电商事业部'
+                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')
+                END AS 上级名称,
+                年度目标营收 AS 总任务金额,
+                年度开单金额 AS 年度开单金额,
+                ROUND(总任务达成率 * 100, 2) AS 达成率,
+                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
+            """.strip()
+        else:
+            select_cols = """
+                '电商业务' AS 条线,
+                层级级别 AS 层级,
+                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,
+                CASE
+                    WHEN 层级级别 = '事业部' THEN NULL
+                    WHEN 层级级别 = '业务部' THEN '电商事业部'
+                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')
+                END AS 上级名称,
+                年度目标营收 AS 总任务金额,
+                年度开单金额 AS 年度开单金额,
+                ROUND(总任务达成率 * 100, 2) AS 达成率,
+                ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
+            """.strip()
+
+        where_parts = ["当前年 = '2026'"]
+        order_by = ""
+        limit_clause = "LIMIT 50"
+
+        # 对比：取 resolved 实体或 query_intent 的 left/right
+        if intent == "comparison" or is_comparison:
+            compare_members = list(all_members)
+            compare_dimension = ""
+            if not compare_members and intent == "comparison":
+                left_text = clean_cmp_text(query_intent.get("comparison_left") or "")
+                right_text = clean_cmp_text(query_intent.get("comparison_right") or "")
+                left_res = resolve_member_mentions(left_text, profile or {}) if left_text else {}
+                right_res = resolve_member_mentions(right_text, profile or {}) if right_text else {}
+                compare_members = list(dict.fromkeys(
+                    (left_res.get("all_members") or []) + (right_res.get("all_members") or [])
+                ))
+                for ent in (left_res.get("entities") or []) + (right_res.get("entities") or []):
+                    if ent.get("dimension_name"):
+                        compare_dimension = ent["dimension_name"]
+                        break
+                # 维度画像没命中具体人名时，按“两到四个汉字”兜底为人名对比
+                if not compare_members and (is_likely_person_name(left_text) or is_likely_person_name(right_text)):
+                    compare_members = [t for t in [left_text, right_text] if t]
+                    compare_dimension = "业务经理"
+            if not compare_dimension and entities:
+                for e in entities:
+                    if any(m in (e.get("members") or []) for m in compare_members):
+                        compare_dimension = e.get("dimension_name")
+                        break
+
+            if compare_members:
+                quoted_members = ",".join(quote(m) for m in compare_members)
+                if compare_dimension == "业务部":
+                    where_parts.append(f"业务部 IN ({quoted_members})")
+                    where_parts.append(f"层级级别 = '业务部'")
+                elif compare_dimension == "业务经理" or projection_mode == "manager":
+                    where_parts.append(f"负责人 IN ({quoted_members})")
+                    where_parts.append(f"层级级别 = '业务经理'")
+                elif compare_dimension in {"细分业务", "业务线"} or user_level in {"细分业务", "业务线"}:
+                    where_parts.append(f"细分业务 IN ({quoted_members})")
+                    where_parts.append(f"层级级别 = '业务经理'")
+                else:
+                    # 兜底：在节点名称里匹配
+                    where_parts.append(
+                        f"COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') IN ({quoted_members})"
+                    )
+                    if actual_level:
+                        where_parts.append(f"层级级别 = '{actual_level}'")
+                # 人名对比需要把负责人作为节点
+                if compare_dimension == "业务经理":
+                    select_cols = """
+                        '电商业务' AS 条线,
+                        '业务经理' AS 层级,
+                        COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,
+                        COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,
+                        年度目标营收 AS 总任务金额,
+                        年度开单金额 AS 年度开单金额,
+                        ROUND(总任务达成率 * 100, 2) AS 达成率,
+                        ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
+                    """.strip()
+                order_by = "年度开单金额 DESC"
+                limit_clause = "LIMIT 50"
+
+        # 排名
+        elif intent == "ranking":
+            if actual_level:
+                where_parts.append(f"层级级别 = '{actual_level}'")
+            # 如果聚焦到某个业务部，且不是业务部自身排名，则限定子树
+            if focus_member and focus_dimension == "业务部" and user_level != "业务部":
+                where_parts.append(f"组织路径 LIKE {quote('电商事业部;' + focus_member + '%')}")
+
+            sort_key = metric_key_from_query(query_intent.get("sort_metric_key"))
+            metric_col = source_metric_expr(sort_key)
+            direction = str(query_intent.get("direction") or "desc").upper()
+            if any(t in q for t in ["最低", "最差", "末位", "最小", "倒数", "垫底"]):
+                direction = "ASC"
+            order_by = f"{metric_col} {direction}"
+
+            top_n = self._safe_int(query_intent.get("top_n"), 0)
+            if top_n <= 0:
+                top_n = self._safe_int(ranking_policy.get("defaultTopN"), 3)
+            max_top_n = self._safe_int(ranking_policy.get("maxTopN"), 20)
+            top_n = max(1, min(max_top_n, top_n))
+            limit_clause = f"LIMIT {top_n}"
+
+        # 筛选
+        elif intent == "filter":
+            if actual_level:
+                where_parts.append(f"层级级别 = '{actual_level}'")
+            if focus_member and focus_dimension == "业务部" and user_level != "业务部":
+                where_parts.append(f"组织路径 LIKE {quote('电商事业部;' + focus_member + '%')}")
+
+            filter_metric_key = metric_key_from_query(query_intent.get("filter_metric_key"))
+            metric_col = source_metric_expr(filter_metric_key)
+            op = str(query_intent.get("filter_operator") or "").strip()
+            val = query_intent.get("filter_value")
+            if op and val is not None and filter_metric_key != "level_only":
+                if op == "between":
+                    val2 = query_intent.get("filter_value2")
+                    norm_val1 = normalize_threshold_value(float(val), filter_metric_key)
+                    norm_val2 = normalize_threshold_value(float(val2), filter_metric_key) if val2 is not None else norm_val1
+                    where_parts.append(f"({metric_col}) BETWEEN {norm_val1} AND {norm_val2}")
+                    order_by = f"{metric_col} DESC"
+                else:
+                    norm_val = normalize_threshold_value(float(val), filter_metric_key)
+                    where_parts.append(f"({metric_col}) {op} {norm_val}")
+                    direction = "asc" if op in {"<", "<="} else "desc"
+                    order_by = f"{metric_col} {direction}"
+            else:
+                order_by = f"{metric_col} DESC" if filter_metric_key != "level_only" else "年度开单金额 DESC"
+            limit_clause = "LIMIT 200"
+
+        # 下钻 / 明细 / 总览（聚焦单个节点）
+        elif focus_member:
+            if focus_dimension == "事业部":
+                where_parts.append(f"组织路径 LIKE {quote('电商事业部%')}")
+            elif focus_dimension == "业务部":
+                where_parts.append(f"(组织路径 LIKE {quote('电商事业部;' + focus_member + '%')} OR (业务部 = {quote(focus_member)} AND 层级级别 = '业务部'))")
+            elif focus_dimension == "细分业务":
+                where_parts.append(f"细分业务 = {quote(focus_member)}")
+            elif focus_dimension == "业务经理":
+                where_parts.append(f"负责人 = {quote(focus_member)}")
+            else:
+                where_parts.append(f"组织路径 LIKE {quote('电商事业部%' + focus_member + '%')}")
+
+            if intent == "drilldown" and actual_level:
+                where_parts.append(f"层级级别 = '{actual_level}'")
+            order_by = "层级级别, 年度开单金额 DESC"
+            limit_clause = "LIMIT 200"
+
+        # 兜底：无明确意图时按关键词识别层级
+        else:
+            if actual_level:
+                where_parts.append(f"层级级别 = '{actual_level}'")
+            if any(t in q for t in ["排名", "Top", "top", "前", "排行榜", "最高", "最低", "最好", "最差", "首位", "末位", "头名", "最大", "最小"]):
+                metric_key = metric_key_from_text(q)
+                metric_col = source_metric_expr(metric_key)
+                direction = "ASC" if any(t in q for t in ["最低", "最差", "末位", "最小"]) else "DESC"
+                order_by = f"{metric_col} {direction}"
+            else:
+                order_by = "年度开单金额 DESC"
+
+        where_clause = " AND ".join(where_parts)
+        sql = f"SELECT {select_cols} FROM v_feishu_tbldianshang WHERE {where_clause} ORDER BY {order_by} {limit_clause};"
+        return sql
+
+
     def _build_consumer_business_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
         dictionary_keys = {
             str(item.get("jsonb_key") or "").strip()
@@ -4302,6 +5164,9 @@ LIMIT 100
         query_intent = self._safe_dict(context.get("query_intent"))
         intent_is_ranking = query_intent.get("intent") == "ranking"
         intent_target_level = str(query_intent.get("target_level") or "")
+        if intent_target_level in {"城市公司", "城市分公司"}:
+            intent_target_level = "城市分公司"
+            query_intent["target_level"] = "城市分公司"
         asks_branch_extremes = (
             "分公司" in normalized_question
             and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
@@ -4329,6 +5194,8 @@ LIMIT 100
             for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:城市分公司|城市公司|分公司|事业部)", normalized_question):
                 cleaned = match.strip("，,、 和与及的业绩情况表现整体")
                 normalized = normalize_consumer_entity_name(cleaned)
+                if re.search(r"\d|万", normalized):
+                    continue
                 if normalized and normalized not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
                     entity_names.append(normalized)
         entity_names = list(dict.fromkeys(entity_names))
@@ -4488,6 +5355,52 @@ WITH 字段提取 AS (
             "消费者事业部总体": "消费者事业部总体",
         }
         filter_level = filter_level_map.get(intent_target_level, "城市分公司" if city_level_requested else "")
+
+        # 消费者指标同义词（含 _万 后缀与组合口径），提前供过滤/聚合/对比复用
+        consumer_metric_map = {
+            "总实际_万": "年度开单金额",
+            "总实际": "年度开单金额",
+            "线下实际_万": "线下实际_万元",
+            "线下实际": "线下实际_万元",
+            "新零售实际_万": "新零售实际_万元",
+            "新零售实际": "新零售实际_万元",
+            "燃气定制实际_万": "燃气定制实际_万元",
+            "燃气定制实际": "燃气定制实际_万元",
+            "地产实际_万": "地产实际_万元",
+            "地产实际": "地产实际_万元",
+            "燃气定制-地产实际_万": "(燃气定制实际_万元 + 地产实际_万元)",
+            "燃气定制地产实际_万": "(燃气定制实际_万元 + 地产实际_万元)",
+            "燃气定制-地产实际": "(燃气定制实际_万元 + 地产实际_万元)",
+            "燃气定制地产实际": "(燃气定制实际_万元 + 地产实际_万元)",
+            "总任务_万": "总任务金额",
+            "总任务": "总任务金额",
+            "线下任务_万": "线下任务_万元",
+            "线下任务": "线下任务_万元",
+            "新零售任务_万": "新零售任务_万元",
+            "新零售任务": "新零售任务_万元",
+            "燃气定制任务_万": "燃气定制任务_万元",
+            "燃气定制任务": "燃气定制任务_万元",
+            "地产任务_万": "地产任务_万元",
+            "地产任务": "地产任务_万元",
+            "燃气定制-地产任务_万": "(燃气定制任务_万元 + 地产任务_万元)",
+            "燃气定制地产任务_万": "(燃气定制任务_万元 + 地产任务_万元)",
+            "燃气定制-地产任务": "(燃气定制任务_万元 + 地产任务_万元)",
+            "燃气定制地产任务": "(燃气定制任务_万元 + 地产任务_万元)",
+            "达成率": "达成率",
+        }
+
+        def map_consumer_metric(text: str) -> str:
+            for key, col in sorted(consumer_metric_map.items(), key=lambda x: -len(x[0])):
+                if key in text:
+                    return col
+            return ""
+
+        if intent_is_filter:
+            mapped_col = map_consumer_metric(normalized_question)
+            if mapped_col:
+                filter_metric_column = mapped_col
+                allowed_filter_columns.add(mapped_col)
+
         asks_threshold_filter = (
             intent_is_filter
             and filter_metric_column in allowed_filter_columns
@@ -4546,6 +5459,7 @@ WITH 字段提取 AS (
                         and n not in level_values
                         and len(n) >= 4
                         and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
+                        and not re.search(r"\d|万", n)
                         and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到"])
                     ]
                     if entity_names:
@@ -4563,35 +5477,7 @@ ORDER BY {filter_metric_column} {order_direction}, {tie_breaker}
 LIMIT 200
 """.strip()
 
-        consumer_metric_map = {
-            "总实际_万": "年度开单金额",
-            "总实际": "年度开单金额",
-            "线下实际_万": "线下实际_万元",
-            "线下实际": "线下实际_万元",
-            "新零售实际_万": "新零售实际_万元",
-            "新零售实际": "新零售实际_万元",
-            "燃气定制实际_万": "燃气定制实际_万元",
-            "燃气定制实际": "燃气定制实际_万元",
-            "地产实际_万": "地产实际_万元",
-            "地产实际": "地产实际_万元",
-            "总任务_万": "总任务金额",
-            "总任务": "总任务金额",
-            "线下任务_万": "线下任务_万元",
-            "线下任务": "线下任务_万元",
-            "新零售任务_万": "新零售任务_万元",
-            "新零售任务": "新零售任务_万元",
-            "燃气定制任务_万": "燃气定制任务_万元",
-            "燃气定制任务": "燃气定制任务_万元",
-            "地产任务_万": "地产任务_万元",
-            "地产任务": "地产任务_万元",
-            "达成率": "达成率",
-        }
-
-        def map_consumer_metric(text: str) -> str:
-            for key, col in sorted(consumer_metric_map.items(), key=lambda x: -len(x[0])):
-                if key in text:
-                    return col
-            return ""
+        # consumer_metric_map / map_consumer_metric 已上提到过滤分支前
 
         if intent_is_comparison:
             left_text = str(query_intent.get("comparison_left") or "").strip()
@@ -4633,8 +5519,23 @@ LIMIT 200
                 group_by_field = "上级名称"
                 where_level = "层级 = '城市分公司'"
 
-            if "平均" in normalized_question:
-                if "达成率" in normalized_question:
+            # 统计各分公司拥有的城市分公司数量
+            if ("各分公司" in normalized_question and "城市分公司数量" in normalized_question) or "各分公司拥有的城市分公司数量" in normalized_question:
+                group_by_field = "上级名称"
+                where_level = "层级 = '城市分公司'"
+                agg_select = "COUNT(*) AS 城市分公司数量"
+                order_by = "城市分公司数量 DESC NULLS LAST"
+            # 单实体 + "各项指标" 返回该节点全量指标
+            elif entity_names and "各项指标" in normalized_question:
+                quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+                where_level += f" AND 节点名称 IN ({quoted_entities})"
+                agg_select = "SUM(总任务金额) AS 总任务金额, SUM(年度开单金额) AS 年度开单金额, AVG(达成率) AS 平均达成率, SUM(剩余任务金额) AS 剩余任务金额, SUM(线下任务_万元) AS 线下任务_万元, SUM(新零售任务_万元) AS 新零售任务_万元, SUM(燃气定制任务_万元) AS 燃气定制任务_万元, SUM(地产任务_万元) AS 地产任务_万元, SUM(线下实际_万元) AS 线下实际_万元, SUM(新零售实际_万元) AS 新零售实际_万元, SUM(燃气定制实际_万元) AS 燃气定制实际_万元, SUM(地产实际_万元) AS 地产实际_万元"
+                order_by = "分组名称"
+            elif "平均" in normalized_question:
+                custom_metric = map_consumer_metric(normalized_question)
+                if custom_metric and custom_metric not in {"达成率", "总任务金额", "年度开单金额"}:
+                    agg_select = f"AVG({custom_metric}) AS 平均值, SUM({custom_metric}) AS 合计值"
+                elif "达成率" in normalized_question:
                     agg_select = "AVG(达成率) AS 平均达成率, COUNT(*) AS 节点数量"
                 elif "任务" in normalized_question:
                     agg_select = "AVG(总任务金额) AS 平均任务金额, SUM(总任务金额) AS 总任务金额"
@@ -6133,6 +7034,8 @@ Agent3 复核结果：
         trace = self._new_trace(question, "ask", live_callback=live_callback)
         memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
         effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
+        # 去掉题干前缀的序号，例如 "[ 4] xxx"、"4. xxx"、"第4题 xxx"
+        effective_question = re.sub(r"^(?:\[\s*\d+\s*\]|\d+[.．、]\s*|第\s*\d+\s*[题问]\s*)", "", effective_question).strip()
         self._append_trace(
             trace,
             "request.received",
@@ -6243,6 +7146,19 @@ Agent3 复核结果：
 
             if allowed_set is not None:
                 route = self._filter_route_by_allowed_datasets(route, allowed_set)
+                # 权限过滤后只剩一个候选选项时，自动命中，不再要求确认
+                if route.get("requires_confirmation"):
+                    filtered_options = route.get("confirmation_options") or []
+                    if len(filtered_options) == 1:
+                        only_option = filtered_options[0]
+                        route["dataset_ids"] = only_option.get("dataset_ids") or []
+                        route["split_queries"] = [
+                            {"dataset_id": ds_id, "sub_query": route.get("refined_query") or effective_question}
+                            for ds_id in (only_option.get("dataset_ids") or [])
+                        ]
+                        route["requires_confirmation"] = False
+                        route["decision"] = "generate_sql"
+                        route["arbiter_reason"] = (route.get("arbiter_reason") or "") + ";single_allowed_option_after_filter"
                 if not route.get("dataset_ids"):
                     result = {
                         "error": "当前账号没有可访问的数据集。请联系超级管理员调整数据权限。",

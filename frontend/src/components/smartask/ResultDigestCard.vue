@@ -395,6 +395,7 @@ const specScope = computed(() => props.dataset?.report_spec?.scope || datasetLis
 const specCompareLevel = computed(() => normalizeLevelHint(specScope.value?.compareLevelLabel))
 const specDetailLevel = computed(() => normalizeLevelHint(specScope.value?.detailLevelLabel))
 const digestCompareLevel = computed(() => explicitQuestionLevel.value || specCompareLevel.value)
+const isAllNodesLevel = computed(() => ['全部', '节点'].includes(digestCompareLevel.value) || String(digestCompareLevel.value || '').includes('/'))
 const isOverviewQuestion = computed(() => Boolean(
   !explicitQuestionLevel.value
   && !specScope.value?.focusNode
@@ -504,6 +505,14 @@ const reportConfig = computed(() => (
   || datasetList.value.find(item => item?.report_config)?.report_config
   || {}
 ))
+const intentName = computed(() => reportConfig.value?.queryIntent?.intent || props.route?.intent || '')
+const isFilterResult = computed(() => intentName.value === 'filter')
+const isRankingResult = computed(() => intentName.value === 'ranking')
+const resultVerb = computed(() => {
+  if (isFilterResult.value) return '筛选出'
+  if (isRankingResult.value) return '排名'
+  return '对比'
+})
 const riskThreshold = computed(() => Number(reportConfig.value?.officeRiskThreshold || reportConfig.value?.riskThreshold || 10))
 const reportDebug = computed(() => (
   props.dataset?.report_debug
@@ -769,6 +778,10 @@ const managementLayerRows = computed(() => {
   if (focusName) {
     const direct = normalizedRows.value.filter(item => item.parent === focusName && item.rate !== null)
     if (direct.length >= 2) return direct
+  }
+  if (isAllNodesLevel.value) {
+    const all = normalizedRows.value.filter(item => item.rate !== null)
+    if (all.length) return all
   }
   if (digestCompareLevel.value) {
     const scoped = normalizedRows.value.filter(item => rowMatchesLevel(item, digestCompareLevel.value) && item.rate !== null)
@@ -1087,6 +1100,7 @@ const comparisonRows = computed(() => {
 const isFilterComparisonQuestion = computed(() => Boolean(
   primaryAnswerMode.value === 'filter'
   && digestCompareLevel.value
+  && !isAllNodesLevel.value
   && !isOverviewQuestion.value
   && !specScope.value?.focusNode
 ))
@@ -1192,6 +1206,7 @@ const rowMatchedParentName = (row, parentNames = []) => parentNames.find((parent
 }) || ''
 
 const comparisonLevelLabel = computed(() => {
+  if (isAllNodesLevel.value) return '节点'
   const level = comparisonDigestRows.value.find(item => item.level)?.level || ''
   if (level) return level
   const name = comparisonDigestRows.value.find(item => item.name)?.name || ''
@@ -1221,7 +1236,11 @@ const shouldUseComparisonTemplate = computed(() => (
 
 const showComparisonChart = computed(() => shouldUseComparisonTemplate.value)
 
-const comparisonChartTitle = computed(() => `${comparisonLevelLabel.value || '对象'}对比`)
+const comparisonChartTitle = computed(() => {
+  if (isFilterResult.value) return `${comparisonLevelLabel.value || '对象'}筛选结果`
+  if (isRankingResult.value) return `${comparisonLevelLabel.value || '对象'}排名`
+  return `${comparisonLevelLabel.value || '对象'}对比`
+})
 
 const comparisonChartRows = computed(() => {
   if (!showComparisonChart.value) return []
@@ -1260,13 +1279,13 @@ const comparisonGapItems = computed(() => {
     const diff = Math.abs(left.rate - right.rate).toFixed(2).replace(/\.?0+$/, '')
     const winner = left.rate >= right.rate ? left.name : right.name
     const loser = left.rate >= right.rate ? right.name : left.name
-    items.push({ label: rows.length > 2 ? '首尾达成率差' : '达成率差', value: `${winner} 比 ${loser} 高 ${diff}pct` })
+    items.push({ label: rows.length > 2 ? (isFilterResult.value ? '达成率差距' : '首尾达成率差') : '达成率差', value: `${winner} 比 ${loser} 高 ${diff}pct` })
   }
   if (left.actual !== null && right.actual !== null) {
     const diff = Math.abs(left.actual - right.actual)
     const winner = left.actual >= right.actual ? left.name : right.name
     const loser = left.actual >= right.actual ? right.name : left.name
-    items.push({ label: rows.length > 2 ? '首尾开单差' : '开单差', value: `${winner} 比 ${loser} 多 ${formatAmountInWan(diff)}` })
+    items.push({ label: rows.length > 2 ? (isFilterResult.value ? '开单差距' : '首尾开单差') : '开单差', value: `${winner} 比 ${loser} 多 ${formatAmountInWan(diff)}` })
   }
   return items
 })
@@ -1284,9 +1303,14 @@ const comparisonVerdict = computed(() => {
     ? Math.abs(left.rate - right.rate).toFixed(2).replace(/\.?0+$/, '')
     : ''
   if (rows.length > 2) {
+    if (isFilterResult.value) {
+      return rateDiff
+        ? `本次${resultVerb.value} ${rows.length} 个${comparisonLevelLabel.value}：${leader.name}达成率最高，${follower.name}最低，相差 ${rateDiff} 个百分点。`
+        : `本次${resultVerb.value} ${rows.length} 个${comparisonLevelLabel.value}。`
+    }
     return rateDiff
-      ? `本次对比 ${rows.length} 个${comparisonLevelLabel.value}：${leader.name}达成率最高，${follower.name}最低，首尾相差 ${rateDiff} 个百分点。`
-      : `本次对比 ${rows.length} 个${comparisonLevelLabel.value}，建议继续看下钻明细定位差距。`
+      ? `本次${resultVerb.value} ${rows.length} 个${comparisonLevelLabel.value}：${leader.name}达成率最高，${follower.name}最低，首尾相差 ${rateDiff} 个百分点。`
+      : `本次${resultVerb.value} ${rows.length} 个${comparisonLevelLabel.value}，建议继续看下钻明细定位差距。`
   }
   return rateDiff
     ? `${leader.name}当前领先${follower.name}，达成率高 ${rateDiff} 个百分点。`

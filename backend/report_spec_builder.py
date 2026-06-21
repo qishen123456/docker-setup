@@ -30,8 +30,8 @@ def _format_value(value: Any, metric: Dict[str, Any]) -> str:
         return "-"
     if metric.get("format") == "percent":
         return f"{numeric:.2f}%"
-    if metric.get("format") == "amount":
-        return _format_amount(numeric, _metric_unit_hint(metric))
+    if metric.get("format") in ("amount", "currency"):
+        return _format_amount(numeric, metric)
     if numeric == int(numeric):
         return f"{int(numeric):,}"
     return f"{numeric:.2f}"
@@ -43,23 +43,40 @@ def _metric_unit_hint(metric: Optional[Dict[str, Any]]) -> str:
     return f"{metric.get('label', '')}{metric.get('column', '')}{metric.get('unit', '')}"
 
 
-def _format_amount(value: float, unit_hint: str = "") -> str:
-    abs_value = abs(value)
-    if "万元" in unit_hint or "_万元" in unit_hint:
-        if abs_value < 10000:
-            if value == int(value):
-                return f"{int(value)}万"
-            return f"{value:.2f}".rstrip("0").rstrip(".") + "万"
-        return f"{value / 10000:.2f}".rstrip("0").rstrip(".") + "亿"
-    if abs_value < 10000:
-        if value == int(value):
-            return str(int(value))
-        return f"{value:.2f}".rstrip("0").rstrip(".")
-    if abs_value < 1000000:
-        return f"{value / 10000:.1f}万"
-    if abs_value < 100000000:
-        return f"{round(value / 10000)}万"
-    return f"{value / 100000000:.2f}亿"
+def _format_amount(value: float, metric: Optional[Dict[str, Any]] = None) -> str:
+    unit = ""
+    scale = 1.0
+    if isinstance(metric, dict):
+        unit = str(metric.get("unit") or "").strip()
+        scale = float(metric.get("scale") or 0) or 1.0
+    if not unit:
+        hint = _metric_unit_hint(metric)
+        if "万元" in hint or "_万元" in hint:
+            unit = "万元"
+        else:
+            unit = "元"
+
+    display = value / scale
+    abs_display = abs(display)
+
+    def fmt(num: float) -> str:
+        if num == int(num):
+            return str(int(num))
+        return f"{num:.2f}".rstrip("0").rstrip(".")
+
+    if unit == "万元":
+        if abs_display < 10000:
+            return fmt(display) + "万"
+        return fmt(display / 10000) + "亿"
+
+    # 默认按 "元" 口径缩放展示
+    if abs_display < 10000:
+        return fmt(display)
+    if abs_display < 1000000:
+        return f"{display / 10000:.1f}".rstrip("0").rstrip(".") + "万"
+    if abs_display < 100000000:
+        return f"{round(display / 10000)}万"
+    return f"{display / 100000000:.2f}".rstrip("0").rstrip(".") + "亿"
 
 
 def _metric_by_key(config: Dict[str, Any], key: str, fallback_tokens: List[str]) -> Optional[Dict[str, Any]]:
@@ -103,7 +120,11 @@ def _infer_metric_from_columns(columns: List[str], key: str, label: str, tokens:
     if not scored:
         return None
     scored.sort(key=lambda item: item[0], reverse=True)
-    return {"key": key, "label": label, "column": scored[0][1], "format": fmt}
+    metric = {"key": key, "label": label, "column": scored[0][1], "format": fmt}
+    if fmt == "amount":
+        metric["unit"] = "元"
+        metric["scale"] = 1
+    return metric
 
 
 def _row_value(row: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> Optional[float]:
@@ -597,6 +618,17 @@ def build_report_spec(
         parent_nodes = [node for node in nodes if node.get("children")]
         max_depth = max([node.get("depth", 0) for node in parent_nodes] or [0])
         comparison_nodes = [node for node in parent_nodes if node.get("depth", 0) == max_depth]
+    # 对于“筛选出...节点”这种没有指定层级的过滤问题，默认不要只取根节点的子节点，应该遍历全部节点
+    if (
+        query_intent.get("intent") == "filter"
+        and not requested_levels
+        and not focus_node
+        and not matched_nodes
+    ):
+        comparison_nodes = [node for node in nodes if node.get("name")]
+    # 排名类问题如果只返回同层节点（没有父节点在结果里），直接把这些节点作为比较对象
+    if not comparison_nodes and query_intent.get("intent") == "ranking":
+        comparison_nodes = [node for node in nodes if node.get("name")]
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
     if requested_levels:
         if explicit_comparative and len(comparison_nodes) > 1:
@@ -661,6 +693,15 @@ def build_report_spec(
     detail_nodes = [item for node in comparison_nodes for item in _drill_children(node)]
     has_drill_detail = bool(detail_nodes)
     detail_label = _level_label(detail_nodes, "明细层级")
+    # 未指定层级的全量节点过滤，层级标签用“全部”，避免前端默认卡到某一层
+    if (
+        query_intent.get("intent") == "filter"
+        and not requested_levels
+        and not focus_node
+        and not matched_nodes
+    ):
+        compare_label = "全部"
+        detail_label = "全部"
 
     chart_metrics = [metric for metric in [actual_metric, task_metric, remain_metric, rate_metric] if metric]
 
