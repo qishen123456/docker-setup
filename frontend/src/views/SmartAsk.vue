@@ -177,6 +177,7 @@
                     <ResultDigestCard
                       v-if="getReport(msg) || getPrimaryDataset(msg)"
                       :title="getResultTitle(msg)"
+                      :display-title="msg.data?.display_title || ''"
                       :question="msg.data?.question || session.state.question"
                       :report="getReport(msg)"
                       :dataset="getPrimaryDataset(msg)"
@@ -4100,8 +4101,12 @@ const getPrimaryDataset = (msg) => {
   return dataset
 }
 const getResultTitle = (msg) => {
+  if (msg.data?.display_title) {
+    return msg.data.display_title.length > 20 ? `${msg.data.display_title.slice(0, 20)}...` : msg.data.display_title
+  }
   const raw = msg.data?.question || session.state.question || '本月公司经营表现分析'
-  return raw.length > 20 ? `${raw.slice(0, 20)}...` : raw
+  const normalized = normalizeReportTitle(raw)
+  return normalized.length > 20 ? `${normalized.slice(0, 20)}...` : normalized
 }
 
 const formatElapsedLabel = (seconds) => {
@@ -4425,7 +4430,19 @@ const datasetNameMap = computed(() => new Map(
   (datasets.value || []).map(item => [Number(item.id), item.dataset_name])
 ))
 
-const normalizeReportTitle = () => '业绩分析报告'
+const normalizeReportTitle = (text) => {
+  let s = String(text ?? '').trim()
+  if (!s) return '业绩分析报告'
+  s = s.replace(
+    /^(?:我说的是|我说的是|我说|我的问题是|我想问|我想知道|请问|问一下|看一下|查一下|看下|查下|请|麻烦|帮我|给我|告诉我|咨询一下|了解一下|看看)(?:[，,：:\s]+)?/,
+    ''
+  )
+  s = s.replace(/[？?！!。]+$/g, '').trim()
+  if (s.endsWith('的')) {
+    s = s.slice(0, -1).trim()
+  }
+  return s || '业绩分析报告'
+}
 
 const buildDownloadFilename = (title) => {
   const base = String(normalizeReportTitle(title))

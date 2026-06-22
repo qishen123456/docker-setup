@@ -222,6 +222,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  displayTitle: {
+    type: String,
+    default: '',
+  },
 })
 
 defineEmits(['viewDetails'])
@@ -250,12 +254,34 @@ const reviewStatusText = computed(() => {
   return 'SQL通过'
 })
 
-const questionLabel = computed(() => cleanText(props.question || props.title || '本轮问数'))
+const normalizeDisplayTitle = (text) => {
+  let s = cleanText(text)
+  if (!s) return s
+  // 去掉“我说的是/请问/看一下”等口语前缀，以及结尾的“的”，让标题更自然
+  s = s.replace(
+    /^(?:我说的是|我说的是|我说|我的问题是|我想问|我想知道|请问|问一下|看一下|查一下|看下|查下|请|麻烦|帮我|给我|告诉我|咨询一下|了解一下|看看)(?:[，,：:\s]+)?/,
+    ''
+  )
+  s = s.replace(/[？?！!。]+$/g, '').trim()
+  if (s.endsWith('的')) {
+    s = s.slice(0, -1).trim()
+  }
+  return s || cleanText(text)
+}
+
+const questionLabel = computed(() => props.displayTitle || normalizeDisplayTitle(props.question || props.title || '本轮问数'))
 
 const rows = computed(() => (Array.isArray(props.dataset?.rows) ? props.dataset.rows : []))
 const isLeafFocus = computed(() => Boolean(reportSpec.value?.scope?.focusNodeIsLeaf))
 
 const cleanText = (value) => String(value ?? '').trim()
+const nodeNameWithUndertaker = (row) => {
+  const name = cleanText(row?.name)
+  const undertaker = cleanText(row?.undertaker)
+  if (!name) return ''
+  if (!undertaker || undertaker === name) return name
+  return `${name}（业务承接人：${undertaker}）`
+}
 const sameOrgName = (left, right) => {
   const leftText = cleanText(left)
   const rightText = cleanText(right)
@@ -300,7 +326,11 @@ const formatAmountInWan = (value) => {
 
 const parseAmountInWan = (value) => {
   if (value === null || value === undefined || value === '') return null
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null
+    // 若数据集 metric 配置为「元」，原始数值是元，统一转为万口径
+    return isYuanAmount.value ? value / 10000 : value
+  }
   const text = String(value).trim()
   const numeric = Number(text.replace(/[^0-9.-]/g, ''))
   if (!Number.isFinite(numeric)) return null
@@ -459,6 +489,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   const actualKey = rowKeys.find(key => /年度开单|开单金额|开单|完成|实际|销售/i.test(key) && !/达成率|完成率|率/i.test(key)) || ''
   const remainKey = rowKeys.find(key => /剩余任务|剩余|缺口|差额|remain/i.test(key)) || ''
   const rankGroupKey = findColumn(row, [/排名分组/])
+  const undertakerKey = findColumn(row, [/业务承接人/, /任务承接人/, /负责人/])
   const taskValue = parseAmountInWan(taskKey ? row[taskKey] : null)
   const actualValue = parseAmountInWan(actualKey ? row[actualKey] : null)
   const remainValue = deriveRemain(taskValue, actualValue, parseAmountInWan(remainKey ? row[remainKey] : null))
@@ -476,6 +507,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     actualText: formatAmountInWan(actualValue),
     remainText: formatAmountInWan(remainValue),
     rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
+    undertaker: cleanText(undertakerKey ? row[undertakerKey] : ''),
     raw: row,
   }
 }).filter(item => item.name))
@@ -505,6 +537,18 @@ const reportConfig = computed(() => (
   || datasetList.value.find(item => item?.report_config)?.report_config
   || {}
 ))
+
+// 金额单位适配：部分数据集（如电商）SQL 输出为元，需要按 metric 配置转换为万口径
+const amountUnitConfig = computed(() => {
+  const metrics = Array.isArray(reportConfig.value?.metrics) ? reportConfig.value.metrics : []
+  const amountMetric = metrics.find((m) => /amount|currency|金额/.test(String(m?.format || '')))
+    || metrics.find((m) => /总任务|年度开单|剩余任务|金额/.test(String(m?.label || m?.column || '')))
+  const unit = String(amountMetric?.unit || '').trim()
+  const scale = Number(amountMetric?.scale) || 1
+  return { unit, scale }
+})
+const isYuanAmount = computed(() => amountUnitConfig.value.unit === '元' && amountUnitConfig.value.scale === 1)
+
 const intentName = computed(() => reportConfig.value?.queryIntent?.intent || props.route?.intent || '')
 const isFilterResult = computed(() => intentName.value === 'filter')
 const isRankingResult = computed(() => intentName.value === 'ranking')
@@ -1798,13 +1842,13 @@ const supportLines = computed(() => {
     const lines = []
     if (leader && pressure && leader.name !== pressure.name && leader.rate !== null && pressure.rate !== null) {
       const diff = Math.abs(leader.rate - pressure.rate).toFixed(2).replace(/\.?0+$/, '')
-      lines.push(`达成率差距：${leader.name}${leader.rateText || ''}，${pressure.name}${pressure.rateText || ''}，相差${diff}个百分点。`)
+      lines.push(`达成率差距：${nodeNameWithUndertaker(leader)}${leader.rateText || ''}，${nodeNameWithUndertaker(pressure)}${pressure.rateText || ''}，相差${diff}个百分点。`)
     }
     if (taskRows.length >= 2) {
-      lines.push(`任务体量：${taskRows[0].name}任务${taskRows[0].taskText || formatAmountInWan(taskRows[0].task)}，${taskRows[taskRows.length - 1].name}任务${taskRows[taskRows.length - 1].taskText || formatAmountInWan(taskRows[taskRows.length - 1].task)}。`)
+      lines.push(`任务体量：${nodeNameWithUndertaker(taskRows[0])}任务${taskRows[0].taskText || formatAmountInWan(taskRows[0].task)}，${nodeNameWithUndertaker(taskRows[taskRows.length - 1])}任务${taskRows[taskRows.length - 1].taskText || formatAmountInWan(taskRows[taskRows.length - 1].task)}。`)
     }
     if (remainRows.length >= 2) {
-      lines.push(`缺口压力：${remainRows[0].name}缺口${remainRows[0].remainText || formatAmountInWan(remainRows[0].remain)}，${remainRows[remainRows.length - 1].name}缺口${remainRows[remainRows.length - 1].remainText || formatAmountInWan(remainRows[remainRows.length - 1].remain)}。`)
+      lines.push(`缺口压力：${nodeNameWithUndertaker(remainRows[0])}缺口${remainRows[0].remainText || formatAmountInWan(remainRows[0].remain)}，${nodeNameWithUndertaker(remainRows[remainRows.length - 1])}缺口${remainRows[remainRows.length - 1].remainText || formatAmountInWan(remainRows[remainRows.length - 1].remain)}。`)
     }
     return lines.filter(Boolean)
   }
@@ -1890,28 +1934,28 @@ const actionItems = computed(() => {
   if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
     const leader = rankedCollectionRows.value[0]
     const tail = rankedCollectionRows.value[rankedCollectionRows.value.length - 1]
-    if (leader) actions.push(`复盘${leader.name}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
-    if (tail && tail.name !== leader?.name) actions.push(`对${tail.name}继续下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
+    if (leader) actions.push(`复盘${nodeNameWithUndertaker(leader)}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
+    if (tail && tail.name !== leader?.name) actions.push(`对${nodeNameWithUndertaker(tail)}继续下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
     actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，排名看${rankingMetricMeta.value.label}，风险继续看达成率和缺口。`)
     return actions.slice(0, 3)
   }
   if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {
     const leader = comparisonLeader.value
     const pressure = worstRow.value
-    if (leader) actions.push(`先复盘${leader.name}的高达成路径，提炼目标拆解、客户跟进和项目推进节奏。`)
-    if (pressure) actions.push(`优先下钻${pressure.name}，定位低达成节点的项目缺口和责任人推进状态。`)
+    if (leader) actions.push(`先复盘${nodeNameWithUndertaker(leader)}的高达成路径，提炼目标拆解、客户跟进和项目推进节奏。`)
+    if (pressure) actions.push(`优先下钻${nodeNameWithUndertaker(pressure)}，定位低达成节点的项目缺口和责任人推进状态。`)
     actions.push(`保持同层级横向比较，再向下一层级展开，避免用业务员明细直接替代管理层级判断。`)
     return actions.slice(0, 3)
   }
   if (riskRows.value.length) {
-    const names = riskRows.value.slice(0, 3).map(item => item.name).join('、')
+    const names = riskRows.value.slice(0, 3).map(item => nodeNameWithUndertaker(item)).join('、')
     actions.push(`优先跟进${names}等低达成节点，形成周度缺口推进清单。`)
   }
   if (bestRow.value) {
-    actions.push(`复盘${bestRow.value.name}的有效动作，形成目标拆解、项目推进和客户转化清单，并在两周内同步给同层级低达成节点。`)
+    actions.push(`复盘${nodeNameWithUndertaker(bestRow.value)}的有效动作，形成目标拆解、项目推进和客户转化清单，并在两周内同步给同层级低达成节点。`)
   }
   if (worstRow.value && worstRow.value !== bestRow.value) {
-    actions.push(`对${worstRow.value.name}做下一层下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
+    actions.push(`对${nodeNameWithUndertaker(worstRow.value)}做下一层下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
   }
   if (managementLayerRows.value.length >= 2) {
     actions.push(`按${managementLayerRows.value[0]?.level || '下级节点'}建立红黄绿看板，低于20%的节点周度复盘，20%-40%的节点专项推进。`)

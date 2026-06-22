@@ -523,6 +523,13 @@ LIMIT {rank_limit}
             best = max(pool, key=lambda m: (m["pos"], len(m["candidate"])))
             return best["level"]
 
+        # 口语化：“开单金额完成超过500万” -> “开单金额超过500万”，便于模式匹配
+        text = re.sub(
+            r"(年度开单金额|开单金额|总任务金额|任务金额|剩余任务金额|完成金额|年度目标营收|目标营收)\s*完成\s*(超过|大于|高于|小于|低于|不少于|不超过|等于|>=|<=|>|<)",
+            r"\1\2",
+            text,
+        )
+
         filter_operator = ""
         if re.search(r"低于|不足|小于|低过|少于", text):
             filter_operator = "<"
@@ -545,15 +552,6 @@ LIMIT {rank_limit}
             and re.search(r"\d+(?:\.\d+)?\s*%?", text)
             and re.search(r"(?:城市分公司|城市公司|分公司|代表处|业务部|业务员|业务代表|业务经理|细分业务)", text)
         )
-        filter_problem = (
-            explicit_filter_question
-            or threshold_filter_question
-            or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
-            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
-        )
-        target_level = resolve_target_level_from_text()
-        if not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
-            target_level = "业务代表"
 
         # 解析可能的多个数值过滤条件
         filter_conditions = []
@@ -567,6 +565,8 @@ LIMIT {rank_limit}
             "年度开单": "年度开单金额",
             "开单金额": "年度开单金额",
             "开单": "年度开单金额",
+            "完成金额": "年度开单金额",
+            "完成": "年度开单金额",
             "总任务金额": "总任务金额",
             "总任务": "总任务金额",
             "任务金额": "总任务金额",
@@ -578,7 +578,7 @@ LIMIT {rank_limit}
             "缺口": "剩余任务金额",
         }
         _metric_pattern = re.compile(
-            r"(年度开单金额|年度开单|开单金额|开单|总任务金额|总任务|任务金额|任务|达成率|完成率|剩余任务金额|剩余任务|缺口)"
+            r"(年度开单金额|年度开单|开单金额|开单|完成金额|完成|总任务金额|总任务|任务金额|任务|达成率|完成率|剩余任务金额|剩余任务|缺口)"
             r"\s*(大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|等于|>=|<=|>|<|=)"
             r"\s*(\d+(?:\.\d+)?)\s*%?"
         )
@@ -590,6 +590,18 @@ LIMIT {rank_limit}
         # 达成率范围也作为 between 条件加入
         for m in re.finditer(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text):
             filter_conditions.append({"column": "达成率", "operator": "between", "value": float(m.group(1)), "value2": float(m.group(2))})
+
+        explicit_metric_filter = bool(filter_conditions)
+        filter_problem = (
+            explicit_filter_question
+            or threshold_filter_question
+            or explicit_metric_filter
+            or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
+            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
+        )
+        target_level = resolve_target_level_from_text()
+        if not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
+            target_level = "业务代表"
 
         drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻|下有哪些|有哪些下属|下都", text))
         # “国内业务部的业务经理有哪些”这类“有哪些”列表问法，如果没有数值过滤，也视为下钻取子节点
@@ -854,7 +866,10 @@ LIMIT {rank_limit}
                     score += 100
                 if key == "rate" and any(t in text_lower for t in ["达成率", "完成率"]):
                     score += 80
-                if key == "actual" and any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"]):
+                if key == "actual" and (
+                    any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"])
+                    or ("完成" in text_lower and "完成率" not in text_lower)
+                ):
                     score += 80
                 if key == "task" and any(t in text_lower for t in ["任务", "目标"]):
                     score += 80
@@ -864,7 +879,25 @@ LIMIT {rank_limit}
                     metric_scores.append((score, m))
             metric = max(metric_scores, key=lambda x: x[0])[1] if metric_scores else {}
             if not metric:
-                metric = next((m for m in metrics if str(m.get("key") or "") == "rate"), {})
+                # 未命中任何指标时，根据阈值单位/量级做兜底推断
+                text_lower = text.lower()
+                has_rate_keyword = any(t in text_lower for t in ["达成率", "完成率", "进度", "比例", "%"])
+                has_amount_unit = "万" in text or "亿" in text
+                amount_like = (
+                    not has_rate_keyword
+                    and (
+                        has_amount_unit
+                        or (filter_value is not None and filter_value >= 100)
+                        or ("完成" in text_lower and "完成率" not in text_lower)
+                        or any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"])
+                    )
+                )
+                if amount_like:
+                    metric = next((m for m in metrics if str(m.get("key") or "") == "actual"), {})
+                    if not metric:
+                        metric = next((m for m in metrics if "年度开单" in str(m.get("label") or "")), {})
+                if not metric:
+                    metric = next((m for m in metrics if str(m.get("key") or "") == "rate"), {})
             if not filter_operator:
                 filter_operator = "<"
             if filter_value is None and filter_operator == "<":
@@ -1305,6 +1338,105 @@ LIMIT {rank_limit}
         if value == int(value):
             return f"{int(value):,}{suffix}"
         return f"{value:.2f}{suffix}"
+
+    @staticmethod
+    def _build_display_title(question: str, dataset_result: Dict[str, Any]) -> str:
+        """基于 query_intent 和数据集名称生成一句简洁的展示标题。"""
+        from collections import Counter
+
+        query_intent = dataset_result.get("query_intent") or {}
+        dataset_name = str(dataset_result.get("dataset_name") or "").strip()
+
+        # 数据集简称：去掉“飞书/安吉”等前缀后优先保留“…事业部”，否则去掉常见前后缀
+        cleaned_name = re.sub(r"^(飞书|安吉|cloud|公共)\s*", "", dataset_name, flags=re.I)
+        domain_match = re.search(r".*?事业部", cleaned_name)
+        if domain_match:
+            domain = domain_match.group(0)
+        else:
+            domain = re.sub(r"^(商用|消费者)|((经营)?预算|业绩|数据|分析|报告)$", "", cleaned_name, flags=re.I).strip() or cleaned_name
+
+        intent = str(query_intent.get("intent") or "").strip()
+        rows = dataset_result.get("rows") or []
+        target_level = str(query_intent.get("target_level") or "").strip()
+        output_level = target_level
+        if rows:
+            # 以实际返回行的层级作为展示标题的层级，比 intent.target_level 更能反映真实输出
+            levels = [str(r.get("层级") or "").strip() for r in rows if r.get("层级")]
+            if levels:
+                output_level = Counter(levels).most_common(1)[0][0]
+        target_level = output_level
+
+        metric_label_map = {
+            "年度开单金额": "开单金额",
+            "总任务金额": "任务金额",
+            "剩余任务金额": "剩余任务金额",
+            "达成率": "达成率",
+        }
+        metric_key_map = {"actual": "开单金额", "task": "任务金额", "remain": "剩余任务金额", "rate": "达成率"}
+
+        def metric_label(metric_key: str, metric_column: str) -> str:
+            if metric_column in metric_label_map:
+                return metric_label_map[metric_column]
+            if metric_key in metric_label_map:
+                return metric_label_map[metric_key]
+            return metric_key_map.get(metric_key) or metric_key or "指标"
+
+        op_text_map = {">": "大于", ">=": "大于等于", "<": "小于", "<=": "小于等于", "=": "等于", "between": "在"}
+
+        if intent == "filter":
+            metric_key = str(query_intent.get("filter_metric_key") or "")
+            metric_column = str(query_intent.get("filter_metric_column") or "")
+            operator = str(query_intent.get("filter_operator") or "")
+            value = query_intent.get("filter_value")
+            value2 = query_intent.get("filter_value2")
+            label = metric_label(metric_key, metric_column)
+            is_rate = label == "达成率"
+            suffix = "%" if is_rate else ""
+
+            if operator == "between" and value is not None and value2 is not None:
+                value_text = f"{FourAgentAskService._format_metric(value, suffix)}到{FourAgentAskService._format_metric(value2, suffix)}之间"
+                op_text = ""
+            else:
+                value_text = FourAgentAskService._format_metric(value, suffix) if value is not None else ""
+                # 金额类阈值优先按题干单位显示
+                if not is_rate and value is not None:
+                    if "亿" in question and float(value) < 10000:
+                        value_text = f"{int(value)}亿" if float(value) == int(value) else f"{value}亿"
+                    elif "万" in question and float(value) < 10000:
+                        value_text = f"{int(value)}万" if float(value) == int(value) else f"{value}万"
+                op_text = op_text_map.get(operator, "超过") if operator else "超过"
+
+            parts = [domain, label]
+            if op_text:
+                parts.append(op_text)
+            if value_text:
+                parts.append(value_text)
+            title = "".join(parts)
+            if target_level:
+                title = f"{title}的{target_level}"
+            return title
+
+        if intent == "ranking":
+            metric_key = str(query_intent.get("sort_metric_key") or "")
+            metric_column = str(query_intent.get("sort_metric_column") or "")
+            label = metric_label(metric_key, metric_column)
+            top_n = query_intent.get("top_n")
+            direction = str(query_intent.get("direction") or "desc")
+            rank_word = "排名后" if direction == "asc" else "排名前"
+            parts = [domain, label]
+            if top_n:
+                parts.append(f"{rank_word}{top_n}")
+            title = "".join(parts)
+            if target_level:
+                title = f"{title}的{target_level}"
+            return title
+
+        # 兜底：去掉口语前缀后返回
+        return re.sub(
+            r"^(?:我说的是|我说的是|我说|我的问题是|我想问|我想知道|请问|问一下|看一下|查一下|看下|查下|请|麻烦|帮我|给我|告诉我|咨询一下|了解一下|看看)(?:[，,：:\s]+)?",
+            "",
+            str(question or ""),
+        ).strip()
 
     def _build_layered_management_report(
         self,
@@ -4920,33 +5052,53 @@ LIMIT 100
             return raw
 
         # 用户层级 -> 实际层级 + 投影模式
-        # 电商视图物理层级只有 事业部/业务部/业务经理；细分业务是业务经理行的属性
+        # 电商视图物理层级只有 事业部/业务部/业务经理；
+        # 业务经理行同时承载「业务承接角色」（细分业务）和「承接人」（负责人）两个逻辑层级，二者是同一物理行。
         USER_LEVELS = {
             "事业部": {"actual": "事业部", "mode": "segment"},
             "业务部": {"actual": "业务部", "mode": "segment"},
+            "业务承接角色": {"actual": "业务经理", "mode": "segment"},
             "细分业务": {"actual": "业务经理", "mode": "segment"},
             "业务线": {"actual": "业务经理", "mode": "segment"},
-            "业务经理": {"actual": "业务经理", "mode": "manager"},
+            "承接人": {"actual": "业务经理", "mode": "manager"},
+            "任务承接人": {"actual": "业务经理", "mode": "manager"},
             "负责人": {"actual": "业务经理", "mode": "manager"},
+            "业务经理": {"actual": "业务经理", "mode": "manager"},
         }
 
         def infer_user_level() -> str:
             # 下钻时如果 target_level 和聚焦维度相同（如“国内业务部下属明细”里的“业务部”），应下钻到子层级
-            if intent == "drilldown" and focus_dimension and intent_target_level == focus_dimension:
-                return {"事业部": "业务部", "业务部": "细分业务", "细分业务": "业务经理", "业务经理": "业务经理"}.get(focus_dimension, "细分业务")
+            # 筛选/对比问题里如果已聚焦到具体节点且 target_level 就是该节点所在维度，也默认下钻到子层级，
+            # 避免“国内业务部完成超过500万的”被理解为对所有业务部做过滤。
+            if focus_dimension and intent_target_level == focus_dimension and intent in {"drilldown", "filter", "comparison"}:
+                return {
+                    "事业部": "业务部",
+                    "业务部": "业务承接角色",
+                    "业务承接角色": "承接人",
+                    "承接人": "承接人",
+                    # 兼容旧画像名
+                    "细分业务": "承接人",
+                    "业务经理": "承接人",
+                }.get(focus_dimension, "业务承接角色")
             if intent_target_level:
                 return intent_target_level
             if focus_dimension and focus_dimension != "事业部":
-                return {"业务部": "细分业务", "细分业务": "业务经理", "业务经理": "业务经理"}.get(focus_dimension, "细分业务")
-            if "业务经理" in q or "负责人" in q:
-                return "业务经理"
-            if "细分业务" in q or "业务线" in q:
-                return "细分业务"
+                return {
+                    "业务部": "业务承接角色",
+                    "业务承接角色": "承接人",
+                    "承接人": "承接人",
+                    "细分业务": "承接人",
+                    "业务经理": "承接人",
+                }.get(focus_dimension, "业务承接角色")
+            if "承接人" in q or "负责人" in q or "任务承接人" in q or "业务经理" in q:
+                return "承接人"
+            if "业务承接角色" in q or "细分业务" in q or "业务线" in q:
+                return "业务承接角色"
             if "业务部" in q:
                 return "业务部"
             if "事业部" in q or "整体" in q or "全部" in q:
                 return "事业部"
-            return "细分业务"
+            return "业务承接角色"
 
         user_level = infer_user_level()
         level_cfg = USER_LEVELS.get(user_level, {"actual": "业务经理", "mode": "segment"})
@@ -4954,25 +5106,30 @@ LIMIT 100
         projection_mode = level_cfg["mode"]
 
         # 投影列：
-        # - manager 模式把负责人作为节点，细分业务/业务部作为上级；
-        # - segment 模式在明确按某个逻辑层级查询时，把 层级 投影为该逻辑层级名，
-        #   方便 report_spec_builder 的层级匹配与前端展示（电商视图里“细分业务”由业务经理行承载）。
+        # - manager 模式把「承接人/负责人」作为节点，业务部/事业部作为上级；
+        # - segment 模式把「业务承接角色」作为节点，业务部/事业部作为上级；
+        # - 默认返回时，业务经理行统一展示为「业务承接角色」，避免把业务承接角色误标成业务经理。
         use_logical_level = intent in {"ranking", "filter", "comparison", "drilldown"} and user_level
         if projection_mode == "manager":
             select_cols = """
                 '电商业务' AS 条线,
-                '业务经理' AS 层级,
-                COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,
-                COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,
+                '承接人' AS 层级,
+                COALESCE(NULLIF(TRIM(负责人), ''), '未知承接人') AS 节点名称,
+                CASE
+                    WHEN 层级级别 = '事业部' THEN NULL
+                    WHEN 层级级别 = '业务部' THEN '电商事业部'
+                    ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')
+                END AS 上级名称,
                 年度目标营收 AS 总任务金额,
                 年度开单金额 AS 年度开单金额,
+                NULLIF(TRIM(负责人), '') AS 业务承接人,
                 ROUND(总任务达成率 * 100, 2) AS 达成率,
                 ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
             """.strip()
-        elif use_logical_level and user_level == "细分业务":
+        elif use_logical_level and user_level in {"业务承接角色", "细分业务", "业务线"}:
             select_cols = """
                 '电商业务' AS 条线,
-                '细分业务' AS 层级,
+                '业务承接角色' AS 层级,
                 COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,
                 CASE
                     WHEN 层级级别 = '事业部' THEN NULL
@@ -4981,13 +5138,17 @@ LIMIT 100
                 END AS 上级名称,
                 年度目标营收 AS 总任务金额,
                 年度开单金额 AS 年度开单金额,
+                NULLIF(TRIM(负责人), '') AS 业务承接人,
                 ROUND(总任务达成率 * 100, 2) AS 达成率,
                 ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
             """.strip()
         else:
             select_cols = """
                 '电商业务' AS 条线,
-                层级级别 AS 层级,
+                CASE
+                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业务), '') IS NOT NULL THEN '业务承接角色'
+                    ELSE 层级级别
+                END AS 层级,
                 COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,
                 CASE
                     WHEN 层级级别 = '事业部' THEN NULL
@@ -4996,6 +5157,7 @@ LIMIT 100
                 END AS 上级名称,
                 年度目标营收 AS 总任务金额,
                 年度开单金额 AS 年度开单金额,
+                NULLIF(TRIM(负责人), '') AS 业务承接人,
                 ROUND(总任务达成率 * 100, 2) AS 达成率,
                 ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
             """.strip()
@@ -5020,10 +5182,10 @@ LIMIT 100
                     if ent.get("dimension_name"):
                         compare_dimension = ent["dimension_name"]
                         break
-                # 维度画像没命中具体人名时，按“两到四个汉字”兜底为人名对比
+                # 维度画像没命中具体人名时，按“两到四个汉字”兜底为承接人对比
                 if not compare_members and (is_likely_person_name(left_text) or is_likely_person_name(right_text)):
                     compare_members = [t for t in [left_text, right_text] if t]
-                    compare_dimension = "业务经理"
+                    compare_dimension = "承接人"
             if not compare_dimension and entities:
                 for e in entities:
                     if any(m in (e.get("members") or []) for m in compare_members):
@@ -5035,10 +5197,10 @@ LIMIT 100
                 if compare_dimension == "业务部":
                     where_parts.append(f"业务部 IN ({quoted_members})")
                     where_parts.append(f"层级级别 = '业务部'")
-                elif compare_dimension == "业务经理" or projection_mode == "manager":
+                elif compare_dimension in {"承接人", "任务承接人", "负责人", "业务经理"} or projection_mode == "manager":
                     where_parts.append(f"负责人 IN ({quoted_members})")
                     where_parts.append(f"层级级别 = '业务经理'")
-                elif compare_dimension in {"细分业务", "业务线"} or user_level in {"细分业务", "业务线"}:
+                elif compare_dimension in {"业务承接角色", "细分业务", "业务线"} or user_level in {"业务承接角色", "细分业务", "业务线"}:
                     where_parts.append(f"细分业务 IN ({quoted_members})")
                     where_parts.append(f"层级级别 = '业务经理'")
                 else:
@@ -5049,14 +5211,19 @@ LIMIT 100
                     if actual_level:
                         where_parts.append(f"层级级别 = '{actual_level}'")
                 # 人名对比需要把负责人作为节点
-                if compare_dimension == "业务经理":
+                if compare_dimension in {"承接人", "任务承接人", "负责人", "业务经理"}:
                     select_cols = """
                         '电商业务' AS 条线,
-                        '业务经理' AS 层级,
-                        COALESCE(NULLIF(TRIM(负责人), ''), '未知负责人') AS 节点名称,
-                        COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 上级名称,
+                        '承接人' AS 层级,
+                        COALESCE(NULLIF(TRIM(负责人), ''), '未知承接人') AS 节点名称,
+                        CASE
+                            WHEN 层级级别 = '事业部' THEN NULL
+                            WHEN 层级级别 = '业务部' THEN '电商事业部'
+                            ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')
+                        END AS 上级名称,
                         年度目标营收 AS 总任务金额,
                         年度开单金额 AS 年度开单金额,
+                        NULLIF(TRIM(负责人), '') AS 业务承接人,
                         ROUND(总任务达成率 * 100, 2) AS 达成率,
                         ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
                     """.strip()
@@ -5118,9 +5285,9 @@ LIMIT 100
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%')}")
             elif focus_dimension == "业务部":
                 where_parts.append(f"(组织路径 LIKE {quote('电商事业部;' + focus_member + '%')} OR (业务部 = {quote(focus_member)} AND 层级级别 = '业务部'))")
-            elif focus_dimension == "细分业务":
+            elif focus_dimension in {"业务承接角色", "细分业务", "业务线"}:
                 where_parts.append(f"细分业务 = {quote(focus_member)}")
-            elif focus_dimension == "业务经理":
+            elif focus_dimension in {"承接人", "任务承接人", "负责人", "业务经理"}:
                 where_parts.append(f"负责人 = {quote(focus_member)}")
             else:
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%' + focus_member + '%')}")
@@ -6929,6 +7096,7 @@ Agent3 复核结果：
                     "report_config": report_config,
                     "report_config_source": report_config_source,
                     "resolved_entities": context.get("resolved_entities"),
+                    "query_intent": context.get("query_intent") or {},
                     "agent3_review": review,
                     "columns": result["columns"],
                     "rows": result["rows"],
@@ -6949,6 +7117,7 @@ Agent3 复核结果：
             )
 
         primary = dataset_results[0]
+        display_title = self._build_display_title(question, primary)
         combined_analysis = "\n\n---\n\n".join(
             [
                 f"## {item['dataset_name']}\n\n{item['analysis']}"
@@ -6958,6 +7127,7 @@ Agent3 复核结果：
         )
         return {
             "question": question,
+            "display_title": display_title,
             "route": route,
             "confidence": self._build_confidence_payload(route, dataset_results),
             "dataset_results": dataset_results,
