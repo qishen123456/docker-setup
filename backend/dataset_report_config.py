@@ -203,6 +203,7 @@ def get_default_config() -> dict:
             {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
             {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount", "unit": "元", "scale": 1},
         ],
+        "amountUnitConvention": "元",  # 所有金额类指标默认原始值为元，按需要自动展示为万/亿
         "levels": [
             {"name": "机构层", "values": ["代表处", "分公司", "业务部"]},
             {"name": "个人层", "values": ["业务代表", "业务员", "业务"]},

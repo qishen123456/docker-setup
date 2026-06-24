@@ -43,6 +43,12 @@ def _metric_unit_hint(metric: Optional[Dict[str, Any]]) -> str:
     return f"{metric.get('label', '')}{metric.get('column', '')}{metric.get('unit', '')}"
 
 
+def _column_uses_wan_unit(column: str) -> bool:
+    """判断列名是否明确表示数值单位为万元。"""
+    text = str(column or "")
+    return "_万元" in text or "转换万" in text or text.endswith("万")
+
+
 def _format_amount(value: float, metric: Optional[Dict[str, Any]] = None) -> str:
     unit = ""
     scale = 1.0
@@ -51,7 +57,7 @@ def _format_amount(value: float, metric: Optional[Dict[str, Any]] = None) -> str
         scale = float(metric.get("scale") or 0) or 1.0
     if not unit:
         hint = _metric_unit_hint(metric)
-        if "万元" in hint or "_万元" in hint:
+        if "万元" in hint or "_万元" in hint or _column_uses_wan_unit(metric.get("column") if isinstance(metric, dict) else ""):
             unit = "万元"
         else:
             unit = "元"
@@ -120,10 +126,16 @@ def _infer_metric_from_columns(columns: List[str], key: str, label: str, tokens:
     if not scored:
         return None
     scored.sort(key=lambda item: item[0], reverse=True)
-    metric = {"key": key, "label": label, "column": scored[0][1], "format": fmt}
+    column = scored[0][1]
+    metric = {"key": key, "label": label, "column": column, "format": fmt}
     if fmt == "amount":
-        metric["unit"] = "元"
-        metric["scale"] = 1
+        # 列名显式带 "_万元"/"万元" 时按万元口径解析，否则统一按商用数据集元口径处理
+        if _column_uses_wan_unit(column):
+            metric["unit"] = "万元"
+            metric["scale"] = 1
+        else:
+            metric["unit"] = "元"
+            metric["scale"] = 1
     return metric
 
 

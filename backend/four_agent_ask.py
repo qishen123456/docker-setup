@@ -1321,23 +1321,58 @@ LIMIT {rank_limit}
             return None
 
     @staticmethod
-    def _format_metric(value: Optional[float], suffix: str = "") -> str:
+    def _format_metric(
+        value: Optional[float],
+        suffix: str = "",
+        metric: Optional[Dict[str, Any]] = None,
+    ) -> str:
         if value is None:
             return "-"
-        if not suffix:
-            abs_value = abs(value)
-            if abs_value < 10000:
-                if value == int(value):
-                    return str(int(value))
-                return f"{value:.2f}".rstrip("0").rstrip(".")
-            if abs_value < 1000000:
-                return f"{value / 10000:.1f}万"
-            if abs_value < 100000000:
-                return f"{round(value / 10000)}万"
-            return f"{value / 100000000:.2f}亿"
-        if value == int(value):
-            return f"{int(value):,}{suffix}"
-        return f"{value:.2f}{suffix}"
+        if suffix:
+            if value == int(value):
+                return f"{int(value):,}{suffix}"
+            return f"{value:.2f}{suffix}"
+
+        def _fmt(num: float) -> str:
+            if num == int(num):
+                return str(int(num))
+            return f"{num:.2f}".rstrip("0").rstrip(".")
+
+        if isinstance(metric, dict) and metric.get("format") in ("amount", "currency"):
+            unit = str(metric.get("unit") or "").strip()
+            scale = float(metric.get("scale") or 0) or 1.0
+            column = str(metric.get("column") or "").strip()
+            if not unit:
+                if "_万元" in column or column.endswith("万元"):
+                    unit = "万元"
+                else:
+                    unit = "元"
+            display = value / scale
+            abs_display = abs(display)
+            if unit == "万元":
+                if abs_display < 10000:
+                    return _fmt(display) + "万"
+                return _fmt(display / 10000) + "亿"
+            # unit == "元"：与商用数据集保持一致的自动缩放展示
+            if abs_display < 10000:
+                return _fmt(display)
+            if abs_display < 1000000:
+                return f"{display / 10000:.1f}".rstrip("0").rstrip(".") + "万"
+            if abs_display < 100000000:
+                return f"{round(display / 10000)}万"
+            return f"{display / 100000000:.2f}".rstrip("0").rstrip(".") + "亿"
+
+        # 兼容旧调用：未传入 metric 时默认按元口径处理
+        abs_value = abs(value)
+        if abs_value < 10000:
+            if value == int(value):
+                return str(int(value))
+            return f"{value:.2f}".rstrip("0").rstrip(".")
+        if abs_value < 1000000:
+            return f"{value / 10000:.1f}万"
+        if abs_value < 100000000:
+            return f"{round(value / 10000)}万"
+        return f"{value / 100000000:.2f}亿"
 
     @staticmethod
     def _build_display_title(question: str, dataset_result: Dict[str, Any]) -> str:
@@ -1574,7 +1609,7 @@ LIMIT {rank_limit}
                 return "-"
             if (metric or {}).get("format") == "percent":
                 return self._format_metric(value, "%")
-            return self._format_metric(value)
+            return self._format_metric(value, metric=metric)
 
         def format_dynamic(groups: Dict[str, Any], key: str, empty_text: str) -> str:
             return format_rank(groups.get(key) or []) if groups.get("can_compare") else empty_text

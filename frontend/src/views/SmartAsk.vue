@@ -1736,7 +1736,15 @@ const formatDisplayValue = (value) => {
 }
 
 const formatValueByColumn = (value, column = '') => {
-  if (isAmountColumn(column)) return formatAmount(value)
+  if (isAmountColumn(column)) {
+    const metric = {}
+    const col = String(column || '')
+    if (/_万元$/.test(col) || /万元$/.test(col)) {
+      metric.unit = '万元'
+      metric.scale = 1
+    }
+    return formatAmount(value, metric)
+  }
   return formatDisplayValue(value)
 }
 
