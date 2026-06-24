@@ -93,70 +93,61 @@
                     </div>
 
                     <div v-if="shouldShowConfirmationCard(msg)" class="sa-card sa-confirm-card">
-                      <div class="sa-card-head">
-                        <span class="sa-confirm-icon">💡</span>
-                        <span class="sa-card-tag sa-tag-orange">需要确认</span>
-                      </div>
-                      <p class="sa-confirm-q">{{ msg.data.confirmation_question }}</p>
-                      <div class="sa-confirm-impact">
-                        <div class="sa-confirm-impact-row">
-                          <span class="sa-confirm-impact-label">确认范围</span>
-                          <span class="sa-confirm-impact-value">{{ getConfirmationScopeSummary(msg) }}</span>
-                        </div>
-                        <div class="sa-confirm-impact-row">
-                          <span class="sa-confirm-impact-label">候选数据集</span>
-                          <div class="sa-confirm-impact-chips">
-                            <span
-                              v-for="name in getConfirmationCandidateNames(msg)"
-                              :key="name"
-                              class="sa-confirm-chip"
-                            >
-                              {{ name }}
-                            </span>
-                          </div>
-                        </div>
+                      <div class="sa-confirm-header">
+                        <span class="sa-confirm-badge">需要确认</span>
+                        <span class="sa-confirm-q">{{ msg.data.confirmation_question }}</span>
                       </div>
                       <div v-if="featureAccess.smart_confirm_scope" class="sa-confirm-opts">
+                        <div class="sa-confirm-list">
+                          <button
+                            v-for="(opt, idx) in visibleConfirmationOptions(msg)"
+                            :key="getConfirmOptionKey(opt)"
+                            class="sa-confirm-row"
+                            :class="{ 'sa-confirm-row-top': idx === 0 }"
+                            :disabled="isRunning"
+                            @click="doConfirm(opt, msg)"
+                          >
+                            <span class="sa-confirm-rank">{{ idx + 1 }}</span>
+                            <span class="sa-confirm-info">
+                              <span class="sa-confirm-row-label">
+                                {{ getConfirmOptionLabel(opt) }}
+                                <span v-if="idx === 0" class="sa-confirm-recommended">推荐</span>
+                              </span>
+                              <span v-if="getConfirmOptionDescription(opt)" class="sa-confirm-row-desc">
+                                {{ getConfirmOptionDescription(opt) }}
+                              </span>
+                            </span>
+                            <span class="sa-confirm-spacer"></span>
+                            <span v-if="getConfirmOptionScore(opt) != null" class="sa-confirm-score">
+                              {{ getConfirmOptionScore(opt) }}分
+                            </span>
+                          </button>
+                        </div>
                         <button
-                          v-for="opt in msg.data.confirmation_options"
-                          :key="getConfirmOptionKey(opt)"
-                          class="sa-confirm-btn"
+                          v-if="(msg.data.confirmation_options || []).length > 4"
+                          class="sa-confirm-toggle"
                           :disabled="isRunning"
-                          @click="doConfirm(opt, msg)"
+                          @click="toggleConfirmOptions(msg.id)"
                         >
-                          <span class="sa-confirm-btn-label">{{ getConfirmOptionLabel(opt) }}</span>
-                          <span v-if="getConfirmOptionDescription(opt)" class="sa-confirm-btn-desc">
-                            {{ getConfirmOptionDescription(opt) }}
-                          </span>
-                          <span v-if="getConfirmOptionDatasetNames(opt).length" class="sa-confirm-btn-meta">
-                            命中数据集：{{ getConfirmOptionDatasetNames(opt).join(' / ') }}
-                          </span>
-                          <span v-if="getConfirmOptionMemberNames(opt).length" class="sa-confirm-btn-meta">
-                            成员范围：{{ getConfirmOptionMemberNames(opt).join(' / ') }}
-                          </span>
-                          <span class="sa-confirm-btn-impact">{{ getConfirmOptionImpact(opt) }}</span>
+                          {{ confirmExpanded[msg.id] ? '收起' : `展开更多 (${msg.data.confirmation_options.length - 4})` }}
                         </button>
                       </div>
                       <div class="sa-confirm-freeform">
-                        <div class="sa-confirm-freeform-head">如果这些卡片都不合适，可以继续补充说明</div>
                         <textarea
                           v-model="confirmationDrafts[msg.id]"
                           class="sa-confirm-textarea"
                           :disabled="isRunning"
-                          placeholder="例如：这里的东部分公司指华东区域，先按分公司口径继续分析。"
+                          placeholder="都不合适？补充说明继续分析，例如：按华东区域分公司口径。"
                           @keydown.enter.exact.prevent="handleConfirmationDraftEnter($event, msg)"
                         ></textarea>
-                        <div class="sa-confirm-freeform-actions">
-                          <span class="sa-confirm-freeform-hint">补充说明会直接作为老板确认内容继续推进问数流程。</span>
-                          <button
-                            v-if="featureAccess.smart_submit_note"
-                            class="sa-confirm-send"
-                            :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
-                            @click="submitConfirmationDraft(msg)"
-                          >
-                            发送补充说明
-                          </button>
-                        </div>
+                        <button
+                          v-if="featureAccess.smart_submit_note"
+                          class="sa-confirm-send"
+                          :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
+                          @click="submitConfirmationDraft(msg)"
+                        >
+                          发送补充说明
+                        </button>
                       </div>
                     </div>
 
@@ -1275,6 +1266,7 @@ const commonQuestionsLoading = ref(false)
 const messages = reactive([])
 const confirmationDrafts = reactive({})
 const confirmationSubmitting = reactive({})
+const confirmExpanded = reactive({})
 const showPanel = ref(true)
 const chatBodyRef = ref(null)
 const panelRef = ref(null)
@@ -3777,6 +3769,7 @@ const clearChatUiState = () => {
   Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
   Object.keys(confirmationDrafts).forEach(k => delete confirmationDrafts[k])
   Object.keys(confirmationSubmitting).forEach(k => delete confirmationSubmitting[k])
+  Object.keys(confirmExpanded).forEach(k => delete confirmExpanded[k])
   Object.keys(officeDrillOpen).forEach(k => delete officeDrillOpen[k])
   reportViewerVisible.value = false
   chartViewerVisible.value = false
@@ -4233,6 +4226,7 @@ const clearMessageRuntimeState = (items = []) => {
     delete thinkingOpen[item.id]
     delete confirmationDrafts[item.id]
     delete confirmationSubmitting[item.id]
+    delete confirmExpanded[item.id]
   })
 }
 
@@ -4582,6 +4576,38 @@ const getConfirmOptionKey = (opt) => (typeof opt === 'string' ? opt : (opt?.id |
 const getConfirmOptionLabel = (opt) => (typeof opt === 'string' ? opt : (opt?.label || opt?.name || '确认选项'))
 
 const getConfirmOptionDescription = (opt) => (typeof opt === 'string' ? '' : String(opt?.description || '').trim())
+const getConfirmOptionScore = (opt) => {
+  if (typeof opt === 'string') return null
+  const raw = opt?.score
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.round(n) : null
+}
+const getConfirmOptionScorePct = (opt) => {
+  const score = getConfirmOptionScore(opt)
+  return score == null ? 0 : Math.min(100, Math.max(0, score))
+}
+const sortedConfirmationOptions = (msg) => {
+  const opts = msg?.data?.confirmation_options || []
+  const copy = opts.map((opt, idx) => ({ opt, idx }))
+  copy.sort((a, b) => {
+    const sa = getConfirmOptionScore(a.opt)
+    const sb = getConfirmOptionScore(b.opt)
+    if (sa != null && sb != null) return sb - sa
+    if (sa != null) return -1
+    if (sb != null) return 1
+    return a.idx - b.idx
+  })
+  return copy.map(item => item.opt)
+}
+const visibleConfirmationOptions = (msg) => {
+  const opts = sortedConfirmationOptions(msg)
+  if (confirmExpanded[msg?.id]) return opts
+  return opts.slice(0, 4)
+}
+const toggleConfirmOptions = (msgId) => {
+  confirmExpanded[msgId] = !confirmExpanded[msgId]
+}
 const getConfirmOptionDatasetNames = (opt) => {
   if (typeof opt === 'string') return []
   const ids = Array.isArray(opt?.dataset_ids) ? opt.dataset_ids : []
@@ -5862,190 +5888,211 @@ onUnmounted(() => {
 }
 
 .sa-confirm-card {
-  border: 1px solid rgba(255, 125, 0, 0.16);
-  border-radius: 16px;
-  overflow: hidden;
+  border: 1px solid rgba(22, 93, 255, 0.14);
+  border-radius: 12px;
   background: #fff;
   width: 100%;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
 }
-.sa-confirm-card .sa-card-head {
+.sa-confirm-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 125, 0, 0.12);
-  background: #fffaf2;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
 }
-.sa-confirm-icon {
-  font-size: 20px;
-}
-.sa-confirm-card .sa-card-tag {
+.sa-confirm-badge {
+  flex: 0 0 auto;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.sa-tag-orange {
-  background: #fff7e8;
-  color: var(--warning);
-}
-.sa-confirm-q {
-  padding: 14px 14px 12px;
-  font-size: 14px;
-  color: var(--text-title);
-  line-height: 1.7;
-}
-.sa-confirm-impact {
-  margin: 0 14px 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #fffaf2;
-  border: 1px solid rgba(255, 125, 0, 0.12);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sa-confirm-impact-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-.sa-confirm-impact-label {
-  min-width: 60px;
   font-size: 11px;
   font-weight: 700;
-  color: #86909c;
-}
-.sa-confirm-impact-value {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #4e5969;
-}
-.sa-confirm-impact-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.sa-confirm-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: #ffffff;
+  background: #fff7e8;
   color: #ff7d00;
-  border: 1px solid rgba(255, 125, 0, 0.12);
-  font-size: 11px;
-  font-weight: 600;
+}
+.sa-confirm-q {
+  flex: 1 1 auto;
+  font-size: 13px;
+  color: var(--text-title);
+  line-height: 1.5;
 }
 .sa-confirm-opts {
   display: flex;
-  gap: 10px;
-  padding: 0 14px 14px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
 }
-.sa-confirm-btn {
+.sa-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sa-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
+  min-height: 48px;
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--color-primary);
-  color: #165dff;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  color: #1d2129;
   background: #fff;
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.15s;
+  transition: all 0.12s;
+}
+.sa-confirm-row:hover {
+  background: #f7fbff;
+  border-color: rgba(22, 93, 255, 0.42);
+}
+.sa-confirm-row-top {
+  border-color: rgba(22, 93, 255, 0.55);
+  background: #f7fbff;
+  font-weight: 600;
+}
+.sa-confirm-row-top .sa-confirm-rank {
+  background: #165dff;
+  color: #fff;
+}
+.sa-confirm-row-top .sa-confirm-score {
+  background: rgba(22, 93, 255, 0.14);
+  color: #165dff;
+  font-weight: 700;
+}
+.sa-confirm-rank {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sa-confirm-info {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
-.sa-confirm-btn:hover {
-  background: #f7fbff;
-  border-color: rgba(22, 93, 255, 0.32);
-}
-.sa-confirm-btn-label {
+.sa-confirm-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
-  font-weight: 700;
-  color: #165dff;
+  font-weight: 600;
+  color: #1d2129;
 }
-.sa-confirm-btn-desc,
-.sa-confirm-btn-meta,
-.sa-confirm-btn-impact {
+.sa-confirm-row-desc {
   font-size: 11px;
-  line-height: 1.55;
-  color: #4e5969;
+  line-height: 1.4;
+  color: #86909c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-confirm-recommended {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #165dff;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+.sa-confirm-spacer {
+  flex: 1 0 auto;
+}
+.sa-confirm-score {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.sa-confirm-toggle {
+  margin-top: 4px;
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px dashed rgba(22, 93, 255, 0.25);
+  background: #fff;
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sa-confirm-toggle:hover {
+  background: #f7fbff;
 }
 
 .sa-confirm-freeform {
-  margin: 0 14px 14px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px dashed rgba(22, 93, 255, 0.18);
-  background: linear-gradient(180deg, rgba(240, 245, 255, 0.75) 0%, #ffffff 100%);
-}
-
-.sa-confirm-freeform-head {
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #1d2129;
+  margin-top: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .sa-confirm-textarea {
-  width: 100%;
-  min-height: 92px;
-  resize: vertical;
-  padding: 11px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  background: rgba(255, 255, 255, 0.95);
-  font-size: 13px;
-  line-height: 1.6;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  resize: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 93, 255, 0.16);
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.5;
   color: #1d2129;
   outline: none;
   box-sizing: border-box;
 }
 
 .sa-confirm-textarea:focus {
-  border-color: rgba(22, 93, 255, 0.34);
-  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.08);
+  border-color: rgba(22, 93, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.08);
 }
 
 .sa-confirm-textarea::placeholder {
   color: #a9b1bc;
 }
 
-.sa-confirm-freeform-actions {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.sa-confirm-freeform-hint {
-  flex: 1;
-  font-size: 11px;
-  line-height: 1.6;
-  color: #86909c;
-}
-
 .sa-confirm-send {
-  height: 34px;
+  flex: 0 0 auto;
+  height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(22, 93, 255, 0.2);
+  border-radius: 8px;
+  border: none;
   background: #165dff;
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.18);
 }
 
 .sa-confirm-send:disabled,
-.sa-confirm-btn:disabled {
+.sa-confirm-row:disabled,
+.sa-confirm-toggle:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
@@ -6649,8 +6696,8 @@ onUnmounted(() => {
 .sa-ghost-btn:active,
 .sa-panel-close:active,
 .sa-link-btn:active,
-.sa-confirm-btn:active {
-  transform: scale(0.96);
+.sa-confirm-row:active {
+  transform: scale(0.985);
 }
 
 .sa-side-report {

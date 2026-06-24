@@ -10,16 +10,22 @@ def build_dataset_options(candidates: List[Dict[str, Any]]) -> List[Dict[str, An
         if not dataset_id:
             continue
         dataset_name = str(item.get("dataset_name") or f"数据集 {dataset_id}")
+        score = item.get("score") if item.get("score") is not None else item.get("score_hint")
+        reason = str(item.get("match_reason") or item.get("reason") or "").strip()
+        if not reason:
+            reason = f"按 {dataset_name} 的业务口径继续。"
         options.append(
             {
                 "id": f"arbiter_dataset_{dataset_id}",
                 "option_id": f"arbiter_dataset_{dataset_id}",
                 "label": dataset_name,
-                "description": str(item.get("reason") or f"按 {dataset_name} 的业务口径继续。"),
+                "reason": reason,
+                "description": reason,
                 "dataset_ids": [dataset_id],
                 "option_type": "dataset_disambiguation",
                 "confirmation_type": "dataset_disambiguation",
                 "scope_filter": item.get("scope_filter") or {},
+                "score": int(score) if score is not None else None,
             }
         )
     return options

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable, Dict, List, Optional
 
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
@@ -99,9 +100,54 @@ class DisambiguationArbiter:
                     "dictionary_terms": [item.get("semantic_name") or item.get("column_name") for item in dictionary[:20]],
                     "has_lld": bool(str((context.get("lld_document") or {}).get("content") or "").strip()),
                     "resolved_profile_scope": profile_scope,
+                    "reason": self._build_reason(question, dataset, profile_scope),
                 }
             )
         return payload
+
+    @staticmethod
+    def _build_reason(question: str, dataset: Dict[str, Any], profile_scope: Dict[str, Any]) -> str:
+        compact_q = re.sub(r"\s+", "", str(question or ""))
+        # 数据集/业务域名称命中
+        for key in ("dataset_name", "business_domain"):
+            value = str(dataset.get(key) or "").strip()
+            if value and value in compact_q:
+                return f"命中数据集名称「{value}」"
+        for alias in dataset.get("synonyms") or []:
+            alias_str = str(alias or "").strip()
+            if alias_str and alias_str in compact_q:
+                return f"命中数据集别名「{alias_str}」"
+
+        # 维度/层级别名命中
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if profile:
+            for level in profile.get("levels") or []:
+                dimension_name = str(level.get("dimension_name") or "").strip()
+                for alias in level.get("aliases") or []:
+                    alias_str = str(alias or "").strip()
+                    if alias_str and alias_str in compact_q and dimension_name:
+                        return f"命中「{alias_str}」→ {dimension_name}维度"
+
+        # 维度组合/分组命中
+        matched = profile_scope.get("matched_groups") or []
+        if matched:
+            first = matched[0]
+            alias = first.get("matched_alias") or first.get("dimension_name") or ""
+            dim = first.get("dimension_name") or ""
+            if alias and dim and alias != dim:
+                return f"命中「{alias}」→ {dim}维度"
+            if alias:
+                return f"命中「{alias}」维度"
+
+        # 具体成员命中
+        entities = profile_scope.get("entities") or []
+        if entities:
+            names = [str(e).strip() for e in entities[:2] if str(e).strip()]
+            if names:
+                return f"命中成员：{('、'.join(names))}"
+
+        # 兜底
+        return "问题中的指标在该数据集中存在"
 
     @staticmethod
     def _profile_scope_payload(question: str, dataset: Dict[str, Any]) -> Dict[str, Any]:
@@ -199,6 +245,10 @@ class DisambiguationArbiter:
             and not _question_has_explicit_scope(question, candidate_contexts)
         )
         candidate_by_id = {int(item["dataset_id"]): item for item in candidates if item.get("dataset_id")}
+        score_by_id: Dict[int, int] = {}
+        for cs in result.get("candidate_scores") or []:
+            if isinstance(cs, dict) and cs.get("dataset_id"):
+                score_by_id[int(cs["dataset_id"])] = int(cs.get("score") or 0)
         normalized_options = []
         for index, option in enumerate(result.get("options") or []):
             if not isinstance(option, dict):
@@ -207,6 +257,11 @@ class DisambiguationArbiter:
             if not dataset_id or dataset_id not in candidate_by_id:
                 continue
             option_id = str(option.get("option_id") or option.get("id") or f"arbiter_dataset_{dataset_id}")
+            score = option.get("score")
+            if score is None and dataset_id in score_by_id:
+                score = score_by_id[dataset_id]
+            if score is None:
+                score = candidate_by_id[dataset_id].get("score_hint")
             normalized_options.append(
                 {
                     "id": option_id,
@@ -217,6 +272,8 @@ class DisambiguationArbiter:
                     "option_type": "dataset_disambiguation",
                     "confirmation_type": "dataset_disambiguation",
                     "scope_filter": option.get("scope_filter") or {},
+                    "score": int(score) if score is not None else None,
+                    "match_reason": str(option.get("match_reason") or "").strip() or None,
                 }
             )
 

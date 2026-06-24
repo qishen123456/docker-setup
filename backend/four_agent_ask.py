@@ -3209,6 +3209,78 @@ LIMIT {rank_limit}
             return False
         return normalized_target in haystack
 
+    @classmethod
+    def _map_dimension_aliases_for_dataset(cls, question: str, dataset: Dict[str, Any]) -> str:
+        """将问题中其他数据集的维度别名映射到当前数据集的等价维度别名。"""
+        if not question:
+            return question
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if not profile:
+            return question
+
+        # 收集当前数据集的所有维度别名
+        selected_aliases = set()
+        for level in profile.get("levels") or []:
+            selected_aliases.add(cls._normalize_compact_text(level.get("dimension_name")))
+            for alias in level.get("aliases") or []:
+                selected_aliases.add(cls._normalize_compact_text(alias))
+        if not selected_aliases:
+            return question
+
+        # 若问题中的别名在当前数据集已存在，则无需映射
+        compact_q = cls._normalize_compact_text(question)
+        if any(alias in compact_q for alias in selected_aliases if len(alias) >= 2):
+            return question
+
+        # 找到当前数据集最适合的角色/人员维度
+        person_keywords = ("经理", "代表", "业务员", "承接人", "负责人", "销售", "角色", "人员", "员工")
+        levels = profile.get("levels") or []
+
+        def _is_person_level(level):
+            dim_name = str(level.get("dimension_name") or "").strip()
+            aliases = [str(a).strip() for a in (level.get("aliases") or []) if str(a).strip()]
+            return any(kw in dim_name for kw in person_keywords) or any(
+                any(kw in a for kw in person_keywords) for a in aliases
+            )
+
+        person_levels = [lvl for lvl in levels if _is_person_level(lvl)]
+        if not person_levels:
+            return question
+
+        # 优先匹配「业务代表/业务员/销售」这类一线角色，再匹配「代表处」等组织层级
+        target_alias = ""
+        role_priority = ("业务代表", "业务员", "销售")
+        for level in person_levels:
+            aliases = [str(a).strip() for a in (level.get("aliases") or []) if str(a).strip()]
+            preferred = next((role for role in role_priority if role in aliases), "")
+            if preferred:
+                target_alias = preferred
+                break
+        if not target_alias:
+            for level in person_levels:
+                aliases = [str(a).strip() for a in (level.get("aliases") or []) if str(a).strip()]
+                preferred = next((a for a in aliases if "业务代表" in a or "业务员" in a), "")
+                if not preferred:
+                    preferred = next((a for a in aliases if "代表" in a or "员" in a), "")
+                if preferred:
+                    target_alias = preferred
+                    break
+        if not target_alias:
+            level = person_levels[0]
+            aliases = [str(a).strip() for a in (level.get("aliases") or []) if str(a).strip()]
+            target_alias = aliases[0] if aliases else str(level.get("dimension_name") or "").strip()
+
+        if not target_alias:
+            return question
+
+        # 问题中常见但当前数据集不支持的角色别名，映射到目标别名
+        replaced = str(question)
+        if "业务经理" in replaced:
+            replaced = replaced.replace("业务经理", target_alias)
+        if "经理" in replaced and not any(cls._normalize_compact_text("经理") == a for a in selected_aliases):
+            replaced = replaced.replace("经理", target_alias)
+        return replaced
+
     def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any], include_profile_levels: bool = True) -> int:
         normalized_question = self._normalize_compact_text(question)
         if not normalized_question:
@@ -7501,6 +7573,20 @@ Agent3 复核结果：
                 route["dataset_ids"] = candidate_ids[:2]
             else:
                 route["dataset_ids"] = route.get("dataset_ids", []) or ([candidate_ids[0]] if candidate_ids else route.get("dataset_ids", []))
+
+        # 单数据集确认时，将问题中其他数据集的维度别名映射到当前数据集
+        if len(route.get("dataset_ids") or []) == 1:
+            selected_dataset_id = int(route["dataset_ids"][0])
+            selected_dataset = next(
+                (ds for ds in self.repository.get_agent1_catalog() if int(ds.get("id") or 0) == selected_dataset_id),
+                None,
+            )
+            if selected_dataset:
+                base_query = str(route.get("refined_query") or question or "").strip()
+                rewritten = self._map_dimension_aliases_for_dataset(base_query, selected_dataset)
+                if rewritten != base_query:
+                    route["refined_query"] = rewritten
+                    route["dimension_alias_rewritten"] = True
 
         confirmation_notes = []
         if selected_option_item:
