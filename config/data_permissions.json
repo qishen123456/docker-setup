@@ -43,30 +43,16 @@
     },
     "62": {
       "dataset_id": 62,
-      "mode": "public",
+      "mode": "org_tree",
       "tree_type_id": "tree_3991b9e4de6d",
       "tree_type_ids": [
         "tree_3991b9e4de6d"
       ],
       "organization_node_ids": [
-        "node_ea963f252380",
-        "node_2a423ecd0bbd",
-        "node_9b83dd3f8e77",
-        "node_87c1b660011d",
-        "node_739c2883d0e9",
-        "node_435990951f1f",
-        "node_c34ba10a4b8f",
-        "node_d565f7d6b917"
+        "node_dianshang_shiye"
       ],
       "organization_codes": [
-        "28b5364e2f181bfg",
-        "gg9c5c9ce5c3faa9",
-        "96a9gc77a35e5ee5",
-        "eb2685cfab3651df",
-        "195c4ac5f864de57",
-        "63aa3gb14a191aee",
-        "b8a3gda6d426a699",
-        "ef5bd91dc373gfbg"
+        "dianshang_2026"
       ],
       "allowed_roles": [],
       "allowed_departments": [],

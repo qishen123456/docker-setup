@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
 from .option_builder import build_dataset_options, fallback_confirmation
-from .scoring import CandidateContext, needs_llm_arbitration, score_snapshot
+from .scoring import CandidateContext, needs_llm_arbitration, score_snapshot, _question_has_explicit_scope
 
 ChatJsonFn = Callable[[str, str, Dict[str, Any], Any, str, str], Dict[str, Any]]
 
@@ -39,6 +39,13 @@ class DisambiguationArbiter:
 不要硬编码字段名集合；如果上下文已经能消解追问，应自动选择并给出 auto_pick_option_id。
 如果候选数据集的 resolved_profile_scope 已经把用户合称、简称或集合口径映射为明确成员，优先相信画像映射，不要把数据集名称误判为唯一业务对象。
 如果多个数据集或统计口径都合理，必须让用户确认。
+
+【评分与推荐】
+- 为每个候选数据集从 0-100 打分（candidate_scores），评分维度：问题与数据集业务域的匹配度、层级/实体在数据集中的支持程度、常见问法和 Golden SQL 样本的相似度。
+- 将得分最高的选项作为"系统推荐"放在 options 的第一位（label 中体现"系统推荐"）。
+- 若 top 候选与 runner-up 的差距很小（<15 分）或 runner-up 分数也较高（>=55），必须 need_confirm=true。
+- 只有当某个候选明显领先（score>=80 且 margin>=20）且口径无歧义时，才可 auto_pick。
+
 只输出 JSON。
 """.strip()
         user_prompt = f"""
@@ -59,7 +66,10 @@ class DisambiguationArbiter:
   "need_confirm": true,
   "confirm_question": "一句面向业务用户的确认问题",
   "options": [
-    {{"option_id":"arbiter_dataset_1", "dataset_id":1, "label":"商用事业部", "scope_filter":{{}}, "reason":"为什么适合"}}
+    {{"option_id":"arbiter_dataset_1", "dataset_id":1, "label":"系统推荐：商用事业部", "scope_filter":{{}}, "reason":"为什么适合", "score": 85}}
+  ],
+  "candidate_scores": [
+    {{"dataset_id": 1, "dataset_name": "商用事业部", "score": 85, "reason": "匹配理由"}}
   ],
   "auto_pick_option_id": "",
   "refined_query": "可选：结合上下文重写后的问题",
@@ -67,7 +77,7 @@ class DisambiguationArbiter:
 }}
 """.strip()
         result = chat_json(system_prompt, user_prompt, fallback, trace, "disambiguation.arbiter", "DisambiguationArbiter")
-        return self._normalize(result, candidates, fallback)
+        return self._normalize(result, candidates, fallback, question, candidate_contexts)
 
     def _candidate_payload(self, question: str, candidate_contexts: List[CandidateContext]) -> List[Dict[str, Any]]:
         payload = []
@@ -154,6 +164,12 @@ class DisambiguationArbiter:
         }
 
     def _fallback(self, question: str, candidates: List[Dict[str, Any]], candidate_contexts: List[CandidateContext]) -> Dict[str, Any]:
+        if len(candidate_contexts) >= 2 and not _question_has_explicit_scope(question, candidate_contexts):
+            forced = fallback_confirmation(candidates[:3], question)
+            forced["need_confirm"] = True
+            forced["reason"] = "lacks_explicit_scope"
+            forced["confirm_question"] = forced.get("confirm_question") or "问题中未明确指定事业部或数据集口径，请确认要分析哪个数据集："
+            return forced
         scores = score_snapshot(candidate_contexts)
         if scores["top_score"] >= 70 and scores["margin"] >= 12:
             top = candidates[0]
@@ -167,9 +183,21 @@ class DisambiguationArbiter:
             }
         return fallback_confirmation(candidates[:3], question)
 
-    def _normalize(self, result: Dict[str, Any], candidates: List[Dict[str, Any]], fallback: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize(
+        self,
+        result: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+        fallback: Dict[str, Any],
+        question: str = "",
+        candidate_contexts: Optional[List[CandidateContext]] = None,
+    ) -> Dict[str, Any]:
         if not isinstance(result, dict):
             result = fallback
+        force_scope_confirm = (
+            candidate_contexts is not None
+            and len(candidate_contexts) >= 2
+            and not _question_has_explicit_scope(question, candidate_contexts)
+        )
         candidate_by_id = {int(item["dataset_id"]): item for item in candidates if item.get("dataset_id")}
         normalized_options = []
         for index, option in enumerate(result.get("options") or []):
@@ -199,6 +227,11 @@ class DisambiguationArbiter:
         valid_ids = {item["id"] for item in normalized_options}
         if auto_pick and auto_pick not in valid_ids:
             auto_pick = ""
+
+        if force_scope_confirm and not auto_pick and not bool(result.get("need_confirm")):
+            result["need_confirm"] = True
+            if not normalized_options:
+                return fallback
 
         return {
             "need_confirm": bool(result.get("need_confirm")) and not auto_pick,

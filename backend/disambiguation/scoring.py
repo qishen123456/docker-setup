@@ -1,8 +1,50 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Tuple
 
+from organization_tree_store import load_organization_trees
+
 CandidateContext = Tuple[Dict[str, Any], Dict[str, Any], int]
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"\s+", "", str(text or "")).lower()
+
+
+def _extract_scope_keywords(candidate_contexts: List[CandidateContext]) -> set:
+    """Extract explicit scope identifiers from dataset metadata and organization tree."""
+    keywords: set = set()
+    for dataset, _context, _score in candidate_contexts:
+        for key in ("dataset_name", "dataset_code", "business_domain"):
+            value = str(dataset.get(key) or "").strip()
+            if value:
+                keywords.add(_compact(value))
+        for alias in dataset.get("synonyms") or []:
+            value = str(alias or "").strip()
+            if value:
+                keywords.add(_compact(value))
+    try:
+        tree = load_organization_trees()
+        for node in (tree.get("nodes") or []):
+            name = str(node.get("name") or "").strip()
+            if name:
+                keywords.add(_compact(name))
+    except Exception:
+        pass
+    return keywords
+
+
+def _question_has_explicit_scope(question: str, candidate_contexts: List[CandidateContext]) -> bool:
+    """Check whether the question explicitly mentions a dataset or organization scope."""
+    compact_question = _compact(question)
+    if not compact_question:
+        return False
+    keywords = _extract_scope_keywords(candidate_contexts)
+    for keyword in keywords:
+        if keyword and keyword in compact_question:
+            return True
+    return False
 
 
 def score_snapshot(candidate_contexts: List[CandidateContext]) -> Dict[str, Any]:
@@ -27,4 +69,6 @@ def needs_llm_arbitration(question: str, candidate_contexts: List[CandidateConte
     )
     has_context_reference = bool(history) and any(token in text for token in ("那", "它", "这个", "上面", "继续", "也", "相比"))
     has_scope_risk = any(token in text for token in ("哪个口径", "口径", "分公司", "代表处", "条线", "事业部", "部门", "团队")) and scores["margin"] < 18
-    return has_multi_dataset_risk or has_context_reference or has_scope_risk
+    # 关键规则：多个候选数据集且问题未明确指定数据集/组织范围时，必须交由 LLM 仲裁并推荐
+    lacks_explicit_scope = len(candidate_contexts) >= 2 and not _question_has_explicit_scope(question, candidate_contexts)
+    return has_multi_dataset_risk or has_context_reference or has_scope_risk or lacks_explicit_scope

@@ -3107,6 +3107,10 @@ LIMIT {rank_limit}
             "网点",
             "业务代表",
             "业务员",
+            "业务经理",
+            "承接人",
+            "任务承接人",
+            "负责人",
             "业务部",
             "行业业务部",
             "城市分公司",
@@ -3138,6 +3142,10 @@ LIMIT {rank_limit}
             "网点",
             "业务代表",
             "业务员",
+            "业务经理",
+            "承接人",
+            "任务承接人",
+            "负责人",
             "业务部",
             "行业业务部",
             "城市分公司",
@@ -3163,7 +3171,7 @@ LIMIT {rank_limit}
         text = cls._normalize_compact_text(question)
         if not text:
             return ""
-        for level in ("城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "事业部"):
+        for level in ("城市分公司", "城市公司", "业务经理", "业务代表", "业务员", "代表处", "业务部", "分公司", "事业部"):
             if cls._normalize_compact_text(level) in text:
                 return level
         return ""
@@ -3201,7 +3209,7 @@ LIMIT {rank_limit}
             return False
         return normalized_target in haystack
 
-    def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any]) -> int:
+    def _dataset_alias_match_score(self, question: str, dataset: Dict[str, Any], include_profile_levels: bool = True) -> int:
         normalized_question = self._normalize_compact_text(question)
         if not normalized_question:
             return 0
@@ -3261,14 +3269,19 @@ LIMIT {rank_limit}
                 if term and term in normalized_question:
                     score = max(score, 90)
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-        profile_level_score = self._profile_level_alias_score(question, profile)
-        if profile_level_score:
-            score = max(score, profile_level_score)
+        if include_profile_levels:
+            profile_level_score = self._profile_level_alias_score(question, profile)
+            if profile_level_score:
+                score = max(score, profile_level_score)
         if profile:
             resolved_scope = resolve_member_mentions(question, profile)
             if resolved_scope.get("all_members"):
                 score = max(score, 96 if len(resolved_scope.get("all_members") or []) > 1 else 92)
         return score
+
+    def _dataset_scope_alias_score(self, question: str, dataset: Dict[str, Any]) -> int:
+        """仅匹配数据集/业务域级别的显式标识，用于绕过歧义确认的快速命中。"""
+        return self._dataset_alias_match_score(question, dataset, include_profile_levels=False)
 
     def _compute_dataset_match(self, question: str, dataset: Dict[str, Any], context: Dict[str, Any]) -> int:
         q_tokens = self._tokenize(question)
@@ -3752,22 +3765,30 @@ LIMIT {rank_limit}
 路由要求：
 1. 优先判断业务口径，而不是只看词面相似。
 2. 必须优先参考候选数据集的 supported_levels、common_questions、schema_table_count、dictionary_count 和 Agent1 提示词片段来判断层级归属。
-3. 如果用户问到的组织层级只被一个数据集支持，例如某层级只在单个数据集的组织树/DDL/字段字典/常见问法里出现，则直接选择该数据集，不要要求确认。
-4. 只有多个数据集在同一层级、同一业务口径下都能回答时，才 requires_confirmation=true。
-5. refined_query 需要补齐时间范围、组织口径、统计对象，但不能虚构用户没有表达的事实。
-6. 只有在数据集明显唯一且口径无歧义时，才能给出 direct_execute 或 generate_sql。
+3. 【强制确认规则】如果用户问题中没有明确出现事业部名称（如"电商事业部"、"商用事业部"、"消费者事业部"）或数据集名称/别名，且存在 2 个及以上候选数据集都可能回答该问题，则必须 requires_confirmation=true，不得擅自选择。
+4. 【评分与推荐】为每个候选数据集从 0-100 打分（candidate_scores），评分维度包括：问题与数据集业务域的匹配度、层级/实体在数据集中的支持程度、常见问法和 Golden SQL 样本的相似度。将得分最高的数据集作为"系统推荐"放在 confirmation_options 的第一项。
+5. 如果某组织层级或业务实体只被一个数据集明确支持，且业务口径无歧义，可直接选择该数据集，不需要确认。
+6. refined_query 需要补齐时间范围、组织口径、统计对象，但不能虚构用户没有表达的事实。
+7. 只有在数据集明显唯一且口径无歧义时，才能给出 direct_execute 或 generate_sql。
 
 请输出 JSON：
 {{
-  "dataset_ids": [1],
+  "dataset_ids": [],
   "intent": "summary|detail|confirm",
   "refined_query": "重写后的查询",
   "decision": "direct_execute|generate_sql|wait_boss_confirm",
   "match_score": 0,
-  "requires_confirmation": false,
+  "requires_confirmation": true,
   "confirmation_role": "boss",
-  "confirmation_question": "",
-  "confirmation_options": [],
+  "confirmation_question": "检测到多个可能的数据集，请选择要查询的口径：",
+  "confirmation_options": [
+    {{"id": "rec_1", "label": "系统推荐：电商事业部 - 业务经理排名", "dataset_ids": [62], "scope_filter": "业务经理层级", "score": 85, "reason": "业务经理是电商数据集明确支持的层级"}},
+    {{"id": "opt_2", "label": "商用事业部 - 业务经理/业务员排名", "dataset_ids": [3], "scope_filter": "业务员层级", "score": 45, "reason": "商用数据集主要支持业务员层级"}}
+  ],
+  "candidate_scores": [
+    {{"dataset_id": 62, "dataset_name": "电商事业部", "score": 85, "reason": "业务经理是电商数据集明确支持的层级"}},
+    {{"dataset_id": 3, "dataset_name": "商用事业部", "score": 45, "reason": "商用数据集主要支持业务员层级"}}
+  ],
   "candidate_dataset_ids": []
 }}
 """
@@ -3906,9 +3927,9 @@ LIMIT {rank_limit}
                         {"dataset_id": selected_dataset["id"], "sub_query": question}
                     ],
                 }
-        best_alias_score = self._dataset_alias_match_score(question, best_dataset)
+        best_alias_score = self._dataset_scope_alias_score(question, best_dataset)
         runner_alias_score = (
-            self._dataset_alias_match_score(question, candidate_contexts[1][0])
+            self._dataset_scope_alias_score(question, candidate_contexts[1][0])
             if len(candidate_contexts) > 1
             else 0
         )
