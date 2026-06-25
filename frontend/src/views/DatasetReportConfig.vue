@@ -348,7 +348,7 @@
       <!-- Empty State -->
       <main class="rc-main rc-main-empty" v-else>
         <div class="rc-empty-hint">
-          <el-icon :size="40" color="#c9cdd4"><Grid /></el-icon>
+          <el-icon :size="40" color="#D1D5DB"><Grid /></el-icon>
           <p>请在左侧选择一个数据集进行配置</p>
         </div>
       </main>
@@ -636,22 +636,22 @@ onMounted(() => {
   flex: 1; display: flex; min-height: 0;
   background: var(--bg-card, #fff);
   border-radius: var(--radius-card, 12px); overflow: hidden;
-  border: 1px solid var(--border, #e5e6eb);
+  border: 1px solid var(--border, #E5E7EB);
   box-shadow: var(--shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
 }
 
 /* LEFT SIDEBAR */
 .rc-sidebar {
   width: 240px; min-width: 240px;
-  background: var(--bg-muted, #f2f3f5);
-  border-right: 1px solid var(--border, #e5e6eb);
+  background: var(--bg-muted, #F3F4F6);
+  border-right: 1px solid var(--border, #E5E7EB);
   display: flex; flex-direction: column;
 }
 .rc-sidebar-title {
   padding: 14px 16px 10px;
-  font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969);
+  font-size: 13px; font-weight: 600; color: var(--text-body, #6B7280);
   text-transform: uppercase; letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--border, #e5e6eb);
+  border-bottom: 1px solid var(--border, #E5E7EB);
 }
 .rc-sidebar-scroll {
   flex: 1; overflow-y: auto; padding: 8px;
@@ -662,20 +662,20 @@ onMounted(() => {
   cursor: pointer; transition: all var(--duration-fast, 150ms) ease;
   margin-bottom: 2px;
 }
-.rc-ds-item:hover { background: rgba(51,112,255,0.04); }
+.rc-ds-item:hover { background: rgba(230, 31, 36, 0.04); }
 .rc-ds-item.is-active {
-  background: var(--color-primary-light, #f0f5ff);
-  box-shadow: inset 3px 0 0 var(--color-primary, #3370ff);
+  background: var(--color-primary-light, #FEF2F2);
+  box-shadow: inset 3px 0 0 var(--color-primary, #E61F24);
 }
-.rc-ds-icon { font-size: 16px; color: var(--text-muted, #86909c); flex-shrink: 0; }
+.rc-ds-icon { font-size: 16px; color: var(--text-muted, #9CA3AF); flex-shrink: 0; }
 .rc-ds-meta { flex: 1; min-width: 0; }
-.rc-ds-name { font-size: 13px; font-weight: 500; color: var(--text-title, #1d2129); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rc-ds-code { font-size: 10px; color: var(--text-muted, #86909c); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-ds-name { font-size: 13px; font-weight: 500; color: var(--text-title, #111827); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-ds-code { font-size: 10px; color: var(--text-muted, #9CA3AF); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-ds-badge {
-  font-size: 10px; font-weight: 600; color: var(--success, #00b42a); background: var(--success-bg, #e8ffea);
+  font-size: 10px; font-weight: 600; color: var(--success, #10B981); background: var(--success-bg, #ECFDF5);
   padding: 1px 6px; border-radius: var(--radius-pill, 999px); flex-shrink: 0;
 }
-.rc-ds-empty { text-align: center; padding: 24px 0; color: var(--text-muted, #86909c); font-size: 13px; }
+.rc-ds-empty { text-align: center; padding: 24px 0; color: var(--text-muted, #9CA3AF); font-size: 13px; }
 
 /* RIGHT MAIN */
 .rc-main {
@@ -685,7 +685,7 @@ onMounted(() => {
 .rc-main-empty {
   display: flex; align-items: center; justify-content: center;
 }
-.rc-empty-hint { text-align: center; color: var(--text-muted, #86909c); }
+.rc-empty-hint { text-align: center; color: var(--text-muted, #9CA3AF); }
 .rc-empty-hint p { margin-top: 12px; font-size: 14px; }
 
 .rc-main-header {
@@ -693,7 +693,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 .rc-main-title {
-  font-size: 16px; font-weight: 700; color: var(--text-title, #1d2129);
+  font-size: 16px; font-weight: 700; color: var(--text-title, #111827);
   display: flex; align-items: center; gap: 8px;
 }
 .rc-main-actions { display: flex; gap: 8px; }
@@ -708,21 +708,21 @@ onMounted(() => {
 }
 .rc-card {
   background: var(--bg-card, #fff); border-radius: var(--radius-card, 12px);
-  border: 1px solid var(--border, #e5e6eb);
+  border: 1px solid var(--border, #E5E7EB);
   overflow: hidden;
   transition: box-shadow var(--duration-normal, 220ms) ease;
 }
 .rc-card:hover { box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.04)); }
 .rc-card-wide { grid-column: 1 / -1; }
 .rc-card-title {
-  padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-body, #4e5969);
-  background: var(--gray-50, #f9fafb); border-bottom: 1px solid var(--border-light, #f0f1f3);
+  padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-body, #6B7280);
+  background: var(--gray-50, #F8F9FA); border-bottom: 1px solid var(--border-light, #F3F4F6);
   display: flex; align-items: center; justify-content: space-between;
 }
 .rc-card-body { padding: 16px; }
 .rc-help-text {
   margin-bottom: 12px;
-  color: var(--text-muted, #86909c);
+  color: var(--text-muted, #9CA3AF);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -731,7 +731,7 @@ onMounted(() => {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }
 .rc-field label {
-  display: block; font-size: 11px; font-weight: 600; color: var(--text-body, #4e5969);
+  display: block; font-size: 11px; font-weight: 600; color: var(--text-body, #6B7280);
   margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em;
 }
 
@@ -742,7 +742,7 @@ onMounted(() => {
 
 .rc-bottom-bar {
   display: flex; align-items: center; gap: 8px;
-  padding-top: 16px; border-top: 1px solid var(--border, #e5e6eb);
+  padding-top: 16px; border-top: 1px solid var(--border, #E5E7EB);
 }
 .rc-spacer { flex: 1; }
 </style>

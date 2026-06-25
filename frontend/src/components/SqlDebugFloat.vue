@@ -167,10 +167,10 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(20, 184, 166, 0.28);
-  background: rgba(15, 118, 110, 0.96);
+  border: 1px solid rgba(230, 31, 36, 0.28);
+  background: rgba(230, 31, 36, 0.96);
   color: #fff;
-  box-shadow: 0 16px 36px rgba(15, 118, 110, 0.24);
+  box-shadow: 0 16px 36px rgba(230, 31, 36, 0.24);
   cursor: pointer;
 }
 
@@ -178,7 +178,7 @@ onUnmounted(() => {
   gap: 8px;
   height: 42px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-weight: 800;
 }
 
@@ -189,14 +189,14 @@ onUnmounted(() => {
 .sql-debug-float-close {
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 14px;
   line-height: 1;
 }
 
 .sql-debug-float-main:hover,
 .sql-debug-float-close:hover {
-  background: #0f766e;
+  background: #E61F24;
   transform: translateY(-1px);
 }
 </style>

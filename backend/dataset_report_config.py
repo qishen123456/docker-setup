@@ -23,6 +23,10 @@ from config_manager import get_default_datasource
 logger = logging.getLogger(__name__)
 
 
+def _is_non_empty_text(value) -> bool:
+    return bool(str(value or "").strip())
+
+
 def _get_connection():
     ds = get_default_datasource()
     if not ds:
@@ -126,6 +130,12 @@ def merge_with_default_config(config: dict | None) -> dict:
     if not isinstance(config, dict):
         return default
     merged = {**default, **config}
+    # 标准结构列如果保存为空字符串，回退到默认值，避免报告契约健康度被误扣分
+    for col_key in ("nameColumn", "parentColumn", "trackColumn", "levelColumn"):
+        if not _is_non_empty_text(merged.get(col_key)):
+            default_value = default.get(col_key)
+            if _is_non_empty_text(default_value):
+                merged[col_key] = default_value
     if isinstance(default.get("sqlOutputContract"), dict) or isinstance(config.get("sqlOutputContract"), dict):
         merged["sqlOutputContract"] = {
             **(default.get("sqlOutputContract") or {}),

@@ -559,8 +559,8 @@ onBeforeUnmount(() => {
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  background: linear-gradient(180deg, #F8F9FA 0%, #ffffff 100%);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -571,8 +571,8 @@ onBeforeUnmount(() => {
 
 .sa-empty-icon span {
   height: 2px;
-  border-radius: 999px;
-  background: rgba(22, 93, 255, 0.4);
+  border-radius: 8px;
+  background: rgba(230, 31, 36, 0.4);
 }
 
 .sa-empty-icon span:nth-child(1) { width: 70%; }
@@ -593,7 +593,7 @@ onBeforeUnmount(() => {
   top: 16px;
   bottom: -16px;
   width: 1px;
-  background: #e5e6eb;
+  background: #E5E7EB;
 }
 
 .sa-node-marker {
@@ -604,29 +604,29 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   margin-top: 11px;
   flex-shrink: 0;
-  background: #d9dde4;
+  background: #D1D5DB;
   border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #e5e6eb;
+  box-shadow: 0 0 0 1px #E5E7EB;
 }
 
 .sa-node-marker.success {
-  background: #00b42a;
-  box-shadow: 0 0 0 1px rgba(0, 180, 42, 0.16);
+  background: #10B981;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.16);
 }
 
 .sa-node-marker.running {
-  background: #165dff;
-  box-shadow: 0 0 0 1px rgba(22, 93, 255, 0.16);
+  background: #E61F24;
+  box-shadow: 0 0 0 1px rgba(230, 31, 36, 0.16);
 }
 
 .sa-node-marker.error {
-  background: #f53f3f;
-  box-shadow: 0 0 0 1px rgba(245, 63, 63, 0.16);
+  background: #E61F24;
+  box-shadow: 0 0 0 1px rgba(230, 31, 36, 0.16);
 }
 
 .sa-node-marker.warning {
-  background: #ff7d00;
-  box-shadow: 0 0 0 1px rgba(255, 125, 0, 0.16);
+  background: #F59E0B;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.16);
 }
 
 .sa-node-main {
@@ -647,7 +647,7 @@ onBeforeUnmount(() => {
 
 .sa-node-arrow {
   font-size: 12px;
-  color: #86909c;
+  color: #9CA3AF;
   transition: transform 0.2s;
   flex-shrink: 0;
 }
@@ -660,8 +660,8 @@ onBeforeUnmount(() => {
   width: 15px;
   height: 15px;
   border-radius: 4px;
-  background: linear-gradient(180deg, #eef4ff 0%, #dfe9ff 100%);
-  border: 1px solid rgba(22, 93, 255, 0.14);
+  background: linear-gradient(180deg, #FEF2F2 0%, #F3F4F6 100%);
+  border: 1px solid rgba(230, 31, 36, 0.14);
   position: relative;
   flex-shrink: 0;
 }
@@ -673,57 +673,57 @@ onBeforeUnmount(() => {
   left: 3px;
   right: 3px;
   height: 1px;
-  background: rgba(22, 93, 255, 0.46);
+  background: rgba(230, 31, 36, 0.46);
 }
 
 .sa-node-icon::before { top: 5px; }
 .sa-node-icon::after { top: 9px; }
 
 .sa-node-icon.dataset {
-  background: linear-gradient(180deg, #ecfdf3 0%, #d9f7e7 100%);
-  border-color: rgba(0, 180, 42, 0.16);
+  background: linear-gradient(180deg, #ECFDF5 0%, #ECFDF5 100%);
+  border-color: rgba(16, 185, 129, 0.16);
 }
 
 .sa-node-icon.dataset::before,
 .sa-node-icon.dataset::after {
-  background: rgba(0, 180, 42, 0.4);
+  background: rgba(16, 185, 129, 0.4);
 }
 
 .sa-node-icon.report {
-  background: linear-gradient(180deg, #fff6e8 0%, #ffe9c7 100%);
-  border-color: rgba(255, 125, 0, 0.18);
+  background: linear-gradient(180deg, #FFFBEB 0%, #FFFBEB 100%);
+  border-color: rgba(245, 158, 11, 0.18);
 }
 
 .sa-node-icon.report::before,
 .sa-node-icon.report::after {
-  background: rgba(255, 125, 0, 0.45);
+  background: rgba(245, 158, 11, 0.45);
 }
 
 .sa-node-icon.confirm {
-  background: linear-gradient(180deg, #fff4f0 0%, #ffe0d6 100%);
-  border-color: rgba(245, 63, 63, 0.16);
+  background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
+  border-color: rgba(230, 31, 36, 0.16);
 }
 
 .sa-node-icon.confirm::before,
 .sa-node-icon.confirm::after {
-  background: rgba(245, 63, 63, 0.4);
+  background: rgba(230, 31, 36, 0.4);
 }
 
 .sa-node-icon.python {
-  background: linear-gradient(180deg, #f4f1ff 0%, #e4dcff 100%);
-  border-color: rgba(114, 46, 209, 0.16);
+  background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
+  border-color: rgba(107, 114, 128, 0.16);
 }
 
 .sa-node-icon.python::before,
 .sa-node-icon.python::after {
-  background: rgba(114, 46, 209, 0.4);
+  background: rgba(107, 114, 128, 0.4);
 }
 
 .sa-node-title {
   flex: 1;
   font-size: 11px;
   font-weight: 500;
-  color: #1d2129;
+  color: #111827;
   line-height: 1.4;
 }
 
@@ -750,14 +750,14 @@ onBeforeUnmount(() => {
   opacity: 0.9;
 }
 
-.sa-node-status.success { color: #22a35a; }
-.sa-node-status.running { color: #165dff; }
-.sa-node-status.error { color: #f53f3f; }
-.sa-node-status.pending { color: #86909c; }
-.sa-node-status.warning { color: #ff7d00; }
+.sa-node-status.success { color: #10B981; }
+.sa-node-status.running { color: #E61F24; }
+.sa-node-status.error { color: #E61F24; }
+.sa-node-status.pending { color: #9CA3AF; }
+.sa-node-status.warning { color: #F59E0B; }
 
 .sa-spin {
-  color: #165dff;
+  color: #E61F24;
   animation: spin 1s linear infinite;
 }
 
@@ -769,9 +769,9 @@ onBeforeUnmount(() => {
   margin: 2px 0 0;
   padding: 9px 11px;
   background: #ffffff;
-  border: 1px solid #e5e6eb;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.035);
 }
 
 .sa-node-body-head {
@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-log-steps {
@@ -801,14 +801,14 @@ onBeforeUnmount(() => {
   margin-bottom: 7px;
   font-size: 10px;
   line-height: 1.6;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-node-thought {
   margin-bottom: 7px;
   padding: 7px 9px;
   border-radius: 8px;
-  background: #fafbfc;
+  background: #F8F9FA;
   border: 1px solid rgba(229, 230, 235, 0.9);
 }
 
@@ -819,14 +819,14 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #a0a7b2;
+  color: #9CA3AF;
 }
 
 .sa-node-thought p {
   margin: 0;
   font-size: 10px;
   line-height: 1.55;
-  color: #667085;
+  color: #6B7280;
 }
 
 .sa-node-live-thought {
@@ -836,7 +836,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   border-radius: 8px;
   border: 1px solid rgba(229, 233, 242, 0.74);
-  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%);
   overflow: hidden;
 }
 
@@ -848,15 +848,15 @@ onBeforeUnmount(() => {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #b0b8c4;
+  color: #9CA3AF;
 }
 
 .sa-live-pulse-dot {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #8aa8ff;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.05);
+  background: #E61F24;
+  box-shadow: 0 0 0 2px rgba(230, 31, 36, 0.05);
   animation: saLivePulse 1.3s ease-in-out infinite;
 }
 
@@ -867,7 +867,7 @@ onBeforeUnmount(() => {
   white-space: normal;
   font-size: 10px;
   line-height: 1.55;
-  color: #7a8494;
+  color: #6B7280;
 }
 
 .sa-node-live-line::-webkit-scrollbar {
@@ -875,8 +875,8 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-live-line::-webkit-scrollbar-thumb {
-  background: #d8dee8;
-  border-radius: 999px;
+  background: #D1D5DB;
+  border-radius: 8px;
 }
 
 .sa-node-live-check {
@@ -884,11 +884,11 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 6px;
   min-height: 18px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-node-live-check.latest {
-  color: #4e5969;
+  color: #6B7280;
 }
 
 .sa-node-live-check-dot {
@@ -896,13 +896,13 @@ onBeforeUnmount(() => {
   height: 4px;
   margin-top: 6px;
   border-radius: 50%;
-  background: #b8c2d0;
+  background: #9CA3AF;
   flex-shrink: 0;
 }
 
 .sa-node-live-check.latest .sa-node-live-check-dot {
-  background: #165dff;
-  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.06);
+  background: #E61F24;
+  box-shadow: 0 0 0 3px rgba(230, 31, 36, 0.06);
 }
 
 .sa-log-step {
@@ -916,18 +916,18 @@ onBeforeUnmount(() => {
   height: 6px;
   margin-top: 7px;
   border-radius: 50%;
-  background: #165dff;
+  background: #E61F24;
   flex-shrink: 0;
 }
 
 .sa-log-step-text {
   font-size: 10px;
-  color: #4e5969;
+  color: #6B7280;
   line-height: 1.6;
 }
 
 .sa-log-step-printing .sa-log-step-text {
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-print-cursor {
@@ -935,7 +935,7 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 12px;
   margin-left: 5px;
-  border-right: 2px solid #165dff;
+  border-right: 2px solid #E61F24;
   animation: blink 0.9s steps(1, end) infinite;
   vertical-align: -2px;
 }
@@ -973,7 +973,7 @@ onBeforeUnmount(() => {
 
 .sa-log-time {
   font-size: 10px;
-  color: #86909c;
+  color: #9CA3AF;
   margin-top: 4px;
 }
 

@@ -56,14 +56,14 @@ defineEmits(['download', 'viewDetails'])
   gap: 10px;
   padding: 11px 13px;
   border-radius: 13px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  background: linear-gradient(180deg, #f4f8ff 0%, #fbfdff 100%);
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  background: linear-gradient(180deg, #F8F9FA 0%, #FFFFFF 100%);
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .sa-artifact-main:hover {
-  border-color: rgba(22, 93, 255, 0.28);
+  border-color: rgba(230, 31, 36, 0.28);
   transform: translateY(-1px);
 }
 
@@ -73,8 +73,8 @@ defineEmits(['download', 'viewDetails'])
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
-  border: 1px solid rgba(22, 93, 255, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  border: 1px solid rgba(230, 31, 36, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -86,8 +86,8 @@ defineEmits(['download', 'viewDetails'])
   width: 14px;
   height: 16px;
   border-radius: 4px;
-  border: 1.5px solid #165dff;
-  background: linear-gradient(180deg, rgba(22, 93, 255, 0.08) 0%, rgba(22, 93, 255, 0.02) 100%);
+  border: 1.5px solid #E61F24;
+  background: linear-gradient(180deg, rgba(230, 31, 36, 0.08) 0%, rgba(230, 31, 36, 0.02) 100%);
 }
 
 .sa-artifact-icon::after {
@@ -97,8 +97,8 @@ defineEmits(['download', 'viewDetails'])
   right: 10px;
   width: 5px;
   height: 5px;
-  border-top: 1.5px solid #165dff;
-  border-right: 1.5px solid #165dff;
+  border-top: 1.5px solid #E61F24;
+  border-right: 1.5px solid #E61F24;
   transform: rotate(45deg);
 }
 
@@ -114,18 +114,18 @@ defineEmits(['download', 'viewDetails'])
 .sa-artifact-name {
   font-size: 12px;
   font-weight: 600;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-artifact-desc {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-artifact-action {
   font-size: 11px;
   font-weight: 600;
-  color: #165dff;
+  color: #E61F24;
 }
 
 .sa-artifact-list {
@@ -141,15 +141,15 @@ defineEmits(['download', 'viewDetails'])
   min-height: 30px;
   padding: 0 10px;
   border-radius: 9px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background: #ffffff;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
 .sa-artifact-chip:hover {
-  border-color: rgba(22, 93, 255, 0.24);
-  background: #f8fbff;
+  border-color: rgba(230, 31, 36, 0.24);
+  background: #F8F9FA;
 }
 
 .sa-chip-type {
@@ -157,8 +157,8 @@ defineEmits(['download', 'viewDetails'])
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  background: #f6f8fb;
-  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: #F8F9FA;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -174,32 +174,32 @@ defineEmits(['download', 'viewDetails'])
 .sa-chip-type.is-log::before {
   width: 9px;
   height: 7px;
-  border-left: 1.5px solid #165dff;
-  border-right: 1.5px solid #165dff;
-  border-bottom: 1.5px solid #165dff;
+  border-left: 1.5px solid #E61F24;
+  border-right: 1.5px solid #E61F24;
+  border-bottom: 1.5px solid #E61F24;
   bottom: 4px;
 }
 
 .sa-chip-type.is-log::after {
   width: 9px;
   height: 1.5px;
-  background: #165dff;
+  background: #E61F24;
   top: 5px;
-  box-shadow: 0 3px 0 #165dff;
+  box-shadow: 0 3px 0 #E61F24;
 }
 
 .sa-chip-type.is-data::before {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 1.5px solid #165dff;
+  border: 1.5px solid #E61F24;
   top: 2px;
 }
 
 .sa-chip-type.is-data::after {
   width: 10px;
   height: 5px;
-  border: 1.5px solid #165dff;
+  border: 1.5px solid #E61F24;
   border-top: none;
   border-radius: 0 0 7px 7px;
   bottom: 2px;
@@ -208,7 +208,7 @@ defineEmits(['download', 'viewDetails'])
 .sa-chip-type.is-view::before {
   width: 10px;
   height: 6px;
-  border: 1.5px solid #165dff;
+  border: 1.5px solid #E61F24;
   border-radius: 8px;
 }
 
@@ -216,11 +216,11 @@ defineEmits(['download', 'viewDetails'])
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #165dff;
+  background: #E61F24;
 }
 
 .sa-chip-name {
   font-size: 11px;
-  color: #1d2129;
+  color: #111827;
 }
 </style>

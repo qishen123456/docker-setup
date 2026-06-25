@@ -589,9 +589,9 @@ onMounted(async () => {
 .workspace,
 .stat-item {
   background: #fff;
-  border: 1px solid #e5eaf3;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04);
 }
 
 .org-hero {
@@ -604,7 +604,7 @@ onMounted(async () => {
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: #E61F24;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0;
@@ -615,7 +615,7 @@ onMounted(async () => {
 .type-panel h2,
 .box-head h3 {
   margin: 0;
-  color: #0f172a;
+  color: #111827;
 }
 
 .org-hero h1 {
@@ -627,7 +627,7 @@ onMounted(async () => {
 .detail-head p,
 .box-head span {
   margin: 8px 0 0;
-  color: #64748b;
+  color: #6B7280;
 }
 
 .hero-actions,
@@ -651,14 +651,14 @@ onMounted(async () => {
 
 .stat-item span {
   display: block;
-  color: #64748b;
+  color: #6B7280;
   font-weight: 700;
 }
 
 .stat-item strong {
   display: block;
   margin-top: 8px;
-  color: #0f172a;
+  color: #111827;
   font-size: 28px;
 }
 
@@ -670,7 +670,7 @@ onMounted(async () => {
 }
 
 .type-panel {
-  border-right: 1px solid #e5eaf3;
+  border-right: 1px solid #E5E7EB;
   padding: 18px;
 }
 
@@ -693,15 +693,15 @@ onMounted(async () => {
   padding: 14px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #F8F9FA;
+  color: #111827;
   text-align: left;
   cursor: pointer;
 }
 
 .type-item.active {
-  border-color: #14b8a6;
-  background: #f0fdfa;
+  border-color: #E61F24;
+  background: #FEF2F2;
 }
 
 .type-item strong,
@@ -712,7 +712,7 @@ onMounted(async () => {
 .type-item small,
 .type-item em {
   margin-top: 4px;
-  color: #64748b;
+  color: #6B7280;
   font-style: normal;
 }
 
@@ -727,8 +727,8 @@ onMounted(async () => {
   height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 12px;
   font-weight: 800;
 }
@@ -742,7 +742,7 @@ onMounted(async () => {
 
 .tree-box,
 .node-panel {
-  border: 1px solid #e5eaf3;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
   padding: 16px;
   min-height: 480px;
@@ -782,19 +782,19 @@ onMounted(async () => {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #0f172a;
+  color: #111827;
   text-align: left;
   cursor: pointer;
   transition: background .16s ease;
 }
 
 .tree-node-row button:hover {
-  background: #f1f5f9;
+  background: #F3F4F6;
 }
 
 .tree-node-row button.active {
   background: #ecfdf5;
-  box-shadow: inset 3px 0 0 #14b8a6;
+  box-shadow: inset 3px 0 0 #E61F24;
 }
 
 .node-title-line {
@@ -818,7 +818,7 @@ onMounted(async () => {
 
 .tree-node-row small {
   margin-top: 2px;
-  color: #64748b;
+  color: #6B7280;
   font-size: 12px;
 }
 
@@ -826,8 +826,8 @@ onMounted(async () => {
   flex: 0 0 auto;
   padding: 1px 6px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 11px;
   font-style: normal;
   font-weight: 800;
@@ -841,20 +841,20 @@ onMounted(async () => {
 
 .node-meta div {
   padding: 12px;
-  border: 1px solid #edf2f7;
+  border: 1px solid #F3F4F6;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #F8F9FA;
 }
 
 .node-meta dt {
-  color: #64748b;
+  color: #6B7280;
   font-size: 12px;
   font-weight: 800;
 }
 
 .node-meta dd {
   margin: 6px 0 0;
-  color: #0f172a;
+  color: #111827;
   font-weight: 800;
 }
 
@@ -885,14 +885,14 @@ onMounted(async () => {
 
 .preview-head h3 {
   margin: 0;
-  color: #0f172a;
+  color: #111827;
   font-size: 18px;
 }
 
 .preview-head p,
 .preview-more {
   margin: 6px 0 0;
-  color: #64748b;
+  color: #6B7280;
   font-size: 12px;
 }
 
@@ -905,21 +905,21 @@ onMounted(async () => {
 
 .preview-stats div {
   padding: 10px;
-  border: 1px solid #e5eaf3;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #F8F9FA;
 }
 
 .preview-stats span {
   display: block;
-  color: #64748b;
+  color: #6B7280;
   font-size: 12px;
 }
 
 .preview-stats strong {
   display: block;
   margin-top: 4px;
-  color: #0f172a;
+  color: #111827;
   font-size: 20px;
 }
 
@@ -941,7 +941,7 @@ onMounted(async () => {
 
   .type-panel {
     border-right: 0;
-    border-bottom: 1px solid #e5eaf3;
+    border-bottom: 1px solid #E5E7EB;
   }
 }
 </style>

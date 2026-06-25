@@ -149,7 +149,7 @@ export const preloadRouteComponents = (routeNames = []) => {
 }
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title || '智能分析'} - Data Agent`
+  document.title = `${to.meta.title || '智能分析'} - ANGEL`
 })
 
 export default router

@@ -573,6 +573,17 @@ def build_report_spec(
             ),
             None,
         )
+    if ranking_sort_metric:
+        sort_column_label = str(query_intent.get("sort_metric_column") or "").strip()
+        if sort_column_label and sort_column_label not in {
+            str(ranking_sort_metric.get("column") or ""),
+            str(ranking_sort_metric.get("label") or ""),
+            str(ranking_sort_metric.get("key") or ""),
+        }:
+            ranking_sort_metric = {
+                **ranking_sort_metric,
+                "label": sort_column_label,
+            }
     sort_metric = ranking_sort_metric or rate_metric or actual_metric or task_metric or remain_metric or {}
     is_ranking_mode = query_intent.get("intent") == "ranking"
 
@@ -625,7 +636,12 @@ def build_report_spec(
     if is_single_focus_question and not comparison_nodes and focus_node:
         comparison_nodes = [focus_node]
     elif not comparison_nodes and len(tree["roots"]) == 1:
-        comparison_nodes = tree["roots"][0].get("children", [])
+        root = tree["roots"][0]
+        root_level = _canonical_level_value(root.get("levelValue") or root.get("levelName"))
+        if requested_levels and root_level in requested_level_set:
+            comparison_nodes = [root]
+        else:
+            comparison_nodes = root.get("children", [])
     if not comparison_nodes and not is_single_focus_question:
         parent_nodes = [node for node in nodes if node.get("children")]
         max_depth = max([node.get("depth", 0) for node in parent_nodes] or [0])
@@ -1237,9 +1253,23 @@ def build_report_spec(
             ranked_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
         top_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
         bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:])) if rank_sides == "both" and rank_limit else []
+        is_single_extreme = rank_sides != "both" and rank_limit == 1
+        if is_single_extreme and ranked_nodes:
+            extreme_label = "最低" if low_first else "最高"
+            answer_title = f"{extreme_label}结果"
+            answer_text = f"{extreme_label}的{compare_label}是 {ranked_nodes[0].get('name')}"
+        else:
+            answer_title = "排名结果"
+            answer_text = (
+                f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出前{rank_limit}和后{rank_limit}个{compare_label}的排序结果"
+                if rank_sides == "both" and ranked_nodes
+                else f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出 {len(ranked_nodes)} 个{compare_label}的排序结果"
+                if ranked_nodes
+                else f"当前没有可排序的{compare_label}结果"
+            )
         answer_summary = {
             "mode": "ranking",
-            "title": "排名结果",
+            "title": answer_title,
             "targetLevel": compare_label,
             "metricLabel": sort_metric.get("label") or sort_metric.get("column") or sort_metric.get("key"),
             "direction": "asc" if low_first else "desc",
@@ -1247,13 +1277,7 @@ def build_report_spec(
             "topN": len(ranked_nodes),
             "leader": ranked_nodes[0].get("name") if ranked_nodes else "",
             "tail": ranked_nodes[-1].get("name") if len(ranked_nodes) > 1 else "",
-            "text": (
-                f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出前{rank_limit}和后{rank_limit}个{compare_label}的排序结果"
-                if rank_sides == "both" and ranked_nodes
-                else f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出 {len(ranked_nodes)} 个{compare_label}的排序结果"
-                if ranked_nodes
-                else f"当前没有可排序的{compare_label}结果"
-            ),
+            "text": answer_text,
             "topNames": [node.get("name") for node in top_nodes],
             "bottomNames": [node.get("name") for node in bottom_nodes],
         }
@@ -1271,6 +1295,16 @@ def build_report_spec(
             ),
         }
 
+    # 单点最高/最低问题，默认把答案节点作为聚焦节点，让前端展示其下级明细
+    if (
+        answer_mode == "ranking"
+        and rank_sides != "both"
+        and rank_limit == 1
+        and ranked_nodes
+        and not focus_node
+    ):
+        focus_node = ranked_nodes[0]
+
     provenance_id = "p_sql_result_001"
     sort_spec = {
         "metricKey": sort_metric.get("key") or "",
@@ -1282,7 +1316,7 @@ def build_report_spec(
     }
     return {
         "version": "2.0",
-        "reportTitle": "业绩分析报告",
+        "reportTitle": str(config.get("reportTitle") or "业绩分析报告"),
         "question": question,
         "answerMode": answer_mode,
         "answerSummary": answer_summary,

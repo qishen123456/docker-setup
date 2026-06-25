@@ -490,7 +490,7 @@ onMounted(() => {
 .advanced-page {
   min-height: 100%;
   padding: 24px;
-  background: #f5f7fb;
+  background: #F8F9FA;
   color: #111827;
 }
 
@@ -509,7 +509,7 @@ onMounted(() => {
   margin: 0 0 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
+  color: #E61F24;
   letter-spacing: 0;
 }
 
@@ -522,7 +522,7 @@ onMounted(() => {
 .advanced-hero p:last-child {
   max-width: 760px;
   margin: 10px 0 0;
-  color: #4b5563;
+  color: #6B7280;
   line-height: 1.7;
 }
 
@@ -552,8 +552,8 @@ onMounted(() => {
 }
 
 .metric-item.is-warning {
-  border-color: #fed7aa;
-  background: #fff7ed;
+  border-color: #FFFBEB;
+  background: #FFFBEB;
 }
 
 .metric-item span,
@@ -630,16 +630,16 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #F3F4F6;
 }
 
 .flow-warning {
   margin-top: 14px;
   padding: 12px 14px;
-  border: 1px solid #fed7aa;
+  border: 1px solid #FFFBEB;
   border-radius: 8px;
-  background: #fff7ed;
-  color: #9a3412;
+  background: #FFFBEB;
+  color: #B45309;
   line-height: 1.7;
 }
 
@@ -695,7 +695,7 @@ onMounted(() => {
 
 .import-panel p {
   margin: 0 0 12px;
-  color: #4b5563;
+  color: #6B7280;
   line-height: 1.7;
 }
 
@@ -711,7 +711,7 @@ onMounted(() => {
   width: 100%;
   margin: 4px 0 0;
   padding-left: 18px;
-  color: #92400e;
+  color: #B45309;
 }
 
 @media (max-width: 1080px) {

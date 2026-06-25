@@ -478,17 +478,17 @@ onMounted(() => {
 <style scoped>
 .migration-page {
   padding: 24px;
-  background: #f5f7fb;
+  background: #F8F9FA;
   min-height: 100%;
 }
 
 .hero-card,
 .panel-card,
 .metric-card {
-  border: 1px solid #e7edf6;
+  border: 1px solid #E5E7EB;
   border-radius: 18px;
   background: #fff;
-  box-shadow: 0 16px 40px rgba(31, 45, 61, 0.06);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.06);
 }
 
 .hero-card {
@@ -497,13 +497,13 @@ onMounted(() => {
   gap: 24px;
   padding: 28px;
   background:
-    radial-gradient(circle at right top, rgba(24, 144, 255, 0.16), transparent 32%),
-    linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+    radial-gradient(circle at right top, rgba(230, 31, 36, 0.16), transparent 32%),
+    linear-gradient(135deg, #ffffff 0%, #F8F9FA 100%);
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: #E61F24;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -512,7 +512,7 @@ onMounted(() => {
 .hero-card h1,
 .panel-title h2 {
   margin: 0;
-  color: #0f172a;
+  color: #111827;
 }
 
 .hero-copy,
@@ -520,7 +520,7 @@ onMounted(() => {
 .metric-card small,
 .permission-card small,
 .upload-zone p {
-  color: #64748b;
+  color: #6B7280;
   line-height: 1.7;
 }
 
@@ -570,7 +570,7 @@ onMounted(() => {
 
 .metric-card span,
 .permission-card span {
-  color: #64748b;
+  color: #6B7280;
   font-weight: 700;
 }
 
@@ -578,7 +578,7 @@ onMounted(() => {
 .permission-card strong {
   display: block;
   margin: 10px 0 4px;
-  color: #1d4ed8;
+  color: #E61F24;
   font-size: 30px;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -593,9 +593,9 @@ onMounted(() => {
 
 .permission-card {
   padding: 14px 16px;
-  border: 1px solid #dbeafe;
+  border: 1px solid #FEF2F2;
   border-radius: 14px;
-  background: #f8fbff;
+  background: #F8F9FA;
 }
 
 .permission-card strong {
@@ -613,7 +613,7 @@ onMounted(() => {
 }
 
 .panel-card :deep(.el-card__header) {
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid #F3F4F6;
 }
 
 .panel-title {
@@ -629,14 +629,14 @@ onMounted(() => {
   justify-content: space-between;
   gap: 18px;
   padding: 20px;
-  border: 1px dashed #bfdbfe;
+  border: 1px dashed #FEF2F2;
   border-radius: 16px;
-  background: #f8fbff;
+  background: #F8F9FA;
 }
 
 .upload-zone.ready {
-  border-color: #22c55e;
-  background: #f4fdf7;
+  border-color: #10B981;
+  background: #F8F9FA;
 }
 
 .file-picker {
@@ -648,7 +648,7 @@ onMounted(() => {
   height: 36px;
   border-radius: 999px;
   color: #fff;
-  background: #2563eb;
+  background: #E61F24;
   cursor: pointer;
 }
 

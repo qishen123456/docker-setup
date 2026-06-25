@@ -118,8 +118,27 @@
             :class="[`is-group-${(group.index % 4) + 1}`, group.tone ? `is-${group.tone}` : '']"
             role="row"
           >
-            <span>{{ group.title }}</span>
-            <small>{{ group.rows.length }}个{{ isRankingQuestion ? rankingLevelLabel : secondaryLevelLabel }}</small>
+            <template v-if="group.meta">
+              <div class="sa-drill-group-node">
+                <strong>{{ group.title }}</strong>
+                <small>{{ group.rows.length }}个{{ secondaryLevelLabel }}</small>
+              </div>
+              <div class="sa-drill-group-cell">
+                <strong>{{ group.meta.taskText || '-' }}</strong>
+                <span>完成 {{ group.meta.actualText || '-' }}</span>
+              </div>
+              <div class="sa-drill-group-cell">{{ group.meta.remainText || '-' }}</div>
+              <div class="sa-drill-group-cell is-metric">
+                <strong>{{ rankingMetricText(group.meta) || group.meta.rateText || '-' }}</strong>
+                <span>{{ rankingMetricMeta.label }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="sa-drill-group-title-only">
+                <span>{{ group.title }}</span>
+                <small>{{ group.rows.length }}个{{ isRankingQuestion ? rankingLevelLabel : secondaryLevelLabel }}</small>
+              </div>
+            </template>
           </div>
           <div
             v-for="(row, index) in group.rows"
@@ -389,6 +408,11 @@ const explicitRequestedRankLimit = computed(() => {
 const isRankingQuestion = computed(() => Boolean(
   requestedRankLimit.value || /排名|排行|最高|最低|最好|最差|倒数|垫底/.test(questionText.value),
 ))
+const isSingleBestQuestion = computed(() => {
+  const topN = queryIntent.value?.top_n || primaryAnswerSummary.value?.topN
+  if (topN === 1) return true
+  return /哪个|哪一家/.test(questionText.value) && /最高|最低|最好|最差/.test(questionText.value)
+})
 const rankDirection = computed(() => (
   /最低|最差|倒数|垫底|后/.test(questionText.value) ? 'asc' : 'desc'
 ))
@@ -736,7 +760,7 @@ const primaryKpiCards = computed(() => {
   }
   if (isCollectionAnswerMode.value) {
     const collectionRows = rankedCollectionRows.value
-    const leader = collectionRows[0] || null
+    const leader = answerSummaryLeaderRow.value || collectionRows[0] || null
     const tail = collectionRows[collectionRows.length - 1] || null
     const metricLabel = cleanText(rankingMetricMeta.value?.label || primaryAnswerSummary.value?.metricLabel || '指标')
     const leaderMetric = leader
@@ -745,12 +769,54 @@ const primaryKpiCards = computed(() => {
     const tailMetric = tail
       ? (primaryAnswerMode.value === 'ranking' ? (rankingMetricText(tail) || '-') : (tail.rateText || '-'))
       : '-'
+    // 当排名/单点查询顺带返回下属明细时，按层级拆分数量展示
+    const levelCounts = collectionRows.reduce((acc, row) => {
+      const level = row.level || '明细'
+      acc[level] = (acc[level] || 0) + 1
+      return acc
+    }, {})
+    const hasMixedLevels = Object.keys(levelCounts).length > 1
+    const countLabel = primaryAnswerMode.value === 'filter' ? '命中数量' : '结果数量'
+    const countValue = hasMixedLevels
+      ? Object.entries(levelCounts).map(([level, count]) => `${level}${count}个`).join(' / ')
+      : `${collectionRows.length}个`
+    const countHint = hasMixedLevels
+      ? '按层级拆分的结果集合'
+      : `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`
+    // 单点“哪个最高/最低”只展示答案和下属明细，不混入末位排名
+    if (isSingleBestQuestion.value && leader) {
+      const childRows = collectionRows.filter(r => r.name !== leader.name && r.level !== leader.level)
+      return [
+        {
+          key: 'single-best-answer',
+          label: '答案',
+          value: leader.name,
+          hint: `${metricLabel} ${leaderMetric}`,
+          tone: 'good',
+        },
+        childRows.length ? {
+          key: 'single-best-children',
+          label: '下属明细',
+          value: `${childRows.length}个`,
+          hint: `${secondaryLevelLabel.value || '下级节点'}可展开查看`,
+          tone: 'neutral',
+        } : null,
+        {
+          key: 'collection-risk',
+          label: '风险节点',
+          value: `${riskRows.value.length}个`,
+          hint: riskRows.value.length ? `低于 ${riskThreshold.value}% 风险线` : '暂无明显风险节点',
+          tone: riskRows.value.length ? 'danger' : 'good',
+        },
+      ].filter(Boolean)
+    }
+
     return [
       {
         key: 'collection-count',
-        label: primaryAnswerMode.value === 'filter' ? '命中数量' : '结果数量',
-        value: `${collectionRows.length}个`,
-        hint: `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`,
+        label: countLabel,
+        value: countValue,
+        hint: countHint,
         tone: 'neutral',
       },
       leader ? {
@@ -914,6 +980,14 @@ const rankedCollectionRows = computed(() => {
   return sortRankingRows(source, rankDirection.value)
 })
 
+// 单点“哪个最高/最低”优先使用后端 answerSummary 给出的唯一答案
+const answerSummaryLeaderRow = computed(() => {
+  if (!isSingleBestQuestion.value) return null
+  const leaderName = primaryAnswerSummary.value?.leader
+  if (!leaderName) return null
+  return normalizedRows.value.find(item => item.name === leaderName) || null
+})
+
 const rateDistribution = computed(() => {
   const source = managementLayerRows.value.filter(item => item.rate !== null)
   const total = source.length || 0
@@ -1018,8 +1092,10 @@ const insightCards = computed(() => {
   }
   if (isCollectionAnswerMode.value) {
     const collectionRows = rankedCollectionRows.value
-    const leader = collectionRows[0] || null
+    const leader = answerSummaryLeaderRow.value || collectionRows[0] || null
     const tail = collectionRows[collectionRows.length - 1] || null
+    const isSingleBest = isSingleBestQuestion.value && leader
+    const singleBestLeaderLabel = rankDirection.value === 'asc' ? '最低对象' : '最高对象'
     return [
       {
         label: '数据覆盖',
@@ -1028,15 +1104,15 @@ const insightCards = computed(() => {
         tone: 'info',
       },
       leader ? {
-        label: primaryAnswerMode.value === 'ranking' ? '榜首对象' : '代表对象',
+        label: isSingleBest ? singleBestLeaderLabel : (primaryAnswerMode.value === 'ranking' ? '榜首对象' : '代表对象'),
         value: leader.name,
         desc: primaryAnswerMode.value === 'ranking'
           ? `${rankingMetricMeta.value.label}${rankingMetricText(leader) || leader.rateText || '-'}`
           : `达成率${leader.rateText || '-'}`,
         tone: 'good',
       } : null,
-      tail ? {
-        label: primaryAnswerMode.value === 'ranking' ? '末位对象' : '重点压力',
+      tail && !(isSingleBest && tail.name === leader?.name) ? {
+        label: isSingleBest ? '内部末位' : (primaryAnswerMode.value === 'ranking' ? '末位对象' : '重点压力'),
         value: tail.name,
         desc: primaryAnswerMode.value === 'ranking'
           ? `${rankingMetricMeta.value.label}${rankingMetricText(tail) || tail.rateText || '-'}`
@@ -1502,13 +1578,20 @@ const secondaryDrillRows = computed(() => {
   if (!isRankingQuestion.value) return rows
   const limit = explicitRequestedRankLimit.value || rows.length || requestedRankLimit.value || 3
   if (rankSides.value === 'both') return twoSidedRankRows(rows)
-  return sortRankingRows(rows, rankDirection.value)
+  const sorted = sortRankingRows(rows, rankDirection.value)
     .slice(0, limit)
+  // 单点“哪个最高/最低”只保留下属明细，答案对象本身在结构看板/核心结论中展示
+  if (isSingleBestQuestion.value && answerSummaryLeaderRow.value) {
+    const leader = answerSummaryLeaderRow.value
+    return sorted.filter(r => r.name !== leader.name)
+  }
+  return sorted
 })
 
-const drillSectionLabel = computed(() => (
-  isRankingQuestion.value ? '四、排名结果' : '四、二级拆解'
-))
+const drillSectionLabel = computed(() => {
+  if (isSingleBestQuestion.value) return '四、答案与明细'
+  return isRankingQuestion.value ? '四、排名结果' : '四、二级拆解'
+})
 
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
@@ -1545,6 +1628,17 @@ const secondaryDrillGroups = computed(() => {
         rows: rows.filter(item => sameOrgName(item.parent, parent)),
       }))
       .filter(group => group.rows.length)
+  }
+  // 单点“哪个最高/最低”把下属明细归到答案对象一个分组，并在分组头展示答案指标
+  if (isSingleBestQuestion.value && answerSummaryLeaderRow.value && rows.length) {
+    const leader = answerSummaryLeaderRow.value
+    return [{
+      key: 'single-best-group',
+      title: leader.name,
+      index: 0,
+      rows,
+      meta: leader,
+    }]
   }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
   const shouldGroup = !explicitRequestedRankLimit.value && comparisonParentNames.value.length >= 2 && parents.length >= 1
@@ -1612,6 +1706,15 @@ const secondaryDrillSummary = computed(() => {
   if (!rows.length) return ''
   if (isRankingQuestion.value) {
     const shown = secondaryDrillRows.value
+    // 单点“哪个最高/最低”不再说“取最高 N 个”，而是直接说答案及其下属明细
+    if (isSingleBestQuestion.value && answerSummaryLeaderRow.value) {
+      const leader = answerSummaryLeaderRow.value
+      const childRows = shown.filter(r => r.name !== leader.name)
+      if (childRows.length) {
+        return `${leader.name} 的下属${secondaryLevelLabel.value || '明细'}共 ${childRows.length} 个，完整明细见下表`
+      }
+      return ''
+    }
     if (rankSides.value === 'both') {
       const limit = twoSidedRankDisplayLimit(shown)
       return `按${rankingMetricMeta.value.label}取前${limit}和后${limit}个${rankingLevelLabel.value}，完整明细见下表`
@@ -1768,12 +1871,7 @@ const directAnswer = computed(() => {
     }
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
     const rows = rankedCollectionRows.value
-    const leader = rows[0]
-    const topNames = rows
-      .slice(0, Math.min(3, rows.length))
-      .map(item => item.name)
-      .filter(Boolean)
-      .join('、')
+    const leader = answerSummaryLeaderRow.value || rows[0]
     const leaderMetrics = [
       rankingMetricText(leader) ? `${rankingMetricMeta.value.label}${rankingMetricText(leader)}` : '',
       rankingMetricMeta.value.key !== 'rate' && leader?.rateText ? `达成率${leader.rateText}` : '',
@@ -1782,7 +1880,32 @@ const directAnswer = computed(() => {
     const riskHint = leader?.rate !== null && leader?.rate !== undefined && Number(leader.rate) < 60
       ? '，但达成率仍低于60%红线，需要把相对排名和绝对进度分开看'
       : ''
-    return `本轮${rankingLevelLabel.value}${rankingMetricMeta.value.label}${directionText}${rows.length}名已生成，前三为${topNames || leader?.name || '见下方明细'}；榜首${leader?.name || '当前对象'}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}。完整名单见排名结果。`
+
+    // 单点“哪个最高/最低”直接回答，不混入下属明细
+    if (isSingleBestQuestion.value && leader) {
+      const leaderLevel = primaryAnswerSummary.value?.targetLevel || leader.level || rankingLevelLabel.value
+      const childRows = rows.filter(r => r.name !== leader.name && (r.parent === leader.name || r.level !== leader.level))
+      const childHint = childRows.length > 0
+        ? `其下属${secondaryLevelLabel.value || '下级节点'}明细可展开查看。`
+        : ''
+      return `${leaderLevel}中${rankingMetricMeta.value.label}${directionText}的是${leader.name}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}。${childHint}`
+    }
+
+    // 排名数量优先取后端报告契约中的 topN，其次解析问题中的数字，最后兜底
+    const rankLimit = primaryAnswerSummary.value?.topN
+      || explicitRequestedRankLimit.value
+      || requestedRankLimit.value
+      || rows.length
+    const topNames = rows
+      .slice(0, Math.min(3, rows.length))
+      .map(item => item.name)
+      .filter(Boolean)
+      .join('、')
+    const childCount = Math.max(0, rows.length - rankLimit)
+    const childHint = childCount > 0
+      ? `（含该${rankingLevelLabel.value}下属 ${childCount} 个${secondaryLevelLabel.value || '下级节点'}明细）`
+      : ''
+    return `本轮${rankingLevelLabel.value}${rankingMetricMeta.value.label}${directionText}${rankLimit}名已生成，前三为${topNames || leader?.name || '见下方明细'}；榜首${leader?.name || '当前对象'}${leaderMetrics ? `，${leaderMetrics}` : ''}${riskHint}${childHint}。完整名单见排名结果。`
   }
   if (comparisonRows.value.length >= 2) {
     const rows = comparisonRows.value
@@ -1854,6 +1977,22 @@ const supportLines = computed(() => {
   }
   if (isRankingQuestion.value && rankedCollectionRows.value.length) {
     const shown = rankedCollectionRows.value
+    // 单点“哪个最高/最低”只聚焦答案对象及其下属明细
+    if (isSingleBestQuestion.value && answerSummaryLeaderRow.value) {
+      const leader = answerSummaryLeaderRow.value
+      const children = shown.filter(r => r.name !== leader.name)
+      const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+      const lines = []
+      lines.push(`${leader.name} 是当前${rankingLevelLabel.value}中${rankingMetricMeta.value.label}${directionText}的答案对象${rankingMetricText(leader) ? `，${rankingMetricPhrase(leader)}` : ''}。`)
+      if (children.length) {
+        lines.push(`该${rankingLevelLabel.value}下属${secondaryLevelLabel.value || '明细'}共 ${children.length} 个，内部明细见下表。`)
+      }
+      const childRiskCount = children.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
+      if (childRiskCount) {
+        lines.push(`下属节点中有 ${childRiskCount} 个低于${riskThreshold.value}%风险线，建议优先下钻。`)
+      }
+      return lines
+    }
     if (rankSides.value === 'both') {
       const limit = twoSidedRankDisplayLimit(shown)
       const topRows = shown.filter(item => item.rankGroup.includes('前')).length
@@ -1868,7 +2007,7 @@ const supportLines = computed(() => {
         `风险提醒：排名看${rankingMetricMeta.value.label}，健康度仍要结合达成率和缺口一起判断。`,
       ].filter(Boolean)
     }
-    const leader = shown[0]
+    const leader = answerSummaryLeaderRow.value || shown[0]
     const tail = shown[shown.length - 1]
     const leaderValue = rankingMetricValue(leader)
     const tailValue = rankingMetricValue(tail)
@@ -1932,6 +2071,18 @@ const supportLines = computed(() => {
 const actionItems = computed(() => {
   const actions = []
   if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
+    // 单点“哪个最高/最低”给出针对性建议
+    if (isSingleBestQuestion.value && answerSummaryLeaderRow.value) {
+      const leader = answerSummaryLeaderRow.value
+      const children = rankedCollectionRows.value.filter(r => r.name !== leader.name)
+      const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+      actions.push(`已定位${rankingLevelLabel.value}中${rankingMetricMeta.value.label}${directionText}的${nodeNameWithUndertaker(leader)}，建议优先复盘其任务缺口、项目阶段和下级节点推进。`)
+      if (children.length) {
+        actions.push(`继续下钻${leader.name}下属的${secondaryLevelLabel.value || '明细'}，识别内部薄弱环节并制定周度推进清单。`)
+      }
+      actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，避免只看${rankingMetricMeta.value.label}而忽略达成率和缺口。`)
+      return actions.slice(0, 3)
+    }
     const leader = rankedCollectionRows.value[0]
     const tail = rankedCollectionRows.value[rankedCollectionRows.value.length - 1]
     if (leader) actions.push(`复盘${nodeNameWithUndertaker(leader)}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
@@ -1972,9 +2123,9 @@ const actionItems = computed(() => {
   width: 100%;
   padding: 15px 17px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055);
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #FFFFFF 100%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.055);
 }
 
 .sa-boss-answer-head {
@@ -1983,7 +2134,7 @@ const actionItems = computed(() => {
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(29, 33, 41, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sa-boss-answer-title-block {
@@ -2004,7 +2155,7 @@ const actionItems = computed(() => {
 
 .sa-boss-answer-kicker,
 .sa-section-label {
-  color: #165dff;
+  color: #E61F24;
   font-size: 12px;
   line-height: 1.35;
   font-weight: 800;
@@ -2015,30 +2166,30 @@ const actionItems = computed(() => {
   align-items: center;
   height: 22px;
   padding: 0 8px;
-  border: 1px solid rgba(22, 93, 255, 0.16);
-  border-radius: 999px;
-  background: #f4f8ff;
-  color: #165dff;
+  border: 1px solid rgba(230, 31, 36, 0.16);
+  border-radius: 8px;
+  background: #F8F9FA;
+  color: #E61F24;
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
 }
 
 .sa-report-flow-badge.is-advanced {
-  border-color: rgba(0, 180, 42, 0.2);
-  background: #f3fff7;
-  color: #178a3b;
+  border-color: rgba(16, 185, 129, 0.2);
+  background: #ECFDF5;
+  color: #10B981;
 }
 
 .sa-report-flow-hint {
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 11px;
   line-height: 1.4;
 }
 
 .sa-boss-answer-title {
   margin: 0;
-  color: #1d2129;
+  color: #111827;
   font-size: 16px;
   line-height: 1.45;
   font-weight: 800;
@@ -2054,8 +2205,8 @@ const actionItems = computed(() => {
   margin-top: 8px;
   padding: 12px 13px;
   border-radius: 12px;
-  border: 1px solid rgba(22, 93, 255, 0.1);
-  background: #f8fbff;
+  border: 1px solid rgba(230, 31, 36, 0.1);
+  background: #F8F9FA;
 }
 
 .sa-boss-answer-conclusion {
@@ -2063,7 +2214,7 @@ const actionItems = computed(() => {
   min-width: 0;
   font-size: 15px;
   line-height: 1.75;
-  color: #1d2129;
+  color: #111827;
   font-weight: 700;
 }
 
@@ -2089,10 +2240,10 @@ const actionItems = computed(() => {
 .sa-kpi-card {
   min-width: 0;
   padding: 11px 12px 12px;
-  border: 1px solid rgba(29, 33, 41, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.96) 100%);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(254, 242, 242, 0.96) 100%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2111,22 +2262,22 @@ const actionItems = computed(() => {
   align-items: center;
   height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(22, 93, 255, 0.08);
-  color: #4e5969;
+  border-radius: 8px;
+  background: rgba(230, 31, 36, 0.08);
+  color: #6B7280;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 
 .sa-kpi-rank-badge.is-leader {
-  background: linear-gradient(90deg, rgba(22, 93, 255, 0.14) 0%, rgba(22, 93, 255, 0.08) 100%);
-  color: #165dff;
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.14) 0%, rgba(230, 31, 36, 0.08) 100%);
+  color: #E61F24;
 }
 
 .sa-kpi-parent {
   min-width: 0;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
@@ -2136,7 +2287,7 @@ const actionItems = computed(() => {
 }
 
 .sa-kpi-value {
-  color: #165dff;
+  color: #E61F24;
   font-size: 24px;
   line-height: 1.1;
   font-weight: 800;
@@ -2144,7 +2295,7 @@ const actionItems = computed(() => {
 
 .sa-kpi-label {
   margin-top: 1px;
-  color: #1d2129;
+  color: #111827;
   font-weight: 700;
   font-size: 12px;
   line-height: 1.35;
@@ -2152,7 +2303,7 @@ const actionItems = computed(() => {
 
 .sa-kpi-hint {
   margin-top: 6px;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 11px;
   line-height: 1.4;
 }
@@ -2169,25 +2320,25 @@ const actionItems = computed(() => {
   align-items: center;
   min-height: 20px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(245, 247, 250, 0.95);
-  border: 1px solid rgba(29, 33, 41, 0.06);
-  color: #4e5969;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #6B7280;
   font-size: 10px;
   line-height: 1.2;
   font-weight: 600;
 }
 
 .sa-kpi-card.is-good .sa-kpi-value {
-  color: #00a870;
+  color: #10B981;
 }
 
 .sa-kpi-card.is-warn .sa-kpi-value {
-  color: #ff7d00;
+  color: #F59E0B;
 }
 
 .sa-kpi-card.is-danger .sa-kpi-value {
-  color: #f53f3f;
+  color: #E61F24;
 }
 
 .sa-insight-grid {
@@ -2201,14 +2352,14 @@ const actionItems = computed(() => {
   min-width: 0;
   padding: 10px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(29, 33, 41, 0.07);
-  background: #f7f9fc;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  background: #F8F9FA;
 }
 
 .sa-insight-card span,
 .sa-insight-card small {
   display: block;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 11px;
   line-height: 1.35;
 }
@@ -2216,7 +2367,7 @@ const actionItems = computed(() => {
 .sa-insight-card strong {
   display: block;
   margin: 4px 0 3px;
-  color: #1d2129;
+  color: #111827;
   font-size: 14px;
   line-height: 1.35;
   font-weight: 800;
@@ -2224,23 +2375,23 @@ const actionItems = computed(() => {
 }
 
 .sa-insight-card.is-good {
-  background: #f2fff7;
-  border-color: rgba(0, 180, 42, 0.16);
+  background: #ECFDF5;
+  border-color: rgba(16, 185, 129, 0.16);
 }
 
 .sa-insight-card.is-warn {
-  background: #fffaf2;
-  border-color: rgba(255, 125, 0, 0.18);
+  background: #FFFBEB;
+  border-color: rgba(245, 158, 11, 0.18);
 }
 
 .sa-insight-card.is-danger {
-  background: #fff7f7;
-  border-color: rgba(245, 63, 63, 0.16);
+  background: #FEF2F2;
+  border-color: rgba(230, 31, 36, 0.16);
 }
 
 .sa-insight-card.is-info {
-  background: #f5f8ff;
-  border-color: rgba(22, 93, 255, 0.12);
+  background: #FEF2F2;
+  border-color: rgba(230, 31, 36, 0.12);
 }
 
 .sa-section-title-line {
@@ -2253,7 +2404,7 @@ const actionItems = computed(() => {
 
 .sa-section-title-line > span {
   min-width: 0;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 12px;
   line-height: 1.4;
   text-align: right;
@@ -2264,14 +2415,14 @@ const actionItems = computed(() => {
 
 .sa-drill-section {
   padding: 11px 12px 12px;
-  border: 1px solid rgba(22, 93, 255, 0.12);
+  border: 1px solid rgba(230, 31, 36, 0.12);
   border-radius: 14px;
-  background: #fbfdff;
+  background: #FFFFFF;
 }
 
 .sa-drill-table {
   overflow: hidden;
-  border: 1px solid rgba(29, 33, 41, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 12px;
   background: #fff;
 }
@@ -2282,7 +2433,7 @@ const actionItems = computed(() => {
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
-  border-top: 1px solid rgba(29, 33, 41, 0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sa-drill-table.is-person-ranking .sa-drill-row {
@@ -2295,73 +2446,88 @@ const actionItems = computed(() => {
 
 .sa-drill-row.is-head {
   padding: 8px 12px;
-  background: #f7f9fc;
-  color: #86909c;
+  background: #F8F9FA;
+  color: #9CA3AF;
   font-size: 12px;
   font-weight: 700;
 }
 
 .sa-drill-group-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(116px, 1.15fr) minmax(112px, 1fr) minmax(74px, 0.72fr) minmax(150px, 1.28fr);
   gap: 10px;
-  padding: 9px 12px;
-  border-top: 1px solid rgba(22, 93, 255, 0.08);
-  border-left: 3px solid #165dff;
-  background: linear-gradient(90deg, rgba(22, 93, 255, 0.08), rgba(22, 93, 255, 0.02));
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(230, 31, 36, 0.08);
+  border-left: 3px solid #E61F24;
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.08), rgba(230, 31, 36, 0.02));
+}
+
+.sa-drill-table.is-person-ranking .sa-drill-group-row {
+  grid-template-columns: minmax(220px, 1.55fr) minmax(120px, 0.9fr) minmax(90px, 0.62fr) minmax(170px, 1.15fr);
 }
 
 .sa-drill-group-row.is-group-2 {
-  border-left-color: #ff7d00;
-  background: linear-gradient(90deg, rgba(255, 125, 0, 0.1), rgba(255, 125, 0, 0.025));
+  border-left-color: #F59E0B;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.025));
 }
 
-.sa-drill-group-row.is-group-2 span {
-  color: #d46b08;
+.sa-drill-group-row.is-group-2 .sa-drill-group-node strong,
+.sa-drill-group-row.is-group-2 .sa-drill-group-title-only > span {
+  color: #B45309;
 }
 
 .sa-drill-group-row.is-group-3 {
-  border-left-color: #00a870;
-  background: linear-gradient(90deg, rgba(0, 168, 112, 0.1), rgba(0, 168, 112, 0.025));
+  border-left-color: #10B981;
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.1), rgba(230, 31, 36, 0.025));
 }
 
-.sa-drill-group-row.is-group-3 span {
-  color: #008f62;
+.sa-drill-group-row.is-group-3 .sa-drill-group-node strong,
+.sa-drill-group-row.is-group-3 .sa-drill-group-title-only > span {
+  color: #10B981;
 }
 
 .sa-drill-group-row.is-group-4 {
-  border-left-color: #722ed1;
-  background: linear-gradient(90deg, rgba(114, 46, 209, 0.1), rgba(114, 46, 209, 0.025));
+  border-left-color: #6B7280;
+  background: linear-gradient(90deg, rgba(107, 114, 128, 0.1), rgba(107, 114, 128, 0.025));
 }
 
-.sa-drill-group-row.is-group-4 span {
-  color: #6d3cc7;
+.sa-drill-group-row.is-group-4 .sa-drill-group-node strong,
+.sa-drill-group-row.is-group-4 .sa-drill-group-title-only > span {
+  color: #6B7280;
 }
 
 .sa-drill-group-row.is-top {
   margin-top: 0;
-  border-left-color: #00b42a;
-  background: linear-gradient(90deg, rgba(0, 180, 42, 0.12), rgba(0, 180, 42, 0.025));
+  border-left-color: #10B981;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.025));
 }
 
-.sa-drill-group-row.is-top span {
-  color: #009a29;
+.sa-drill-group-row.is-top .sa-drill-group-node strong,
+.sa-drill-group-row.is-top .sa-drill-group-title-only > span {
+  color: #10B981;
 }
 
 .sa-drill-group-row.is-bottom {
-  border-top-color: rgba(255, 125, 0, 0.16);
-  border-left-color: #ff7d00;
-  background: linear-gradient(90deg, rgba(255, 125, 0, 0.14), rgba(255, 125, 0, 0.03));
+  border-top-color: rgba(245, 158, 11, 0.16);
+  border-left-color: #F59E0B;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.03));
 }
 
-.sa-drill-group-row.is-bottom span {
-  color: #d46b08;
+.sa-drill-group-row.is-bottom .sa-drill-group-node strong,
+.sa-drill-group-row.is-bottom .sa-drill-group-title-only > span {
+  color: #B45309;
 }
 
-.sa-drill-group-row span {
+.sa-drill-group-node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  color: #165dff;
+}
+
+.sa-drill-group-node strong {
+  color: #E61F24;
   font-size: 13px;
   font-weight: 800;
   overflow: hidden;
@@ -2369,19 +2535,63 @@ const actionItems = computed(() => {
   white-space: nowrap;
 }
 
-.sa-drill-group-row small {
+.sa-drill-group-node small {
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sa-drill-group-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sa-drill-group-cell span {
+  color: #9CA3AF;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sa-drill-group-cell.is-metric {
+  align-items: flex-end;
+}
+
+.sa-drill-group-title-only {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sa-drill-group-title-only > span {
+  min-width: 0;
+  color: #E61F24;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-drill-group-title-only > small {
   flex: 0 0 auto;
-  color: #4e5969;
+  color: #6B7280;
   font-size: 12px;
   font-weight: 700;
 }
 
 .sa-drill-row.is-rank-top {
-  background: linear-gradient(90deg, rgba(0, 180, 42, 0.035), rgba(255, 255, 255, 0));
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.035), rgba(255, 255, 255, 0));
 }
 
 .sa-drill-row.is-rank-bottom {
-  background: linear-gradient(90deg, rgba(255, 125, 0, 0.045), rgba(255, 255, 255, 0));
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.045), rgba(255, 255, 255, 0));
 }
 
 .sa-drill-node,
@@ -2400,7 +2610,7 @@ const actionItems = computed(() => {
 .sa-drill-number strong,
 .sa-drill-rate-head strong {
   min-width: 0;
-  color: #1d2129;
+  color: #111827;
   font-size: 13px;
   line-height: 1.3;
   overflow: hidden;
@@ -2411,7 +2621,7 @@ const actionItems = computed(() => {
 .sa-drill-node span,
 .sa-drill-number span,
 .sa-drill-rate-head span {
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 12px;
   line-height: 1.35;
 }
@@ -2423,7 +2633,7 @@ const actionItems = computed(() => {
 }
 
 .sa-drill-gap {
-  color: #4e5969;
+  color: #6B7280;
   font-size: 13px;
   font-weight: 700;
   overflow: hidden;
@@ -2448,46 +2658,46 @@ const actionItems = computed(() => {
   position: relative;
   height: 7px;
   overflow: hidden;
-  border-radius: 999px;
-  background: rgba(29, 33, 41, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .sa-drill-bar i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #165dff;
+  background: #E61F24;
 }
 
 .sa-drill-rate.is-success .sa-drill-bar i {
-  background: #00b42a;
+  background: #10B981;
 }
 
 .sa-drill-rate.is-success .sa-drill-rate-head strong,
 .sa-drill-rate.is-success .sa-drill-rate-head span {
-  color: #00a321;
+  color: #10B981;
 }
 
 .sa-drill-rate.is-warn .sa-drill-bar i {
-  background: #ff7d00;
+  background: #F59E0B;
 }
 
 .sa-drill-rate.is-warn .sa-drill-rate-head strong,
 .sa-drill-rate.is-warn .sa-drill-rate-head span {
-  color: #d46b08;
+  color: #B45309;
 }
 
 .sa-drill-rate.is-danger .sa-drill-bar i {
-  background: #f53f3f;
+  background: #E61F24;
 }
 
 .sa-drill-rate.is-danger .sa-drill-rate-head strong,
 .sa-drill-rate.is-danger .sa-drill-rate-head span {
-  color: #d92d20;
+  color: #E61F24;
 }
 
 .sa-drill-rate.is-neutral .sa-drill-bar i {
-  background: #86909c;
+  background: #9CA3AF;
 }
 
 .sa-drill-rate.is-neutral .sa-drill-rate-head strong,
@@ -2509,14 +2719,14 @@ const actionItems = computed(() => {
   min-width: 0;
   padding: 11px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(22, 93, 255, 0.1);
+  border: 1px solid rgba(230, 31, 36, 0.1);
   background: #ffffff;
 }
 
 .sa-advice-list {
   margin: 8px 0 0;
   padding-left: 20px;
-  color: #1d2129;
+  color: #111827;
   font-size: 13px;
   line-height: 1.75;
 }
@@ -2533,7 +2743,7 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-verdict {
-  color: #1d2129;
+  color: #111827;
   font-size: 14px;
   line-height: 1.55;
   font-weight: 800;
@@ -2557,14 +2767,14 @@ const actionItems = computed(() => {
 .sa-comparison-card {
   min-width: 0;
   padding: 8px 9px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  background: #fbfcff;
+  background: #FFFFFF;
 }
 
 .sa-comparison-card.is-leader {
-  border-color: rgba(22, 93, 255, 0.22);
-  background: #f7faff;
+  border-color: rgba(230, 31, 36, 0.22);
+  background: #F8F9FA;
 }
 
 .sa-comparison-card-head {
@@ -2572,7 +2782,7 @@ const actionItems = computed(() => {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 7px;
-  color: #1d2129;
+  color: #111827;
   font-size: 13px;
   font-weight: 800;
 }
@@ -2587,7 +2797,7 @@ const actionItems = computed(() => {
 
 .sa-comparison-card-head strong {
   flex-shrink: 0;
-  color: #165dff;
+  color: #E61F24;
   font-size: 15px;
   line-height: 1.25;
 }
@@ -2601,7 +2811,7 @@ const actionItems = computed(() => {
 
 .sa-comparison-metrics {
   margin-top: 6px;
-  color: #4e5969;
+  color: #6B7280;
   font-size: 11px;
   line-height: 1.45;
 }
@@ -2621,13 +2831,13 @@ const actionItems = computed(() => {
   min-width: 0;
   padding: 8px 10px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  border: 1px solid rgba(22, 93, 255, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  border: 1px solid rgba(230, 31, 36, 0.12);
 }
 
 .sa-comparison-lane-row.is-leader {
-  border-color: rgba(22, 93, 255, 0.24);
-  box-shadow: 0 6px 18px rgba(22, 93, 255, 0.08);
+  border-color: rgba(230, 31, 36, 0.24);
+  box-shadow: 0 6px 18px rgba(230, 31, 36, 0.08);
 }
 
 .sa-comparison-lane-head {
@@ -2635,13 +2845,13 @@ const actionItems = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #1d2129;
+  color: #111827;
   font-size: 13px;
   font-weight: 700;
 }
 
 .sa-comparison-lane-head strong {
-  color: #165dff;
+  color: #E61F24;
   font-size: 16px;
   line-height: 1.2;
 }
@@ -2650,8 +2860,8 @@ const actionItems = computed(() => {
   position: relative;
   height: 8px;
   margin-top: 8px;
-  border-radius: 999px;
-  background: rgba(22, 93, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(230, 31, 36, 0.08);
   overflow: hidden;
 }
 
@@ -2659,7 +2869,7 @@ const actionItems = computed(() => {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #78a9ff 0%, #165dff 100%);
+  background: linear-gradient(90deg, #E61F24 0%, #E61F24 100%);
 }
 
 .sa-comparison-lane-meta {
@@ -2667,7 +2877,7 @@ const actionItems = computed(() => {
   flex-wrap: wrap;
   gap: 4px 10px;
   margin-top: 6px;
-  color: #4e5969;
+  color: #6B7280;
   font-size: 11px;
   line-height: 1.45;
 }
@@ -2679,10 +2889,10 @@ const actionItems = computed(() => {
 .sa-comparison-chart {
   margin-top: 10px;
   padding: 15px 16px 13px;
-  border: 1px solid rgba(22, 93, 255, 0.1);
+  border: 1px solid rgba(230, 31, 36, 0.1);
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(247, 250, 255, 0.98) 0%, rgba(255, 255, 255, 0.99) 100%);
+    linear-gradient(180deg, rgba(254, 242, 242, 0.98) 0%, rgba(255, 255, 255, 0.99) 100%);
 }
 
 .sa-comparison-chart--in-kpi {
@@ -2698,7 +2908,7 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-chart-head strong {
-  color: #1d2129;
+  color: #111827;
   font-size: 14px;
   font-weight: 800;
   line-height: 1.3;
@@ -2716,7 +2926,7 @@ const actionItems = computed(() => {
   gap: 10px 14px;
   align-items: center;
   padding: 12px 0;
-  border-top: 1px solid rgba(29, 33, 41, 0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sa-comparison-chart-row:first-child {
@@ -2726,19 +2936,19 @@ const actionItems = computed(() => {
 
 .sa-comparison-chart-row.is-leader .sa-comparison-chart-label,
 .sa-comparison-chart-row.is-leader .sa-comparison-chart-value {
-  color: #165dff;
+  color: #E61F24;
 }
 
 .sa-comparison-chart-row.is-leader .sa-comparison-chart-track i {
-  background: linear-gradient(90deg, #7ba8ff 0%, #165dff 55%, #0040ff 100%);
-  box-shadow: 0 8px 18px rgba(22, 93, 255, 0.3);
+  background: linear-gradient(90deg, #E61F24 0%, #E61F24 55%, #E61F24 100%);
+  box-shadow: 0 8px 18px rgba(230, 31, 36, 0.3);
 }
 
 .sa-comparison-chart-label {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  color: #1d2129;
+  color: #111827;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
@@ -2751,7 +2961,7 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-chart-label small {
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 11px;
   line-height: 1.4;
   font-weight: 600;
@@ -2760,10 +2970,10 @@ const actionItems = computed(() => {
 .sa-comparison-chart-track {
   position: relative;
   height: 14px;
-  border-radius: 999px;
+  border-radius: 8px;
   overflow: hidden;
   background:
-    linear-gradient(90deg, rgba(22, 93, 255, 0.08) 0%, rgba(22, 93, 255, 0.03) 100%);
+    linear-gradient(90deg, rgba(230, 31, 36, 0.08) 0%, rgba(230, 31, 36, 0.03) 100%);
 }
 
 .sa-comparison-chart-track::before {
@@ -2771,7 +2981,7 @@ const actionItems = computed(() => {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(to right, rgba(22, 93, 255, 0.08) 0, rgba(22, 93, 255, 0.08) 1px, transparent 1px, transparent 50%);
+    linear-gradient(to right, rgba(230, 31, 36, 0.08) 0, rgba(230, 31, 36, 0.08) 1px, transparent 1px, transparent 50%);
   background-size: 50% 100%;
   pointer-events: none;
 }
@@ -2782,12 +2992,12 @@ const actionItems = computed(() => {
   height: 100%;
   min-width: 10px;
   border-radius: inherit;
-  background: linear-gradient(90deg, #8db7ff 0%, #165dff 100%);
-  box-shadow: 0 5px 12px rgba(22, 93, 255, 0.18);
+  background: linear-gradient(90deg, #E61F24 0%, #E61F24 100%);
+  box-shadow: 0 5px 12px rgba(230, 31, 36, 0.18);
 }
 
 .sa-comparison-chart-value {
-  color: #1d2129;
+  color: #111827;
   font-size: 14px;
   font-weight: 800;
   text-align: right;
@@ -2795,7 +3005,7 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-chart-actual {
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
@@ -2804,23 +3014,23 @@ const actionItems = computed(() => {
 }
 
 .sa-kpi-card.is-compare-leader {
-  border-color: rgba(22, 93, 255, 0.26);
+  border-color: rgba(230, 31, 36, 0.26);
   background:
-    linear-gradient(180deg, rgba(247, 250, 255, 0.98) 0%, rgba(255, 255, 255, 1) 100%);
-  box-shadow: 0 14px 30px rgba(22, 93, 255, 0.1);
+    linear-gradient(180deg, rgba(254, 242, 242, 0.98) 0%, rgba(255, 255, 255, 1) 100%);
+  box-shadow: 0 14px 30px rgba(230, 31, 36, 0.1);
 }
 
 .sa-kpi-card.is-compare-leader .sa-kpi-label,
 .sa-kpi-card.is-compare-leader .sa-kpi-value {
-  color: #165dff;
+  color: #E61F24;
 }
 
 .sa-comparison-gap-list span {
   padding: 4px 8px;
   border-radius: 7px;
-  background: #f7f9ff;
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  color: #2f5fd7;
+  background: #FEF2F2;
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  color: #E61F24;
   font-size: 11px;
   font-weight: 700;
 }
@@ -2829,10 +3039,10 @@ const actionItems = computed(() => {
   flex-shrink: 0;
   height: 28px;
   padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid rgba(22, 93, 255, 0.18);
-  background: #f8fbff;
-  color: #165dff;
+  border-radius: 8px;
+  border: 1px solid rgba(230, 31, 36, 0.18);
+  background: #F8F9FA;
+  color: #E61F24;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -2844,20 +3054,20 @@ const actionItems = computed(() => {
   gap: 7px 12px;
   margin-top: 8px;
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-boss-answer-points.is-drill {
   padding: 7px 9px;
   border-radius: 8px;
-  background: #f7f9fc;
-  border: 1px solid rgba(29, 33, 41, 0.06);
+  background: #F8F9FA;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sa-boss-answer-points span:not(:last-child)::after {
   content: '·';
   margin-left: 12px;
-  color: #c9cdd4;
+  color: #D1D5DB;
 }
 
 .sa-report-debug-strip {
@@ -2869,10 +3079,10 @@ const actionItems = computed(() => {
 
 .sa-report-debug-strip span {
   padding: 1px 5px;
-  border-radius: 999px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  background: #f7f8fa;
-  color: #4e5969;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #F8F9FA;
+  color: #6B7280;
   font-size: 9px;
   line-height: 1.2;
   max-width: 100%;
@@ -2880,27 +3090,27 @@ const actionItems = computed(() => {
 }
 
 .sa-report-debug-strip .is-success {
-  border-color: rgba(0, 180, 42, 0.2);
-  background: #f3fff7;
-  color: #178a3b;
+  border-color: rgba(16, 185, 129, 0.2);
+  background: #ECFDF5;
+  color: #10B981;
 }
 
 .sa-report-debug-strip .is-warning {
-  border-color: rgba(255, 125, 0, 0.22);
-  background: #fff8f0;
-  color: #b45f00;
+  border-color: rgba(245, 158, 11, 0.22);
+  background: #FFFBEB;
+  color: #B45309;
 }
 
 .sa-report-debug-strip .is-danger {
-  border-color: rgba(245, 63, 63, 0.22);
-  background: #fff5f5;
-  color: #c73737;
+  border-color: rgba(230, 31, 36, 0.22);
+  background: #FEF2F2;
+  color: #E61F24;
 }
 
 .sa-report-debug-strip .is-info {
-  border-color: rgba(22, 93, 255, 0.18);
-  background: #f4f8ff;
-  color: #245bd6;
+  border-color: rgba(230, 31, 36, 0.18);
+  background: #F8F9FA;
+  color: #6B7280;
 }
 
 @media (max-width: 760px) {
@@ -2978,9 +3188,11 @@ const actionItems = computed(() => {
   }
 
   .sa-drill-group-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sa-drill-group-cell.is-metric {
     align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
   }
 }
 

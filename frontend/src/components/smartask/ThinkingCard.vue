@@ -74,11 +74,11 @@ const normalizedSteps = computed(() => {
 <style scoped>
 .sa-thinking-card {
   width: 100%;
-  background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
-  border: 1px solid rgba(22, 93, 255, 0.12);
+  background: linear-gradient(180deg, #FFFFFF 0%, #ffffff 100%);
+  border: 1px solid rgba(230, 31, 36, 0.12);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.035);
 }
 
 .sa-thinking-header {
@@ -91,12 +91,12 @@ const normalizedSteps = computed(() => {
 }
 
 .sa-thinking-header:hover {
-  background: #f7faff;
+  background: #F8F9FA;
 }
 
 .sa-arrow {
   font-size: 12px;
-  color: #86909c;
+  color: #9CA3AF;
   transition: transform 200ms;
 }
 
@@ -108,35 +108,35 @@ const normalizedSteps = computed(() => {
   flex: 1;
   font-size: 13px;
   font-weight: 600;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-header-count {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-check {
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #00b42a;
-  background: #e8ffea;
+  color: #10B981;
+  background: #ECFDF5;
 }
 
 .sa-check.loading {
-  color: #165dff;
-  background: #e8f3ff;
+  color: #E61F24;
+  background: #FEF2F2;
 }
 
 .sa-thinking-body {
-  background: #f8fafc;
-  border-top: 1px solid rgba(22, 93, 255, 0.08);
+  background: #F8F9FA;
+  border-top: 1px solid rgba(230, 31, 36, 0.08);
   padding: 11px 13px 13px;
 }
 
@@ -156,24 +156,24 @@ const normalizedSteps = computed(() => {
 }
 
 .sa-dot.running {
-  background: #165dff;
+  background: #E61F24;
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .sa-dot.completed {
-  background: #00b42a;
+  background: #10B981;
 }
 
 .sa-dot.pending {
-  background: #94a3b8;
+  background: #9CA3AF;
 }
 
 .sa-dot.warning {
-  background: #ff7d00;
+  background: #F59E0B;
 }
 
 .sa-dot.error {
-  background: #f53f3f;
+  background: #E61F24;
 }
 
 .sa-step-copy {
@@ -186,47 +186,47 @@ const normalizedSteps = computed(() => {
 
 .sa-step-text {
   font-size: 12px;
-  color: #1d2129;
+  color: #111827;
   line-height: 1.55;
 }
 
 .sa-step-detail {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
   line-height: 1.52;
 }
 
 .sa-step-status {
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .sa-step-status.completed {
-  background: #e8ffea;
-  color: #00b42a;
+  background: #ECFDF5;
+  color: #10B981;
 }
 
 .sa-step-status.running {
-  background: #e8f3ff;
-  color: #165dff;
+  background: #FEF2F2;
+  color: #E61F24;
 }
 
 .sa-step-status.pending {
-  background: #f2f3f5;
-  color: #86909c;
+  background: #F3F4F6;
+  color: #9CA3AF;
 }
 
 .sa-step-status.warning {
-  background: #fff7e8;
-  color: #ff7d00;
+  background: #FFFBEB;
+  color: #F59E0B;
 }
 
 .sa-step-status.error {
-  background: #fff1f0;
-  color: #f53f3f;
+  background: #FEF2F2;
+  color: #E61F24;
 }
 
 @keyframes pulse {

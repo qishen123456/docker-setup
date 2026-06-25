@@ -46,7 +46,7 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
   justify-content: space-between;
   gap: 10px;
   container-type: inline-size;
-  border-bottom: 1px solid rgba(29, 33, 41, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.92);
   flex-shrink: 0;
 }
@@ -84,9 +84,9 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
   align-items: center;
   height: 17px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: #e8f3ff;
-  color: #165dff;
+  border-radius: 8px;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 9px;
   font-weight: 700;
 }
@@ -105,7 +105,7 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 .sa-text-btn {
   height: 26px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 10px;
   font-weight: 600;
@@ -114,32 +114,32 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 }
 
 .sa-text-btn {
-  border: 1px solid rgba(29, 33, 41, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   background: rgba(248, 249, 251, 0.92);
-  color: #4e5969;
+  color: #6B7280;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .sa-text-btn:hover {
-  color: #165dff;
-  border-color: rgba(22, 93, 255, 0.16);
-  background: #f5f8ff;
+  color: #E61F24;
+  border-color: rgba(230, 31, 36, 0.16);
+  background: #FEF2F2;
   transform: translateY(-1px);
 }
 
 .sa-solid-btn {
-  border: 1px solid rgba(22, 93, 255, 0.12);
-  background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-  color: #165dff;
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  background: linear-gradient(180deg, #F8F9FA 0%, #FEF2F2 100%);
+  color: #E61F24;
   box-shadow:
-    0 8px 18px rgba(22, 93, 255, 0.08),
+    0 8px 18px rgba(230, 31, 36, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .sa-solid-btn:hover {
-  border-color: rgba(22, 93, 255, 0.22);
-  background: linear-gradient(180deg, #ffffff 0%, #f2f6ff 100%);
-  color: #114fd6;
+  border-color: rgba(230, 31, 36, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  color: #cc181d;
   transform: translateY(-1px);
 }
 

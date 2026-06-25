@@ -151,16 +151,16 @@ onMounted(() => {
 .agent-head-metrics {
   display: flex;
   gap: 8px;
-  color: var(--text-body, #4e5969);
+  color: var(--text-body, #6B7280);
   font-size: 13px;
 }
 
 .agent-head-metrics span {
   padding: 8px 12px;
-  border: 1px solid rgba(15, 118, 110, 0.16);
+  border: 1px solid rgba(230, 31, 36, 0.16);
   border-radius: 999px;
-  background: #f5fbfa;
-  color: #0b625d;
+  background: #F8F9FA;
+  color: #cc181d;
   font-weight: 750;
 }
 
@@ -174,17 +174,17 @@ onMounted(() => {
 .panel-title {
   font-size: 17px;
   font-weight: 900;
-  color: #101828;
+  color: #111827;
 }
 
 .agent-rail,
 .agent-editor {
-  border: 1px solid rgba(18, 48, 79, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 20px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 118, 110, 0.08), transparent 30%),
+    radial-gradient(circle at 100% 0%, rgba(230, 31, 36, 0.08), transparent 30%),
     rgba(255, 255, 255, 0.86);
-  box-shadow: 0 10px 26px rgba(18, 48, 79, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.82);
   overflow: hidden;
 }
 
@@ -207,7 +207,7 @@ onMounted(() => {
 .agent-rail-kicker,
 .agent-editor-kicker {
   margin-bottom: 4px;
-  color: #0f766e;
+  color: #E61F24;
   font-size: 10px;
   font-weight: 850;
   letter-spacing: 0.12em;
@@ -220,23 +220,23 @@ onMounted(() => {
   margin-bottom: 10px;
   border-radius: 16px;
   cursor: pointer;
-  border: 1px solid rgba(18, 48, 79, 0.08);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
 }
 
 .agent-card:hover {
-  border-color: rgba(15, 118, 110, 0.2);
-  box-shadow: 0 10px 22px rgba(18, 48, 79, 0.07);
+  border-color: rgba(230, 31, 36, 0.2);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.07);
   transform: translateY(-1px);
 }
 
 .agent-card.active {
-  border-color: rgba(15, 118, 110, 0.28);
+  border-color: rgba(230, 31, 36, 0.28);
   background:
-    radial-gradient(circle at 100% 0%, rgba(15, 118, 110, 0.12), transparent 28%),
-    linear-gradient(135deg, #e8f6f4 0%, #ffffff 100%);
-  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.12), inset 4px 0 0 #0f766e;
+    radial-gradient(circle at 100% 0%, rgba(230, 31, 36, 0.12), transparent 28%),
+    linear-gradient(135deg, #FEF2F2 0%, #ffffff 100%);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12), inset 4px 0 0 #E61F24;
 }
 
 .agent-card-no {
@@ -247,11 +247,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #0b625d;
+  color: #cc181d;
   font-size: 12px;
   font-weight: 900;
-  background: #e8f6f4;
-  border: 1px solid rgba(15, 118, 110, 0.14);
+  background: #FEF2F2;
+  border: 1px solid rgba(230, 31, 36, 0.14);
 }
 
 .agent-card-copy {
@@ -262,12 +262,12 @@ onMounted(() => {
 .agent-card-title {
   font-weight: 850;
   margin-bottom: 5px;
-  color: #101828;
+  color: #111827;
 }
 
 .agent-card-desc {
   font-size: 12px;
-  color: #667085;
+  color: #6B7280;
   line-height: 1.6;
 }
 
@@ -278,7 +278,7 @@ onMounted(() => {
 .agent-editor-head {
   margin-bottom: 16px;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(18, 48, 79, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .agent-form-grid {
@@ -291,7 +291,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  color: #1f3349;
+  color: #111827;
   font-size: 13px;
   font-weight: 800;
 }
@@ -311,18 +311,18 @@ onMounted(() => {
   align-items: center;
   margin: 18px 0 12px;
   padding-top: 14px;
-  border-top: 1px solid rgba(18, 48, 79, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .subheading {
   font-size: 15px;
   font-weight: 900;
-  color: #101828;
+  color: #111827;
 }
 
 .knowledge-desc {
   margin-top: 4px;
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
 }
 
@@ -332,7 +332,7 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 10px;
   padding: 10px;
-  border: 1px solid rgba(18, 48, 79, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 14px;
   background: #ffffff;
 }
@@ -346,10 +346,10 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #0b625d;
+  color: #cc181d;
   font-size: 11px;
   font-weight: 900;
-  background: #e8f6f4;
+  background: #FEF2F2;
 }
 
 @media (max-width: 1180px) {

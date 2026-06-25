@@ -246,6 +246,33 @@ class RouteGuardSkill:
             return result
 
         top_dataset_id = signal.get("top_dataset_id")
+
+        # 同义词/业务域精确命中短路：当问题完整出现某个候选数据集的名称、业务域或同义词，
+        # 且其他候选得分明显落后时，直接锁定该数据集，避免不必要的确认。
+        if top_dataset_id and candidates:
+            top = candidates[0]
+            second_score = int(signal.get("second_score") or 0)
+            exact_match_texts = [
+                str(top.get("dataset_name") or "").strip(),
+                str(top.get("business_domain") or "").strip(),
+                *[str(s or "").strip() for s in (top.get("synonyms") or [])],
+            ]
+            exact_match_texts = [t for t in exact_match_texts if t and len(t) >= 2]
+            question_text = str(question or "").strip()
+            if exact_match_texts and second_score < 15:
+                matched = any(t in question_text for t in exact_match_texts)
+                if matched:
+                    result.update(
+                        {
+                            "action": "auto_lock",
+                            "confidence": "high",
+                            "apply_dataset_ids": [top_dataset_id],
+                            "recommended_dataset_ids": [top_dataset_id],
+                            "reason": "问题完整命中数据集名称/业务域/同义词，进阶流程直接锁定该数据源。",
+                        }
+                    )
+                    return result
+
         high_score = int(signal.get("top_score") or 0) >= 90
         acceptable_score = int(signal.get("top_score") or 0) >= 45 and int(signal.get("margin") or 0) >= 18
         if top_dataset_id and (high_score or acceptable_score):

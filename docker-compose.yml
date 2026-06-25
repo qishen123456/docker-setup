@@ -41,7 +41,7 @@ services:
       - .env
     environment:
       SMARTASK_BACKEND_PORT: 5002
-      SMARTASK_BOOTSTRAP_SKIP_BUILTINS: "1"
+      SMARTASK_BOOTSTRAP_SKIP_BUILTINS: "0"
       SMARTASK_DB_HOST: postgres
       SMARTASK_DB_PORT: 5432
       SMARTASK_CHROMA_PATH: /app/chroma_db

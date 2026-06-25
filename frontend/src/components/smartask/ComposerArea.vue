@@ -239,26 +239,26 @@ onMounted(() => {
 .sa-composer {
   margin: 10px 18px 16px;
   background: rgba(255, 255, 255, 0.97);
-  border: 1px solid rgba(29, 33, 41, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 18px;
   padding: 10px 11px 11px;
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 8px 20px rgba(15, 23, 42, 0.04),
-    0 1px 2px rgba(15, 23, 42, 0.03);
+    0 8px 20px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.03);
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sa-composer.is-running {
-  border-color: transparent;
+  border-color: rgba(26, 26, 26, 0.14);
   background:
-    radial-gradient(circle at 12% 0%, rgba(20, 184, 166, 0.1), transparent 28%),
-    radial-gradient(circle at 88% 100%, rgba(22, 93, 255, 0.1), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(247, 250, 255, 0.97) 100%);
+    radial-gradient(circle at 12% 0%, rgba(26, 26, 26, 0.05), transparent 28%),
+    radial-gradient(circle at 88% 100%, rgba(26, 26, 26, 0.05), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(243, 244, 246, 0.97) 100%);
   box-shadow:
-    0 16px 38px rgba(22, 93, 255, 0.12),
-    0 0 0 5px rgba(22, 93, 255, 0.06);
+    0 16px 38px rgba(0, 0, 0, 0.08),
+    0 0 0 4px rgba(26, 26, 26, 0.04);
 }
 
 .sa-composer.is-running::before {
@@ -270,11 +270,11 @@ onMounted(() => {
   background:
     conic-gradient(
       from var(--sa-composer-angle),
-      rgba(22, 93, 255, 0.18),
-      rgba(20, 184, 166, 0.95),
-      rgba(255, 181, 71, 0.88),
-      rgba(124, 58, 237, 0.86),
-      rgba(22, 93, 255, 0.18)
+      rgba(26, 26, 26, 0.12),
+      rgba(26, 26, 26, 0.8),
+      rgba(26, 26, 26, 0.7),
+      rgba(107, 114, 128, 0.7),
+      rgba(26, 26, 26, 0.12)
     );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -296,7 +296,7 @@ onMounted(() => {
 
 .sa-composer-body {
   display: grid;
-  grid-template-columns: 154px minmax(0, 1fr);
+  grid-template-columns: 210px minmax(0, 1fr);
   gap: 8px;
   align-items: stretch;
 }
@@ -309,22 +309,22 @@ onMounted(() => {
   min-width: 0;
   padding: 8px 9px;
   border-radius: 12px;
-  border: 1px solid rgba(30, 41, 59, 0.1);
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
   box-shadow:
-    0 6px 14px rgba(15, 23, 42, 0.03),
-    inset 2px 0 0 rgba(37, 99, 235, 0.5);
+    0 6px 14px rgba(0, 0, 0, 0.03),
+    inset 3px 0 0 #E61F24;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-height: 76px;
 }
 
 .sa-side-dataset-card.active,
 .sa-side-dataset-card:hover {
-  border-color: rgba(37, 99, 235, 0.22);
+  border-color: rgba(26, 26, 26, 0.18);
   box-shadow:
-    0 0 0 1px rgba(37, 99, 235, 0.08),
-    0 12px 24px rgba(15, 23, 42, 0.055),
-    inset 3px 0 0 #2563eb;
+    0 0 0 1px rgba(26, 26, 26, 0.06),
+    0 12px 24px rgba(0, 0, 0, 0.055),
+    inset 3px 0 0 #E61F24;
 }
 
 .sa-side-dataset-head {
@@ -336,8 +336,8 @@ onMounted(() => {
 
 .sa-side-dataset-label {
   font-size: 11px;
-  font-weight: 760;
-  color: #475569;
+  font-weight: 800;
+  color: #111827;
   line-height: 1.2;
 }
 
@@ -352,15 +352,15 @@ onMounted(() => {
   border-radius: 9px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(30, 41, 59, 0.1),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .sa-side-dataset-card.active .sa-side-ds-select :deep(.el-select__wrapper) {
   box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.35),
+    inset 0 0 0 1px rgba(26, 26, 26, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 3px rgba(37, 99, 235, 0.08);
+    0 0 0 3px rgba(26, 26, 26, 0.06);
 }
 
 .sa-side-ds-select :deep(.el-select__selected-item),
@@ -369,8 +369,12 @@ onMounted(() => {
   line-height: 1.2;
 }
 
+.sa-side-ds-select :deep(.el-select__selected-item) {
+  max-width: 148px;
+}
+
 .sa-side-ds-select :deep(.el-select__caret) {
-  color: #94a3b8;
+  color: #9CA3AF;
 }
 
 .sa-composer-main {
@@ -380,9 +384,9 @@ onMounted(() => {
 .sa-ds-mode-chip {
   height: 16px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(30, 41, 59, 0.06);
-  color: #475569;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #6B7280;
   font-size: 8px;
   font-weight: 800;
   display: inline-flex;
@@ -391,9 +395,9 @@ onMounted(() => {
 }
 
 .sa-ds-mode-chip.active {
-  background: #1e293b;
+  background: #1A1A1A;
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
 }
 
 .sa-ds-icon {
@@ -418,7 +422,7 @@ onMounted(() => {
 
 .sa-ds-icon::before {
   inset: 1px;
-  border: 1px solid rgba(30, 41, 59, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.16);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
 }
 
@@ -427,8 +431,8 @@ onMounted(() => {
   left: 5px;
   width: 6px;
   height: 1.5px;
-  background: rgba(71, 85, 105, 0.58);
-  box-shadow: 0 3px 0 rgba(71, 85, 105, 0.38), 0 6px 0 rgba(71, 85, 105, 0.24);
+  background: rgba(107, 114, 128, 0.58);
+  box-shadow: 0 3px 0 rgba(107, 114, 128, 0.38), 0 6px 0 rgba(107, 114, 128, 0.24);
 }
 
 .sa-ds-option {
@@ -446,18 +450,18 @@ onMounted(() => {
   top: 5px;
   bottom: 5px;
   width: 3px;
-  border-radius: 999px;
-  background: #2563eb;
+  border-radius: 8px;
+  background: #E61F24;
   opacity: 0.7;
 }
 
 .sa-model-option::before {
-  background: #0f766e;
+  background: #E61F24;
 }
 
 .sa-model-option.is-default-model::before {
   width: 4px;
-  background: #0f766e;
+  background: #E61F24;
   opacity: 1;
 }
 
@@ -471,7 +475,7 @@ onMounted(() => {
 .sa-ds-option-title {
   font-size: 11px;
   font-weight: 700;
-  color: #243041;
+  color: #374151;
   line-height: 1.4;
 }
 
@@ -491,13 +495,13 @@ onMounted(() => {
 }
 
 .sa-ds-option-auto .sa-ds-option-title {
-  color: #165dff;
+  color: #E61F24;
 }
 
 :deep(.sa-ds-popper.el-popper) {
   border-radius: 16px;
-  border: 1px solid rgba(29, 33, 41, 0.08);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
   padding: 6px;
 }
 
@@ -510,17 +514,17 @@ onMounted(() => {
   border-radius: 10px;
   padding-top: 8px;
   padding-bottom: 8px;
-  color: #3d4756;
+  color: #374151;
 }
 
 :deep(.sa-dataset-popper .el-select-dropdown__item.is-hovering),
 :deep(.sa-dataset-popper .el-select-dropdown__item:hover) {
-  background: rgba(37, 99, 235, 0.07);
+  background: rgba(230, 31, 36, 0.07);
 }
 
 :deep(.sa-model-popper .el-select-dropdown__item.is-hovering),
 :deep(.sa-model-popper .el-select-dropdown__item:hover) {
-  background: rgba(15, 118, 110, 0.07);
+  background: rgba(230, 31, 36, 0.07);
 }
 
 .sa-textarea-wrap {
@@ -530,12 +534,21 @@ onMounted(() => {
   gap: 6px;
   min-height: 76px;
   padding: 7px 10px 8px 22px;
-  border-radius: 12px;
-  border: 1px solid rgba(30, 41, 59, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 8px 16px rgba(15, 23, 42, 0.03);
+    0 8px 16px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sa-textarea-wrap:focus-within {
+  border-color: rgba(26, 26, 26, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 16px rgba(0, 0, 0, 0.04),
+    0 0 0 3px rgba(26, 26, 26, 0.05);
 }
 
 .sa-composer-status-capsule {
@@ -549,11 +562,11 @@ onMounted(() => {
   max-width: 250px;
   min-width: 0;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(29, 33, 41, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.06),
+    0 8px 18px rgba(0, 0, 0, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
   pointer-events: none;
@@ -564,24 +577,24 @@ onMounted(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #165dff;
+  background: #E61F24;
   flex: 0 0 auto;
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .sa-composer-status-capsule.completed .sa-composer-status-dot {
-  background: #00b42a;
+  background: #10B981;
   animation: none;
 }
 
 .sa-composer-status-capsule.error .sa-composer-status-dot {
-  background: #f53f3f;
+  background: #E61F24;
   animation: none;
 }
 
 .sa-composer-status-text {
   min-width: 0;
-  color: #344054;
+  color: #374151;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
@@ -591,7 +604,7 @@ onMounted(() => {
 }
 
 .sa-composer-status-time {
-  color: #98a2b3;
+  color: #9CA3AF;
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -612,8 +625,8 @@ onMounted(() => {
 .sa-textarea-leading::after {
   content: '';
   position: absolute;
-  border-radius: 999px;
-  background: rgba(201, 205, 212, 0.8);
+  border-radius: 8px;
+  background: rgba(26, 26, 26, 0.75);
 }
 
 .sa-textarea-leading::before {
@@ -622,7 +635,7 @@ onMounted(() => {
 
 .sa-textarea-leading::after {
   inset: 0;
-  opacity: 0.34;
+  opacity: 0.28;
 }
 
 .sa-textarea {
@@ -634,12 +647,12 @@ onMounted(() => {
   max-height: 132px;
   resize: none;
   line-height: 1.45;
-  color: #1d2129;
+  color: #111827;
   background: transparent;
 }
 
 .sa-textarea::placeholder {
-  color: #c9cdd4;
+  color: #9CA3AF;
   font-size: 13px;
 }
 
@@ -653,7 +666,7 @@ onMounted(() => {
 
 .sa-composer-hint {
   font-size: 10px;
-  color: #97a0b3;
+  color: #6B7280;
   line-height: 1.2;
 }
 
@@ -672,10 +685,10 @@ onMounted(() => {
   min-height: 31px;
   padding-left: 30px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   box-shadow:
-    inset 0 0 0 1px rgba(30, 41, 59, 0.08),
-    0 6px 12px rgba(15, 23, 42, 0.035);
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 6px 12px rgba(0, 0, 0, 0.035);
 }
 
 .sa-model-corner-select :deep(.el-select__selected-item),
@@ -696,11 +709,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  color: #0f766e;
+  background: linear-gradient(180deg, #F8F9FA 0%, #ffffff 100%);
+  border: 1px solid rgba(26, 26, 26, 0.14);
+  color: #1A1A1A;
   font-size: 10px;
-  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04);
   pointer-events: none;
 }
 
@@ -711,18 +724,25 @@ onMounted(() => {
   min-width: 34px;
   min-height: 34px;
   border-radius: 50%;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
   color: #ffffff;
   box-shadow:
-    0 8px 16px rgba(15, 23, 42, 0.13),
+    0 8px 16px rgba(0, 0, 0, 0.13),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.sa-send-btn {
+  background: #E61F24;
+}
+
+.sa-stop-btn {
+  background: #1A1A1A;
 }
 
 .sa-send-icon,
@@ -756,8 +776,8 @@ onMounted(() => {
   top: 8px;
   width: 7px;
   height: 1.5px;
-  background: rgba(30, 41, 59, 0.42);
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
   transform: rotate(-8deg);
 }
 
@@ -774,12 +794,12 @@ onMounted(() => {
   flex: 0 0 auto;
   height: 18px;
   padding: 0 7px;
-  border-radius: 999px;
-  background: rgba(15, 118, 110, 0.12);
-  color: #0f766e;
+  border-radius: 8px;
+  background: rgba(26, 26, 26, 0.08);
+  color: #1A1A1A;
   font-size: 10px;
   font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(26, 26, 26, 0.12);
 }
 
 @property --sa-composer-angle {

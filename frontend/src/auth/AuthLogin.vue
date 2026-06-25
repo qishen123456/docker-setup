@@ -6,8 +6,8 @@
         <span></span>
         <span></span>
       </div>
-      <p class="auth-kicker">DATA AGENT ACCESS</p>
-      <h1>经营分析工作台</h1>
+      <p class="auth-kicker">ANGEL INTELLIGENCE</p>
+      <h1>安吉尔智能问数</h1>
       <p class="auth-desc">登录后根据员工权限加载分析、配置与管理能力。</p>
       <div class="auth-capabilities">
         <span>统一身份</span>
@@ -131,9 +131,8 @@ const startFeishu = async () => {
   align-items: center;
   padding: 56px;
   background:
-    radial-gradient(circle at 12% 16%, rgba(15, 118, 110, 0.18), transparent 28%),
-    radial-gradient(circle at 82% 10%, rgba(51, 112, 255, 0.18), transparent 26%),
-    linear-gradient(135deg, #f4f8fb 0%, #eef5f3 48%, #f7f9fc 100%);
+    radial-gradient(circle at 88% 12%, rgba(230, 31, 36, 0.04), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f8f9fa 48%, #f3f4f6 100%);
 }
 
 .auth-hero {
@@ -146,26 +145,29 @@ const startFeishu = async () => {
   height: 68px;
   border-radius: 24px;
   position: relative;
-  background: linear-gradient(135deg, #122033, #0f766e);
-  box-shadow: 0 22px 50px rgba(18, 48, 79, 0.22);
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.08);
+  display: grid;
+  place-items: center;
+}
+
+.auth-hero-mark::before {
+  content: '';
+  width: 38px;
+  height: 42px;
+  background: #E61F24;
+  clip-path: polygon(50% 0%, 70% 100%, 30% 100%);
 }
 
 .auth-hero-mark span {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #fff;
+  display: none;
 }
-
-.auth-hero-mark span:nth-child(1) { left: 16px; top: 18px; background: #8fb8ff; }
-.auth-hero-mark span:nth-child(2) { right: 16px; top: 28px; background: #75e0d3; }
-.auth-hero-mark span:nth-child(3) { left: 28px; bottom: 14px; background: #ffd36f; }
 
 .auth-kicker,
 .login-kicker {
   margin: 24px 0 10px;
-  color: #0f766e;
+  color: #E61F24;
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -173,7 +175,7 @@ const startFeishu = async () => {
 
 .auth-hero h1 {
   margin: 0;
-  color: #172033;
+  color: #111827;
   font-size: clamp(36px, 5vw, 64px);
   line-height: 1.05;
   letter-spacing: -0.05em;
@@ -182,7 +184,7 @@ const startFeishu = async () => {
 .auth-desc {
   max-width: 460px;
   margin: 20px 0 0;
-  color: #5f6b7a;
+  color: #6B7280;
   font-size: 17px;
   line-height: 1.8;
 }
@@ -198,8 +200,8 @@ const startFeishu = async () => {
   padding: 8px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(18, 48, 79, 0.08);
-  color: #344054;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: #374151;
   font-size: 12px;
   font-weight: 800;
 }
@@ -207,9 +209,9 @@ const startFeishu = async () => {
 .login-card {
   padding: 30px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(18, 48, 79, 0.08);
-  box-shadow: 0 28px 70px rgba(18, 48, 79, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(14px);
 }
 
@@ -222,7 +224,7 @@ const startFeishu = async () => {
 
 .login-card h2 {
   margin: 0 0 22px;
-  color: #1d2129;
+  color: #111827;
   font-size: 28px;
   letter-spacing: -0.03em;
 }
@@ -230,8 +232,8 @@ const startFeishu = async () => {
 .login-badge {
   padding: 7px 10px;
   border-radius: 999px;
-  background: #e8f6f4;
-  color: #0b625d;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
@@ -245,7 +247,7 @@ const startFeishu = async () => {
 .login-form label {
   display: grid;
   gap: 8px;
-  color: #4e5969;
+  color: #6B7280;
   font-size: 13px;
   font-weight: 800;
 }
@@ -254,8 +256,8 @@ const startFeishu = async () => {
   width: 100%;
   height: 44px;
   padding: 0 14px;
-  border: 1px solid #e5e6eb;
-  border-radius: 14px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
   outline: none;
   color: #1d2129;
   font-size: 14px;
@@ -290,7 +292,7 @@ const startFeishu = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #667085;
+  color: #9CA3AF;
   background: transparent;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -298,8 +300,8 @@ const startFeishu = async () => {
 }
 
 .password-eye:hover {
-  color: #0f766e;
-  background: rgba(15, 118, 110, 0.08);
+  color: #E61F24;
+  background: #FEF2F2;
 }
 
 .password-eye .el-icon {
@@ -307,8 +309,8 @@ const startFeishu = async () => {
 }
 
 .login-form input:focus {
-  border-color: #3370ff;
-  box-shadow: 0 0 0 4px rgba(51, 112, 255, 0.1);
+  border-color: #E61F24;
+  box-shadow: 0 0 0 4px rgba(230, 31, 36, 0.12);
 }
 
 .primary-login,
@@ -324,15 +326,24 @@ const startFeishu = async () => {
 
 .primary-login {
   margin-top: 4px;
-  background: linear-gradient(135deg, #165dff, #0f766e);
+  background: #1A1A1A;
   color: #fff;
-  box-shadow: 0 14px 26px rgba(22, 93, 255, 0.22);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.12);
+}
+
+.primary-login:hover {
+  background: #000000;
 }
 
 .feishu-login {
-  background: #eef4ff;
-  color: #165dff;
-  border: 1px solid rgba(22, 93, 255, 0.14);
+  background: #FFFFFF;
+  color: #374151;
+  border: 1px solid #E5E7EB;
+}
+
+.feishu-login:hover {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
 }
 
 .primary-login:disabled,
@@ -346,7 +357,7 @@ const startFeishu = async () => {
   align-items: center;
   gap: 12px;
   margin: 22px 0;
-  color: #98a2b3;
+  color: #9CA3AF;
   font-size: 12px;
 }
 
@@ -355,12 +366,12 @@ const startFeishu = async () => {
   content: '';
   height: 1px;
   flex: 1;
-  background: #edf0f5;
+  background: #E5E7EB;
 }
 
 .login-tip {
   margin: 14px 0 0;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 12px;
   line-height: 1.6;
 }

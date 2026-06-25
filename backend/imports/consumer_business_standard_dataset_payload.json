@@ -1003,6 +1003,17 @@
       "is_active": true
     },
     {
+      "intent_type": "risk",
+      "question": "哪个分公司低于30%？",
+      "sql_text": "WITH 源数据 AS (\n  SELECT\n    fields,\n    COALESCE(NULLIF(regexp_replace(fields ->> '总任务（金额）', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 总任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 年度开单原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '线下', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 线下任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '线下-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 线下实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '新零售', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 新零售任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '新零售-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 新零售实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '燃气定制', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 燃气定制任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '燃气定制-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 燃气定制实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '地产', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 地产任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '地产-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 地产实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '总任务达成率', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 达成率原值\n  FROM public.feishu_tbl_xioafeizhe\n),\n标准结果 AS (\n  SELECT\n    '消费者事业部' AS 条线,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部总体'\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '分公司'\n      ELSE '城市分公司'\n    END AS 层级,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部'\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN fields ->> '分公司'\n      ELSE fields ->> '城市分公司'\n    END AS 节点名称,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN NULL\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '消费者事业部'\n      ELSE fields ->> '分公司'\n    END AS 上级名称,\n    ROUND(总任务原值 / 10000, 2) AS 总任务金额,\n    ROUND(年度开单原值 / 10000, 2) AS 年度开单金额,\n    ROUND(CASE WHEN 总任务原值 > 0 THEN 年度开单原值 / 总任务原值 * 100 ELSE 达成率原值 END, 2) AS 达成率,\n    ROUND(GREATEST(总任务原值 - 年度开单原值, 0) / 10000, 2) AS 剩余任务金额,\n    ROUND(线下任务原值 / 10000, 2) AS 线下任务金额,\n    ROUND(线下实际原值 / 10000, 2) AS 线下开单金额,\n    ROUND(新零售任务原值 / 10000, 2) AS 新零售任务金额,\n    ROUND(新零售实际原值 / 10000, 2) AS 新零售开单金额,\n    ROUND(燃气定制任务原值 / 10000, 2) AS 燃气定制任务金额,\n    ROUND(燃气定制实际原值 / 10000, 2) AS 燃气定制开单金额,\n    ROUND(地产任务原值 / 10000, 2) AS 地产任务金额,\n    ROUND(地产实际原值 / 10000, 2) AS 地产开单金额\n  FROM 源数据\n  WHERE 总任务原值 > 0\n)\nSELECT *\nFROM 标准结果\nWHERE 层级 = '分公司'\n  AND 达成率 < 30\nORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称\nLIMIT 200;",
+      "tags": [
+        "风险节点",
+        "分公司"
+      ],
+      "quality_score": 95,
+      "is_active": true
+    },
+    {
       "intent_type": "comparative",
       "question": "四条业务线贡献如何？",
       "sql_text": "WITH 源数据 AS (\n  SELECT\n    fields,\n    COALESCE(NULLIF(regexp_replace(fields ->> '总任务（金额）', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 总任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 年度开单原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '线下', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 线下任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '线下-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 线下实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '新零售', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 新零售任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '新零售-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 新零售实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '燃气定制', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 燃气定制任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '燃气定制-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 燃气定制实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '地产', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 地产任务原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '地产-年度开单金额', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 地产实际原值,\n    COALESCE(NULLIF(regexp_replace(fields ->> '总任务达成率', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 达成率原值\n  FROM public.feishu_tbl_xioafeizhe\n),\n标准结果 AS (\n  SELECT\n    '消费者事业部' AS 条线,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部总体'\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '分公司'\n      ELSE '城市分公司'\n    END AS 层级,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN '消费者事业部'\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN fields ->> '分公司'\n      ELSE fields ->> '城市分公司'\n    END AS 节点名称,\n    CASE\n      WHEN NULLIF(fields ->> '分公司', '') IS NULL THEN NULL\n      WHEN NULLIF(fields ->> '城市分公司', '') IS NULL THEN '消费者事业部'\n      ELSE fields ->> '分公司'\n    END AS 上级名称,\n    ROUND(总任务原值 / 10000, 2) AS 总任务金额,\n    ROUND(年度开单原值 / 10000, 2) AS 年度开单金额,\n    ROUND(CASE WHEN 总任务原值 > 0 THEN 年度开单原值 / 总任务原值 * 100 ELSE 达成率原值 END, 2) AS 达成率,\n    ROUND(GREATEST(总任务原值 - 年度开单原值, 0) / 10000, 2) AS 剩余任务金额,\n    ROUND(线下任务原值 / 10000, 2) AS 线下任务金额,\n    ROUND(线下实际原值 / 10000, 2) AS 线下开单金额,\n    ROUND(新零售任务原值 / 10000, 2) AS 新零售任务金额,\n    ROUND(新零售实际原值 / 10000, 2) AS 新零售开单金额,\n    ROUND(燃气定制任务原值 / 10000, 2) AS 燃气定制任务金额,\n    ROUND(燃气定制实际原值 / 10000, 2) AS 燃气定制开单金额,\n    ROUND(地产任务原值 / 10000, 2) AS 地产任务金额,\n    ROUND(地产实际原值 / 10000, 2) AS 地产开单金额\n  FROM 源数据\n  WHERE 总任务原值 > 0\n)\nSELECT\n  节点名称,\n  业务线,\n  任务金额,\n  开单金额,\n  ROUND(CASE WHEN 任务金额 > 0 THEN 开单金额 / 任务金额 * 100 ELSE 0 END, 2) AS 达成率\nFROM 标准结果\nCROSS JOIN LATERAL (\n  VALUES\n    ('线下', 线下任务金额, 线下开单金额),\n    ('新零售', 新零售任务金额, 新零售开单金额),\n    ('燃气定制', 燃气定制任务金额, 燃气定制开单金额),\n    ('地产', 地产任务金额, 地产开单金额)\n) AS 业务线明细(业务线, 任务金额, 开单金额)\nWHERE 层级 = '消费者事业部总体'\nORDER BY 开单金额 DESC;",
@@ -1065,6 +1076,10 @@
       "sort_order": 30
     },
     {
+      "question_text": "哪个分公司低于30%？",
+      "sort_order": 35
+    },
+    {
       "question_text": "消费者事业部剩余缺口最大的组织有哪些？",
       "sort_order": 40
     },
@@ -1101,8 +1116,8 @@
     },
     {
       "case_type": "risk",
-      "question_text": "???????30%?",
-      "expected_focus": "??????????????30%?????????????????",
+      "question_text": "哪个分公司低于30%？",
+      "expected_focus": "仅筛选分公司层级中达成率低于30%的对象，不回退到消费者事业部总体。",
       "expected_intent": "generate_sql",
       "sort_order": 35
     }
@@ -1278,24 +1293,5 @@
     ],
     "reportTitle": "消费者事业部业绩分析报告",
     "agentReportGuidance": "报告由 SQL 标准列和动态树决定。整体场景先讲消费者事业部大盘，再比较分公司，再下钻城市分公司；四条业务线作为贡献度补充，不替代组织层级判断。"
-  },
-  "sql_examples": [
-    {
-      "intent_type": "risk",
-      "question": "???????30%?",
-      "sql_text": "WITH ??? AS (\n  SELECT\n    fields,\n    COALESCE(NULLIF(regexp_replace(fields ->> '???????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ?????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ??????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ??????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??-??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ??????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '???', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ???????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '???-??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ???????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ????????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '????-??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ????????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ??????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??-??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ??????,\n    COALESCE(NULLIF(regexp_replace(fields ->> '??????', '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS ?????\n  FROM public.feishu_tbl_xioafeizhe\n),\n???? AS (\n  SELECT\n    '??????' AS ??,\n    CASE\n      WHEN NULLIF(fields ->> '???', '') IS NULL THEN '????????'\n      WHEN NULLIF(fields ->> '?????', '') IS NULL THEN '???'\n      ELSE '?????'\n    END AS ??,\n    CASE\n      WHEN NULLIF(fields ->> '???', '') IS NULL THEN '??????'\n      WHEN NULLIF(fields ->> '?????', '') IS NULL THEN fields ->> '???'\n      ELSE fields ->> '?????'\n    END AS ????,\n    CASE\n      WHEN NULLIF(fields ->> '???', '') IS NULL THEN NULL\n      WHEN NULLIF(fields ->> '?????', '') IS NULL THEN '??????'\n      ELSE fields ->> '???'\n    END AS ????,\n    ROUND(????? / 10000, 2) AS ?????,\n    ROUND(?????? / 10000, 2) AS ??????,\n    ROUND(CASE WHEN ????? > 0 THEN ?????? / ????? * 100 ELSE ????? END, 2) AS ???,\n    ROUND(GREATEST(????? - ??????, 0) / 10000, 2) AS ??????,\n    ROUND(?????? / 10000, 2) AS ??????,\n    ROUND(?????? / 10000, 2) AS ??????,\n    ROUND(??????? / 10000, 2) AS ???????,\n    ROUND(??????? / 10000, 2) AS ???????,\n    ROUND(???????? / 10000, 2) AS ????????,\n    ROUND(???????? / 10000, 2) AS ????????,\n    ROUND(?????? / 10000, 2) AS ??????,\n    ROUND(?????? / 10000, 2) AS ??????\n  FROM ???\n  WHERE ????? > 0\n)\nSELECT *\nFROM ????\nWHERE ?? = '???'\n  AND ??? < 30\nORDER BY ??? ASC, ?????? DESC, ????\nLIMIT 200;",
-      "tags": [
-        "????",
-        "???"
-      ],
-      "quality_score": 95,
-      "is_active": true
-    }
-  ],
-  "question_samples": [
-    {
-      "question_text": "???????30%?",
-      "sort_order": 35
-    }
-  ]
+  }
 }

@@ -103,7 +103,7 @@ onMounted(() => {
 .sa-welcome-avatar {
   width: 34px;
   height: 34px;
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(180deg, #1A1A1A 0%, #1A1A1A 100%);
   color: #fff;
   border-radius: 12px;
   display: flex;
@@ -112,8 +112,8 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 800;
   box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.1),
-    inset 0 -2px 0 rgba(37, 99, 235, 0.55);
+    0 8px 18px rgba(0, 0, 0, 0.1),
+    inset 0 -2px 0 rgba(230, 31, 36, 0.55);
 }
 
 .sa-welcome-copy {
@@ -125,21 +125,21 @@ onMounted(() => {
 .sa-welcome-label {
   font-size: 10px;
   font-weight: 700;
-  color: #165dff;
+  color: #E61F24;
   letter-spacing: 0.03em;
 }
 
 .sa-welcome-text {
   font-size: 16px;
   font-weight: 600;
-  color: #1d2129;
+  color: #111827;
   line-height: 1.5;
 }
 
 .sa-welcome-text::after {
   content: '|';
   margin-left: 2px;
-  color: #165dff;
+  color: #E61F24;
   animation: sa-welcome-cursor-blink 1s step-end infinite;
 }
 
@@ -159,14 +159,14 @@ onMounted(() => {
 .sa-quick-title {
   font-size: 11px;
   font-weight: 700;
-  color: #86909c;
+  color: #9CA3AF;
   margin-bottom: 4px;
 }
 
 .sa-quick-tip {
   margin-bottom: 6px;
   font-size: 10px;
-  color: #a0a7b4;
+  color: #9CA3AF;
 }
 
 .sa-quick-refresh {
@@ -177,25 +177,25 @@ onMounted(() => {
   height: 32px;
   min-width: 82px;
   padding: 0 13px;
-  border: 1px solid rgba(30, 41, 59, 0.1);
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  color: #334155;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  color: #1A1A1A;
   font-size: 11px;
   font-weight: 750;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
   transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
   white-space: nowrap;
 }
 
 .sa-quick-refresh:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.22);
+  border-color: rgba(230, 31, 36, 0.22);
   background: #ffffff;
-  color: #1d4ed8;
-  box-shadow: 0 9px 18px rgba(15, 23, 42, 0.07);
+  color: #E61F24;
+  box-shadow: 0 9px 18px rgba(0, 0, 0, 0.07);
 }
 
 .sa-quick-refresh:disabled {
@@ -228,14 +228,14 @@ onMounted(() => {
   text-align: left;
   min-height: 40px;
   padding: 10px 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-  border: 1px solid rgba(29, 33, 41, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #FFFFFF 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;
   font-size: 11px;
-  color: #4e5969;
+  color: #6B7280;
   cursor: pointer;
   transition: all 0.15s;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.035);
   line-height: 1.4;
   display: flex;
   flex-direction: column;
@@ -243,9 +243,9 @@ onMounted(() => {
 }
 
 .sa-quick-btn:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
-  border-color: rgba(22, 93, 255, 0.22);
-  color: #165dff;
+  background: linear-gradient(180deg, #ffffff 0%, #FEF2F2 100%);
+  border-color: rgba(230, 31, 36, 0.22);
+  color: #E61F24;
   transform: translateY(-1px);
 }
 
@@ -260,9 +260,9 @@ onMounted(() => {
   align-self: flex-start;
   max-width: 100%;
   padding: 2px 7px;
-  border-radius: 999px;
-  background: rgba(22, 93, 255, 0.08);
-  color: #165dff;
+  border-radius: 8px;
+  background: rgba(230, 31, 36, 0.08);
+  color: #E61F24;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
@@ -278,10 +278,10 @@ onMounted(() => {
 
 .sa-quick-empty {
   padding: 14px 16px;
-  border: 1px dashed rgba(29, 33, 41, 0.12);
+  border: 1px dashed rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   background: rgba(247, 248, 250, 0.72);
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 12px;
 }
 

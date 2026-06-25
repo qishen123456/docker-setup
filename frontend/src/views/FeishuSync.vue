@@ -469,7 +469,7 @@
             <span>{{ log.message }}</span>
           </el-timeline-item>
         </el-timeline>
-        <div v-if="logs.length === 0" style="text-align: center; padding: 30px; color: #909399">暂无日志</div>
+        <div v-if="logs.length === 0" style="text-align: center; padding: 30px; color: #9CA3AF">暂无日志</div>
       </div>
     </el-dialog>
   </div>
@@ -1044,11 +1044,11 @@ onUnmounted(() => {
 .fs-page {
   min-height: 100%;
   padding: 28px;
-  color: #102033;
+  color: #111827;
   background:
-    radial-gradient(circle at 8% 0%, rgba(20, 184, 166, 0.13), transparent 30%),
-    radial-gradient(circle at 90% 16%, rgba(14, 116, 144, 0.13), transparent 28%),
-    linear-gradient(180deg, #f7fbfb 0%, #eef4f5 100%);
+    radial-gradient(circle at 8% 0%, rgba(230, 31, 36, 0.13), transparent 30%),
+    radial-gradient(circle at 90% 16%, rgba(107, 114, 128, 0.13), transparent 28%),
+    linear-gradient(180deg, #F8F9FA 0%, #F3F4F6 100%);
 }
 
 .fs-hero {
@@ -1057,10 +1057,10 @@ onUnmounted(() => {
   min-height: 138px;
   padding: 30px 32px;
   border-radius: 28px;
-  border: 1px solid rgba(15, 118, 110, 0.16);
+  border: 1px solid rgba(230, 31, 36, 0.16);
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 253, 250, 0.92) 54%, rgba(227, 245, 247, 0.96) 100%);
-  box-shadow: 0 22px 58px rgba(15, 72, 84, 0.1);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.96) 0%, rgba(254, 242, 242, 0.92) 54%, rgba(248, 249, 250, 0.96) 100%);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1074,7 +1074,7 @@ onUnmounted(() => {
   width: 210px;
   height: 210px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(20, 184, 166, 0.28), transparent 62%);
+  background: radial-gradient(circle, rgba(230, 31, 36, 0.28), transparent 62%);
   filter: blur(2px);
 }
 
@@ -1088,20 +1088,20 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.14em;
-  color: #0f766e;
+  color: #E61F24;
 }
 
 .fs-hero h2 {
   margin: 8px 0 8px;
   font-size: 32px;
   letter-spacing: -0.04em;
-  color: #071b28;
+  color: #111827;
 }
 
 .fs-hero p,
 .fs-board-head p {
   margin: 0;
-  color: #667085;
+  color: #6B7280;
   line-height: 1.7;
 }
 
@@ -1140,15 +1140,15 @@ onUnmounted(() => {
 
 .fs-btn-primary {
   color: #fff;
-  background: linear-gradient(135deg, #0f4c81 0%, #0f766e 100%);
-  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.24);
+  background: linear-gradient(135deg, #1A1A1A 0%, #E61F24 100%);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24);
 }
 
 .fs-btn-ghost {
-  color: #0f3d52;
+  color: #1A1A1A;
   background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(15, 76, 129, 0.12);
-  box-shadow: 0 10px 20px rgba(15, 72, 84, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
 }
 
 .fs-stat-grid {
@@ -1162,9 +1162,9 @@ onUnmounted(() => {
   min-height: 116px;
   padding: 22px;
   border-radius: 24px;
-  border: 1px solid rgba(15, 72, 84, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.1);
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 18px 40px rgba(15, 72, 84, 0.07);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.07);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -1179,23 +1179,23 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 18px;
   font-weight: 900;
-  color: #0f766e;
-  background: linear-gradient(180deg, #ecfeff 0%, #d9f7f2 100%);
+  color: #E61F24;
+  background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
 }
 
 .fs-stat-card.running .fs-stat-icon {
   color: #b45309;
-  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  background: linear-gradient(180deg, #FFFBEB 0%, #FFFBEB 100%);
 }
 
 .fs-stat-card.failed .fs-stat-icon {
-  color: #e11d48;
-  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+  color: #E61F24;
+  background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
 }
 
 .fs-stat-card.quiet .fs-stat-icon {
-  color: #64748b;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: #6B7280;
+  background: linear-gradient(180deg, #F8F9FA 0%, #F3F4F6 100%);
 }
 
 .fs-stat-copy {
@@ -1208,18 +1208,18 @@ onUnmounted(() => {
 .fs-stat-label {
   font-size: 13px;
   font-weight: 800;
-  color: #344054;
+  color: #374151;
 }
 
 .fs-stat-copy strong {
   font-size: 31px;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #071b28;
+  color: #111827;
 }
 
 .fs-stat-copy small {
-  color: #98a2b3;
+  color: #9CA3AF;
   font-size: 12px;
 }
 
@@ -1234,7 +1234,7 @@ onUnmounted(() => {
 .fs-board-head h3 {
   margin: 6px 0 5px;
   font-size: 22px;
-  color: #071b28;
+  color: #111827;
 }
 
 .fs-board-tags {
@@ -1248,9 +1248,9 @@ onUnmounted(() => {
   height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #f2fbfa;
-  border: 1px solid rgba(15, 118, 110, 0.12);
-  color: #0f766e;
+  background: #F8F9FA;
+  border: 1px solid rgba(230, 31, 36, 0.12);
+  color: #E61F24;
   font-size: 12px;
   font-weight: 800;
   display: inline-flex;
@@ -1261,9 +1261,9 @@ onUnmounted(() => {
   margin-bottom: 22px;
   padding: 20px;
   border-radius: 24px;
-  border: 1px solid rgba(15, 72, 84, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.1);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 48px rgba(15, 72, 84, 0.07);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.07);
 }
 
 .fs-ops-tabs {
@@ -1276,18 +1276,18 @@ onUnmounted(() => {
 
 .fs-ops-tabs :deep(.el-tabs__nav-wrap::after) {
   height: 1px;
-  background: rgba(15, 72, 84, 0.08);
+  background: rgba(107, 114, 128, 0.08);
 }
 
 .fs-ops-tabs :deep(.el-tabs__item) {
   height: 34px;
   padding: 0 18px;
-  color: #667085;
+  color: #6B7280;
   font-weight: 800;
 }
 
 .fs-ops-tabs :deep(.el-tabs__item.is-active) {
-  color: #0f766e;
+  color: #E61F24;
 }
 
 .fs-tab-label {
@@ -1300,8 +1300,8 @@ onUnmounted(() => {
   min-width: 0;
   padding: 14px;
   border-radius: 18px;
-  border: 1px solid rgba(15, 72, 84, 0.08);
-  background: #fbfefe;
+  border: 1px solid rgba(107, 114, 128, 0.08);
+  background: #F8F9FA;
 }
 
 .fs-panel-title {
@@ -1314,14 +1314,14 @@ onUnmounted(() => {
 
 .fs-panel-title strong {
   display: block;
-  color: #102033;
+  color: #111827;
   font-size: 15px;
 }
 
 .fs-panel-title span {
   display: block;
   margin-top: 4px;
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -1356,14 +1356,14 @@ onUnmounted(() => {
 
 .fs-compact-table strong {
   display: block;
-  color: #102033;
+  color: #111827;
   font-size: 13px;
 }
 
 .fs-compact-table small {
   display: block;
   margin-top: 3px;
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
 }
 
@@ -1374,7 +1374,7 @@ onUnmounted(() => {
 }
 
 .fs-next-run {
-  color: #475569;
+  color: #6B7280;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1386,11 +1386,11 @@ onUnmounted(() => {
 }
 
 .fs-next-run.is-muted {
-  color: #94a3b8;
+  color: #9CA3AF;
 }
 
 .fs-next-run.is-waiting {
-  color: #0f766e;
+  color: #E61F24;
   font-weight: 800;
 }
 
@@ -1413,9 +1413,9 @@ onUnmounted(() => {
   overflow: hidden;
   padding: 20px;
   border-radius: 22px;
-  border: 1px solid rgba(15, 72, 84, 0.1);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbfb 100%);
-  box-shadow: 0 14px 34px rgba(15, 72, 84, 0.07);
+  border: 1px solid rgba(107, 114, 128, 0.1);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.07);
 }
 
 .fs-task-card::before {
@@ -1423,12 +1423,12 @@ onUnmounted(() => {
   position: absolute;
   inset: 0 0 auto;
   height: 4px;
-  background: #94a3b8;
+  background: #9CA3AF;
 }
 
-.fs-task-card.is-success::before { background: linear-gradient(90deg, #0f766e, #22c55e); }
-.fs-task-card.is-running::before { background: linear-gradient(90deg, #f59e0b, #06b6d4); }
-.fs-task-card.is-failed::before { background: linear-gradient(90deg, #e11d48, #fb7185); }
+.fs-task-card.is-success::before { background: linear-gradient(90deg, #E61F24, #10B981); }
+.fs-task-card.is-running::before { background: linear-gradient(90deg, #f59e0b, #9CA3AF); }
+.fs-task-card.is-failed::before { background: linear-gradient(90deg, #E61F24, #F87171); }
 
 .fs-task-top {
   display: flex;
@@ -1448,37 +1448,37 @@ onUnmounted(() => {
   height: 12px;
   margin-top: 6px;
   border-radius: 50%;
-  background: #94a3b8;
-  box-shadow: 0 0 0 6px rgba(148, 163, 184, 0.12);
+  background: #9CA3AF;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.12);
   flex-shrink: 0;
 }
 
 .is-success .fs-task-status-dot {
-  background: #16a34a;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.12);
+  background: #10B981;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.12);
 }
 
 .is-running .fs-task-status-dot {
   background: #f59e0b;
-  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.16);
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.16);
   animation: fsPulse 1.3s ease-in-out infinite;
 }
 
 .is-failed .fs-task-status-dot {
-  background: #e11d48;
-  box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.12);
+  background: #E61F24;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.12);
 }
 
 .fs-task-title-group h4 {
   margin: 0 0 5px;
   font-size: 16px;
-  color: #101828;
+  color: #111827;
 }
 
 .fs-task-title-group p {
   margin: 0;
   max-width: 520px;
-  color: #667085;
+  color: #6B7280;
   line-height: 1.55;
   font-size: 13px;
 }
@@ -1489,26 +1489,26 @@ onUnmounted(() => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 900;
-  background: #f1f5f9;
-  color: #64748b;
+  background: #F3F4F6;
+  color: #6B7280;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
 }
 
 .fs-status-pill.is-success {
-  color: #15803d;
-  background: #dcfce7;
+  color: #10B981;
+  background: #ECFDF5;
 }
 
 .fs-status-pill.is-running {
   color: #b45309;
-  background: #fef3c7;
+  background: #FFFBEB;
 }
 
 .fs-status-pill.is-failed {
-  color: #be123c;
-  background: #ffe4e6;
+  color: #E61F24;
+  background: #FEF2F2;
 }
 
 .fs-task-meta {
@@ -1521,22 +1521,22 @@ onUnmounted(() => {
 .fs-task-meta div {
   padding: 12px;
   border-radius: 15px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 72, 84, 0.06);
+  background: #F8F9FA;
+  border: 1px solid rgba(107, 114, 128, 0.06);
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
 .fs-task-meta span {
-  color: #98a2b3;
+  color: #9CA3AF;
   font-size: 11px;
   font-weight: 800;
 }
 
 .fs-task-meta strong {
   min-height: 19px;
-  color: #1d2939;
+  color: #111827;
   font-size: 13px;
   word-break: break-all;
 }
@@ -1546,7 +1546,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
   font-weight: 800;
 }
@@ -1554,7 +1554,7 @@ onUnmounted(() => {
 .fs-task-route i {
   height: 1px;
   flex: 1;
-  background: linear-gradient(90deg, rgba(15, 118, 110, 0.18), rgba(15, 76, 129, 0.38), rgba(15, 118, 110, 0.18));
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.18), rgba(0, 0, 0, 0.38), rgba(230, 31, 36, 0.18));
 }
 
 .fs-task-actions {
@@ -1567,9 +1567,9 @@ onUnmounted(() => {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  color: #0f3d52;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 72, 84, 0.09);
+  color: #1A1A1A;
+  background: #F8F9FA;
+  border: 1px solid rgba(107, 114, 128, 0.09);
 }
 
 .fs-action-btn:disabled {
@@ -1579,13 +1579,13 @@ onUnmounted(() => {
 }
 
 .fs-action-primary {
-  color: #0f766e;
-  background: #effdfb;
+  color: #E61F24;
+  background: #FEF2F2;
 }
 
 .fs-action-danger {
-  color: #e11d48;
-  background: #fff1f2;
+  color: #E61F24;
+  background: #FEF2F2;
 }
 
 .fs-url-assist,
@@ -1593,17 +1593,17 @@ onUnmounted(() => {
   margin-bottom: 18px;
   padding: 16px;
   border-radius: 18px;
-  border: 1px solid rgba(15, 118, 110, 0.12);
+  border: 1px solid rgba(230, 31, 36, 0.12);
   background:
-    radial-gradient(circle at 96% 0%, rgba(20, 184, 166, 0.12), transparent 34%),
-    #f8fbfb;
+    radial-gradient(circle at 96% 0%, rgba(230, 31, 36, 0.12), transparent 34%),
+    #F8F9FA;
 }
 
 .fs-url-assist strong,
 .fs-schema-head strong {
   display: block;
   margin-bottom: 4px;
-  color: #102033;
+  color: #111827;
   font-size: 14px;
 }
 
@@ -1611,7 +1611,7 @@ onUnmounted(() => {
 .fs-schema-head span,
 .fs-schema-empty,
 .fs-field-box p {
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
   line-height: 1.65;
 }
@@ -1635,11 +1635,11 @@ onUnmounted(() => {
 .fs-schema-panel {
   margin: 8px 0 0;
   background:
-    linear-gradient(135deg, rgba(239, 253, 250, 0.92), rgba(255, 255, 255, 0.96));
+    linear-gradient(135deg, rgba(254, 242, 242, 0.92), rgba(255, 255, 255, 0.96));
 }
 
 .fs-schema-panel.is-ready {
-  border-color: rgba(15, 118, 110, 0.24);
+  border-color: rgba(230, 31, 36, 0.24);
 }
 
 .fs-schema-summary {
@@ -1653,19 +1653,19 @@ onUnmounted(() => {
   padding: 12px;
   border-radius: 14px;
   background: #ffffff;
-  border: 1px solid rgba(15, 72, 84, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.08);
 }
 
 .fs-schema-summary span {
   display: block;
   margin-bottom: 5px;
-  color: #98a2b3;
+  color: #9CA3AF;
   font-size: 11px;
   font-weight: 800;
 }
 
 .fs-schema-summary strong {
-  color: #0f3d52;
+  color: #1A1A1A;
   font-size: 18px;
 }
 
@@ -1680,8 +1680,8 @@ onUnmounted(() => {
   margin-top: 12px;
   padding: 12px 14px;
   border-radius: 15px;
-  border: 1px solid rgba(15, 118, 110, 0.14);
-  background: rgba(240, 253, 250, 0.82);
+  border: 1px solid rgba(230, 31, 36, 0.14);
+  background: rgba(254, 242, 242, 0.82);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1694,13 +1694,13 @@ onUnmounted(() => {
 }
 
 .fs-schema-alert strong {
-  color: #0f3d52;
+  color: #1A1A1A;
   font-size: 13px;
 }
 
 .fs-schema-alert span,
 .fs-field-table-title span {
-  color: #667085;
+  color: #6B7280;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1710,20 +1710,20 @@ onUnmounted(() => {
   padding: 14px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid rgba(15, 72, 84, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.08);
 }
 
 .fs-field-box.added {
-  border-color: rgba(22, 163, 74, 0.18);
+  border-color: rgba(16, 185, 129, 0.18);
 }
 
 .fs-field-box.removed {
-  border-color: rgba(225, 29, 72, 0.16);
+  border-color: rgba(230, 31, 36, 0.16);
 }
 
 .fs-field-box-title {
   margin-bottom: 10px;
-  color: #1d2939;
+  color: #111827;
   font-weight: 900;
   font-size: 13px;
 }
@@ -1743,7 +1743,7 @@ onUnmounted(() => {
   padding: 14px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid rgba(15, 72, 84, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.08);
 }
 
 .fs-field-table-title {
@@ -1755,7 +1755,7 @@ onUnmounted(() => {
 }
 
 .fs-field-table-title strong {
-  color: #1d2939;
+  color: #111827;
   font-size: 13px;
 }
 

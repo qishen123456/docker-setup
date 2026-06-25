@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import './styles/volcano-design.css'
+import './styles/angel-theme.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import App from './App.vue'

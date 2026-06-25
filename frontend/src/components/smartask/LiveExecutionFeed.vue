@@ -1,12 +1,24 @@
 <template>
   <section v-if="displaySteps.length" class="sa-lite-flow">
     <div class="sa-lite-head">
-      <span class="sa-lite-badge">{{ headBadge }}</span>
-      <span class="sa-lite-title">{{ headTitle }}</span>
-      <span v-if="feedElapsedLabel" class="sa-lite-elapsed">{{ feedElapsedLabel }}</span>
+      <div class="sa-lite-head-left">
+        <span class="sa-lite-badge">{{ headBadge }}</span>
+        <span class="sa-lite-title">{{ headTitle }}</span>
+        <span v-if="feedElapsedLabel" class="sa-lite-elapsed">{{ feedElapsedLabel }}</span>
+      </div>
+      <button
+        v-if="props.mode === 'completed' || props.mode === 'canceled'"
+        class="sa-lite-toggle"
+        type="button"
+        @click="isExpanded = !isExpanded"
+      >
+        <span :class="['sa-lite-toggle-icon', { 'is-open': isExpanded }]">▶</span>
+        <span>{{ isExpanded ? '收起' : '展开' }}</span>
+      </button>
     </div>
 
-    <ol class="sa-lite-steps">
+    <transition name="sa-lite-collapse">
+      <ol v-show="isExpanded" class="sa-lite-steps">
       <li
         v-for="(step, index) in displaySteps"
         :key="step.key"
@@ -48,7 +60,8 @@
           </div>
         </div>
       </li>
-    </ol>
+      </ol>
+    </transition>
   </section>
 </template>
 
@@ -79,6 +92,20 @@ const clockNow = ref(Date.now())
 const thoughtRef = ref(null)
 const frozenElapsedLabel = ref('')
 const hasFrozenElapsed = ref(false)
+const isExpanded = ref(true)
+
+// 执行完成后默认折叠，执行过程中始终展开
+watch(
+  () => props.mode,
+  (mode) => {
+    if (mode === 'completed' || mode === 'canceled') {
+      isExpanded.value = false
+    } else {
+      isExpanded.value = true
+    }
+  },
+  { immediate: true }
+)
 let clockTimer = setInterval(() => {
   clockNow.value = Date.now()
 }, 1000)
@@ -369,15 +396,66 @@ onBeforeUnmount(() => {
 .sa-lite-flow {
   width: 100%;
   padding: 6px 2px 2px;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-lite-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+}
+
+.sa-lite-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sa-lite-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: #6B7280;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sa-lite-toggle:hover {
+  background: #F8F9FA;
+  color: #111827;
+}
+
+.sa-lite-toggle-icon {
+  display: inline-block;
+  font-size: 9px;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.sa-lite-toggle-icon.is-open {
+  transform: rotate(90deg);
+}
+
+.sa-lite-collapse-enter-active,
+.sa-lite-collapse-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform-origin: top;
+}
+
+.sa-lite-collapse-enter-from,
+.sa-lite-collapse-leave-to {
+  opacity: 0;
+  transform: scaleY(0.96);
 }
 
 .sa-lite-badge {
@@ -385,21 +463,21 @@ onBeforeUnmount(() => {
   align-items: center;
   height: 22px;
   padding: 0 9px;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #165dff;
+  border-radius: 8px;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 11px;
   font-weight: 700;
 }
 
 .sa-lite-title {
   font-size: 12px;
-  color: #4e5969;
+  color: #6B7280;
 }
 
 .sa-lite-elapsed {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-lite-steps {
@@ -427,39 +505,39 @@ onBeforeUnmount(() => {
   height: 18px;
   margin-top: 2px;
   border-radius: 50%;
-  background: #f2f3f5;
-  color: #86909c;
+  background: #F3F4F6;
+  color: #9CA3AF;
   font-size: 10px;
   font-weight: 800;
 }
 
 .sa-lite-marker.success,
 .sa-lite-marker.completed {
-  background: #e8ffea;
-  color: #00a63e;
+  background: #ECFDF5;
+  color: #10B981;
 }
 
 .sa-lite-marker.running {
-  background: #e8f3ff;
-  color: #165dff;
+  background: #FEF2F2;
+  color: #E61F24;
 }
 
 .sa-lite-marker.warning {
-  background: #fff7e8;
-  color: #ff7d00;
+  background: #FFFBEB;
+  color: #F59E0B;
 }
 
 .sa-lite-marker.error {
-  background: #fff1f0;
-  color: #f53f3f;
+  background: #FEF2F2;
+  color: #E61F24;
 }
 
 .sa-lite-spinner {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 2px solid rgba(22, 93, 255, 0.2);
-  border-top-color: #165dff;
+  border: 2px solid rgba(230, 31, 36, 0.2);
+  border-top-color: #E61F24;
   animation: sa-lite-spin 0.9s linear infinite;
 }
 
@@ -469,7 +547,7 @@ onBeforeUnmount(() => {
   top: 24px;
   bottom: 0;
   width: 1px;
-  background: #e5e6eb;
+  background: #E5E7EB;
 }
 
 .sa-lite-copy {
@@ -487,28 +565,28 @@ onBeforeUnmount(() => {
 .sa-lite-step-title {
   font-size: 13px;
   font-weight: 700;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-lite-step-state {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
 }
 
 .sa-lite-step-desc {
   margin-top: 2px;
   font-size: 11px;
   line-height: 1.55;
-  color: #667085;
+  color: #6B7280;
 }
 
 .sa-lite-thought {
   margin-top: 6px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: linear-gradient(180deg, #fbfcff 0%, #f7f9fc 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%);
   border: 1px solid rgba(229, 233, 242, 0.78);
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 10px;
   line-height: 1.55;
   white-space: normal;
@@ -519,7 +597,7 @@ onBeforeUnmount(() => {
 .sa-lite-thought-label {
   display: block;
   margin-bottom: 3px;
-  color: #b0b8c4;
+  color: #9CA3AF;
   font-size: 9px;
   font-weight: 600;
 }
@@ -534,11 +612,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 5px;
-  color: #9aa3b2;
+  color: #9CA3AF;
 }
 
 .sa-lite-print-line.latest {
-  color: #7a8494;
+  color: #6B7280;
 }
 
 .sa-lite-print-dot {
@@ -546,17 +624,17 @@ onBeforeUnmount(() => {
   height: 3px;
   margin-top: 6px;
   border-radius: 50%;
-  background: #c7ced8;
+  background: #9CA3AF;
   flex-shrink: 0;
 }
 
 .sa-lite-print-line.latest .sa-lite-print-dot {
-  background: #8aa8ff;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.05);
+  background: #E61F24;
+  box-shadow: 0 0 0 2px rgba(230, 31, 36, 0.05);
 }
 
 .sa-lite-step.latest .sa-lite-step-title {
-  color: #165dff;
+  color: #E61F24;
 }
 
 @keyframes sa-lite-spin {

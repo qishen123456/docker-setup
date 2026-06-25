@@ -34,10 +34,10 @@ defineEmits(['viewDetails'])
   gap: 16px;
   width: 100%;
   padding: 11px 13px;
-  border: 1px solid rgba(29, 33, 41, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.035);
+  background: linear-gradient(180deg, #ffffff 0%, #FFFFFF 100%);
+  box-shadow: 0 7px 16px rgba(0, 0, 0, 0.035);
 }
 
 .sa-agent-copy {
@@ -51,7 +51,7 @@ defineEmits(['viewDetails'])
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(180deg, #2a6cff 0%, #165dff 100%);
+  background: linear-gradient(180deg, #E61F24 0%, #E61F24 100%);
   color: #fff;
   display: flex;
   align-items: center;
@@ -73,18 +73,18 @@ defineEmits(['viewDetails'])
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #4e5969;
+  color: #6B7280;
 }
 
 .sa-agent-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-agent-subtitle {
   font-size: 11px;
-  color: #86909c;
+  color: #9CA3AF;
   line-height: 1.5;
 }
 
@@ -106,14 +106,14 @@ defineEmits(['viewDetails'])
 }
 
 .sa-secondary-btn {
-  border: 1px solid rgba(29, 33, 41, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   background: #fff;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-secondary-btn:hover {
-  border-color: #165dff;
-  color: #165dff;
+  border-color: #E61F24;
+  color: #E61F24;
 }
 
 @media (max-width: 900px) {

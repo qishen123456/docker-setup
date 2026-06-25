@@ -1,4 +1,4 @@
-﻿import json
+import json
 import logging
 import os
 import random
@@ -519,7 +519,23 @@ LIMIT {rank_limit}
                 return ""
             non_root = [m for m in matches if not m["is_root"]]
             pool = non_root if non_root else matches
-            # 优先取最右边（最晚提到）的层级；同位置取更长的候选词
+            # 精确匹配优先：如果用户原话中某个候选词是独立出现的（不被更长的候选词包含），优先选它
+            # 例如：用户说"分公司前3"而不是"城市分公司前3"，应选"分公司"
+            exact_matches = []
+            for m in pool:
+                candidate = m["candidate"]
+                is_substring_of_longer = any(
+                    other["candidate"] != candidate
+                    and candidate in other["candidate"]
+                    and other["pos"] is not None
+                    and m["pos"] is not None
+                    and abs(other["pos"] - m["pos"]) < len(other["candidate"])
+                    for other in pool
+                )
+                if not is_substring_of_longer:
+                    exact_matches.append(m)
+            if exact_matches:
+                pool = exact_matches
             best = max(pool, key=lambda m: (m["pos"], len(m["candidate"])))
             return best["level"]
 
@@ -870,7 +886,9 @@ LIMIT {rank_limit}
                     any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"])
                     or ("完成" in text_lower and "完成率" not in text_lower)
                 ):
-                    score += 80
+                    # 关键修复：如果问题中已经包含完成率、达成率，actual 就不加分，优先让 rate 胜出
+                    if "完成率" not in text_lower and "达成率" not in text_lower:
+                        score += 80
                 if key == "task" and any(t in text_lower for t in ["任务", "目标"]):
                     score += 80
                 if key == "remain" and any(t in text_lower for t in ["剩余", "缺口", "差额", "待完成"]):
@@ -930,8 +948,10 @@ LIMIT {rank_limit}
             task_tokens = ["任务金额", "任务额", "目标金额", "目标", "任务"]
             remain_tokens = ["剩余任务", "剩余金额", "缺口", "差额", "待完成"]
             rate_tokens = ["达成率", "完成率", "进度", "比例", "rate", "percent"]
+            text_lower = text.lower()
+            has_rate_keyword = any(token in text_lower for token in ["达成率", "完成率"])
 
-            if any(token in text for token in amount_tokens):
+            if not has_rate_keyword and any(token in text for token in amount_tokens):
                 if metric_key == "actual":
                     score += 60
                 if any(token in metric_text for token in ["年度开单", "开单金额", "开单", "实际", "销售"]):
@@ -946,11 +966,11 @@ LIMIT {rank_limit}
                     score += 60
                 if any(token in metric_text for token in ["剩余", "缺口", "差额", "待完成"]):
                     score += 40
-            if any(token in text.lower() for token in [item.lower() for item in rate_tokens]):
+            if has_rate_keyword:
                 if metric_key == "rate":
-                    score += 60
+                    score += 100  # 修复：优先让率胜出
                 if any(token in metric_text.lower() for token in [item.lower() for item in rate_tokens]):
-                    score += 40
+                    score += 60
 
             if metric_key and metric_key in text:
                 score += 30
@@ -978,10 +998,19 @@ LIMIT {rank_limit}
 
         max_top_n = self._safe_int(ranking_policy.get("maxTopN"), 20)
         default_top_n = self._safe_int(ranking_policy.get("defaultTopN"), 3)
-        rank_spec = self._rank_request_spec(text, default_limit=0, max_limit=max_top_n)
+        rank_spec = self._rank_request_spec(text, default_limit=default_top_n, max_limit=max_top_n)
         top_n = rank_spec.get("limit") or None
         if top_n is not None:
             top_n = max(1, min(max_top_n, top_n))
+        # 单点最高/最低问法（“哪个最高/最低”或“最低的分公司”）默认只取 1 个，避免和“排名前 N”混淆
+        # 只要没有显式数量（如“最低的三个”），且不是“最高和最低”同时问，就按单点处理
+        if (
+            top_n == default_top_n
+            and rank_spec.get("sides") != "both"
+            and any(t in text for t in ["最高", "最低", "最好", "最差"])
+            and not self._rank_limit_match(text)
+        ):
+            top_n = 1
 
         negative_triggers = [str(item) for item in (ranking_policy.get("negativeTriggers") or []) if str(item).strip()]
         for nt in ["最少", "最小"]:
@@ -1382,27 +1411,34 @@ LIMIT {rank_limit}
         query_intent = dataset_result.get("query_intent") or {}
         dataset_name = str(dataset_result.get("dataset_name") or "").strip()
 
-        # 数据集简称：去掉“飞书/安吉”等前缀后优先保留“…事业部”，否则去掉常见前后缀
+        # 数据集简称：去掉“飞书/安吉”等前缀后优先保留“…事业部”，否则保留有意义的部分
         cleaned_name = re.sub(r"^(飞书|安吉|cloud|公共)\s*", "", dataset_name, flags=re.I)
         domain_match = re.search(r".*?事业部", cleaned_name)
         if domain_match:
             domain = domain_match.group(0)
         else:
-            domain = re.sub(r"^(商用|消费者)|((经营)?预算|业绩|数据|分析|报告)$", "", cleaned_name, flags=re.I).strip() or cleaned_name
+            # 去掉“测试数据集/数据集/数据/业绩/报告”等无意义后缀
+            domain = re.sub(r"(测试数据集|数据集|数据|业绩|报告|分析|预算)$", "", cleaned_name, flags=re.I).strip() or cleaned_name
+            # 如果剩下来的是“消费者/商用”等事业部简称，补上“事业部”
+            if domain and not domain.endswith("事业部") and re.match(r"^(消费者|商用|电商|飞书).*$", domain):
+                domain = domain + "事业部"
 
         intent = str(query_intent.get("intent") or "").strip()
         rows = dataset_result.get("rows") or []
         target_level = str(query_intent.get("target_level") or "").strip()
-        output_level = target_level
-        if rows:
-            # 以实际返回行的层级作为展示标题的层级，比 intent.target_level 更能反映真实输出
+        # 标题层级优先使用 query_intent.target_level；只有为空时才按返回行中最多层级兜底
+        if not target_level and rows:
             levels = [str(r.get("层级") or "").strip() for r in rows if r.get("层级")]
             if levels:
-                output_level = Counter(levels).most_common(1)[0][0]
-        target_level = output_level
+                target_level = Counter(levels).most_common(1)[0][0]
 
+        # 指标标签支持业务线口径展示
         metric_label_map = {
             "年度开单金额": "开单金额",
+            "线下业务开单金额": "线下业务开单金额",
+            "新零售业务开单金额": "新零售业务开单金额",
+            "燃气定制业务开单金额": "燃气定制业务开单金额",
+            "地产业务开单金额": "地产业务开单金额",
             "总任务金额": "任务金额",
             "剩余任务金额": "剩余任务金额",
             "达成率": "达成率",
@@ -1459,6 +1495,17 @@ LIMIT {rank_limit}
             direction = str(query_intent.get("direction") or "desc")
             rank_word = "排名后" if direction == "asc" else "排名前"
             parts = [domain, label]
+            # 单点“哪个最高/最低”问法，标题直接表达为“最高的分公司”
+            if top_n == 1 and (
+                re.search(r"哪个|哪一家", question or "")
+                or re.search(r"最高|最低|最好|最差", question or "")
+            ):
+                extrema_word = "最低" if direction == "asc" else "最高"
+                parts = [domain, f"{extrema_word}的{target_level or '对象'}"]
+                if label and label != "指标":
+                    parts = [domain, label, f"{extrema_word}的{target_level or '对象'}"]
+                title = "".join(parts)
+                return title
             if top_n:
                 parts.append(f"{rank_word}{top_n}")
             title = "".join(parts)
@@ -1735,44 +1782,76 @@ LIMIT {rank_limit}
                 risk_rows = [row for row in shown_rows if row_rate(row) is not None and (row_rate(row) or 0) < 20]
                 top_names = "、".join(row_name(row) for row in shown_rows[: min(3, len(shown_rows))] if row_name(row))
                 level_label = target_level or (normalized_text(leader, level_col) if leader else "") or "对象"
-                lines = [
-                    "## 业绩分析报告",
-                    "",
-                    "### 核心结论",
-                    (
-                        f"本次已按{ranking_metric_label}输出 {len(shown_rows)} 个{level_label}的排名结果："
-                        f"{row_name(leader)}位列第1，{ranking_metric_label}{leader_metric_text}；"
-                        f"{row_name(tail)}位于末位，{ranking_metric_label}{tail_metric_text}"
-                        f"{f'，首尾相差{gap_text}' if gap_text else ''}{rate_warning}。"
-                    ),
-                    "",
-                    "### 亮点分析",
-                    (
-                        f"• **榜首对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
-                        f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
-                        " -> 可作为当前口径的优先复盘样本。"
-                    ),
-                    (
-                        f"• **前三结果：** {top_names or row_name(leader)}"
-                        " -> 先看头部样本，再结合完整排名表继续核对差距来源。"
-                    ),
-                    "",
-                    "### 问题诊断",
-                    (
-                        f"• **末位对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
-                        f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
-                        " -> 建议优先核对任务缺口、项目推进和资源投入。"
-                    ),
-                    (
-                        f"• **风险提示：** 当前结果内低于20%风险线的节点 {len(risk_rows)} 个"
-                        + (f"，重点关注 {format_rank(risk_rows[:3])}。" if risk_rows else "，暂无明显低于20%的节点。")
-                    ),
-                    "",
-                    "### 改进建议",
-                    f"• 先按{ranking_metric_label}复盘榜首与末位对象的差距来源，避免继续按默认达成率口径解释本轮排序。",
-                    f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；如需继续拆因，优先下钻末位对象的下级明细。",
-                    "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
-                ]
+                is_asc = ranking_direction == "asc"
+                if rank_limit == 1:
+                    extreme_label = "最低" if is_asc else "最高"
+                    lines = [
+                        "## 业绩分析报告",
+                        "",
+                        "### 核心结论",
+                        (
+                            f"本次已按{ranking_metric_label}找到{level_label}中{extreme_label}的对象："
+                            f"{row_name(leader)}，{ranking_metric_label}{leader_metric_text}"
+                            f"{f'，达成率{leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            f"{rate_warning}。"
+                        ),
+                        "",
+                        "### 关键指标",
+                        (
+                            f"• **{extreme_label}对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
+                            f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            f" -> 建议优先核对该对象的任务缺口与下级明细。"
+                        ),
+                        (
+                            f"• **风险提示：** 当前结果内低于20%风险线的节点 {len(risk_rows)} 个"
+                            + (f"，重点关注 {format_rank(risk_rows[:3])}。" if risk_rows else "，暂无明显低于20%的节点。")
+                        ),
+                        "",
+                        "### 改进建议",
+                        f"• {row_name(leader)}为当前{ranking_metric_label}{extreme_label}的{level_label}，建议下钻其下级节点继续拆因。",
+                        "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
+                    ]
+                else:
+                    first_label = "末位" if is_asc else "榜首"
+                    last_label = "榜首" if is_asc else "末位"
+                    lines = [
+                        "## 业绩分析报告",
+                        "",
+                        "### 核心结论",
+                        (
+                            f"本次已按{ranking_metric_label}输出 {len(shown_rows)} 个{level_label}的排名结果："
+                            f"{row_name(leader)}位列第1（{first_label}），{ranking_metric_label}{leader_metric_text}；"
+                            f"{row_name(tail)}位于第{len(shown_rows)}（{last_label}），{ranking_metric_label}{tail_metric_text}"
+                            f"{f'，首尾相差{gap_text}' if gap_text else ''}{rate_warning}。"
+                        ),
+                        "",
+                        "### 亮点分析",
+                        (
+                            f"• **{first_label}对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
+                            f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 可作为当前口径的优先复盘样本。"
+                        ),
+                        (
+                            f"• **前三结果：** {top_names or row_name(leader)}"
+                            " -> 先看头部样本，再结合完整排名表继续核对差距来源。"
+                        ),
+                        "",
+                        "### 问题诊断",
+                        (
+                            f"• **{last_label}对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
+                            f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 建议优先核对任务缺口、项目推进和资源投入。"
+                        ),
+                        (
+                            f"• **风险提示：** 当前结果内低于20%风险线的节点 {len(risk_rows)} 个"
+                            + (f"，重点关注 {format_rank(risk_rows[:3])}。" if risk_rows else "，暂无明显低于20%的节点。")
+                        ),
+                        "",
+                        "### 改进建议",
+                        f"• 先按{ranking_metric_label}复盘{first_label}与{last_label}对象的差距来源，避免继续按默认达成率口径解释本轮排序。",
+                        f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；如需继续拆因，优先下钻{last_label}对象的下级明细。",
+                        "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
+                    ]
                 if review_summary:
                     lines.extend(["", f"> SQL复核：{review_summary}"])
                 if error_message:
@@ -2813,6 +2892,23 @@ LIMIT {rank_limit}
         config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
         if not config:
             return ""
+        resolved_entities = context.get("resolved_entities") or {}
+        org_tree_hint = ""
+        for entity in resolved_entities.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            if str(entity.get("source") or "") == "organization_tree_route":
+                members = [str(m) for m in (entity.get("members") or []) if str(m).strip()]
+                if members:
+                    org_tree_hint = (
+                        f"\u7ec4\u7ec7\u6811\u5df2\u547d\u4e2d\u8282\u70b9\uff1a{', '.join(members)}\u3002"
+                        f"\u8bf7\u4e25\u683c\u6309\u7528\u6237\u539f\u8bdd\u7684\u5c42\u7ea7\u8bcd\u6c47\u751f\u6210 SQL\uff0c"
+                        f"\u4e0d\u8981\u81ea\u884c\u5347\u7ea7\u6216\u964d\u7ea7\u5c42\u7ea7\u3002"
+                        f"\u4f8b\u5982\u7528\u6237\u8bf4\u201c\u5206\u516c\u53f8\u201d\u5c31\u67e5\u5206\u516c\u53f8\u5c42\u7ea7\uff0c"
+                        f"\u4e0d\u8981\u66ff\u6362\u6210\u201c\u57ce\u5e02\u5206\u516c\u53f8\u201d\uff1b"
+                        f"\u7528\u6237\u8bf4\u201c\u57ce\u5e02\u5206\u516c\u53f8\u201d\u624d\u67e5\u57ce\u5e02\u5206\u516c\u53f8\u5c42\u7ea7\u3002"
+                    )
+                    break
         payload = {
             "businessContext": config.get("businessContext", ""),
             "standardColumns": {
@@ -2829,10 +2925,12 @@ LIMIT {rank_limit}
             "queryIntent": context.get("query_intent") or {},
             "intentPolicies": config.get("intentPolicies") or {},
             "riskThreshold": config.get("riskThreshold"),
-            "dynamicPerformanceRule": "报告中的好/差节点必须基于本次结果动态分组；不要按固定阈值或固定 TopN 硬切。好/差两组不得重复；可比对象少于 2 个时不做横向对比。",
+            "dynamicPerformanceRule": "\u62a5\u544a\u4e2d\u7684\u597d/\u5dee\u8282\u70b9\u5fc5\u987b\u57fa\u4e8e\u672c\u6b21\u7ed3\u679c\u52a8\u6001\u5206\u7ec4\uff1b\u4e0d\u8981\u6309\u56fa\u5b9a\u9608\u503c\u6216\u56fa\u5b9a TopN \u786c\u5207\u3002\u597d/\u5dee\u4e24\u7ec4\u4e0d\u5f97\u91cd\u590d\uff1b\u53ef\u6bd4\u5bf9\u8c61\u5c11\u4e8e 2 \u4e2a\u65f6\u4e0d\u505a\u6a2a\u5411\u5bf9\u6bd4\u3002",
             "agentReportGuidance": config.get("agentReportGuidance", ""),
-            "resolvedQuestionScope": context.get("resolved_entities") or {},
+            "resolvedQuestionScope": resolved_entities,
         }
+        if org_tree_hint:
+            payload["organizationTreeLevelGuidance"] = org_tree_hint
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
     @staticmethod
@@ -5522,6 +5620,16 @@ WHERE 节点名称 = '消费者事业部'
             task_metric_expr = f"COALESCE({channel_metric}任务_万元, 0) * 10000"
             actual_metric_expr = f"COALESCE({channel_metric}实际_万元, 0) * 10000"
             metric_scope_expr = f"'{channel_metric}'"
+            # 业务线口径的展示标签同步到 query_intent，让前端/报告契约显示正确的指标名
+            channel_label = f"{channel_metric}业务开单金额"
+            channel_sql_column = f"{channel_metric}实际_万元"
+            query_intent["sort_metric_column"] = channel_label
+            query_intent["sort_metric_sql_column"] = channel_sql_column
+            query_intent["_channel_metric_label"] = channel_label
+            report_config_qi = context.get("report_config", {}).get("queryIntent") or {}
+            report_config_qi["sort_metric_column"] = channel_label
+            report_config_qi["sort_metric_sql_column"] = channel_sql_column
+            report_config_qi["_channel_metric_label"] = channel_label
         else:
             task_metric_expr = "总任务金额"
             actual_metric_expr = "年度开单金额"
@@ -5711,6 +5819,12 @@ WITH 字段提取 AS (
             if rank_limit <= 0:
                 rank_limit = int(rank_spec.get("limit") or 0)
             if rank_limit <= 0:
+                # 优先读取数据集报告模板中配置的默认 TopN
+                ds_ranking_policy = self._safe_dict(
+                    (context.get("report_config") or {}).get("intentPolicies")
+                ).get("ranking")
+                rank_limit = self._safe_int(ds_ranking_policy.get("defaultTopN"), 0)
+            if rank_limit <= 0:
                 rank_limit = 3 if any(token in normalized_question for token in ["Top", "top", "前", "后", "排名", "排行"]) else 1
             return max(1, min(20, rank_limit))
 
@@ -5721,6 +5835,7 @@ WITH 字段提取 AS (
             return "DESC" if rank_sides == "both" else order_direction
 
         def consumer_sort_column() -> str:
+            configured_sql_column = str(query_intent.get("sort_metric_sql_column") or "").strip()
             configured_sort_column = str(query_intent.get("sort_metric_column") or "").strip()
             allowed_sort_columns = {
                 "总任务金额",
@@ -5736,7 +5851,11 @@ WITH 字段提取 AS (
                 "燃气定制实际_万元",
                 "地产实际_万元",
             }
-            return configured_sort_column if configured_sort_column in allowed_sort_columns else "达成率"
+            if configured_sql_column in allowed_sort_columns:
+                return configured_sql_column
+            if configured_sort_column in allowed_sort_columns:
+                return configured_sort_column
+            return "达成率"
 
         if asks_threshold_filter:
             try:
@@ -5886,6 +6005,21 @@ LIMIT 200
             rank_limit = consumer_rank_limit()
             order_direction = consumer_order_direction()
             sort_column = consumer_sort_column()
+            # 关键修复：如果用户明确指定了 target_level，只返回该层级，不要带上下级
+            explicit_target = intent_target_level in ["分公司", "城市分公司"]
+            if explicit_target:
+                return self._build_ranked_select_sql(
+                    source_cte=base_sql,
+                    source_name="汇总结果",
+                    output_cte="分公司排序",
+                    where_clause=f"层级 = '{intent_target_level}'",
+                    metric_column=sort_column,
+                    direction=order_direction,
+                    rank_limit=rank_limit,
+                    rank_sides=rank_sides,
+                    tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
+                )
+            # 原有逻辑：用户没有明确层级时，才返回「分公司 + 城市分公司」上下级数据
             if rank_sides == "both":
                 return self._build_ranked_select_sql(
                     source_cte=base_sql,
@@ -5923,6 +6057,9 @@ ORDER BY
 LIMIT 10000
 """.strip()
         if channel_metric and asks_best_branch:
+            # 单点最高/最低需要先确定排序列和方向，避免未赋值
+            order_direction = consumer_order_direction()
+            sort_column = consumer_sort_column()
             # Ranking should ignore empty branch rows, but the final display should keep
             # child city-company rows even when the selected metric is currently 0.
             best_branch_base_sql = base_sql.replace(
@@ -5935,8 +6072,7 @@ LIMIT 10000
     SELECT 节点名称
     FROM 汇总结果
     WHERE 层级 = '分公司'
-      AND 总任务金额 > 0
-    ORDER BY 达成率 DESC, 年度开单金额 DESC, 节点名称
+    ORDER BY {sort_column} {order_direction}, 节点名称
     LIMIT 1
 )
 SELECT *
@@ -5945,7 +6081,7 @@ WHERE 节点名称 IN (SELECT 节点名称 FROM 最佳分公司)
    OR 上级名称 IN (SELECT 节点名称 FROM 最佳分公司)
 ORDER BY
     CASE 层级 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
-    达成率 DESC,
+    {sort_column} {order_direction},
     节点名称
 LIMIT 1000
 """.strip()
@@ -6104,7 +6240,12 @@ Agent1 路由结果：
    - 代表处必须按 分公司/上级名称 分组，用 ROW_NUMBER() OVER (PARTITION BY 上级名称 ORDER BY 达成率 ASC/DESC...) 输出每个分公司下的最低/最高代表处，不能把所有代表处全局混排。
    - 业务代表必须按代表处或业务部上级分组比较，不能把所有业务代表全局混排。
    - 查询结果必须保留 上级名称、节点名称、层级、达成率、剩余任务金额，以及分组内排名字段。
-9. 如果用户问某个组织节点“业绩怎么样/情况/表现/分析”，这是单体分析场景，不要只返回该节点下一层；必须按报告配置 analysisDimensions 的父子链路返回“命中节点 + 下级节点 + 下下级明细节点”。例如配置链路为 A -> B -> C -> D 时，命中 B 要返回 B、C、D；命中 C 要返回 C、D。该规则必须由配置字段 nameColumn/parentColumn/levelColumn/analysisDimensions 推导，不允许针对固定组织名称写死。
+9. 如果用户问某个组织节点\u201c业绩怎么样/情况/表现/分析\u201d，这是单体分析场景，不要只返回该节点下一层；必须按报告配置 analysisDimensions 的父子链路返回\u201c命中节点 + 下级节点 + 下下级明细节点\u201d。例如配置链路为 A -> B -> C -> D 时，命中 B 要返回 B、C、D；命中 C 要返回 C、D。该规则必须由配置字段 nameColumn/parentColumn/levelColumn/analysisDimensions 推导，不允许针对固定组织名称写死。
+10. \u5c42\u7ea7\u7cbe\u786e\u5339\u914d\u89c4\u5219\uff1a\u7528\u6237\u539f\u8bdd\u4e2d\u7684\u5c42\u7ea7\u8bcd\u6c47\u5fc5\u987b\u4e25\u683c\u5c0a\u91cd\uff0c\u4e0d\u5f97\u81ea\u884c\u5347\u7ea7\u6216\u964d\u7ea7\u3002\u4f8b\u5982\uff1a
+   - \u7528\u6237\u8bf4\u201c\u5206\u516c\u53f8\u201d\u5c31\u67e5\u5c42\u7ea7=\u2018\u5206\u516c\u53f8\u2019\uff0c\u4e0d\u5f97\u66ff\u6362\u6210\u201c\u57ce\u5e02\u5206\u516c\u53f8\u201d\u5c42\u7ea7\uff1b
+   - \u7528\u6237\u8bf4\u201c\u57ce\u5e02\u5206\u516c\u53f8\u201d\u624d\u67e5\u5c42\u7ea7=\u2018\u57ce\u5e02\u5206\u516c\u53f8\u2019\uff1b
+   - \u7528\u6237\u8bf4\u201c\u4ee3\u8868\u5904\u201d\u5c31\u67e5\u5c42\u7ea7=\u2018\u4ee3\u8868\u5904\u2019\uff0c\u4e0d\u5f97\u66ff\u6362\u6210\u201c\u4e1a\u52a1\u4ee3\u8868\u201d\u5c42\u7ea7\uff1b
+   - \u5982\u679c\u62a5\u544a\u914d\u7f6e\u4e2d\u6709 organizationTreeLevelGuidance \u5b57\u6bb5\uff0c\u5fc5\u987b\u4e25\u683c\u9075\u5b88\u5176\u5c42\u7ea7\u6307\u5f15\u3002
 
 请输出 JSON：
 {{

@@ -82,9 +82,9 @@ const steps = computed(() => {
   width: fit-content;
   height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
-  background: #edf4ff;
-  color: #165dff;
+  border-radius: 8px;
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 11px;
   font-weight: 700;
 }
@@ -92,7 +92,7 @@ const steps = computed(() => {
 .sa-plan-intro {
   margin: 0;
   font-size: 14px;
-  color: #1d2129;
+  color: #111827;
   line-height: 1.72;
   font-weight: 500;
 }
@@ -113,8 +113,8 @@ const steps = computed(() => {
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: linear-gradient(180deg, #f5f8ff 0%, #e8f3ff 100%);
-  color: #165dff;
+  background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
+  color: #E61F24;
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -132,13 +132,13 @@ const steps = computed(() => {
 
 .sa-step-content {
   font-size: 13px;
-  color: #1d2129;
+  color: #111827;
   line-height: 1.65;
 }
 
 .sa-step-sub {
   font-size: 12px;
-  color: #86909c;
+  color: #9CA3AF;
   line-height: 1.62;
 }
 </style>

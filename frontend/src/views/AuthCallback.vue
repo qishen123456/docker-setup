@@ -41,7 +41,7 @@ onMounted(() => {
   min-height: 100%;
   display: grid;
   place-items: center;
-  background: #f6f8fb;
+  background: #F8F9FA;
 }
 
 .auth-callback-card {
@@ -49,7 +49,7 @@ onMounted(() => {
   padding: 34px;
   border-radius: 18px;
   background: #fff;
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
 
@@ -58,18 +58,18 @@ onMounted(() => {
   height: 42px;
   margin: 0 auto 16px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #165dff, #14c9c9);
+  background: linear-gradient(135deg, #E61F24, #9CA3AF);
 }
 
 .auth-callback-card h1 {
   margin: 0 0 8px;
-  color: #1d2129;
+  color: #111827;
   font-size: 20px;
 }
 
 .auth-callback-card p {
   margin: 0;
-  color: #86909c;
+  color: #9CA3AF;
   font-size: 13px;
 }
 </style>

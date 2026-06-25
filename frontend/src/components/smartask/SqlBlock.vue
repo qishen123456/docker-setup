@@ -195,8 +195,8 @@ watch(displaySql, () => {
   border-radius: 12px;
   overflow: hidden;
   margin: 9px 0;
-  background: #f7f8fa;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  background: #F8F9FA;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.04);
 }
 
 .sa-sql-header {
@@ -224,9 +224,9 @@ watch(displaySql, () => {
   width: 31px;
   height: 31px;
   border-radius: 9px;
-  border: 1px solid rgba(22, 93, 255, 0.16);
-  background: #edf4ff;
-  color: #165dff;
+  border: 1px solid rgba(230, 31, 36, 0.16);
+  background: #FEF2F2;
+  color: #E61F24;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0;
@@ -244,12 +244,12 @@ watch(displaySql, () => {
   font-size: 12px;
   line-height: 1.35;
   font-weight: 700;
-  color: #1d2129;
+  color: #111827;
 }
 
 .sa-sql-caption {
   font-size: 10px;
-  color: #86909c;
+  color: #9CA3AF;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -267,9 +267,9 @@ watch(displaySql, () => {
   gap: 5px;
   height: 24px;
   padding: 0 8px;
-  border-radius: 999px;
-  background: #e8ffea;
-  color: #00b42a;
+  border-radius: 8px;
+  background: #ECFDF5;
+  color: #10B981;
   font-size: 10px;
   font-weight: 700;
 }
@@ -286,8 +286,8 @@ watch(displaySql, () => {
   align-items: center;
   gap: 5px;
   background: #ffffff;
-  border: 1px solid rgba(22, 93, 255, 0.18);
-  color: #165dff;
+  border: 1px solid rgba(230, 31, 36, 0.18);
+  color: #E61F24;
   border-radius: 8px;
   height: 28px;
   padding: 0 9px;
@@ -298,9 +298,9 @@ watch(displaySql, () => {
 }
 
 .sa-copy-btn:hover {
-  border-color: rgba(22, 93, 255, 0.36);
-  color: #0e42d2;
-  background: #edf4ff;
+  border-color: rgba(230, 31, 36, 0.36);
+  color: #cc181d;
+  background: #FEF2F2;
   transform: translateY(-1px);
 }
 
@@ -337,14 +337,14 @@ watch(displaySql, () => {
   margin: 10px;
   border-radius: 9px;
   border: 1px solid rgba(229, 230, 235, 0.82);
-  background: #f4f5f7;
+  background: #F3F4F6;
 }
 
 .sa-sql-gutter {
   padding: 14px 0 14px 8px;
   border-right: 1px solid rgba(229, 230, 235, 0.9);
-  background: #f0f2f5;
-  color: #a9b0bd;
+  background: #F3F4F6;
+  color: #9CA3AF;
   font-family: var(--font-mono, 'JetBrains Mono', 'Cascadia Code', Consolas, monospace);
   font-size: 10px;
   line-height: 1.72;
@@ -367,7 +367,7 @@ watch(displaySql, () => {
   font-family: var(--font-mono, 'JetBrains Mono', 'Cascadia Code', Consolas, monospace);
   font-size: 11px;
   line-height: 1.72;
-  color: #252b3a;
+  color: #111827;
 }
 
 .sa-sql-pre code {
@@ -380,39 +380,39 @@ watch(displaySql, () => {
 
 :deep(.sa-sql-pre .hljs) {
   background: transparent;
-  color: #252b3a;
+  color: #111827;
 }
 
 :deep(.sa-sql-pre .hljs-keyword),
 :deep(.sa-sql-pre .hljs-selector-tag) {
-  color: #c02fd6;
+  color: #6B7280;
   font-weight: 800;
 }
 
 :deep(.sa-sql-pre .hljs-string) {
-  color: #159947;
+  color: #10B981;
 }
 
 :deep(.sa-sql-pre .hljs-number),
 :deep(.sa-sql-pre .hljs-literal) {
-  color: #f59f00;
+  color: #F59E0B;
 }
 
 :deep(.sa-sql-pre .hljs-comment) {
-  color: #9aa3b2;
+  color: #9CA3AF;
   font-style: italic;
 }
 
 :deep(.sa-sql-pre .hljs-built_in),
 :deep(.sa-sql-pre .hljs-function),
 :deep(.sa-sql-pre .hljs-title.function_) {
-  color: #168cff;
+  color: #111827;
   font-weight: 700;
 }
 
 :deep(.sa-sql-pre .hljs-operator),
 :deep(.sa-sql-pre .hljs-punctuation) {
-  color: #7b8496;
+  color: #6B7280;
 }
 
 .sa-sql-surface::-webkit-scrollbar {
@@ -421,8 +421,8 @@ watch(displaySql, () => {
 }
 
 .sa-sql-surface::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.38);
+  border-radius: 8px;
+  background: rgba(156, 163, 175, 0.38);
 }
 
 .sa-sql-surface::-webkit-scrollbar-track {

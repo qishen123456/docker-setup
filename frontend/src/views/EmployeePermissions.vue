@@ -53,8 +53,8 @@
             <el-switch
               class="status-switch"
               :model-value="row.enabled !== false"
-              active-color="#1677ff"
-              inactive-color="#cbd5e1"
+              active-color="#E61F24"
+              inactive-color="#D1D5DB"
               :disabled="!isFeatureEnabled('employee_status_update')"
               @change="toggleUserEnabled(row)"
             />
@@ -547,9 +547,9 @@ onMounted(() => {
 .toolbar,
 .user-table-card {
   background: #fff;
-  border: 1px solid #e5eaf3;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04);
 }
 
 .page-head {
@@ -562,21 +562,21 @@ onMounted(() => {
 
 .kicker {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: #E61F24;
   font-size: 12px;
   font-weight: 800;
 }
 
 .page-head h1 {
   margin: 0;
-  color: #0f172a;
+  color: #111827;
   font-size: 24px;
 }
 
 .page-head p,
 .muted {
   margin: 6px 0 0;
-  color: #64748b;
+  color: #6B7280;
   font-size: 12px;
 }
 
@@ -655,7 +655,7 @@ onMounted(() => {
 
 :deep(.compact-user-dialog .el-dialog__footer) {
   padding: 10px 20px 16px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #F3F4F6;
 }
 
 .dialog-footer-actions {
@@ -674,10 +674,10 @@ onMounted(() => {
 .form-section-title {
   margin: 2px 0 8px;
   padding-top: 10px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid #F3F4F6;
   font-weight: 700;
   font-size: 13px;
-  color: #0f172a;
+  color: #111827;
 }
 
 :deep(.el-table) {
@@ -695,8 +695,8 @@ onMounted(() => {
 }
 
 :deep(.status-switch.el-switch) {
-  --el-switch-on-color: #1677ff;
-  --el-switch-off-color: #cbd5e1;
+  --el-switch-on-color: #E61F24;
+  --el-switch-off-color: #D1D5DB;
   height: 24px;
 }
 
@@ -731,8 +731,8 @@ onMounted(() => {
   justify-content: start;
   gap: 6px;
   padding: 8px;
-  border-bottom: 1px solid #eef2f7;
-  background: #f8fafc;
+  border-bottom: 1px solid #F3F4F6;
+  background: #F8F9FA;
 }
 
 .tree-select-panel-actions .el-button {

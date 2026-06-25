@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?mso-application progid="Word.Document"?>
+<w:wordDocument xmlns:w="http://schemas.microsoft.com/office/word/2003/wordml">
+  <w:styles>
+    <w:style w:type="paragraph" w:styleId="Heading1">
+      <w:name w:val="heading 1"/>
+      <w:pPr>
+        <w:outlineLvl w:val="0"/>
+      </w:pPr>
+    </w:style>
+    <w:style w:type="paragraph" w:styleId="Heading2">
+      <w:name w:val="heading 2"/>
+      <w:pPr>
+        <w:outlineLvl w:val="1"/>
+      </w:pPr>
+    </w:style>
+  </w:styles>
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P1 封面</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>SmartAsk 智能问数系统 · 基础版</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Autonomous BI 的最小闭环 —— 让经营分析从“找人要数”变成“开口即得”</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P2 项目定位：我们到底在做什么</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>不是“做一个聊天机器人”</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>不是“替代 BI 工具”</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>而是：自然语言入口 + 可解释数据链路 + 确定性报告输出</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>当前聚焦：验证“问题 → 数据集 → SQL → 数据 → 报告”链路可稳定跑通</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P3 传统经营分析的三重困境</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>响应慢：找表、找人、写 SQL、整理结论，决策滞后</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>门槛高：业务人员不会 SQL，分析资源 bottleneck</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>口径乱：不同人出的数不一致，决策依据不可靠</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P4 设计原则一：先跑通最小闭环</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>基础版不追求大而全，先聚焦一件事</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>让一句自然语言问题，稳定地变成一份可解释的经营报告</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>闭环四节点：问题理解 → 数据集锁定 → SQL 生成与执行 → 报告输出与沉淀</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P5 设计原则二：基础流程稳定、进阶流程增强</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>AskFlowController 统一决策：本轮走基础还是进阶</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>基础流程：稳定四 Agent 引擎，服务 80% 常规问题</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>进阶流程：Skill / 工具 / 数据加工链路，服务复杂分析</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>进阶异常时自动回退基础流程，不影响用户</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>前端无感知：统一结果契约 dataset_results / report_spec / analysis</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P6 设计原则三：三层解耦</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第一层 数据集知识层：DDL / 数据字典 / LLD / Golden SQL / Agent Prompt</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第二层 报告契约层：指标 / 标准列 / 层级 / 阈值 / 信号灯 / 写作口径</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第三层 场景渲染层：detail / comparative / ranking / diagnostic / trend</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>越底层越稳定，越上层越动态</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P7 总体架构</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>前端：Vue 3 + Element Plus + ECharts</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>后端：Flask + 四 Agent 编排 + ReportSpec v2</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>数据：PostgreSQL 元数据 + 业务数据，Chroma 向量检索</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>部署：Docker Compose 三容器一键启动</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P8 四 Agent 协作流水线</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent1 路由：意图识别、数据集路由、歧义确认</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent2 生成：基于上下文生成只读 SQL</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent3 复核：安全、字段、口径、可执行性校验</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent4 解读：基于结果生成经营分析结论</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>前一 Agent 不通过，后一 Agent 不执行</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P9 Agent1 路由：不只是“选表”</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>输入信号：数据集名称、别名、业务域、组织树、画像、历史上下文、Golden SQL 相似度</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>明确信号：自动锁定数据集</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>歧义信号：返回确认卡片，由用户确认口径</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>设计目标：不确定时不乱答</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P10 SQL 生成三层策略</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第一层 Golden SQL 直执行：常见问题直接命中人工沉淀口径</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第二层 规则 SQL 兜底：高频组织 / 排名 / 下钻问题确定性生成</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第三层 Agent2 动态生成：新问题由大模型泛化处理</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>越常见越稳定，越新颖越灵活</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P11 Agent3 复核与 Agent2Repair</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent3 复核：只读、字段、JSONB、聚合口径、输出列、风险</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>执行失败：捕获真实数据库错误</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Agent2Repair：基于 failed_sql + error + DDL 自动修复</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>修复后再次复核、再次执行、仍失败则优雅降级</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P12 报告契约与 ReportSpec v2</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>不让大模型自由生成 HTML</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>报告契约定义：指标、层级、阈值、信号灯、标准输出列</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>report_spec_builder 输出确定性报告协议</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>前端按 report_spec 渲染，结构稳定、可解释、可追溯</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P13 前端信息分工：中间区看答案，右侧区看过程</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>中间区：执行计划、关键进展、结果摘要、报告卡片</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>右侧区：Skill 轨迹、路由分数、SQL、表格预览、自检提示</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>原则：中间区不变成日志区，右侧区不变成第二份答案</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P14 场景识别：一个问题该用哪种展示方式</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>detail：单一主体分析，KPI + 趋势 + 下钻</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>comparative：多主体对比，突出差异值和对比率</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>ranking：排名场景，名次、差距、红绿灯</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>diagnostic：风险诊断，缺口、风险节点、建议</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>测试验证：四类场景识别准确率 100%，契约健康度 100/100</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P15 企业级安全设计</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>数据集访问权限：allowed_dataset_ids 过滤</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>组织提及权限检查：未授权组织直接拦截</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>行级权限过滤：SQL 外层包组织范围 WHERE</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>SQL 只读执行：禁止 INSERT/UPDATE/DELETE/DROP/ALTER</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>异常自动修复：Agent2Repair + 复核闭环</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P16 行级权限落地方式</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>方式一：源表直接有组织编码 —— 最简单、最稳定</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>方式二：源表只有组织名称 —— 过渡方案</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>方式三：新增业务组织映射表 —— 推荐长期方案</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>路线：先明确组织口径 → 再配置权限映射 → 最后做权限预检</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P17 部署形态与运行环境</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>交付形态：预置数据源、模型、数据集、报告模板</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>用户只看见：智能分析工作台</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Docker Compose 三容器：postgres + backend + frontend</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>首次启动自动迁移、导入、初始化</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>访问地址：http://localhost:8888</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P18 测试验证与当前状态</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>前端构建通过</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>后端语法检查通过</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>后端健康检查正常</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>四类报告场景识别测试全部通过</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>报告契约健康度 100/100</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>基础问数链路稳定可用，已具备对外交付基础版能力</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P19 基础版价值总结</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>降低门槛：业务人员无需写 SQL</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>缩短响应：常规问题从小时级压缩到分钟级</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>沉淀口径：Golden SQL + 复核机制减少口径不一致</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>可信可解释：路由分数、执行轨迹、复核说明、报告契约可追溯</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>建立底座：为进阶流程、权限治理、平台化运营奠定基础</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P20 演进路线</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>V1 基础版：能问、能查、能答、能展示</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>V2 中阶版：查得准、可确认、可追踪</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>V3 高阶版：可治理、可配置、可运维</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>V4 终极版：主动分析、经营智能体</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>基础版不是终点，而是后续迭代的稳定底座</w:t></w:r></w:p>
+
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>P21 结尾与致谢</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>SmartAsk 基础版：让每一个人都能开口问数</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>从“找人要数”到“开口即得”，从“概念验证”到“可落地产物”</w:t></w:r></w:p>
+    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>谢谢大家，欢迎提问</w:t></w:r></w:p>
+  </w:body>
+</w:wordDocument>
