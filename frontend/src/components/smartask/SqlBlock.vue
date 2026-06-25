@@ -224,9 +224,9 @@ watch(displaySql, () => {
   width: 31px;
   height: 31px;
   border-radius: 9px;
-  border: 1px solid rgba(230, 31, 36, 0.16);
+  border: 1px solid rgba(26, 26, 26, 0.16);
   background: #FEF2F2;
-  color: #E61F24;
+  color: #1A1A1A;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0;
@@ -286,8 +286,8 @@ watch(displaySql, () => {
   align-items: center;
   gap: 5px;
   background: #ffffff;
-  border: 1px solid rgba(230, 31, 36, 0.18);
-  color: #E61F24;
+  border: 1px solid rgba(26, 26, 26, 0.18);
+  color: #1A1A1A;
   border-radius: 8px;
   height: 28px;
   padding: 0 9px;
@@ -298,7 +298,7 @@ watch(displaySql, () => {
 }
 
 .sa-copy-btn:hover {
-  border-color: rgba(230, 31, 36, 0.36);
+  border-color: rgba(26, 26, 26, 0.36);
   color: #cc181d;
   background: #FEF2F2;
   transform: translateY(-1px);

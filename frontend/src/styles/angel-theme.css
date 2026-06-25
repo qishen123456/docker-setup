@@ -16,16 +16,21 @@
   --brand-primary-focus: rgba(230, 31, 36, 0.16);
   --brand-primary-focus-strong: rgba(230, 31, 36, 0.24);
 
-  /* 安吉尔官网气质：黑底白字为主行动色，红作品牌点缀 */
-  --brand-action: #1A1A1A;
-  --brand-action-hover: #000000;
-  --brand-action-active: #000000;
+  /* 安吉尔官网气质：深灰黑底白字为主行动色，红作品牌点缀 */
+  --brand-black: rgba(20, 20, 20, 0.92);
+  --brand-black-strong: rgba(20, 20, 20, 0.96);
+  --brand-black-soft: rgba(20, 20, 20, 0.82);
+  --brand-surface-dark: rgba(28, 28, 28, 0.88);
+  --brand-overlay: rgba(255, 255, 255, 0.72);
+
+  --brand-action: rgba(20, 20, 20, 0.92);
+  --brand-action-hover: rgba(0, 0, 0, 0.96);
+  --brand-action-active: rgba(0, 0, 0, 0.98);
   --brand-action-soft: #F3F4F6;
-  --brand-action-focus: rgba(26, 26, 26, 0.14);
-  --brand-action-focus-strong: rgba(26, 26, 26, 0.22);
+  --brand-action-focus: rgba(20, 20, 20, 0.14);
+  --brand-action-focus-strong: rgba(20, 20, 20, 0.22);
 
   /* ── 中性色阶 ── */
-  --brand-black: #1A1A1A;
   --brand-gray-50: #FAFAFA;
   --brand-gray-100: #F3F4F6;
   --brand-gray-200: #E5E7EB;
@@ -44,18 +49,18 @@
   --text-muted: #9CA3AF;
   --text-placeholder: #D1D5DB;
 
-  /* ── 语义背景 ── */
-  --bg-page: #F8F9FA;
-  --bg-card: #FFFFFF;
-  --bg-soft: #F3F4F6;
-  --bg-hover: #F3F4F6;
-  --bg-elevated: #FFFFFF;
+  /* ── 语义背景（素描纸暖色系）── */
+  --bg-page: #F2EDE8;
+  --bg-card: #FDFAF7;
+  --bg-soft: #EDE8E2;
+  --bg-hover: #E8E2DB;
+  --bg-elevated: #FDFAF7;
   --bg-mask: rgba(17, 24, 39, 0.45);
 
   /* ── 语义边框 ── */
-  --border: #E5E7EB;
-  --border-light: #F3F4F6;
-  --border-hover: #D1D5DB;
+  --border: #DDD8D1;
+  --border-light: #E8E3DC;
+  --border-hover: #C8C0B7;
   --border-strong: #9CA3AF;
 
   /* ── 状态色 ── */
@@ -1086,4 +1091,37 @@ select:focus-visible,
 .el-slider__bar,
 .el-date-table td.current:not(.disabled) span {
   --el-color-primary: var(--brand-action);
+}
+
+/* 深色面板通用类：深烟灰 + 毛玻璃感 */
+.sa-dark-panel {
+  background: rgba(26, 24, 22, 0.94);
+  backdrop-filter: saturate(160%) blur(24px);
+  -webkit-backdrop-filter: saturate(160%) blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.sa-dark-panel-soft {
+  background: rgba(30, 28, 26, 0.84);
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 深色面板文字色校正 */
+.sa-dark-panel .el-menu-item,
+.sa-dark-panel .el-sub-menu__title {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.sa-dark-panel .el-menu-item:hover,
+.sa-dark-panel .el-sub-menu__title:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.sa-dark-panel .el-menu-item.is-active {
+  background: rgba(230, 31, 36, 0.18) !important;
+  color: #f87171 !important;
 }

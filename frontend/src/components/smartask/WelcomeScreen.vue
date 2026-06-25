@@ -1,9 +1,11 @@
 <template>
   <div class="sa-welcome">
     <div class="sa-welcome-head">
-      <div class="sa-welcome-avatar">D</div>
+      <div class="sa-welcome-avatar">
+        <img src="/angel-logo.png" alt="ANGEL" class="sa-welcome-avatar-img" />
+      </div>
       <div class="sa-welcome-copy">
-        <div class="sa-welcome-label">经营分析顾问</div>
+        <div class="sa-welcome-label">安吉尔经营分析顾问</div>
         <div class="sa-welcome-text">{{ displayText }}</div>
       </div>
     </div>
@@ -103,17 +105,22 @@ onMounted(() => {
 .sa-welcome-avatar {
   width: 34px;
   height: 34px;
-  background: linear-gradient(180deg, #1A1A1A 0%, #1A1A1A 100%);
-  color: #fff;
+  background: var(--brand-primary, #1A1A1A);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 800;
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.1),
-    inset 0 -2px 0 rgba(230, 31, 36, 0.55);
+    0 8px 18px rgba(26, 26, 26, 0.18),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  padding: 3px;
+}
+
+.sa-welcome-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sa-welcome-copy {
@@ -125,7 +132,7 @@ onMounted(() => {
 .sa-welcome-label {
   font-size: 10px;
   font-weight: 700;
-  color: #E61F24;
+  color: #1A1A1A;
   letter-spacing: 0.03em;
 }
 
@@ -139,7 +146,7 @@ onMounted(() => {
 .sa-welcome-text::after {
   content: '|';
   margin-left: 2px;
-  color: #E61F24;
+  color: #1A1A1A;
   animation: sa-welcome-cursor-blink 1s step-end infinite;
 }
 
@@ -192,9 +199,9 @@ onMounted(() => {
 
 .sa-quick-refresh:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(230, 31, 36, 0.22);
+  border-color: rgba(26, 26, 26, 0.22);
   background: #ffffff;
-  color: #E61F24;
+  color: #1A1A1A;
   box-shadow: 0 9px 18px rgba(0, 0, 0, 0.07);
 }
 
@@ -244,8 +251,8 @@ onMounted(() => {
 
 .sa-quick-btn:hover {
   background: linear-gradient(180deg, #ffffff 0%, #FEF2F2 100%);
-  border-color: rgba(230, 31, 36, 0.22);
-  color: #E61F24;
+  border-color: rgba(26, 26, 26, 0.22);
+  color: #1A1A1A;
   transform: translateY(-1px);
 }
 
@@ -261,8 +268,8 @@ onMounted(() => {
   max-width: 100%;
   padding: 2px 7px;
   border-radius: 8px;
-  background: rgba(230, 31, 36, 0.08);
-  color: #E61F24;
+  background: rgba(26, 26, 26, 0.08);
+  color: #1A1A1A;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;

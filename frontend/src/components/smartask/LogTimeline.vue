@@ -559,7 +559,7 @@ onBeforeUnmount(() => {
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  border: 1px solid rgba(230, 31, 36, 0.12);
+  border: 1px solid rgba(26, 26, 26, 0.12);
   background: linear-gradient(180deg, #F8F9FA 0%, #ffffff 100%);
   display: flex;
   flex-direction: column;
@@ -572,7 +572,7 @@ onBeforeUnmount(() => {
 .sa-empty-icon span {
   height: 2px;
   border-radius: 8px;
-  background: rgba(230, 31, 36, 0.4);
+  background: rgba(26, 26, 26, 0.4);
 }
 
 .sa-empty-icon span:nth-child(1) { width: 70%; }
@@ -615,13 +615,13 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-marker.running {
-  background: #E61F24;
-  box-shadow: 0 0 0 1px rgba(230, 31, 36, 0.16);
+  background: #1A1A1A;
+  box-shadow: 0 0 0 1px rgba(26, 26, 26, 0.16);
 }
 
 .sa-node-marker.error {
-  background: #E61F24;
-  box-shadow: 0 0 0 1px rgba(230, 31, 36, 0.16);
+  background: #1A1A1A;
+  box-shadow: 0 0 0 1px rgba(26, 26, 26, 0.16);
 }
 
 .sa-node-marker.warning {
@@ -661,7 +661,7 @@ onBeforeUnmount(() => {
   height: 15px;
   border-radius: 4px;
   background: linear-gradient(180deg, #FEF2F2 0%, #F3F4F6 100%);
-  border: 1px solid rgba(230, 31, 36, 0.14);
+  border: 1px solid rgba(26, 26, 26, 0.14);
   position: relative;
   flex-shrink: 0;
 }
@@ -673,7 +673,7 @@ onBeforeUnmount(() => {
   left: 3px;
   right: 3px;
   height: 1px;
-  background: rgba(230, 31, 36, 0.46);
+  background: rgba(26, 26, 26, 0.46);
 }
 
 .sa-node-icon::before { top: 5px; }
@@ -701,12 +701,12 @@ onBeforeUnmount(() => {
 
 .sa-node-icon.confirm {
   background: linear-gradient(180deg, #FEF2F2 0%, #FEF2F2 100%);
-  border-color: rgba(230, 31, 36, 0.16);
+  border-color: rgba(26, 26, 26, 0.16);
 }
 
 .sa-node-icon.confirm::before,
 .sa-node-icon.confirm::after {
-  background: rgba(230, 31, 36, 0.4);
+  background: rgba(26, 26, 26, 0.4);
 }
 
 .sa-node-icon.python {
@@ -751,13 +751,13 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-status.success { color: #10B981; }
-.sa-node-status.running { color: #E61F24; }
-.sa-node-status.error { color: #E61F24; }
+.sa-node-status.running { color: #1A1A1A; }
+.sa-node-status.error { color: #1A1A1A; }
 .sa-node-status.pending { color: #9CA3AF; }
 .sa-node-status.warning { color: #F59E0B; }
 
 .sa-spin {
-  color: #E61F24;
+  color: #1A1A1A;
   animation: spin 1s linear infinite;
 }
 
@@ -855,8 +855,8 @@ onBeforeUnmount(() => {
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #E61F24;
-  box-shadow: 0 0 0 2px rgba(230, 31, 36, 0.05);
+  background: #1A1A1A;
+  box-shadow: 0 0 0 2px rgba(26, 26, 26, 0.05);
   animation: saLivePulse 1.3s ease-in-out infinite;
 }
 
@@ -901,8 +901,8 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-live-check.latest .sa-node-live-check-dot {
-  background: #E61F24;
-  box-shadow: 0 0 0 3px rgba(230, 31, 36, 0.06);
+  background: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.06);
 }
 
 .sa-log-step {
@@ -916,7 +916,7 @@ onBeforeUnmount(() => {
   height: 6px;
   margin-top: 7px;
   border-radius: 50%;
-  background: #E61F24;
+  background: #1A1A1A;
   flex-shrink: 0;
 }
 
@@ -935,7 +935,7 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 12px;
   margin-left: 5px;
-  border-right: 2px solid #E61F24;
+  border-right: 2px solid #1A1A1A;
   animation: blink 0.9s steps(1, end) infinite;
   vertical-align: -2px;
 }

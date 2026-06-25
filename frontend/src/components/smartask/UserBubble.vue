@@ -92,28 +92,17 @@ defineEmits(['copy', 'edit', 'rerun'])
   height: 30px;
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
-  color: #1A1A1A;
+  background: rgba(26, 24, 22, 0.94);
+  color: #FFFFFF;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: none;
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88);
-}
-
-.sa-user-avatar::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #E61F24 0%, #E61F24 100%);
+    0 6px 14px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .sa-user-avatar-mark {
@@ -127,15 +116,15 @@ defineEmits(['copy', 'edit', 'rerun'])
 
 .sa-user-bubble {
   padding: 12px 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #FDFBF9 100%);
   color: #111827;
-  border: 1px solid rgba(230, 31, 36, 0.14);
+  border: 1px solid rgba(26, 24, 22, 0.08);
   border-radius: 18px 18px 6px 18px;
   font-size: 13px;
   line-height: 1.62;
   word-break: break-word;
   box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.06),
+    0 10px 24px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -162,7 +151,7 @@ defineEmits(['copy', 'edit', 'rerun'])
 .sa-user-action {
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(230, 31, 36, 0.12);
+  border: 1px solid rgba(26, 24, 22, 0.12);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.96);
   color: #6B7280;
@@ -175,8 +164,8 @@ defineEmits(['copy', 'edit', 'rerun'])
 }
 
 .sa-user-action:hover:not(:disabled) {
-  color: #E61F24;
-  border-color: rgba(230, 31, 36, 0.32);
+  color: #1A1816;
+  border-color: rgba(26, 24, 22, 0.32);
   background: #ffffff;
   transform: translateY(-1px);
 }

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="sa-page">
     <div class="sa-shell">
       <section class="sa-workspace" :class="{ 'is-detail-hidden': !detailPanelVisible }">
@@ -46,10 +46,10 @@
                 <!-- AI 回复 -->
                 <div v-else class="sa-ai-wrap">
                   <div class="sa-ai-meta">
-                    <div class="sa-ai-avatar" aria-label="经营分析助手头像">
-                      <span class="sa-ai-avatar-core">D</span>
+                    <div class="sa-ai-avatar" aria-label="安吉尔经营分析助手头像">
+                      <img src="/angel-logo.png" alt="ANGEL" class="sa-ai-avatar-img" />
                     </div>
-                    <span class="sa-ai-name">经营分析顾问</span>
+                    <span class="sa-ai-name">安吉尔经营分析顾问</span>
                   </div>
                   <div class="sa-ai-cards">
                     <!-- 加载中-->
@@ -5590,45 +5590,24 @@ onUnmounted(() => {
   height: 32px;
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, #1A1A1A 0%, #1A1A1A 100%);
-  color: #ffffff;
+  background: rgba(26, 24, 22, 0.94);
   border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: none;
   box-shadow:
-    0 10px 22px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 6px 16px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 3px;
 }
 
-.sa-ai-avatar::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #E61F24 0%, #E61F24 100%);
-}
-
-.sa-ai-avatar-core {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: 0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+.sa-ai-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 .sa-ai-name {
   font-size: 13px;

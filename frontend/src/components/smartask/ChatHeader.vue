@@ -85,8 +85,8 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
   height: 17px;
   padding: 0 6px;
   border-radius: 8px;
-  background: #FEF2F2;
-  color: #E61F24;
+  background: #F3F4F6;
+  color: #1A1A1A;
   font-size: 9px;
   font-weight: 700;
 }
@@ -121,25 +121,25 @@ defineEmits(['togglePanel', 'newChat', 'showHistory'])
 }
 
 .sa-text-btn:hover {
-  color: #E61F24;
-  border-color: rgba(230, 31, 36, 0.16);
-  background: #FEF2F2;
+  color: #1A1A1A;
+  border-color: rgba(26, 26, 26, 0.16);
+  background: #F8F9FA;
   transform: translateY(-1px);
 }
 
 .sa-solid-btn {
-  border: 1px solid rgba(230, 31, 36, 0.12);
-  background: linear-gradient(180deg, #F8F9FA 0%, #FEF2F2 100%);
-  color: #E61F24;
+  border: 1px solid rgba(26, 26, 26, 0.12);
+  background: linear-gradient(180deg, #F8F9FA 0%, #E5E7EB 100%);
+  color: #1A1A1A;
   box-shadow:
-    0 8px 18px rgba(230, 31, 36, 0.08),
+    0 8px 18px rgba(0, 0, 0, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .sa-solid-btn:hover {
-  border-color: rgba(230, 31, 36, 0.22);
+  border-color: rgba(26, 26, 26, 0.22);
   background: linear-gradient(180deg, #ffffff 0%, #F8F9FA 100%);
-  color: #cc181d;
+  color: #000000;
   transform: translateY(-1px);
 }
 

@@ -313,7 +313,7 @@ onMounted(() => {
   background: #ffffff;
   box-shadow:
     0 6px 14px rgba(0, 0, 0, 0.03),
-    inset 3px 0 0 #E61F24;
+    inset 3px 0 0 #1A1A1A;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-height: 76px;
 }
@@ -324,7 +324,7 @@ onMounted(() => {
   box-shadow:
     0 0 0 1px rgba(26, 26, 26, 0.06),
     0 12px 24px rgba(0, 0, 0, 0.055),
-    inset 3px 0 0 #E61F24;
+    inset 3px 0 0 #1A1A1A;
 }
 
 .sa-side-dataset-head {
@@ -451,17 +451,17 @@ onMounted(() => {
   bottom: 5px;
   width: 3px;
   border-radius: 8px;
-  background: #E61F24;
+  background: #1A1A1A;
   opacity: 0.7;
 }
 
 .sa-model-option::before {
-  background: #E61F24;
+  background: #1A1A1A;
 }
 
 .sa-model-option.is-default-model::before {
   width: 4px;
-  background: #E61F24;
+  background: #1A1A1A;
   opacity: 1;
 }
 
@@ -495,7 +495,7 @@ onMounted(() => {
 }
 
 .sa-ds-option-auto .sa-ds-option-title {
-  color: #E61F24;
+  color: #1A1A1A;
 }
 
 :deep(.sa-ds-popper.el-popper) {
@@ -519,12 +519,12 @@ onMounted(() => {
 
 :deep(.sa-dataset-popper .el-select-dropdown__item.is-hovering),
 :deep(.sa-dataset-popper .el-select-dropdown__item:hover) {
-  background: rgba(230, 31, 36, 0.07);
+  background: rgba(26, 26, 26, 0.07);
 }
 
 :deep(.sa-model-popper .el-select-dropdown__item.is-hovering),
 :deep(.sa-model-popper .el-select-dropdown__item:hover) {
-  background: rgba(230, 31, 36, 0.07);
+  background: rgba(26, 26, 26, 0.07);
 }
 
 .sa-textarea-wrap {
@@ -577,7 +577,7 @@ onMounted(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #E61F24;
+  background: #1A1A1A;
   flex: 0 0 auto;
   animation: pulse 1.2s ease-in-out infinite;
 }
@@ -588,7 +588,7 @@ onMounted(() => {
 }
 
 .sa-composer-status-capsule.error .sa-composer-status-dot {
-  background: #E61F24;
+  background: #1A1A1A;
   animation: none;
 }
 
@@ -738,7 +738,7 @@ onMounted(() => {
 }
 
 .sa-send-btn {
-  background: #E61F24;
+  background: #1A1A1A;
 }
 
 .sa-stop-btn {

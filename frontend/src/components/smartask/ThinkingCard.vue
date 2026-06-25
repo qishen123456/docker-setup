@@ -75,7 +75,7 @@ const normalizedSteps = computed(() => {
 .sa-thinking-card {
   width: 100%;
   background: linear-gradient(180deg, #FFFFFF 0%, #ffffff 100%);
-  border: 1px solid rgba(230, 31, 36, 0.12);
+  border: 1px solid rgba(26, 26, 26, 0.12);
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 7px 18px rgba(0, 0, 0, 0.035);
@@ -130,13 +130,13 @@ const normalizedSteps = computed(() => {
 }
 
 .sa-check.loading {
-  color: #E61F24;
+  color: #1A1A1A;
   background: #FEF2F2;
 }
 
 .sa-thinking-body {
   background: #F8F9FA;
-  border-top: 1px solid rgba(230, 31, 36, 0.08);
+  border-top: 1px solid rgba(26, 26, 26, 0.08);
   padding: 11px 13px 13px;
 }
 
@@ -156,7 +156,7 @@ const normalizedSteps = computed(() => {
 }
 
 .sa-dot.running {
-  background: #E61F24;
+  background: #1A1A1A;
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -173,7 +173,7 @@ const normalizedSteps = computed(() => {
 }
 
 .sa-dot.error {
-  background: #E61F24;
+  background: #1A1A1A;
 }
 
 .sa-step-copy {
@@ -211,7 +211,7 @@ const normalizedSteps = computed(() => {
 
 .sa-step-status.running {
   background: #FEF2F2;
-  color: #E61F24;
+  color: #1A1A1A;
 }
 
 .sa-step-status.pending {
@@ -226,7 +226,7 @@ const normalizedSteps = computed(() => {
 
 .sa-step-status.error {
   background: #FEF2F2;
-  color: #E61F24;
+  color: #1A1A1A;
 }
 
 @keyframes pulse {
