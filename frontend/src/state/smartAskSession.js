@@ -730,7 +730,7 @@ const buildTraceDetailLines = (stage, status, payload = {}) => {
 const buildTraceThought = (stage, status, payload = {}) => {
   const text = String(stage || '')
   if (status === 'delta') return ''
-  if (text.startsWith('advanced.') && payload.thought) return String(payload.thought).trim()
+  if ((text.startsWith('advanced.') || text.startsWith('agent1.')) && payload.thought) return String(payload.thought).trim()
   if (payload.response_text) return String(payload.response_text).trim()
   if (payload.analysis_preview) return String(payload.analysis_preview).trim()
   if (payload.review_summary) return String(payload.review_summary).trim()

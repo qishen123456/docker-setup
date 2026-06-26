@@ -729,6 +729,7 @@ def smart_chat_stream():
                     trace_events=trace_events,
                     event_prefix="smart_chat_stream",
                 )
+                print(f"[DEBUG] stream result requires_confirmation={result.get('requires_confirmation')} route_decision={result.get('route', {}).get('decision')} route_requires_confirmation={result.get('route', {}).get('requires_confirmation')} dataset_ids={result.get('route', {}).get('dataset_ids')}", flush=True)
                 event_queue.put({"type": "result", "result": result})
             except Exception as exc:
                 error_result = {

@@ -1122,6 +1122,6 @@ select:focus-visible,
 }
 
 .sa-dark-panel .el-menu-item.is-active {
-  background: rgba(230, 31, 36, 0.18) !important;
-  color: #f87171 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
 }

@@ -24,7 +24,13 @@
             @change="$emit('datasetChange', $event || null)"
           >
             <template #prefix>
-              <span class="sa-ds-icon" aria-hidden="true"></span>
+              <span class="sa-ds-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                  <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+                </svg>
+              </span>
             </template>
             <el-option label="自动路由数据集" value="">
               <div class="sa-ds-option sa-ds-option-auto">
@@ -56,12 +62,11 @@
               <span v-if="statusElapsed" class="sa-composer-status-time">{{ statusElapsed }}</span>
             </div>
 
-            <span class="sa-textarea-leading" aria-hidden="true"></span>
             <textarea
               ref="inputRef"
               v-model="modelQuery"
               class="sa-textarea"
-              placeholder="请输入您的业务问题..."
+              placeholder="请输入您的业务问题，支持自然语言提问或指令..."
               rows="1"
               :disabled="isRunning"
               @input="autoGrow"
@@ -83,7 +88,11 @@
                   :fallback-placements="['top-start']"
                 >
                   <template #prefix>
-                    <span class="sa-model-icon" aria-hidden="true">⚡</span>
+                    <span class="sa-model-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M13.4 2.4 5.9 13.1h5.2l-.6 8.5 7.6-11h-5.3l.6-8.2Z" fill="currentColor" />
+                      </svg>
+                    </span>
                   </template>
                   <el-option label="Auto" value="">
                     <div class="sa-ds-option sa-model-option sa-ds-option-auto">
@@ -118,7 +127,11 @@
                   aria-label="发送问题"
                   @click="$emit('send')"
                 >
-                  <span class="sa-send-icon" aria-hidden="true"></span>
+                  <span class="sa-send-icon" aria-hidden="true">
+                    <svg class="sa-send-plane" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                      <path d="M9.78 18.65l.28-4.28 7.68-6.95c.33-.29-.07-.45-.51-.16l-9.5 5.98-4.15-1.3c-.9-.28-.92-.9.19-1.33L20.2 3.44c.73-.27 1.37.17 1.13 1.2l-2.8 13.23c-.2 1-.8 1.25-1.63.78l-4.25-3.13-2.05 1.98-1.02 1.15z" />
+                    </svg>
+                  </span>
                 </button>
 
                 <button
@@ -237,56 +250,31 @@ onMounted(() => {
 
 <style scoped>
 .sa-composer {
-  margin: 10px 18px 16px;
-  background: rgba(255, 255, 255, 0.97);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 18px;
-  padding: 10px 11px 11px;
+  width: 100%;
+  margin: 0 0 14px;
+  box-sizing: border-box;
+  background: #FFFFFF;
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  border-radius: 20px;
+  padding: 12px 16px 12px 18px;
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 8px 20px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.03);
+    0 12px 28px rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.025);
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sa-composer.is-running {
-  border-color: rgba(26, 26, 26, 0.14);
-  background:
-    radial-gradient(circle at 12% 0%, rgba(26, 26, 26, 0.05), transparent 28%),
-    radial-gradient(circle at 88% 100%, rgba(26, 26, 26, 0.05), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(243, 244, 246, 0.97) 100%);
+  border-color: rgba(230, 31, 36, 0.14);
+  background: #FFFFFF;
   box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.08),
-    0 0 0 4px rgba(26, 26, 26, 0.04);
+    0 12px 28px rgba(15, 23, 42, 0.075),
+    0 0 0 3px rgba(230, 31, 36, 0.035);
 }
 
 .sa-composer.is-running::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 3px;
-  border-radius: inherit;
-  background:
-    conic-gradient(
-      from var(--sa-composer-angle),
-      rgba(26, 26, 26, 0.12),
-      rgba(26, 26, 26, 0.8),
-      rgba(26, 26, 26, 0.7),
-      rgba(107, 114, 128, 0.7),
-      rgba(26, 26, 26, 0.12)
-    );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0.98;
-  pointer-events: none;
-  animation: sa-composer-marquee 1.9s linear infinite;
+  content: none;
 }
 
 .sa-composer-inner {
@@ -296,85 +284,115 @@ onMounted(() => {
 
 .sa-composer-body {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(260px, max-content) minmax(0, 1fr);
+  gap: 16px;
   align-items: stretch;
 }
 
 .sa-side-dataset-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
-  min-width: 0;
-  padding: 8px 9px;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: #ffffff;
-  box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.03),
-    inset 3px 0 0 #1A1A1A;
+  gap: 10px;
+  min-width: 260px;
+  width: max-content;
+  padding: 8px 0 8px 18px;
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: #FFFFFF;
+  box-shadow: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  min-height: 76px;
+  min-height: 74px;
+}
+
+.sa-side-dataset-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: #F51F19;
+  pointer-events: none;
 }
 
 .sa-side-dataset-card.active,
 .sa-side-dataset-card:hover {
-  border-color: rgba(26, 26, 26, 0.18);
-  box-shadow:
-    0 0 0 1px rgba(26, 26, 26, 0.06),
-    0 12px 24px rgba(0, 0, 0, 0.055),
-    inset 3px 0 0 #1A1A1A;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.sa-side-dataset-card.active::before,
+.sa-side-dataset-card:hover::before {
+  background: #F51F19;
 }
 
 .sa-side-dataset-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 12px;
 }
 
 .sa-side-dataset-label {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
   color: #111827;
   line-height: 1.2;
 }
 
 .sa-side-ds-select {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   margin-top: auto;
 }
 
 .sa-side-ds-select :deep(.el-select__wrapper) {
-  min-height: 31px;
-  padding-left: 28px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  min-height: 32px;
+  min-width: 230px;
+  padding-left: 34px;
+  padding-right: 12px;
+  border-radius: 12px;
+  background: #F3F4F6;
+  box-shadow: none;
 }
 
 .sa-side-dataset-card.active .sa-side-ds-select :deep(.el-select__wrapper) {
-  box-shadow:
-    inset 0 0 0 1px rgba(26, 26, 26, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 3px rgba(26, 26, 26, 0.06);
+  box-shadow: none;
 }
 
 .sa-side-ds-select :deep(.el-select__selected-item),
 .sa-side-ds-select :deep(.el-select__placeholder) {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .sa-side-ds-select :deep(.el-select__selected-item) {
-  max-width: 148px;
+  max-width: none;
+  color: #111827;
+}
+
+.sa-side-ds-select :deep(.el-select__selection) {
+  min-width: 0;
+  width: max-content;
+}
+
+.sa-side-ds-select :deep(.el-select__selected-item span) {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.sa-side-ds-select :deep(.el-select__placeholder) {
+  color: #8B95A1;
 }
 
 .sa-side-ds-select :deep(.el-select__caret) {
-  color: #9CA3AF;
+  color: #111827;
+  font-weight: 900;
 }
 
 .sa-composer-main {
@@ -382,12 +400,12 @@ onMounted(() => {
 }
 
 .sa-ds-mode-chip {
-  height: 16px;
-  padding: 0 6px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.06);
-  color: #6B7280;
-  font-size: 8px;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.74);
+  color: #FFFFFF;
+  font-size: 10px;
   font-weight: 800;
   display: inline-flex;
   align-items: center;
@@ -395,44 +413,29 @@ onMounted(() => {
 }
 
 .sa-ds-mode-chip.active {
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.82);
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 .sa-ds-icon {
   position: absolute;
-  left: 9px;
+  left: 11px;
   top: 50%;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transform: translateY(-50%);
   pointer-events: none;
+  color: #374151;
 }
 
-.sa-ds-icon::before,
-.sa-ds-icon::after {
-  content: '';
-  position: absolute;
-  border-radius: 4px;
-}
-
-.sa-ds-icon::before {
-  inset: 1px;
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
-}
-
-.sa-ds-icon::after {
-  top: 4px;
-  left: 5px;
-  width: 6px;
-  height: 1.5px;
-  background: rgba(107, 114, 128, 0.58);
-  box-shadow: 0 3px 0 rgba(107, 114, 128, 0.38), 0 6px 0 rgba(107, 114, 128, 0.24);
+.sa-ds-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .sa-ds-option {
@@ -451,17 +454,17 @@ onMounted(() => {
   bottom: 5px;
   width: 3px;
   border-radius: 8px;
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.82);
   opacity: 0.7;
 }
 
 .sa-model-option::before {
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.82);
 }
 
 .sa-model-option.is-default-model::before {
   width: 4px;
-  background: #1A1A1A;
+  background: rgba(230, 31, 36, 0.84);
   opacity: 1;
 }
 
@@ -532,41 +535,40 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 76px;
-  padding: 7px 10px 8px 22px;
-  border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #ffffff;
+  min-height: 72px;
+  padding: 14px 126px 12px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background: #FFFFFF;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 8px 16px rgba(0, 0, 0, 0.03);
+    0 0 0 1px rgba(17, 24, 39, 0.015);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .sa-textarea-wrap:focus-within {
-  border-color: rgba(26, 26, 26, 0.22);
+  border-color: rgba(17, 24, 39, 0.09);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 8px 16px rgba(0, 0, 0, 0.04),
-    0 0 0 3px rgba(26, 26, 26, 0.05);
+    0 0 0 3px rgba(17, 24, 39, 0.025);
 }
 
 .sa-composer-status-capsule {
   position: absolute;
   top: 8px;
-  left: calc(100% - 170px);
+  left: calc(100% - 176px);
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  max-width: 250px;
+  gap: 6px;
+  max-width: 210px;
   min-width: 0;
-  padding: 7px 12px;
-  border-radius: 8px;
+  padding: 6px 9px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(17, 24, 39, 0.06);
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.06),
+    0 12px 22px rgba(15, 23, 42, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
   pointer-events: none;
@@ -574,10 +576,10 @@ onMounted(() => {
 }
 
 .sa-composer-status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #1A1A1A;
+  background: rgba(230, 31, 36, 0.82);
   flex: 0 0 auto;
   animation: pulse 1.2s ease-in-out infinite;
 }
@@ -588,14 +590,14 @@ onMounted(() => {
 }
 
 .sa-composer-status-capsule.error .sa-composer-status-dot {
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.88);
   animation: none;
 }
 
 .sa-composer-status-text {
   min-width: 0;
   color: #374151;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
@@ -612,119 +614,126 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.sa-textarea-leading {
-  position: absolute;
-  left: 10px;
-  top: 12px;
-  width: 12px;
-  height: 12px;
-  pointer-events: none;
-}
-
-.sa-textarea-leading::before,
-.sa-textarea-leading::after {
-  content: '';
-  position: absolute;
-  border-radius: 8px;
-  background: rgba(26, 26, 26, 0.75);
-}
-
-.sa-textarea-leading::before {
-  inset: 4px;
-}
-
-.sa-textarea-leading::after {
-  inset: 0;
-  opacity: 0.28;
-}
-
 .sa-textarea {
+  display: block;
+  width: 100%;
   flex: 1;
   border: none;
-  outline: none;
-  font-size: 13px;
-  min-height: 24px;
+  outline: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none !important;
+  font-size: 14px;
+  min-height: 20px;
   max-height: 132px;
   resize: none;
   line-height: 1.45;
   color: #111827;
   background: transparent;
+  caret-color: #E61F24;
+  margin-top: 0;
+}
+
+.sa-textarea:focus,
+.sa-textarea:focus-visible {
+  border: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .sa-textarea::placeholder {
-  color: #9CA3AF;
-  font-size: 13px;
+  color: #9AA3AF;
+  font-size: 14px;
+  font-weight: 680;
 }
 
 .sa-composer-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   margin-top: auto;
+  min-height: 36px;
 }
 
 .sa-composer-hint {
-  font-size: 10px;
+  font-size: 11px;
   color: #6B7280;
   line-height: 1.2;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
 }
 
 .sa-composer-actions {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   margin-left: auto;
+  height: 36px;
 }
 
 .sa-model-corner-select {
-  width: 118px;
+  width: 120px;
 }
 
 .sa-model-corner-select :deep(.el-select__wrapper) {
-  min-height: 31px;
-  padding-left: 30px;
-  border-radius: 9px;
+  min-height: 36px;
+  padding-left: 34px;
+  padding-right: 12px;
+  border-radius: 999px;
   background: #ffffff;
   box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.08),
-    0 6px 12px rgba(0, 0, 0, 0.035);
+    inset 0 0 0 1px #E5E7EB;
 }
 
 .sa-model-corner-select :deep(.el-select__selected-item),
 .sa-model-corner-select :deep(.el-select__placeholder) {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.2;
+  color: #111827;
 }
 
 .sa-model-icon {
   position: absolute;
-  left: 9px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: linear-gradient(180deg, #F8F9FA 0%, #ffffff 100%);
-  border: 1px solid rgba(26, 26, 26, 0.14);
-  color: #1A1A1A;
-  font-size: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(230, 31, 36, 0.16);
+  color: #E61F24;
+  color: #111827;
+  box-shadow: none;
   pointer-events: none;
+}
+
+.sa-model-icon svg {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .sa-send-btn,
 .sa-stop-btn {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(245, 31, 25, 0.18);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -733,16 +742,25 @@ onMounted(() => {
   overflow: hidden;
   color: #ffffff;
   box-shadow:
-    0 8px 16px rgba(0, 0, 0, 0.13),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    0 4px 12px rgba(245, 31, 25, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .sa-send-btn {
-  background: #1A1A1A;
+  background: #F51F19;
+}
+
+.sa-send-btn:hover {
+  background: #DC1C17;
+  box-shadow:
+    0 6px 16px rgba(245, 31, 25, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .sa-stop-btn {
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.88);
 }
 
 .sa-send-icon,
@@ -753,38 +771,22 @@ onMounted(() => {
 }
 
 .sa-send-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  transform: translate(-1px, 0.5px);
 }
 
-.sa-send-icon::before,
-.sa-send-icon::after {
-  content: '';
-  position: absolute;
-  box-sizing: border-box;
-}
-
-.sa-send-icon::before {
-  inset: 2px 1px 2px 2px;
-  background: currentColor;
-  border-radius: 2px;
-  clip-path: polygon(0 7%, 100% 50%, 0 93%, 24% 57%, 56% 50%, 24% 43%);
-}
-
-.sa-send-icon::after {
-  left: 5px;
-  top: 8px;
-  width: 7px;
-  height: 1.5px;
-  background: rgba(255, 255, 255, 0.45);
-  border-radius: 8px;
-  transform: rotate(-8deg);
+.sa-send-icon svg,
+.sa-send-plane {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .sa-stop-icon {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2.5px;
   background: currentColor;
 }
 
@@ -795,11 +797,11 @@ onMounted(() => {
   height: 18px;
   padding: 0 7px;
   border-radius: 8px;
-  background: rgba(26, 26, 26, 0.08);
-  color: #1A1A1A;
+  background: rgba(230, 31, 36, 0.08);
+  color: rgba(230, 31, 36, 0.88);
   font-size: 10px;
   font-weight: 800;
-  box-shadow: inset 0 0 0 1px rgba(26, 26, 26, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(230, 31, 36, 0.14);
 }
 
 @property --sa-composer-angle {
@@ -814,11 +816,13 @@ onMounted(() => {
 
 @media (max-width: 900px) {
   .sa-composer {
-    margin: 10px 14px 14px;
+    margin: 0 0 10px;
+    padding: 12px;
   }
 
   .sa-composer-body {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .sa-side-dataset-card {
@@ -836,7 +840,12 @@ onMounted(() => {
 
   .sa-composer-actions {
     width: 100%;
+    position: static;
     justify-content: space-between;
+  }
+
+  .sa-textarea-wrap {
+    padding-right: 14px;
   }
 
   .sa-model-corner-select {

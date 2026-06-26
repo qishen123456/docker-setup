@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 from dataset_dimension_profiles import get_dataset_profile
@@ -21,8 +22,24 @@ class DatasetRouteSkill:
         "城市分公司",
     }
 
+    # 通用指标/统计口径词，不适合作为数据集判别依据
+    METRIC_ONLY_ALIASES = {
+        "达成率", "完成率", "开单", "开单金额", "年度开单", "销售金额", "销售",
+        "任务", "任务金额", "总任务", "年度任务", "任务达成", "剩余任务", "缺口", "差额",
+        "实际", "实际金额", "完成情况", "完成金额", "业绩", "指标", "数据", "分析", "结果",
+    }
+    # 通用组织/层级词，单独命中不能区分数据集
+    GENERIC_ALIASES = {
+        "事业部", "分公司", "代表处", "业务部", "城市公司", "城市分公司",
+        "业务员", "业务代表", "公司", "部门", "团队",
+    }
+
     def __init__(self, repository):
         self.repository = repository
+
+    @staticmethod
+    def _compact(text: str) -> str:
+        return re.sub(r"\s+", "", str(text or "")).lower()
 
     @staticmethod
     def _profile_supported_levels(profile: Dict[str, Any]) -> set[str]:
@@ -57,7 +74,45 @@ class DatasetRouteSkill:
         return score
 
     @staticmethod
-    def score(question: str, dataset: Dict[str, Any]) -> int:
+    def _alias_score(question: str, dataset: Dict[str, Any]) -> int:
+        """基于数据集名称、业务域、同义词的子串匹配打分。"""
+        q = DatasetRouteSkill._compact(question)
+        if not q:
+            return 0
+
+        alias_items = [
+            (str(dataset.get("dataset_name") or ""), 100),
+            (str(dataset.get("business_domain") or ""), 98),
+        ]
+        for synonym in dataset.get("synonyms") or []:
+            alias_items.append((str(synonym or ""), 95))
+
+        score = 0
+        subject_suffixes = ("事业部", "分公司", "代表处", "业务部")
+        for alias, base_score in alias_items:
+            compact_alias = DatasetRouteSkill._compact(alias)
+            if len(compact_alias) < 2:
+                continue
+            if compact_alias in DatasetRouteSkill.METRIC_ONLY_ALIASES or compact_alias in DatasetRouteSkill.GENERIC_ALIASES:
+                continue
+            if compact_alias in q:
+                score = max(score, base_score)
+                continue
+            # 如果别名带事业部/分公司等业务主体后缀，前缀命中也加分
+            for suffix in subject_suffixes:
+                if compact_alias.endswith(suffix):
+                    prefix = compact_alias[: -len(suffix)]
+                    if len(prefix) >= 2 and prefix in q:
+                        score = max(score, 90)
+                    break
+        return score
+
+    @classmethod
+    def score(cls, question: str, dataset: Dict[str, Any]) -> int:
+        alias_score = cls._alias_score(question, dataset)
+        if alias_score >= 90:
+            return alias_score + cls._profile_level_score(question, dataset)
+
         query_tokens = tokens(question)
         text = " ".join(
             [
@@ -71,7 +126,7 @@ class DatasetRouteSkill:
         overlap = len(query_tokens.intersection(dataset_tokens))
         direct = sum(18 for token in query_tokens if token and token in text.lower())
         name_hit = 35 if str(dataset.get("dataset_name") or "") and str(dataset.get("dataset_name")) in question else 0
-        return overlap * 12 + direct + name_hit + DatasetRouteSkill._profile_level_score(question, dataset)
+        return alias_score + overlap * 12 + direct + name_hit + cls._profile_level_score(question, dataset)
 
     def run(self, question: str, preferred_dataset_ids=None, limit: int = 3) -> List[Dict[str, Any]]:
         preferred = set(as_int_list(preferred_dataset_ids))

@@ -81,59 +81,6 @@
         "row_filter_note": ""
       },
       "note": ""
-    },
-    "64": {
-      "dataset_id": 64,
-      "mode": "org_tree",
-      "tree_type_id": "tree_3991b9e4de6d",
-      "tree_type_ids": [
-        "tree_3991b9e4de6d"
-      ],
-      "organization_node_ids": [
-        "node_697e76982cd7",
-        "node_3c33a259eb8e",
-        "node_ada6e8d38ce6",
-        "node_e3363e1962f4",
-        "node_9b5374a086ec",
-        "node_1ed70722a8e4",
-        "node_4c87472449cf",
-        "node_fd3fdc54d540",
-        "node_5e935dfaeb01",
-        "node_dabee0670c0e",
-        "node_bd07ce4168cd",
-        "node_9d06ef77a918",
-        "node_572251bc4961",
-        "node_fd939efceec4"
-      ],
-      "organization_codes": [
-        "7c38ff2d14dd5515",
-        "1f5bc53566bfa5b2",
-        "4c92717a393b3248",
-        "e26cc888231cb3c9",
-        "1bbd2a36b2fb686f",
-        "4b66949a1g2g1e8c",
-        "196873fd1d2cfg85",
-        "843a34aa6g3gg763",
-        "b45ddd151517eag6",
-        "e99798612e98b4d6",
-        "bg18ddb2efb2gf61",
-        "egg37cg26bafg5a9",
-        "aa34g4b218a28bgf",
-        "egcc258a8d9c811f"
-      ],
-      "allowed_roles": [],
-      "allowed_departments": [],
-      "allowed_positions": [],
-      "allowed_employee_ids": [],
-      "allowed_union_ids": [],
-      "scope": {
-        "organization_field": "组织编码",
-        "organization_values": [],
-        "company_field": "",
-        "company_values": [],
-        "row_filter_note": ""
-      },
-      "note": "消费者事业部标准数据集权限"
     }
   }
 }

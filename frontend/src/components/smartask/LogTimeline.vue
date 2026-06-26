@@ -539,10 +539,10 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sa-timeline {
-  padding: 12px 13px 14px;
+  padding: 18px 18px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .sa-empty {
@@ -550,39 +550,82 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 46px 16px;
+  min-height: 520px;
+  padding: 72px 20px 56px;
   color: var(--text-muted);
   text-align: center;
 }
 
 .sa-empty-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  border: 1px solid rgba(26, 26, 26, 0.12);
-  background: linear-gradient(180deg, #F8F9FA 0%, #ffffff 100%);
+  position: relative;
+  width: 148px;
+  height: 120px;
+  border-radius: 28px;
+  border: 0;
+  background: transparent;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 12px;
-  margin-bottom: 9px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 34px 34px 0;
+  margin-bottom: 26px;
+  box-shadow: none;
 }
 
 .sa-empty-icon span {
-  height: 2px;
-  border-radius: 8px;
-  background: rgba(26, 26, 26, 0.4);
+  position: relative;
+  z-index: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.1);
 }
 
 .sa-empty-icon span:nth-child(1) { width: 70%; }
 .sa-empty-icon span:nth-child(2) { width: 100%; }
 .sa-empty-icon span:nth-child(3) { width: 55%; }
 
+.sa-empty-icon::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 20px;
+  height: 86px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 250, 0.96) 100%);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.055),
+    inset 0 -4px 0 rgba(230, 31, 36, 0.06);
+  transform: perspective(260px) rotateX(18deg);
+}
+
+.sa-empty-icon::after {
+  content: '';
+  position: absolute;
+  right: 19px;
+  bottom: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 6px solid rgba(230, 31, 36, 0.68);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 24px rgba(230, 31, 36, 0.12);
+}
+
+.sa-empty p {
+  margin: 0;
+  color: #111827;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .sa-log-node {
   position: relative;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   padding-bottom: 1px;
 }
 
@@ -593,7 +636,7 @@ onBeforeUnmount(() => {
   top: 16px;
   bottom: -16px;
   width: 1px;
-  background: #E5E7EB;
+  background: linear-gradient(180deg, rgba(229, 231, 235, 1) 0%, rgba(229, 231, 235, 0.32) 100%);
 }
 
 .sa-node-marker {
@@ -602,7 +645,7 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  margin-top: 11px;
+  margin-top: 13px;
   flex-shrink: 0;
   background: #D1D5DB;
   border: 2px solid #fff;
@@ -638,8 +681,8 @@ onBeforeUnmount(() => {
 .sa-node-header {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 0;
+  gap: 8px;
+  padding: 8px 0;
   cursor: pointer;
   background: transparent;
   transition: background 0.1s;
@@ -657,11 +700,11 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-icon {
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #FEF2F2 0%, #F3F4F6 100%);
-  border: 1px solid rgba(26, 26, 26, 0.14);
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #F8F9FA 0%, #FFFFFF 100%);
+  border: 1px solid rgba(17, 24, 39, 0.12);
   position: relative;
   flex-shrink: 0;
 }
@@ -721,8 +764,8 @@ onBeforeUnmount(() => {
 
 .sa-node-title {
   flex: 1;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 700;
   color: #111827;
   line-height: 1.4;
 }
@@ -732,9 +775,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 4px;
   justify-content: flex-end;
-  min-width: 58px;
+  min-width: 64px;
   padding: 0 1px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   letter-spacing: 0.01em;
@@ -766,12 +809,12 @@ onBeforeUnmount(() => {
 }
 
 .sa-node-body {
-  margin: 2px 0 0;
-  padding: 9px 11px;
-  background: #ffffff;
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.035);
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.035);
 }
 
 .sa-node-body-head {

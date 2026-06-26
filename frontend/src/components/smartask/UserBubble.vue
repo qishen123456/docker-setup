@@ -33,7 +33,24 @@
       </div>
     </div>
     <div class="sa-user-avatar" aria-label="用户头像">
-      <span class="sa-user-avatar-mark">U</span>
+      <svg class="sa-user-avatar-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="userAuraChat" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#475569" />
+            <stop offset="100%" stop-color="#CBD5E1" />
+          </linearGradient>
+          <linearGradient id="innerBgChatUser" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF" />
+            <stop offset="100%" stop-color="#F8FAFC" />
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r="45" stroke="url(#userAuraChat)" stroke-width="2.5" />
+        <circle cx="50" cy="50" r="40" fill="url(#innerBgChatUser)" />
+        <circle cx="50" cy="50" r="32" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="2 2" />
+        <circle cx="50" cy="38" r="10" fill="#475569" />
+        <path d="M50 54 L25 76 L75 76 Z" fill="#64748B" opacity="0.85"/>
+        <path d="M50 54 L36 76 L64 76 Z" fill="#475569"/>
+      </svg>
     </div>
   </div>
 </template>
@@ -77,7 +94,7 @@ defineEmits(['copy', 'edit', 'rerun'])
   align-items: flex-start;
   gap: 10px;
   justify-content: flex-end;
-  margin: 14px 0;
+  margin: 18px 0;
 }
 
 .sa-user-main {
@@ -88,43 +105,56 @@ defineEmits(['copy', 'edit', 'rerun'])
 }
 
 .sa-user-avatar {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   position: relative;
-  overflow: hidden;
-  background: rgba(26, 24, 22, 0.94);
-  color: #FFFFFF;
-  border-radius: 10px;
+  overflow: visible;
+  background: transparent;
+  color: #475569;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: none;
-  box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 0;
+  box-shadow: none;
 }
 
-.sa-user-avatar-mark {
-  position: relative;
-  z-index: 1;
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: 0;
+.sa-user-avatar::before {
+  content: none;
+}
+
+.sa-user-avatar::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #E61F24;
+  box-shadow:
+    0 0 0 3px #FFFFFF,
+    0 4px 9px rgba(230, 31, 36, 0.18);
+}
+
+.sa-user-avatar-svg {
+  width: 44px;
+  height: 44px;
+  display: block;
 }
 
 .sa-user-bubble {
-  padding: 12px 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #FDFBF9 100%);
+  padding: 14px 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #FAFBFC 100%);
   color: #111827;
-  border: 1px solid rgba(26, 24, 22, 0.08);
-  border-radius: 18px 18px 6px 18px;
-  font-size: 13px;
-  line-height: 1.62;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  border-radius: 20px 20px 8px 20px;
+  font-size: 14px;
+  line-height: 1.68;
   word-break: break-word;
   box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.04),
+    0 16px 28px rgba(15, 23, 42, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 

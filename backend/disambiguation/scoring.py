@@ -64,11 +64,20 @@ def needs_llm_arbitration(question: str, candidate_contexts: List[CandidateConte
         return False
     scores = score_snapshot(candidate_contexts)
     text = str(question or "")
+    has_explicit_scope = _question_has_explicit_scope(question, candidate_contexts)
+    # 只有当头部候选没拉开差距，或亚军分数也很高（>=75）且差距<20 时才需要仲裁
     has_multi_dataset_risk = len(candidate_contexts) >= 2 and (
-        scores["top_score"] < 70 or scores["margin"] < 12 or scores["runner_up_score"] >= 60
+        scores["top_score"] < 70
+        or scores["margin"] < 12
+        or (scores["runner_up_score"] >= 75 and scores["margin"] < 20)
     )
     has_context_reference = bool(history) and any(token in text for token in ("那", "它", "这个", "上面", "继续", "也", "相比"))
-    has_scope_risk = any(token in text for token in ("哪个口径", "口径", "分公司", "代表处", "条线", "事业部", "部门", "团队")) and scores["margin"] < 18
+    # 含层级词时，如果已经明确指定了数据集/业务域，不再因为 margin 偏低强制仲裁
+    has_scope_risk = (
+        not has_explicit_scope
+        and any(token in text for token in ("哪个口径", "口径", "分公司", "代表处", "条线", "事业部", "部门", "团队"))
+        and scores["margin"] < 25
+    )
     # 关键规则：多个候选数据集且问题未明确指定数据集/组织范围时，必须交由 LLM 仲裁并推荐
-    lacks_explicit_scope = len(candidate_contexts) >= 2 and not _question_has_explicit_scope(question, candidate_contexts)
+    lacks_explicit_scope = len(candidate_contexts) >= 2 and not has_explicit_scope
     return has_multi_dataset_risk or has_context_reference or has_scope_risk or lacks_explicit_scope

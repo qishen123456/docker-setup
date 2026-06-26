@@ -290,6 +290,16 @@ def _layout_template(mode: str) -> str:
     return layout_for_scene(mode)
 
 
+def _nodes_match_requested_levels(nodes: List[Dict[str, Any]], requested_level_set: set) -> bool:
+    if not nodes or not requested_level_set:
+        return False
+    for node in nodes:
+        level_value = _canonical_level_value(node.get("levelValue") or node.get("levelName"))
+        if level_value not in requested_level_set:
+            return False
+    return True
+
+
 def _effective_thresholds(config: Dict[str, Any]) -> Dict[str, float]:
     generic_benchmark = _to_float(config.get("benchmarkThreshold"))
     return {
@@ -606,7 +616,7 @@ def build_report_spec(
             node for node in sorted(nodes, key=lambda item: len(item.get("name") or ""), reverse=True)
             if node.get("name") and _question_mentions_node(question or "", node["name"])
         ]
-    explicit_comparative = len(matched_nodes) > 1 or bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
+    explicit_comparative = len(matched_nodes) > 1 or bool(re.search(r"对比|比较|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
     requested_levels = _requested_level_values(question or "", config)
     query_target_level = _canonical_level_value(query_intent.get("target_level"))
     if query_target_level and query_target_level not in requested_levels:
@@ -658,6 +668,13 @@ def build_report_spec(
     if not comparison_nodes and query_intent.get("intent") == "ranking":
         comparison_nodes = [node for node in nodes if node.get("name")]
     comparison_nodes = [node for node in comparison_nodes if node.get("name")]
+    if (
+        query_intent.get("intent") == "filter"
+        and requested_level_set
+        and _nodes_match_requested_levels(nodes, requested_level_set)
+    ):
+        comparison_nodes = [node for node in nodes if node.get("name")]
+        focus_node = None
     if requested_levels:
         if explicit_comparative and len(comparison_nodes) > 1:
             scoped_nodes = []
@@ -684,6 +701,8 @@ def build_report_spec(
             comparison_nodes = level_nodes
             if len(level_nodes) == 1:
                 focus_node = level_nodes[0]
+            elif query_intent.get("intent") == "filter":
+                focus_node = None
     low_first = (
         str(query_intent.get("direction") or "").lower() == "asc"
         if query_intent.get("intent") == "ranking"

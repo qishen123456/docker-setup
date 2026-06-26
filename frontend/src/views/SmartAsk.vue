@@ -5,17 +5,20 @@
         <!-- 📌 左侧/中间 对话区-->
         <div class="sa-chat-panel" :class="{ 'is-detail-hidden': !detailPanelVisible }">
           <!-- 头部组件-->
-          <ChatHeader
-            :show-panel="detailPanelVisible"
-            :allow-toggle-panel="featureAccess.debug_execution_trace"
-            :allow-new-chat="featureAccess.smart_new_chat"
-            @toggle-panel="togglePanel"
-            @new-chat="handleNewChat"
-            @show-history="focusSidebarHistory"
-          />
+          <div class="sa-content-track sa-header-track">
+            <ChatHeader
+              :show-panel="detailPanelVisible"
+              :allow-toggle-panel="featureAccess.debug_execution_trace"
+              :allow-new-chat="featureAccess.smart_new_chat"
+              @toggle-panel="togglePanel"
+              @new-chat="handleNewChat"
+              @show-history="focusSidebarHistory"
+            />
+          </div>
 
           <!-- 会话滚动区-->
           <div class="sa-chat-body" ref="chatBodyRef">
+            <div class="sa-content-track sa-chat-content">
             <!-- 欢迎首屏 -->
             <WelcomeScreen
               v-if="messages.length === 0"
@@ -47,7 +50,22 @@
                 <div v-else class="sa-ai-wrap">
                   <div class="sa-ai-meta">
                     <div class="sa-ai-avatar" aria-label="安吉尔经营分析助手头像">
-                      <img src="/angel-logo.png" alt="ANGEL" class="sa-ai-avatar-img" />
+                      <svg class="sa-ai-avatar-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                        <defs>
+                          <linearGradient id="aiAuraChat" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#F51F19" />
+                            <stop offset="100%" stop-color="#FFA07A" />
+                          </linearGradient>
+                          <linearGradient id="innerBgChatAi" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#FFFFFF" />
+                            <stop offset="100%" stop-color="#F8FAFC" />
+                          </linearGradient>
+                        </defs>
+                        <circle cx="50" cy="50" r="45" stroke="url(#aiAuraChat)" stroke-width="2.5" />
+                        <circle cx="50" cy="50" r="40" fill="url(#innerBgChatAi)" />
+                        <circle cx="50" cy="50" r="32" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="2 2" />
+                        <path d="M50 31 L25 73 L37 73 L50 52 L63 73 L75 73 Z" fill="#F51F19" />
+                      </svg>
                     </div>
                     <span class="sa-ai-name">安吉尔经营分析顾问</span>
                   </div>
@@ -254,31 +272,34 @@
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
           <!-- 底部输入区-->
-          <ComposerArea
-            :class="{ 'sa-composer-narrow': !detailPanelVisible }"
-            v-model:query="query"
-            v-model:dataset-id="datasetId"
-            v-model:model-id="modelId"
-            :datasets="datasets"
-            :ai-models="aiModels"
-            :is-running="isRunning"
-            :allow-send="featureAccess.smart_send_question"
-            :allow-stop="featureAccess.smart_stop_run"
-            :allow-dataset-select="featureAccess.smart_dataset_select"
-            :allow-model-select="featureAccess.smart_model_select"
-            :status-text="isRunning || session.state.status === 'completed' ? statusBarText : ''"
-            :status-elapsed="isRunning ? `${elapsed}s` : ''"
-            :status-tone="session.state.status"
-            :status-flow-label="activeAskFlowLabel"
-            :status-flow-class="activeAskFlowClass"
-            :status-flow-hint="activeAskFlowLabel ? activeAskFlowHint : ''"
-            @send="handleSend"
-            @stop="handleStop"
-            @dataset-change="handleDatasetChange"
-          />
+          <div class="sa-content-track sa-composer-track">
+            <ComposerArea
+              :class="{ 'sa-composer-narrow': !detailPanelVisible }"
+              v-model:query="query"
+              v-model:dataset-id="datasetId"
+              v-model:model-id="modelId"
+              :datasets="datasets"
+              :ai-models="aiModels"
+              :is-running="isRunning"
+              :allow-send="featureAccess.smart_send_question"
+              :allow-stop="featureAccess.smart_stop_run"
+              :allow-dataset-select="featureAccess.smart_dataset_select"
+              :allow-model-select="featureAccess.smart_model_select"
+              :status-text="isRunning || session.state.status === 'completed' ? statusBarText : ''"
+              :status-elapsed="isRunning ? `${elapsed}s` : ''"
+              :status-tone="session.state.status"
+              :status-flow-label="activeAskFlowLabel"
+              :status-flow-class="activeAskFlowClass"
+              :status-flow-hint="activeAskFlowLabel ? activeAskFlowHint : ''"
+              @send="handleSend"
+              @stop="handleStop"
+              @dataset-change="handleDatasetChange"
+            />
+          </div>
         </div>
 
         <!-- ██ 右侧 执行详情面板 -->
@@ -5463,15 +5484,15 @@ onUnmounted(() => {
 /* ===== 页面布局 ===== */
 .sa-page {
   height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(26, 26, 26, 0.05), transparent 30%),
-    linear-gradient(180deg, #F8F9FA 0%, #FFFFFF 100%);
+  background: #F4F5F7;
   overflow: hidden;
   font-family: var(--font-sans, 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif);
   font-size: 14px;
   color: var(--text-title);
-  padding: 12px;
+  padding: 14px;
   box-sizing: border-box;
+  --sa-content-width: 960px;
+  --sa-content-gutter: 24px;
 }
 
 .sa-page :is(button, div, span) {
@@ -5496,11 +5517,12 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.055);
-  backdrop-filter: blur(14px);
+  gap: 0;
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  border-radius: 24px;
+  background: #FFFFFF;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.055);
+  backdrop-filter: none;
 }
 
 .sa-workspace.is-detail-hidden {
@@ -5515,59 +5537,111 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: #FFFFFF;
+  border-radius: 24px 0 0 24px;
 }
 
 .sa-chat-panel.is-detail-hidden {
-  max-width: 960px;
+  max-width: none;
   width: 100%;
   margin: 0 auto;
+  border-radius: 24px;
+}
+
+.sa-content-track {
+  width: min(100% - calc(var(--sa-content-gutter) * 2), var(--sa-content-width));
+  max-width: var(--sa-content-width);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+.sa-header-track {
+  flex: 0 0 auto;
+}
+
+.sa-header-track :deep(.sa-header) {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sa-chat-content {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sa-composer-track {
+  flex: 0 0 auto;
 }
 
 /* 聊天区 */
 .sa-chat-body {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 16px 8px;
+  padding: 0 0 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  background: #FFFFFF;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-chat-body {
-  padding-left: clamp(14px, 2vw, 28px);
-  padding-right: clamp(14px, 2vw, 28px);
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* 消息 */
 .sa-msg-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
 }
 .sa-msg-wrap {
   animation: sa-fadein 0.3s ease-out;
-  max-width: 920px;
+  width: 100%;
+  max-width: var(--sa-content-width);
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-list {
-  max-width: 920px;
-  margin: 0 auto;
   width: 100%;
-  align-items: center;
+  align-items: stretch;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-msg-wrap {
-  width: min(100%, 920px);
-  max-width: 920px;
+  width: 100%;
+  max-width: var(--sa-content-width);
 }
 
-.sa-chat-panel.is-detail-hidden :deep(.sa-composer) {
-  max-width: 920px;
-  width: min(calc(100% - 24px), 920px);
-  margin-left: auto;
-  margin-right: auto;
+.sa-chat-panel :deep(.sa-composer) {
+  width: 100%;
+  max-width: none;
+  margin: 0 0 14px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-composer-body) {
+  grid-template-columns: minmax(260px, max-content) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-side-dataset-card),
+.sa-chat-panel.is-detail-hidden :deep(.sa-textarea-wrap) {
+  min-height: 72px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-side-dataset-label) {
+  font-size: 15px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-textarea) {
+  font-size: 14px;
+}
+
+.sa-chat-panel.is-detail-hidden :deep(.sa-textarea::placeholder) {
+  font-size: 14px;
 }
 @keyframes sa-fadein {
   from { opacity: 0; transform: translateY(16px); }
@@ -5578,48 +5652,67 @@ onUnmounted(() => {
 .sa-ai-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .sa-ai-meta {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
 }
 .sa-ai-avatar {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   position: relative;
-  overflow: hidden;
-  background: rgba(26, 24, 22, 0.94);
-  border-radius: 11px;
+  overflow: visible;
+  background: transparent;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.sa-ai-avatar::before {
+  content: none;
+}
+
+.sa-ai-avatar::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10B981;
   box-shadow:
-    0 6px 16px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  padding: 3px;
+    0 0 0 3px #FFFFFF,
+    0 4px 9px rgba(16, 185, 129, 0.18);
 }
 
 .sa-ai-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
+  display: none;
+}
+
+.sa-ai-avatar-svg {
+  width: 44px;
+  height: 44px;
+  display: block;
 }
 .sa-ai-name {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: #111827;
 }
 .sa-ai-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-left: 39px;
-  max-width: 760px;
+  gap: 12px;
+  padding-left: 54px;
+  max-width: 900px;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-ai-cards {
@@ -5629,11 +5722,11 @@ onUnmounted(() => {
 .sa-result-chain {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
-  padding-top: 10px;
+  padding-top: 14px;
   margin-top: 1px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  border-top: 1px dashed rgba(17, 24, 39, 0.1);
   animation: sa-curtain-open 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: top center;
 }
@@ -5647,13 +5740,14 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   max-width: 720px;
-  padding: 28px 20px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px dashed rgba(0, 0, 0, 0.12);
+  padding: 30px 24px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 249, 250, 0.88) 100%);
+  border: 1px dashed rgba(17, 24, 39, 0.1);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.04);
   text-align: center;
 }
 
@@ -5664,14 +5758,14 @@ onUnmounted(() => {
 }
 
 .sa-result-empty-title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-title, #111827);
 }
 
 .sa-result-empty-desc {
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.75;
   color: var(--text-secondary, #6B7280);
   max-width: 520px;
 }
@@ -6278,103 +6372,109 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.92);
+  border-left: 1px solid rgba(17, 24, 39, 0.07);
+  background: #FFFFFF;
+  box-shadow: none;
   flex-shrink: 0;
 }
 .sa-panel-header {
-  padding: 16px 16px 12px;
+  padding: 28px 28px 24px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.07);
+  background: #FFFFFF;
   flex-shrink: 0;
 }
 .sa-panel-heading {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 12px;
   min-width: 0;
 }
 .sa-panel-eyebrow {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #1A1A1A;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #E61F24;
 }
 .sa-panel-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .sa-panel-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 21px;
+  font-weight: 800;
   color: #111827;
 }
 .sa-panel-state {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  padding: 0 9px;
+  height: 28px;
+  padding: 0 12px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 600;
-  background: #F3F4F6;
+  font-weight: 700;
+  background: rgba(17, 24, 39, 0.06);
   color: #6B7280;
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.05);
 }
 .sa-panel-state.running {
-  background: #1A1A1A;
-  color: #ffffff;
+  background: rgba(17, 24, 39, 0.88);
+  color: rgba(255, 255, 255, 0.96);
 }
 .sa-panel-state.completed {
-  background: #ECFDF5;
-  color: #10B981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
 }
 .sa-panel-state.canceled {
-  background: #FFFBEB;
+  background: rgba(245, 158, 11, 0.12);
   color: #B45309;
 }
 .sa-panel-state.error {
-  background: #FEF2F2;
+  background: rgba(230, 31, 36, 0.1);
   color: #E61F24;
 }
 .sa-panel-state.waiting_confirmation {
-  background: #FFFBEB;
+  background: rgba(245, 158, 11, 0.12);
   color: #F59E0B;
 }
 .sa-panel-desc {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.55;
-  color: #9CA3AF;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #7B8491;
+  max-width: 360px;
 }
 .sa-panel-close {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  background: rgba(255, 255, 255, 0.92);
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: none;
 }
 
 .sa-panel-close:hover {
   color: #1A1A1A;
-  border-color: rgba(26, 26, 26, 0.18);
-  background: #F3F4F6;
+  border-color: rgba(230, 31, 36, 0.14);
+  background: rgba(255, 255, 255, 1);
 }
 .sa-panel-content {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 10px;
+  padding: 6px 0 14px;
   overscroll-behavior: contain;
 }
 
@@ -6394,7 +6494,7 @@ onUnmounted(() => {
 }
 .sa-kpi-shelf {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .sa-side-section-head {
@@ -6421,24 +6521,28 @@ onUnmounted(() => {
   height: 22px;
   padding: 0 9px;
   border-radius: 999px;
-  background: #F8F9FA;
+  background: rgba(255, 255, 255, 0.88);
   color: #6B7280;
   font-size: 10px;
   font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.06);
 }
 .sa-kpi-card {
   flex: 1;
   min-width: 120px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  padding: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 16px;
+  padding: 14px;
   text-align: center;
-  background: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(251, 252, 253, 0.96) 100%);
+  box-shadow:
+    0 14px 24px rgba(15, 23, 42, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .sa-kpi-card.is-explained {
   min-height: 92px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   text-align: left;
 }
 
@@ -6483,33 +6587,33 @@ onUnmounted(() => {
 
 .sa-kpi-value {
   font-size: 22px;
-  font-weight: 700;
-  color: #1A1A1A;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.92);
   line-height: 1.2;
 }
 .sa-kpi-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .sa-kpi-hint {
-  margin-top: 7px;
+  margin-top: 8px;
   color: #6B7280;
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.55;
 }
 .sa-main-chart {
   height: 208px;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(17, 24, 39, 0.08);
 }
 .sa-insight-metric {
   min-height: 164px;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
   background: linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%);
   display: flex;
   flex-direction: column;
@@ -6521,18 +6625,18 @@ onUnmounted(() => {
 .sa-insight-metric-value {
   font-size: 25px;
   line-height: 1.2;
-  font-weight: 700;
-  color: #1A1A1A;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.92);
 }
 .sa-insight-metric-label {
   margin-top: 7px;
-  font-size: 11px;
-  color: #9CA3AF;
+  font-size: 12px;
+  color: #6B7280;
 }
 .sa-preview-table {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(17, 24, 39, 0.06);
 }
 .sa-report-md {
   font-size: 13px;
@@ -6572,9 +6676,9 @@ onUnmounted(() => {
   height: 34px;
   padding: 0 16px;
   border-radius: 999px;
-  background: #1A1A1A;
+  background: rgba(17, 24, 39, 0.9);
   color: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(17, 24, 39, 0.14);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
@@ -6584,13 +6688,13 @@ onUnmounted(() => {
   gap: 7px;
   transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow:
-    0 10px 18px rgba(0, 0, 0, 0.12),
+    0 10px 18px rgba(15, 23, 42, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 .sa-primary-btn:hover {
   transform: translateY(-1px) scale(1.01);
   box-shadow:
-    0 12px 22px rgba(0, 0, 0, 0.14),
+    0 12px 22px rgba(15, 23, 42, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
