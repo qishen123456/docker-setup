@@ -1835,14 +1835,23 @@ const secondaryRelativeTier = (row) => {
 }
 
 const secondaryRateTone = (row) => {
-  // 排名类问题按「方向」统一着色，避免 top3 里出现红/黄/绿混排
+  // 排名类问题着色：
+  // - 明确方向（前/高/后/低/both）时按方向统一着色，保持头部/尾部语义一致
+  // - 中性排名（如“分公司业绩排名”）按相对名次分层：前1/3绿、中1/3黄、后1/3红
   if (isRankingQuestion.value) {
     if (rankSides.value === 'both') {
       if (row.rankGroup?.includes('后')) return 'is-rank-bottom'
       if (row.rankGroup?.includes('前')) return 'is-rank-top'
     }
-    if (isNeutralRankingQuestion.value) return 'is-rank-neutral'
     if (isNegativeRankingQuestion.value || rankDirection.value === 'asc') return 'is-rank-bottom'
+    if (isPositiveRankingQuestion.value) return 'is-rank-top'
+    if (isNeutralRankingQuestion.value) {
+      const tier = secondaryRelativeTier(row)
+      if (tier === 'leader') return 'is-success'
+      if (tier === 'steady') return 'is-warn'
+      if (tier === 'pressure') return 'is-danger'
+      return 'is-rank-neutral'
+    }
     return 'is-rank-top'
   }
   const value = secondaryMetricValue(row)
