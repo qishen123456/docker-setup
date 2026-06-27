@@ -2273,39 +2273,61 @@ LIMIT 10000
         route = self._safe_dict(route)
         candidate_ids = route.get("candidate_dataset_ids") or route.get("dataset_ids") or []
         candidate_count = len(candidate_ids) if isinstance(candidate_ids, list) else 0
+        reason = str(route.get("arbiter_reason") or "").strip()
         try:
-            score = int(route.get("match_score") or (78 if candidate_count <= 1 else 64))
+            raw_match_score = int(route.get("match_score") or 0)
         except Exception:
-            score = 78 if candidate_count <= 1 else 64
+            raw_match_score = 0
+
+        # 统一“展示分”口径：
+        # - 保留原始 match_score 作为底层事实，不参与实际路由决策变更
+        # - 展示分按更平滑的规则归一，避免不同分支硬编码的 92/96/98/100 直接外露
+        base_score = 76 if candidate_count <= 1 else 68
+        score = int(round(raw_match_score * 0.55 + base_score * 0.45)) if raw_match_score > 0 else base_score
 
         if candidate_count > 1:
-            score -= min(12, (candidate_count - 1) * 6)
+            score -= min(10, (candidate_count - 1) * 4)
         route_margin = int(route.get("route_margin") or 0)
-        if route_margin >= 20:
+        if route_margin >= 40:
+            score += 6
+        elif route_margin >= 20:
+            score += 3
+        elif candidate_count > 1 and route_margin <= 5:
+            score -= 4
+        elif candidate_count > 1 and route_margin <= 12:
+            score -= 2
+
+        if reason in {"explicit_dataset_scope_unique", "explicit_dataset_domain", "explicit_dataset_alias"}:
             score += 4
-        elif candidate_count > 1 and route_margin <= 8:
-            score -= 6
+        elif reason in {"organization_tree_name_resolved", "entity_mention_unique", "target_level_unique:城市分公司"}:
+            score += 3
+        elif "target_level_unique:" in reason:
+            score += 2
+        elif reason.startswith("level_ambiguity_resolved_by_"):
+            score -= 1
+
         if route.get("requires_confirmation"):
-            score = min(score, 60)
+            # 待确认表示口径歧义，不等于系统完全没把握；仅限制到“可确认”档位
+            score = min(score, 68)
         if route.get("preferred_dataset_override"):
             score = max(score, 72)
 
         score = max(0, min(100, score))
-        level = "high" if score >= 82 else "medium" if score >= 65 else "low"
-        label = "高" if score >= 82 else "中" if score >= 65 else "待确认"
+        level = "high" if score >= 80 else "medium" if score >= 64 else "low"
+        label = "高" if score >= 80 else "中" if score >= 64 else "待确认"
 
         if route.get("requires_confirmation"):
             summary = "当前命中仍存在不确定性，已暂停并等待确认统计口径。"
-        elif route.get("arbiter_reason") == "profile_scope_resolved":
+        elif reason == "profile_scope_resolved":
             summary = "当前问题中的组织简称或合称已命中数据集画像，系统按画像映射的数据集执行。"
-        elif route.get("arbiter_reason") == "explicit_dataset_alias":
+        elif reason in {"explicit_dataset_alias", "explicit_dataset_scope_unique", "explicit_dataset_domain"}:
             summary = "当前问题直接命中了数据集名称、业务域或已维护同义词。"
-        elif route.get("arbiter_reason") == "organization_tree_name_resolved":
+        elif reason == "organization_tree_name_resolved":
             summary = "当前问题命中了组织树节点，系统按该节点绑定的数据集执行。"
-        elif score < 70:
+        elif score < 64:
             summary = "当前更像相似命中，系统不会把它当作确定命中直接下结论。"
         elif candidate_count > 1:
-            summary = f"当前存在 {candidate_count} 个候选口径，后续执行会继续标注采用的数据范围。"
+            summary = f"当前存在 {candidate_count} 个候选口径，系统已结合层级、别名和候选差距收敛到当前数据集。"
         elif route.get("preferred_dataset_override"):
             summary = "当前按人工指定数据集执行，路由方向相对明确。"
         else:
@@ -2317,9 +2339,9 @@ LIMIT 10000
             "label": label,
             "summary": summary,
             "candidate_count": candidate_count,
-            "match_score": int(route.get("match_score") or 0),
+            "match_score": raw_match_score,
             "route_margin": route_margin,
-            "reason": route.get("arbiter_reason") or "",
+            "reason": reason,
         }
 
     def _select_sql_strategy(self, question: str, route: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -4432,6 +4454,7 @@ LIMIT 10000
                 [item[0]["id"] for item in ranked[:3]],
                 [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked[:3]],
             )
+            force_generic_level_confirm = self._is_pure_generic_level_question(question, matched_levels)
             # 若问题包含具体层级，过滤掉不支持该层级的候选；跨数据集选项在单一层级口径下也不适合自动命中
             if matched_levels and supported_dataset_ids:
                 filtered_options = [
@@ -4458,7 +4481,7 @@ LIMIT 10000
                         "split_queries": [{"dataset_id": selected_id, "sub_query": question}],
                     }
                 # 修复：通用层级歧义但各选项得分有差距时，直接命中得分最高的选项，避免过度弹确认。
-                if len(filtered_options) >= 2:
+                if len(filtered_options) >= 2 and not force_generic_level_confirm:
                     sorted_options = sorted(filtered_options, key=lambda o: o.get("score", 0) or 0, reverse=True)
                     best_opt = sorted_options[0]
                     runner_opt = sorted_options[1]
@@ -8224,5 +8247,3 @@ Agent3 复核结果：
 
 
 four_agent_ask_service = FourAgentAskService()
-
-
