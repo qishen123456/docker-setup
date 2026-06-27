@@ -259,6 +259,10 @@ let phaseTimer = null
 let activeAbortController = null
 let lastHeartbeatLineAt = 0
 let runToken = 0
+let tracePacingTimers = new Map()
+let tracePacingWaiters = []
+let traceEventQueue = []
+let flushingTraceQueue = false
 
 const snapshot = () => ({
   question: state.question,
@@ -318,6 +322,94 @@ const stopPhaseTimer = () => {
     clearInterval(phaseTimer)
     phaseTimer = null
   }
+}
+
+const resolveTracePacingWaiters = () => {
+  if (tracePacingTimers.size > 0 || traceEventQueue.length > 0) return
+  const waiters = tracePacingWaiters
+  tracePacingWaiters = []
+  waiters.forEach(resolve => resolve())
+}
+
+const clearTracePacing = () => {
+  tracePacingTimers.forEach(timer => clearTimeout(timer))
+  tracePacingTimers = new Map()
+  traceEventQueue = []
+  flushingTraceQueue = false
+  resolveTracePacingWaiters()
+}
+
+const shouldPaceTraceKey = (key) => new Set([
+  'trace-route',
+  'trace-context',
+  'trace-agent2',
+  'trace-agent3',
+  'trace-execute',
+  'trace-agent4',
+  'result-final-check',
+]).has(String(key || ''))
+
+const getTraceMinVisibleMs = (key) => ({
+  'trace-route': 3200,
+  'trace-context': 3200,
+  'trace-agent2': 4600,
+  'trace-agent3': 3600,
+  'trace-execute': 3200,
+  'trace-agent4': 5200,
+  'result-final-check': 3600,
+}[String(key || '')] || 3200)
+
+const waitForTracePacing = () => {
+  if (tracePacingTimers.size === 0 && traceEventQueue.length === 0) return Promise.resolve()
+  return new Promise(resolve => tracePacingWaiters.push(resolve))
+}
+
+const shouldQueueTraceEvent = (payload = {}) => {
+  if (tracePacingTimers.size === 0) return false
+  const stage = String(payload?.event?.stage || '')
+  if (!stage) return false
+  const key = normalizeTraceStageKey(stage)
+  if (!shouldPaceTraceKey(key)) return false
+  return !tracePacingTimers.has(key)
+}
+
+const flushQueuedTraceEvents = () => {
+  if (flushingTraceQueue) return
+  flushingTraceQueue = true
+  try {
+    while (traceEventQueue.length > 0 && tracePacingTimers.size === 0) {
+      const payload = traceEventQueue.shift()
+      applyTraceEventNow(payload)
+    }
+  } finally {
+    flushingTraceQueue = false
+  }
+  if (tracePacingTimers.size === 0 && traceEventQueue.length === 0) {
+    resolveTracePacingWaiters()
+  }
+}
+
+const settlePacedTraceKey = (key, entry, minVisibleMs) => {
+  const visibleMs = Math.max(Number(entry.duration || 0), getTraceMinVisibleMs(key))
+  if (tracePacingTimers.has(key)) {
+    clearTimeout(tracePacingTimers.get(key))
+  }
+  const timer = window.setTimeout(() => {
+    tracePacingTimers.delete(key)
+    appendLog({
+      ...entry,
+      status: 'success',
+      duration: visibleMs,
+      elapsedLabel: formatDuration(visibleMs),
+      durationLabel: formatDuration(visibleMs),
+      time: nowText(),
+    })
+    flushQueuedTraceEvents()
+    if (tracePacingTimers.size === 0 && traceEventQueue.length === 0) {
+      resolveTracePacingWaiters()
+    }
+  }, minVisibleMs)
+  tracePacingTimers.set(key, timer)
 }
 
 const replaceLogs = (entries) => {
@@ -427,6 +519,7 @@ const beginPhaseStreaming = () => {
 
 const beginRealtimeStreaming = (question) => {
   stopPhaseTimer()
+  clearTracePacing()
   lastHeartbeatLineAt = 0
   replaceLogs([
     {
@@ -873,6 +966,14 @@ const buildTraceArtifacts = (stage, status, payload = {}, existing = null) => {
 }
 
 const applyTraceEvent = (payload = {}) => {
+  if (shouldQueueTraceEvent(payload)) {
+    traceEventQueue.push(payload)
+    return
+  }
+  applyTraceEventNow(payload)
+}
+
+const applyTraceEventNow = (payload = {}) => {
   const event = payload?.event || {}
   const stage = String(event.stage || '')
   if (!stage) return
@@ -901,6 +1002,11 @@ const applyTraceEvent = (payload = {}) => {
   const fallbackDuration = normalizedStatus === 'success' && !tracedDuration
     ? Date.now() - nodeStartedAt
     : existing?.duration
+  const minVisibleMs = getTraceMinVisibleMs(key)
+  const elapsedSinceNodeStart = Math.max(0, Date.now() - nodeStartedAt)
+  const shouldDelaySuccess = normalizedStatus === 'success'
+    && shouldPaceTraceKey(key)
+    && elapsedSinceNodeStart < minVisibleMs
 
   const eventStatus = String(event.status || '').toLowerCase()
   const deltaKind = String(event.delta_kind || '').toLowerCase()
@@ -925,12 +1031,12 @@ const applyTraceEvent = (payload = {}) => {
     : existing?.liveThoughtLines || []
   const artifacts = buildTraceArtifacts(stage, event.status, event, existing)
 
-  appendLog({
+  const nextLogEntry = {
     key,
     title: meta.title,
     kind: meta.kind,
     toolType: meta.toolType,
-    status: normalizedStatus,
+    status: shouldDelaySuccess ? 'running' : normalizedStatus,
     summary,
     thought,
     detailLines,
@@ -946,9 +1052,18 @@ const applyTraceEvent = (payload = {}) => {
     lastStreamAt: isDelta ? Date.now() : existing?.lastStreamAt || 0,
     persist: !isDelta,
     ...artifacts,
-  })
+  }
 
-  if (normalizedStatus === 'running') {
+  appendLog(nextLogEntry)
+
+  if (shouldDelaySuccess) {
+    settlePacedTraceKey(key, {
+      ...nextLogEntry,
+      status: normalizedStatus,
+    }, minVisibleMs - elapsedSinceNodeStart)
+  }
+
+  if (normalizedStatus === 'running' || shouldDelaySuccess) {
     lastHeartbeatLineAt = 0
   }
 }
@@ -1585,6 +1700,7 @@ const isUserAbortError = (error) => {
 
 const settleUserCanceledTimeline = () => {
   stopPhaseTimer()
+  clearTracePacing()
   lastHeartbeatLineAt = 0
 
   const canceledAt = Date.now()
@@ -1635,7 +1751,7 @@ const settleUserCanceledTimeline = () => {
   persist()
 }
 
-const finalizeFromResult = (data) => {
+const finalizeFromResult = async (data) => {
   stopPhaseTimer()
   lastHeartbeatLineAt = 0
 
@@ -1645,6 +1761,7 @@ const finalizeFromResult = (data) => {
   state.updatedAt = new Date().toISOString()
 
   if (data?.error) {
+    clearTracePacing()
     const diagnostics = data?.diagnostics && typeof data.diagnostics === 'object'
       ? Object.entries(data.diagnostics).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : JSON.stringify(value)}`)
       : []
@@ -1663,6 +1780,8 @@ const finalizeFromResult = (data) => {
     persist()
     return
   }
+
+  await waitForTracePacing()
 
   if (!settleRealtimeTimeline()) {
     const timeline = mergeRealtimeProgressIntoTimeline(buildTimelineFromResult(data))
@@ -1765,6 +1884,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
     }
     if (!finalPayload?.requires_confirmation) {
       const elapsedMs = Date.now() - new Date(state.startedAt).getTime()
+      await waitForTracePacing()
       appendLog({
         key: 'result-final-check',
         title: '核对指标与报告口径',
@@ -1774,17 +1894,17 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
         summary: '正在核对数据标签、指标口径和图表展示结构。',
         detailLines: ['已收到查询结果。', '正在核对指标标签、层级关系和图表结构。'],
       })
-      if (elapsedMs < MIN_ANALYSIS_VISIBLE_MS) {
-        await wait(MIN_ANALYSIS_VISIBLE_MS - elapsedMs)
-      }
+      const finalCheckVisibleMs = getTraceMinVisibleMs('result-final-check')
+      await wait(Math.max(finalCheckVisibleMs, MIN_ANALYSIS_VISIBLE_MS - elapsedMs))
     }
     const data = finalPayload
-    finalizeFromResult(data)
+    await finalizeFromResult(data)
     activeAbortController = null
     return data
   } catch (error) {
     if (currentRunToken !== runToken) return null
     stopPhaseTimer()
+    clearTracePacing()
     const aborted = isUserAbortError(error)
 
     if (aborted) {
@@ -1862,7 +1982,7 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
     }, activeAbortController.signal, () => currentRunToken !== runToken)
 
     if (currentRunToken !== runToken) return null
-    finalizeFromResult(data)
+    await finalizeFromResult(data)
     activeAbortController = null
     return data
   } catch (error) {
@@ -1915,6 +2035,7 @@ const resetSession = () => {
     activeAbortController = null
   }
   stopPhaseTimer()
+  clearTracePacing()
   lastHeartbeatLineAt = 0
   state.question = ''
   state.selectedDatasetId = null
@@ -1945,6 +2066,7 @@ const stopAsk = () => {
 const clearRecoveredSessionResult = () => {
   runToken += 1
   stopPhaseTimer()
+  clearTracePacing()
   lastHeartbeatLineAt = 0
   state.question = ''
   state.status = 'idle'

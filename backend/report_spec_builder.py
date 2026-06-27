@@ -616,7 +616,8 @@ def build_report_spec(
             node for node in sorted(nodes, key=lambda item: len(item.get("name") or ""), reverse=True)
             if node.get("name") and _question_mentions_node(question or "", node["name"])
         ]
-    explicit_comparative = len(matched_nodes) > 1 or bool(re.search(r"对比|比较|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
+    # 只有题干明确出现对比/比较类词汇时才视为显式对比；避免“各分公司排名”因错误解析出多个成员而被当成对比
+    explicit_comparative = bool(re.search(r"对比|比较|谁更|差异|分别|各自|和.+比|跟.+比|与.+比|\bvs\b", question or "", re.I))
     requested_levels = _requested_level_values(question or "", config)
     query_target_level = _canonical_level_value(query_intent.get("target_level"))
     if query_target_level and query_target_level not in requested_levels:
@@ -1257,7 +1258,13 @@ def build_report_spec(
 
     if answer_mode == "ranking" and not answer_summary:
         rank_sides = str(query_intent.get("rank_sides") or "")
-        rank_limit = max(1, min(len(ranked_comparison_nodes), int(query_intent.get("top_n") or 10) or 10)) if ranked_comparison_nodes else 0
+        raw_top_n = query_intent.get("top_n")
+        if raw_top_n is None or raw_top_n == "":
+            effective_limit = 10
+        else:
+            effective_limit = int(raw_top_n)
+        # top_n=0 表示用户未指定数量，返回全部节点
+        rank_limit = max(0, min(len(ranked_comparison_nodes), effective_limit)) if ranked_comparison_nodes else 0
         if rank_sides == "both" and rank_limit:
             bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:]))
             ranked_nodes = []
@@ -1268,10 +1275,12 @@ def build_report_spec(
                     continue
                 seen_node_ids.add(node_id)
                 ranked_nodes.append(node)
+        elif rank_limit > 0:
+            ranked_nodes = ranked_comparison_nodes[:rank_limit]
         else:
-            ranked_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
-        top_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit else []
-        bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:])) if rank_sides == "both" and rank_limit else []
+            ranked_nodes = ranked_comparison_nodes
+        top_nodes = ranked_comparison_nodes[:rank_limit] if rank_limit > 0 else ranked_comparison_nodes
+        bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:])) if rank_sides == "both" and rank_limit > 0 else []
         is_single_extreme = rank_sides != "both" and rank_limit == 1
         if is_single_extreme and ranked_nodes:
             extreme_label = "最低" if low_first else "最高"

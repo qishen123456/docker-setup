@@ -266,6 +266,26 @@ class OrganizationRouteResolver:
                 "split_queries": [{"dataset_id": dataset_ids[0], "sub_query": refined_query}],
             }
 
+        # 修复：多个组织节点且问题是对比意图时，自动识别为跨数据集对比，不再弹确认。
+        if len(dataset_ids) > 1 and _is_compare_question(question):
+            return {
+                "dataset_ids": dataset_ids,
+                "intent": "comparison",
+                "refined_query": refined_query,
+                "requires_confirmation": False,
+                "decision": "generate_sql",
+                "match_score": 98,
+                "route_margin": 100,
+                "matched_sample_id": None,
+                "matched_sample_sql": "",
+                "arbiter_reason": ORG_ROUTE_REASON,
+                "candidate_dataset_ids": candidate_dataset_ids,
+                "organization_mentions": mentions,
+                "resolved_members": distinct_node_names,
+                "scope_mode": "cross",
+                "split_queries": [{"dataset_id": ds_id, "sub_query": refined_query} for ds_id in dataset_ids],
+            }
+
         options: List[Dict[str, Any]] = []
         by_dataset: Dict[int, List[Dict[str, Any]]] = {}
         for mention in mentions:

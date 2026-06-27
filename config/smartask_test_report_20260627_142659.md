@@ -1,8 +1,8 @@
 # SmartAsk 端到端测试报告
 
-- 测试时间：2026-06-27 07:40:20
+- 测试时间：2026-06-27 15:34:22
 - 问题总数：170
-- 异常/待确认数：82
+- 异常/待确认数：89
 - 服务端点：http://localhost:5002/api/smart-chat
 
 ## 汇总
@@ -21,25 +21,26 @@
 
 | 编号 | 问题 | 预期 | 异常点 |
 |---|---|---|---|
+| R1 | 商用事业部的达成率 | 3 | 结果为空 |
 | R4 | 分公司业绩排名 | 需确认 | 结果为空; 卡片标题与问题关联度低 |
-| R8 | 商用事业部和消费者事业部的总任务金额对比 | 跨数据集 | 未识别跨数据集对比 |
-| R12 | 事业部的达成率 | 需确认 | 未按预期弹确认 |
-| R16 | 业务部业绩 | 需确认 | 未按预期弹确认; 结果为空 |
+| R8 | 商用事业部和消费者事业部的总任务金额对比 | 跨数据集 | 未识别跨数据集对比; 结果为空 |
+| R12 | 事业部的达成率 | 需确认 | 卡片标题与问题关联度低 |
+| R16 | 业务部业绩 | 需确认 | 卡片标题与问题关联度低 |
 | R18 | 消费者城市分公司排名 | 2 | 卡片标题与问题关联度低 |
-| R20 | 代表处业绩 | 需确认 | 未按预期弹确认; 结果为空 |
+| R20 | 代表处业绩 | 需确认 | 卡片标题与问题关联度低 |
 | I1 | 消费者事业部哪个分公司完成率最高 | 2 | 卡片标题与问题关联度低 |
 | I3 | 前 3 的分公司 | 2 | 意外弹确认; 结果为空; 卡片标题与问题关联度低 |
-| I4 | 后 5 的代表处 | 3 | 结果为空; 卡片标题与问题关联度低 |
+| I4 | 后 5 的代表处 | 3 | 卡片标题与问题关联度低 |
 | I5 | 哪些城市分公司达成率低于 10% | 2 | 卡片标题与问题关联度低 |
 | I8 | 消费者事业部各城市分公司业绩排名 | 2 | 卡片标题与问题关联度低 |
 | I10 | 所有细分业务按年度开单金额排名 | 62 | 卡片标题与问题关联度低 |
-| I12 | 商用事业部南部分公司下属代表处业绩 | 3 | 结果为空 |
 | I13 | 哪个分公司最低 | 2 | 意外弹确认; 结果为空; 卡片标题与问题关联度低 |
 | I14 | 商用事业部哪个代表处开单金额最高 | 3 | 卡片标题与问题关联度低 |
 | I15 | 电商事业部前 5 的细分业务 | 62 | 卡片标题与问题关联度低 |
 | I16 | 消费者事业部倒数前 3 的城市分公司 | 2 | 卡片标题与问题关联度低 |
 | I17 | 商用事业部达成率超过 80% 的分公司 | 3 | 结果为空 |
 | I18 | 电商事业部年度开单金额低于 500 万的业务 | 62 | 卡片标题与问题关联度低 |
+| I20 | 商用事业部业绩总览 | 3 | 结果为空 |
 | I23 | 商用事业部各分公司年度开单金额对比 | 3 | 结果为空 |
 | I25 | 消费者事业部业绩排名 | 2 | 卡片标题与问题关联度低 |
 | I26 | 商用事业部代表处业绩排名 | 3 | 卡片标题与问题关联度低 |
@@ -47,25 +48,29 @@
 | I28 | 消费者事业部缺口最大的分公司 | 2 | 卡片标题与问题关联度低 |
 | I29 | 商用事业部剩余任务最少的分公司 | 3 | 卡片标题与问题关联度低 |
 | I30 | 电商事业部毛利率最高的业务部 | 62 | 卡片标题与问题关联度低 |
+| M3 | 商用事业部剩余任务金额 | 3 | 结果为空 |
 | M4 | 电商事业部年度目标营收 vs 年度开单金额对比 | 62 | 结果为空 |
 | M5 | 商用事业部年度开单金额最高的分公司 | 3 | 卡片标题与问题关联度低 |
 | M6 | 消费者事业部缺口最大的分公司 | 2 | 卡片标题与问题关联度低 |
+| M8 | 商用事业部 q1 目标金额 | 3 | 结果为空 |
+| M10 | 商用事业部任务完成率 | 3 | 结果为空 |
+| M12 | 商用事业部总任务金额 | 3 | 结果为空 |
 | M13 | 消费者事业部年度开单金额排名 | 2 | 卡片标题与问题关联度低 |
 | M14 | 商用事业部达成率排名 | 3 | 结果为空; 卡片标题与问题关联度低 |
 | M15 | 电商事业部年度开单金额排名 | 62 | 卡片标题与问题关联度低 |
+| M17 | 商用事业部还差多少任务 | 3 | 结果为空 |
 | M18 | 电商事业部目标营收完成率最低的细分业务 | 62 | 卡片标题与问题关联度低 |
 | M19 | 消费者事业部哪个分公司销售额最高 | 2 | 卡片标题与问题关联度低 |
 | M20 | 商用事业部哪个分公司完成进度最快 | 3 | 结果为空 |
 | M21 | 电商事业部哪个业务线利润最高 | 62 | 卡片标题与问题关联度低 |
-| L1 | 商用事业部东部分公司下有哪些代表处 | 3 | 结果为空 |
+| M23 | 商用事业部开单金额 | 3 | 结果为空 |
+| M25 | 商用事业部代表处人均业绩 | 3 | 结果为空 |
 | L4 | 电商事业部净水业务负责人是谁 | 62 | 结果为空 |
 | L5 | 商用事业部业务员业绩排名 | 3 | 卡片标题与问题关联度低 |
 | L6 | 消费者事业部前 5 的城市分公司 | 2 | 卡片标题与问题关联度低 |
 | L9 | 商用事业部东部分公司代表处业绩排名 | 3 | 卡片标题与问题关联度低 |
-| L14 | 商用事业部西部分公司代表处业绩 | 3 | 结果为空 |
-| L16 | 商用事业部北部分公司有哪些业务部 | 3 | 结果为空 |
 | L17 | 消费者事业部城市分公司排名 | 2 | 卡片标题与问题关联度低 |
-| L19 | 商用事业部餐饮业务部代表处业绩 | 3 | 结果为空 |
+| L23 | 商用事业部南部分公司餐饮业务部业绩 | 3 | 结果为空 |
 | L24 | 消费者事业部山东分公司城市分公司排名 | 2 | 卡片标题与问题关联度低 |
 | E1 | 华北分公司的业绩 | 2 | 意外弹确认; 结果为空; 卡片标题与问题关联度低 |
 | E2 | 不存在的代表处业绩 | 3 | 结果为空 |
@@ -81,6 +86,7 @@
 | E17 | 消费者事业部业绩最差的分公司 | 2 | 卡片标题与问题关联度低 |
 | E18 | 商用事业部业绩最好的分公司 | 3 | 卡片标题与问题关联度低 |
 | E19 | 电商事业部年度开单金额最少的业务 | 62 | 卡片标题与问题关联度低 |
+| E21 | 商用事业部所有代表处业绩总和 | 3 | 结果为空 |
 | E23 | 消费者事业部业绩前十 | 2 | 卡片标题与问题关联度低 |
 | E24 | 商用事业部后十名代表处 | 3 | 卡片标题与问题关联度低 |
 | C3 | 前 3 的分公司 | 2 | 意外弹确认; 结果为空; 卡片标题与问题关联度低 |
@@ -88,9 +94,10 @@
 | C7 | 消费者事业部哪个分公司完成率最高 | 2 | 卡片标题与问题关联度低 |
 | C8 | 商用事业部后 3 名的代表处 | 3 | 卡片标题与问题关联度低 |
 | C9 | 消费者事业部缺口最大的分公司 | 2 | 卡片标题与问题关联度低 |
+| C12 | 商用事业部年度开单金额 | 3 | 结果为空 |
 | C14 | 消费者事业部前 5 的城市分公司 | 2 | 卡片标题与问题关联度低 |
 | C16 | 电商事业部毛利率最高的 3 个业务 | 62 | 卡片标题与问题关联度低 |
-| X5 | 商用事业部东部分公司和南部分公司代表处业绩对比 | 3 | 结果为空 |
+| C24 | 商用事业部各代表处达成率分布 | 3 | 结果为空 |
 | X6 | 电商事业部京东直营、天猫直营、抖音直营业绩排名 | 62 | 卡片标题与问题关联度低 |
 | X7 | 消费者事业部哪些分公司达成率低于 50% 且缺口超过 1000 万 | 2 | 卡片标题与问题关联度低 |
 | X8 | 商用事业部达成率高于 80% 且开单金额超过 5000 万的代表处 | 3 | 结果为空; 卡片标题与问题关联度低 |
@@ -111,54 +118,21 @@
 - **目标数据集**：3
 - **预期行为**：直接命中数据集 3，不弹确认
 - **状态**：✅ 成功
-- **耗时**：8.28s
+- **耗时**：44.6s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部的达成率
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### R2：消费者事业部业绩怎么样
 
 - **目标数据集**：2
 - **预期行为**：直接命中数据集 2，不弹确认
 - **状态**：✅ 成功
-- **耗时**：19.94s
+- **耗时**：22.32s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -206,7 +180,7 @@ WITH 源数据 AS (
 - **目标数据集**：62
 - **预期行为**：直接命中数据集 62，不弹确认
 - **状态**：✅ 成功
-- **耗时**：16.91s
+- **耗时**：25.82s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -258,7 +232,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：命中消费者事业部数据集 2
 - **状态**：✅ 成功
-- **耗时**：15.65s
+- **耗时**：29.14s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -299,7 +273,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：命中商用事业部数据集 3
 - **状态**：✅ 成功
-- **耗时**：10.17s
+- **耗时**：28.89s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -347,7 +321,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：命中电商数据集 62
 - **状态**：✅ 成功
-- **耗时**：15.92s
+- **耗时**：25.43s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -385,55 +359,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：跨数据集
 - **预期行为**：跨数据集对比或提示确认
 - **状态**：✅ 成功
-- **耗时**：7.91s
+- **耗时**：40.46s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部和消费者事业部的总任务金额对比
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "业务部 / 分公司数量", "value": "7"}, {"title": "累计总任务金额", "value": "455000000.0"}, {"title": "累计年度开单金额", "value": "131114522.4527676"}, {"title": "整体达成率", "value": "28.816378561047824"}, {"title": "最高：公共办公业务部", "value": "80.76"}, {"title": "最低：西部分公司", "value": "19.08"}, {"title": "首尾差距", "value": "61.68000000000001"}]
-- **章节**：总体判断 / 业务部 / 分公司对比分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "对比对象较多，关键指标区聚焦整体、最高和最低，完整 7 个业务部 / 分公司在下方对比表展开。", "首尾差异：公共办公业务部达成率比东部分公司高57.05个百分点", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
-```
-- **⚠️ 异常点**：未识别跨数据集对比
+- **报告标题**：
+- **⚠️ 异常点**：未识别跨数据集对比; 结果为空
 
 ### R9：商用事业部的业绩
 
 - **目标数据集**：3
 - **预期行为**：直接命中数据集 3
 - **状态**：✅ 成功
-- **耗时**：10.58s
+- **耗时**：13.58s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -489,7 +429,7 @@ WITH raw_data AS (
 - **目标数据集**：2
 - **预期行为**：直接命中数据集 2
 - **状态**：✅ 成功
-- **耗时**：18.05s
+- **耗时**：33.74s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -530,7 +470,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：直接命中数据集 62
 - **状态**：✅ 成功
-- **耗时**：16.29s
+- **耗时**：25.03s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -568,49 +508,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：需确认
 - **预期行为**：多个事业部数据集，应弹确认
 - **状态**：✅ 成功
-- **耗时**：16.12s
-- **路由决策**：generate_sql
-- **意图**：detail
-- **是否需要确认**：False
-- **命中数据集**：[2]
-- **显示标题**：事业部的达成率
-- **报告标题**：消费者事业部业绩分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "1789710000.0"}, {"title": "年度开单金额", "value": "593461787.79"}, {"title": "达成率", "value": "33.16"}, {"title": "剩余任务金额", "value": "1196248212.21"}]
-- **章节**：总体判断 / 消费者事业部总体下钻分析
-- **图表**：各消费者事业部总体达成率排序
-- **折叠面板**：消费者事业部
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 1 个消费者事业部总体", "当前可比对象不足 2 个，不做横向好坏对比。"]
-- **SQL 样例**：
-```sql
-WITH 字段提取 AS (
-    SELECT
-        id,
-        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') AS 事业部,
-        COALESCE(NULLIF(TRIM(fields->>'分公司'), ''), '') AS 分公司,
-        COALESCE(NULLIF(TRIM(fields->>'城市分公司'), ''), '') AS 城市分公司,
-        COALESCE(NULLIF(TRIM(fields->>'层级级别'), ''), '') AS 源层级,
-        COALESCE(NULLIF(TRIM(fields->>'当前年'), ''), '2026') AS 当前年,
-        NULLIF(regexp_replace(COALESCE(fields->>'总任务（金额）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 总任务原值,
-        NULLIF(regexp_replace(COALESCE(fields->>'年度开单金额', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 年度开单原值,
-        NULLIF(regexp_replace(COALESCE(fields->>'线下（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 线下任务万,
-        NULLIF(regexp_replace(COALESCE(fields->>'新零售（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 新零售任务万,
-        NULLIF(regexp_replace(COALESCE(fields->>'燃气定制（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 燃气定制任务万,
-        NULLIF(regexp_replace(COALESCE(fields->>'地产（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 地产任务万,
-        NULLIF(regexp_replace(COALESCE(fields->>'线下-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 线下实际万,
-        NULLIF(regexp_replace(COALESCE(fields->>'新零售-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 新零售实际万,
-        NULLIF(regexp_replace(COALESCE(fields->>'燃气定制-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 燃气定制实际万,
-        NULLIF(regexp_replace(COALESCE(fields->>'地产-年度开单金额（万）', ''), '[^0-9.-]', '', 'g'), '')::NUMERIC AS 地产实际万
-    FROM public.fei
-```
-- **⚠️ 异常点**：未按预期弹确认
+- **耗时**：0.24s
+- **路由决策**：
+- **意图**：
+- **是否需要确认**：True
+- **命中数据集**：[]
+- **显示标题**：
+- **报告标题**：
+- **⚠️ 异常点**：卡片标题与问题关联度低
 
 ### R13：粤桂琼分公司业绩
 
 - **目标数据集**：2
 - **预期行为**：命中数据集 2
 - **状态**：✅ 成功
-- **耗时**：15.01s
+- **耗时**：34.48s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -651,7 +563,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：命中数据集 3
 - **状态**：✅ 成功
-- **耗时**：7.55s
+- **耗时**：14.41s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -698,7 +610,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：命中数据集 62
 - **状态**：✅ 成功
-- **耗时**：16.27s
+- **耗时**：55.43s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -736,21 +648,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：需确认
 - **预期行为**：数据集 3/62 都含“业务部”，应弹确认
 - **状态**：✅ 成功
-- **耗时**：23.29s
-- **路由决策**：generate_sql
-- **意图**：detail
-- **是否需要确认**：False
-- **命中数据集**：[3]
-- **显示标题**：业务部业绩
+- **耗时**：0.27s
+- **路由决策**：
+- **意图**：
+- **是否需要确认**：True
+- **命中数据集**：[]
+- **显示标题**：
 - **报告标题**：
-- **⚠️ 异常点**：未按预期弹确认; 结果为空
+- **⚠️ 异常点**：卡片标题与问题关联度低
 
 ### R17：商用四个分公司业绩
 
 - **目标数据集**：3
 - **预期行为**：命中数据集 3
 - **状态**：✅ 成功
-- **耗时**：7.46s
+- **耗时**：13.41s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -797,7 +709,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：命中数据集 2
 - **状态**：✅ 成功
-- **耗时**：15.57s
+- **耗时**：26.52s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -839,7 +751,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：命中数据集 62
 - **状态**：✅ 成功
-- **耗时**：16.55s
+- **耗时**：37.43s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -877,21 +789,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：需确认
 - **预期行为**：数据集 3/2 都可能含代表处，需确认
 - **状态**：✅ 成功
-- **耗时**：25.88s
-- **路由决策**：generate_sql
-- **意图**：detail
-- **是否需要确认**：False
-- **命中数据集**：[3]
-- **显示标题**：代表处业绩
+- **耗时**：0.24s
+- **路由决策**：
+- **意图**：
+- **是否需要确认**：True
+- **命中数据集**：[]
+- **显示标题**：
 - **报告标题**：
-- **⚠️ 异常点**：未按预期弹确认; 结果为空
+- **⚠️ 异常点**：卡片标题与问题关联度低
 
 ### I1：消费者事业部哪个分公司完成率最高
 
 - **目标数据集**：2
 - **预期行为**：单点极值 / top 1
 - **状态**：✅ 成功
-- **耗时**：15.18s
+- **耗时**：29.05s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -933,7 +845,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：单点极值 / bottom 1
 - **状态**：✅ 成功
-- **耗时**：8.17s
+- **耗时**：12.46s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -980,7 +892,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：排名 top 3
 - **状态**：✅ 成功
-- **耗时**：7.26s
+- **耗时**：15.4s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -994,16 +906,19 @@ flattened_tree AS (
 - **目标数据集**：3
 - **预期行为**：排名 bottom 5
 - **状态**：✅ 成功
-- **耗时**：7.81s
+- **耗时**：16.33s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部达成率排名后5的代表处
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{"bottomNames": [], "direction": "asc", "leader": "", "metricLabel": "达成率", "mode": "ranking", "rankSides": "bottom", "tail": "", "targetLevel": "下一层级", "text": "当前没有可排序的下一层级结果", "title": "排名结果", "topN": 0, "topNames": []}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **KPI 卡**：[{"title": "总任务金额", "value": "8100000.0"}, {"title": "年度开单金额", "value": "892720.72"}, {"title": "达成率", "value": "11.02"}, {"title": "剩余任务金额", "value": "7207279.28"}]
+- **章节**：总体判断 / 代表处对比分析
+- **图表**：各代表处达成率排序
+- **折叠面板**：甘青宁代表处 / 餐饮 / 重庆代表处 / 河南代表处 / 吉林代表处
+- **答案摘要**：{"bottomNames": [], "direction": "asc", "leader": "甘青宁代表处", "metricLabel": "达成率", "mode": "ranking", "rankSides": "bottom", "tail": "吉林代表处", "targetLevel": "代表处", "text": "已按达成率输出 5 个代表处的排序结果", "title": "排名结果", "topN": 5, "topNames": ["甘青宁代表处", "餐饮", "重庆代表处", "河南代表处", "吉林代表处"]}
+- **叙述**：["本次结果覆盖 5 个代表处", "第一梯队：吉林代表处14.69%、河南代表处13.07%", "第二梯队：重庆代表处12.96%、餐饮12.83%", "第三梯队：甘青宁代表处11.02%"]
 - **SQL 样例**：
 ```sql
 WITH 汇总结果 AS (
@@ -1032,14 +947,14 @@ flattened_tree AS (
         CASE
             WHEN 业务代表 <> '' THEN COALESCE(NU
 ```
-- **⚠️ 异常点**：结果为空; 卡片标题与问题关联度低
+- **⚠️ 异常点**：卡片标题与问题关联度低
 
 ### I5：哪些城市分公司达成率低于 10%
 
 - **目标数据集**：2
 - **预期行为**：阈值筛选
 - **状态**：✅ 成功
-- **耗时**：17.12s
+- **耗时**：21.62s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1081,7 +996,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：阈值筛选
 - **状态**：✅ 成功
-- **耗时**：17.33s
+- **耗时**：26.87s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1119,7 +1034,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：单点总览
 - **状态**：✅ 成功
-- **耗时**：10.03s
+- **耗时**：14.44s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1175,7 +1090,7 @@ WITH raw_data AS (
 - **目标数据集**：2
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：15.99s
+- **耗时**：34.99s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1217,7 +1132,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：总览 / 对比
 - **状态**：✅ 成功
-- **耗时**：8.0s
+- **耗时**：13.45s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1264,7 +1179,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：17.15s
+- **耗时**：22.74s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1300,7 +1215,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：区间筛选
 - **状态**：✅ 成功
-- **耗时**：17.69s
+- **耗时**：28.84s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1341,19 +1256,22 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：下钻
 - **状态**：✅ 成功
-- **耗时**：7.57s
+- **耗时**：18.06s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部南部分公司下属代表处业绩
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{"childCount": 0, "focusNode": "", "mode": "drilldown", "targetLevel": "下一层级", "text": "当前展示 0 个下一层级下级节点", "title": "下钻结果"}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **KPI 卡**：[{"title": "总任务金额", "value": "82000000.0"}, {"title": "年度开单金额", "value": "20243897.6727679"}, {"title": "达成率", "value": "24.69"}, {"title": "剩余任务金额", "value": "61756102.33"}]
+- **章节**：总体判断 / 代表处下钻分析
+- **图表**：各代表处达成率排序
+- **折叠面板**：湖南代表处 / 粤东代表处 / 粤西广西代表处 / 江西代表处 / 福建代表处 / 餐饮
+- **答案摘要**：{"childCount": 6, "focusNode": "南部分公司", "mode": "drilldown", "targetLevel": "代表处", "text": "已定位到 南部分公司，当前展示其下一级 6 个代表处", "title": "下钻结果"}
+- **叙述**：["本次结果覆盖 6 个代表处", "第一梯队：湖南代表处34.55%、粤东代表处28.90%", "第二梯队：粤西广西代表处22.19%、江西代表处20.35%", "第三梯队：福建代表处15.01%、餐饮12.83%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -1377,16 +1295,15 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
-- **⚠️ 异常点**：结果为空
 
 ### I13：哪个分公司最低
 
 - **目标数据集**：2
 - **预期行为**：单点极值
 - **状态**：✅ 成功
-- **耗时**：9.16s
+- **耗时**：13.09s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -1400,7 +1317,7 @@ flattened_tree AS (
 - **目标数据集**：3
 - **预期行为**：单点极值
 - **状态**：✅ 成功
-- **耗时**：7.6s
+- **耗时**：15.3s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1448,7 +1365,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：15.07s
+- **耗时**：24.42s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1484,7 +1401,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：排名 bottom 3
 - **状态**：✅ 成功
-- **耗时**：16.77s
+- **耗时**：23.9s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1526,7 +1443,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：阈值筛选
 - **状态**：✅ 成功
-- **耗时**：7.34s
+- **耗时**：11.71s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1571,7 +1488,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：阈值筛选
 - **状态**：✅ 成功
-- **耗时**：14.31s
+- **耗时**：32.49s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1608,7 +1525,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：总览
 - **状态**：✅ 成功
-- **耗时**：15.61s
+- **耗时**：26.88s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1649,54 +1566,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：总览
 - **状态**：✅ 成功
-- **耗时**：8.22s
+- **耗时**：37.73s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部业绩总览
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### I21：电商事业部业绩总览
 
 - **目标数据集**：62
 - **预期行为**：总览
 - **状态**：✅ 成功
-- **耗时**：16.82s
+- **耗时**：24.35s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1734,7 +1618,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：对比
 - **状态**：✅ 成功
-- **耗时**：16.33s
+- **耗时**：23.58s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1775,44 +1659,13 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：对比
 - **状态**：✅ 成功
-- **耗时**：7.37s
+- **耗时**：47.7s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部各分公司年度开单金额对比
-- **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
-- **SQL 样例**：
-```sql
-WITH 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
-```
+- **报告标题**：
 - **⚠️ 异常点**：结果为空
 
 ### I24：电商事业部三大业务部年度目标营收对比
@@ -1820,7 +1673,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：对比
 - **状态**：✅ 成功
-- **耗时**：15.45s
+- **耗时**：30.73s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1858,7 +1711,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：18.41s
+- **耗时**：28.68s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1907,7 +1760,7 @@ WITH 源数据 AS (
 - **目标数据集**：3
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：7.84s
+- **耗时**：12.11s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1955,7 +1808,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：排名
 - **状态**：✅ 成功
-- **耗时**：16.42s
+- **耗时**：22.02s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -1991,7 +1844,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：极值
 - **状态**：✅ 成功
-- **耗时**：15.44s
+- **耗时**：28.35s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2033,7 +1886,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：极值
 - **状态**：✅ 成功
-- **耗时**：7.44s
+- **耗时**：12.55s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2081,7 +1934,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：极值
 - **状态**：✅ 成功
-- **耗时**：15.17s
+- **耗时**：22.34s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2120,7 +1973,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：金额单位应为“万元”
 - **状态**：✅ 成功
-- **耗时**：17.89s
+- **耗时**：23.96s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2161,7 +2014,7 @@ WITH 字段提取 AS (
 - **目标数据集**：2
 - **预期行为**：指标应为达成率，不能错用开单金额
 - **状态**：✅ 成功
-- **耗时**：17.75s
+- **耗时**：21.78s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2202,54 +2055,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：缺口口径，金额单位正确
 - **状态**：✅ 成功
-- **耗时**：7.52s
+- **耗时**：47.88s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部剩余任务金额
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M4：电商事业部年度目标营收 vs 年度开单金额对比
 
 - **目标数据集**：62
 - **预期行为**：双指标对比，字段不能混用
 - **状态**：✅ 成功
-- **耗时**：15.09s
+- **耗时**：27.19s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2282,7 +2102,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：按金额排序，非达成率
 - **状态**：✅ 成功
-- **耗时**：8.27s
+- **耗时**：8.89s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2330,7 +2150,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：按剩余任务/缺口排序
 - **状态**：✅ 成功
-- **耗时**：16.35s
+- **耗时**：28.31s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2372,7 +2192,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：自定义指标组合
 - **状态**：✅ 成功
-- **耗时**：17.48s
+- **耗时**：30.44s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2410,54 +2230,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：季度目标口径
 - **状态**：✅ 成功
-- **耗时**：8.53s
+- **耗时**：43.37s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部 q1 目标金额
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M9：消费者事业部完成金额
 
 - **目标数据集**：2
 - **预期行为**：应指向年度开单金额
 - **状态**：✅ 成功
-- **耗时**：16.48s
+- **耗时**：33.33s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2498,54 +2285,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：应指向达成率
 - **状态**：✅ 成功
-- **耗时**：7.41s
+- **耗时**：41.89s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部任务完成率
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M11：电商事业部预算完成率
 
 - **目标数据集**：62
 - **预期行为**：年度目标营收完成率
 - **状态**：✅ 成功
-- **耗时**：16.12s
+- **耗时**：20.58s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2583,54 +2337,21 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：金额口径
 - **状态**：✅ 成功
-- **耗时**：8.21s
+- **耗时**：32.75s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部总任务金额
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M13：消费者事业部年度开单金额排名
 
 - **目标数据集**：2
 - **预期行为**：金额排序
 - **状态**：✅ 成功
-- **耗时**：17.98s
+- **耗时**：25.22s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2672,7 +2393,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：率排序
 - **状态**：✅ 成功
-- **耗时**：7.45s
+- **耗时**：10.67s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2717,7 +2438,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：金额排序
 - **状态**：✅ 成功
-- **耗时**：14.94s
+- **耗时**：22.78s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2756,7 +2477,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：金额或率需明确
 - **状态**：✅ 成功
-- **耗时**：15.82s
+- **耗时**：28.52s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2797,54 +2518,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：缺口口径
 - **状态**：✅ 成功
-- **耗时**：8.38s
+- **耗时**：53.28s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部还差多少任务
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：西部分公司 / 东部分公司 / 南部分公司 / 北部分公司 / 餐饮业务部 / 工业医疗业务部 / 公共办公业务部
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M18：电商事业部目标营收完成率最低的细分业务
 
 - **目标数据集**：62
 - **预期行为**：率排序
 - **状态**：✅ 成功
-- **耗时**：16.38s
+- **耗时**：23.38s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2880,7 +2568,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：年度开单金额
 - **状态**：✅ 成功
-- **耗时**：14.98s
+- **耗时**：22.54s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -2922,44 +2610,13 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：达成率
 - **状态**：✅ 成功
-- **耗时**：7.09s
+- **耗时**：36.63s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部哪个分公司完成进度最快
-- **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
-- **SQL 样例**：
-```sql
-WITH 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
-```
+- **报告标题**：
 - **⚠️ 异常点**：结果为空
 
 ### M21：电商事业部哪个业务线利润最高
@@ -2967,7 +2624,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：毛利/利润口径
 - **状态**：✅ 成功
-- **耗时**：14.48s
+- **耗时**：25.12s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3003,7 +2660,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：达成率
 - **状态**：✅ 成功
-- **耗时**：15.9s
+- **耗时**：31.69s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3044,54 +2701,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：年度开单金额
 - **状态**：✅ 成功
-- **耗时**：8.14s
+- **耗时**：42.48s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部开单金额
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### M24：电商事业部营收完成情况
 
 - **目标数据集**：62
 - **预期行为**：年度目标营收完成率
 - **状态**：✅ 成功
-- **耗时**：15.89s
+- **耗时**：25.93s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3129,19 +2753,33 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：需聚合后计算，可能不支持但看兜底
 - **状态**：✅ 成功
-- **耗时**：7.64s
+- **耗时**：40.29s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部代表处人均业绩
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
+
+### L1：商用事业部东部分公司下有哪些代表处
+
+- **目标数据集**：3
+- **预期行为**：事业部 → 分公司 → 代表处
+- **状态**：✅ 成功
+- **耗时**：16.31s
+- **路由决策**：generate_sql
+- **意图**：detail
+- **是否需要确认**：False
+- **命中数据集**：[3]
+- **显示标题**：商用事业部东部分公司下有哪些代表处
 - **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
+- **KPI 卡**：[{"title": "总任务金额", "value": "95000000.0"}, {"title": "年度开单金额", "value": "22526100.19"}, {"title": "达成率", "value": "23.71"}, {"title": "剩余任务金额", "value": "72473899.81"}]
 - **章节**：总体判断 / 代表处下钻分析
 - **图表**：各代表处达成率排序
-- **折叠面板**：山东代表处 / 湖南代表处 / 粤东代表处 / 津冀代表处 / 黑龙江代表处 / 北京代表处 / 四川代表处 / 新西代表处 / 浙江代表处 / 上海代表处 / 江苏代表处 / 辽宁代表处 / 粤西广西代表处 / 湖北代表处 / 江西代表处 / 陕西代表处 / 云贵代表处 / 晋蒙（蒙西）代表处 / 安徽代表处 / 福建代表处 / 吉林代表处 / 河南代表处 / 重庆代表处 / 餐饮 / 甘青宁代表处
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 25 个代表处", "第一梯队：山东代表处37.63%、湖南代表处34.55%、粤东代表处28.90%、津冀代表处28.86%、黑龙江代表处28.73%、北京代表处26.32%、四川代表处25.98%、新西代表处25.01%、浙江代表处24.09%", "第二梯队：上海代表处24.04%、江苏代表处23.77%、辽宁代表处23.18%、粤西广西代表处22.19%、湖北代表处20.92%、江西代表处20.35%、陕西代表处18.50%、云贵代表处17.84%", "第三梯队：晋蒙（蒙西）代表处17.15%、安徽代表处16.96%、福建代表处15.01%、吉林代表处14.69%、河南代表处13.07%、重庆代表处12.96%、餐饮12.83%、甘青宁代表处11.02%"]
+- **折叠面板**：山东代表处 / 浙江代表处 / 上海代表处 / 江苏代表处 / 湖北代表处 / 安徽代表处 / 河南代表处
+- **答案摘要**：{"childCount": 7, "focusNode": "东部分公司", "mode": "drilldown", "targetLevel": "代表处", "text": "已定位到 东部分公司，当前展示其下一级 7 个代表处", "title": "下钻结果"}
+- **叙述**：["本次结果覆盖 7 个代表处", "第一梯队：山东代表处37.63%、浙江代表处24.09%、上海代表处24.04%", "第二梯队：江苏代表处23.77%、湖北代表处20.92%", "第三梯队：安徽代表处16.96%、河南代表处13.07%"]
 - **SQL 样例**：
 ```sql
 WITH RECURSIVE 汇总结果 AS (
@@ -3171,57 +2809,12 @@ flattened_tree AS (
             WHEN 业务代表 <> '' THEN C
 ```
 
-### L1：商用事业部东部分公司下有哪些代表处
-
-- **目标数据集**：3
-- **预期行为**：事业部 → 分公司 → 代表处
-- **状态**：✅ 成功
-- **耗时**：7.4s
-- **路由决策**：generate_sql
-- **意图**：detail
-- **是否需要确认**：False
-- **命中数据集**：[3]
-- **显示标题**：商用事业部东部分公司下有哪些代表处
-- **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{"childCount": 0, "focusNode": "", "mode": "drilldown", "targetLevel": "下一层级", "text": "当前展示 0 个下一层级下级节点", "title": "下钻结果"}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
-- **SQL 样例**：
-```sql
-WITH 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
-```
-- **⚠️ 异常点**：结果为空
-
 ### L2：商用事业部餐饮业务部业绩
 
 - **目标数据集**：3
 - **预期行为**：事业部 → 业务部
 - **状态**：✅ 成功
-- **耗时**：8.0s
+- **耗时**：15.55s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3229,14 +2822,14 @@ flattened_tree AS (
 - **显示标题**：商用事业部餐饮业务部业绩
 - **报告标题**：经营分析报告
 - **KPI 卡**：[{"title": "总任务金额", "value": "105000000.0"}, {"title": "年度开单金额", "value": "28667839.21"}, {"title": "达成率", "value": "27.3"}, {"title": "剩余任务金额", "value": "76332160.79"}]
-- **章节**：总体判断 / 业务部对比分析
-- **图表**：各业务部达成率排序
-- **折叠面板**：餐饮业务部
+- **章节**：总体判断 / 业务代表对比分析
+- **图表**：各业务代表达成率排序
+- **折叠面板**：周萌 / 贾希 / 靳锋
 - **答案摘要**：{}
-- **叙述**：["本次结果覆盖 1 个业务部", "当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["本次结果覆盖 3 个业务代表", "第一梯队：周萌59.30%", "第二梯队：贾希52.29%", "第三梯队：靳锋21.98%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3260,7 +2853,7 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
 
 ### L3：消费者事业部粤桂琼分公司下属城市分公司业绩
@@ -3268,7 +2861,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：事业部 → 分公司 → 城市分公司
 - **状态**：✅ 成功
-- **耗时**：17.76s
+- **耗时**：29.58s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3309,7 +2902,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：细分业务 → 承接人
 - **状态**：✅ 成功
-- **耗时**：14.63s
+- **耗时**：23.19s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3342,7 +2935,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：业务员层级
 - **状态**：✅ 成功
-- **耗时**：7.44s
+- **耗时**：12.97s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3387,7 +2980,7 @@ WITH 业务代表原始 AS (
 - **目标数据集**：2
 - **预期行为**：城市分公司层级
 - **状态**：✅ 成功
-- **耗时**：17.04s
+- **耗时**：40.53s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3429,22 +3022,22 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：代表处/业务员层级
 - **状态**：✅ 成功
-- **耗时**：7.87s
+- **耗时**：19.04s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部北部分公司业务代表业绩
 - **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "业务部 / 分公司数量", "value": "7"}, {"title": "累计总任务金额", "value": "455000000.0"}, {"title": "累计年度开单金额", "value": "131114522.4527676"}, {"title": "整体达成率", "value": "28.816378561047824"}, {"title": "最高：公共办公业务部", "value": "80.76"}, {"title": "最低：西部分公司", "value": "19.08"}, {"title": "首尾差距", "value": "61.68000000000001"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
+- **KPI 卡**：[{"title": "总任务金额", "value": "63600000.0"}, {"title": "年度开单金额", "value": "15840997.5799999"}, {"title": "达成率", "value": "24.91"}, {"title": "剩余任务金额", "value": "47759002.42"}]
+- **章节**：总体判断 / 业务代表对比分析
+- **图表**：各业务代表达成率排序
+- **折叠面板**：季刚 / 栾天龙 / 纪正洋 / 史利伟 / 于翔彦 / 张永在 / 杨傲男 / 付滨 / 廉博 / 马传朋 / 张光伟 / 戴亚轩 / 李书贵
 - **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "对比对象较多，关键指标区聚焦整体、最高和最低，完整 7 个业务部 / 分公司在下方对比表展开。", "首尾差异：公共办公业务部达成率比东部分公司高57.05个百分点", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
+- **叙述**：["本次结果覆盖 13 个业务代表", "第一梯队：季刚41.22%、栾天龙39.44%、纪正洋36.32%、史利伟34.78%、于翔彦31.21%", "第二梯队：张永在26.35%、杨傲男21.85%、付滨16.34%、廉博15.73%", "第三梯队：马传朋13.52%、张光伟12.70%、戴亚轩8.88%、李书贵4.31%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3468,7 +3061,7 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
 
 ### L8：国内业务部各细分业务年度开单金额
@@ -3476,7 +3069,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：业务部 → 细分业务
 - **状态**：✅ 成功
-- **耗时**：17.23s
+- **耗时**：23.08s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3514,7 +3107,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：分公司 → 代表处
 - **状态**：✅ 成功
-- **耗时**：7.23s
+- **耗时**：8.71s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3562,7 +3155,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：分公司 → 城市分公司
 - **状态**：✅ 成功
-- **耗时**：15.38s
+- **耗时**：26.72s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3603,22 +3196,22 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：业务部 → 业务员
 - **状态**：✅ 成功
-- **耗时**：7.33s
+- **耗时**：12.99s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部工业医疗业务部业务员业绩
 - **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "业务部 / 业务代表数量", "value": "6"}, {"title": "累计总任务金额", "value": "155000000.0"}, {"title": "累计年度开单金额", "value": "59506939.8899999"}, {"title": "整体达成率", "value": "38.39157412258058"}, {"title": "最高：公共办公业务部", "value": "80.76"}, {"title": "最低：董峰", "value": "0.00%"}, {"title": "首尾差距", "value": "80.76"}]
-- **章节**：总体判断 / 业务部 / 业务代表下钻分析
-- **图表**：各业务部 / 业务代表达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 陈林 / 张坤 / 董峰
+- **KPI 卡**：[{"title": "总任务金额", "value": "10000000.0"}, {"title": "年度开单金额", "value": "6367885.36"}, {"title": "达成率", "value": "63.68"}, {"title": "剩余任务金额", "value": "3632114.64"}]
+- **章节**：总体判断 / 业务代表对比分析
+- **图表**：各业务代表达成率排序
+- **折叠面板**：陈林 / 张坤 / 董峰
 - **答案摘要**：{}
-- **叙述**：["本次结果覆盖 6 个业务部 / 业务代表", "对比对象较多，关键指标区聚焦整体、最高和最低，完整 6 个业务部 / 业务代表在下方对比表展开。", "首尾差异：公共办公业务部达成率比张坤高80.76个百分点", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%", "第二梯队：餐饮业务部27.30%、陈林8.15%", "第三梯队：张坤0.00%、董峰0.00%"]
+- **叙述**：["本次结果覆盖 3 个业务代表", "第一梯队：陈林8.15%", "第二梯队：张坤0.00%", "第三梯队：董峰0.00%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3642,7 +3235,7 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
 
 ### L12：电商事业部京东直营业绩
@@ -3650,7 +3243,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：细分业务
 - **状态**：✅ 成功
-- **耗时**：14.97s
+- **耗时**：27.62s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3688,7 +3281,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：分公司
 - **状态**：✅ 成功
-- **耗时**：15.94s
+- **耗时**：28.21s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3729,19 +3322,22 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：分公司 → 代表处
 - **状态**：✅ 成功
-- **耗时**：7.56s
+- **耗时**：12.03s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部西部分公司代表处业绩
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
+- **KPI 卡**：[{"title": "总任务金额", "value": "69400000.0"}, {"title": "年度开单金额", "value": "13240968.1199999"}, {"title": "达成率", "value": "19.08"}, {"title": "剩余任务金额", "value": "56159031.88"}]
+- **章节**：总体判断 / 代表处下钻分析
+- **图表**：各代表处达成率排序
+- **折叠面板**：四川代表处 / 新西代表处 / 陕西代表处 / 云贵代表处 / 重庆代表处 / 甘青宁代表处
 - **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["本次结果覆盖 6 个代表处", "第一梯队：四川代表处25.98%、新西代表处25.01%", "第二梯队：陕西代表处18.50%、云贵代表处17.84%", "第三梯队：重庆代表处12.96%、甘青宁代表处11.02%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3765,16 +3361,15 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
-- **⚠️ 异常点**：结果为空
 
 ### L15：电商事业部直营零售部下属细分业务
 
 - **目标数据集**：62
 - **预期行为**：业务部 → 细分业务
 - **状态**：✅ 成功
-- **耗时**：14.03s
+- **耗时**：25.35s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3809,19 +3404,22 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：分公司 → 业务部
 - **状态**：✅ 成功
-- **耗时**：7.33s
+- **耗时**：11.64s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部北部分公司有哪些业务部
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{"childCount": 0, "focusNode": "", "mode": "drilldown", "targetLevel": "下一层级", "text": "当前展示 0 个下一层级下级节点", "title": "下钻结果"}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **KPI 卡**：[{"title": "总任务金额", "value": "63600000.0"}, {"title": "年度开单金额", "value": "15840997.5799999"}, {"title": "达成率", "value": "24.91"}, {"title": "剩余任务金额", "value": "47759002.42"}]
+- **章节**：总体判断 / 代表处下钻分析
+- **图表**：各代表处达成率排序
+- **折叠面板**：津冀代表处 / 黑龙江代表处 / 北京代表处 / 辽宁代表处 / 晋蒙（蒙西）代表处 / 吉林代表处
+- **答案摘要**：{"childCount": 6, "focusNode": "北部分公司", "mode": "drilldown", "targetLevel": "代表处", "text": "已定位到 北部分公司，当前展示其下一级 6 个代表处", "title": "下钻结果"}
+- **叙述**：["本次结果覆盖 6 个代表处", "第一梯队：津冀代表处28.86%、黑龙江代表处28.73%", "第二梯队：北京代表处26.32%、辽宁代表处23.18%", "第三梯队：晋蒙（蒙西）代表处17.15%、吉林代表处14.69%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3845,16 +3443,15 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
-- **⚠️ 异常点**：结果为空
 
 ### L17：消费者事业部城市分公司排名
 
 - **目标数据集**：2
 - **预期行为**：城市分公司
 - **状态**：✅ 成功
-- **耗时**：16.88s
+- **耗时**：27.53s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3896,7 +3493,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：承接人
 - **状态**：✅ 成功
-- **耗时**：16.98s
+- **耗时**：24.37s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -3931,19 +3528,22 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：业务部 → 代表处
 - **状态**：✅ 成功
-- **耗时**：7.71s
+- **耗时**：10.06s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部餐饮业务部代表处业绩
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
+- **KPI 卡**：[{"title": "总任务金额", "value": "105000000.0"}, {"title": "年度开单金额", "value": "28667839.21"}, {"title": "达成率", "value": "27.3"}, {"title": "剩余任务金额", "value": "76332160.79"}]
+- **章节**：总体判断 / 业务代表对比分析
+- **图表**：各业务代表达成率排序
+- **折叠面板**：周萌 / 贾希 / 靳锋
 - **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["本次结果覆盖 3 个业务代表", "第一梯队：周萌59.30%", "第二梯队：贾希52.29%", "第三梯队：靳锋21.98%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -3967,16 +3567,15 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
-- **⚠️ 异常点**：结果为空
 
 ### L20：消费者事业部粤桂琼与山东分公司对比
 
 - **目标数据集**：2
 - **预期行为**：分公司集合对比
 - **状态**：✅ 成功
-- **耗时**：15.35s
+- **耗时**：29.64s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4017,7 +3616,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：分公司集合对比
 - **状态**：✅ 成功
-- **耗时**：9.2s
+- **耗时**：10.48s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4064,7 +3663,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：业务部集合对比
 - **状态**：✅ 成功
-- **耗时**：17.55s
+- **耗时**：31.82s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4102,19 +3701,16 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：分公司 + 业务部组合
 - **状态**：✅ 成功
-- **耗时**：7.4s
+- **耗时**：13.93s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部南部分公司餐饮业务部业绩
 - **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "105000000.0"}, {"title": "年度开单金额", "value": "28667839.21"}, {"title": "达成率", "value": "27.3"}, {"title": "剩余任务金额", "value": "76332160.79"}]
-- **章节**：总体判断 / 业务部对比分析
-- **图表**：各业务部达成率排序
-- **折叠面板**：餐饮业务部
+- **章节**：总体判断 / 下一层级对比分析
 - **答案摘要**：{}
-- **叙述**：["本次结果覆盖 1 个业务部", "当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
 - **SQL 样例**：
 ```sql
 WITH 汇总结果 AS (
@@ -4143,13 +3739,14 @@ flattened_tree AS (
         CASE
             WHEN 业务代表 <> '' THEN COALESCE(NU
 ```
+- **⚠️ 异常点**：结果为空
 
 ### L24：消费者事业部山东分公司城市分公司排名
 
 - **目标数据集**：2
 - **预期行为**：分公司 → 城市分公司排名
 - **状态**：✅ 成功
-- **耗时**：15.16s
+- **耗时**：25.65s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4191,7 +3788,7 @@ WITH 字段提取 AS (
 - **目标数据集**：62
 - **预期行为**：业务部 → 细分业务 → 承接人
 - **状态**：✅ 成功
-- **耗时**：14.75s
+- **耗时**：30.95s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4226,7 +3823,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：无该节点或给出合理提示
 - **状态**：✅ 成功
-- **耗时**：7.43s
+- **耗时**：14.79s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -4240,7 +3837,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：3
 - **预期行为**：友好兜底，不报错
 - **状态**：✅ 成功
-- **耗时**：7.31s
+- **耗时**：9.27s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4285,7 +3882,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：N 超过实际数量时按实际返回
 - **状态**：✅ 成功
-- **耗时**：8.11s
+- **耗时**：10.86s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -4299,7 +3896,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：无结果/空状态
 - **状态**：✅ 成功
-- **耗时**：0.23s
+- **耗时**：0.22s
 - **路由决策**：
 - **意图**：
 - **是否需要确认**：True
@@ -4313,7 +3910,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：时间维度不支持时应说明
 - **状态**：✅ 成功
-- **耗时**：8.58s
+- **耗时**：11.46s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -4327,44 +3924,13 @@ flattened_tree AS (
 - **目标数据集**：3
 - **预期行为**：跨数据集口径不一致提示
 - **状态**：✅ 成功
-- **耗时**：8.69s
+- **耗时**：47.25s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部和消费者事业部的分公司对比
-- **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
-- **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
-- **SQL 样例**：
-```sql
-WITH 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
-```
+- **报告标题**：
 - **⚠️ 异常点**：结果为空
 
 ### E7：哪个分公司最高 5 名
@@ -4372,7 +3938,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：语义纠错为 top 5
 - **状态**：✅ 成功
-- **耗时**：7.47s
+- **耗时**：13.95s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -4386,7 +3952,7 @@ flattened_tree AS (
 - **目标数据集**：3
 - **预期行为**：可能无结果
 - **状态**：✅ 成功
-- **耗时**：7.56s
+- **耗时**：9.41s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4431,7 +3997,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：聚合求和
 - **状态**：✅ 成功
-- **耗时**：16.34s
+- **耗时**：59.37s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4472,7 +4038,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：非法数量处理
 - **状态**：✅ 成功
-- **耗时**：8.37s
+- **耗时**：11.85s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4520,7 +4086,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：细分业务对比
 - **状态**：✅ 成功
-- **耗时**：15.58s
+- **耗时**：25.88s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4558,7 +4124,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：同数据集分公司对比
 - **状态**：✅ 成功
-- **耗时**：16.24s
+- **耗时**：30.01s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4599,7 +4165,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：同数据集分公司对比
 - **状态**：✅ 成功
-- **耗时**：7.63s
+- **耗时**：9.45s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4646,7 +4212,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：N 大于实际时返回全部
 - **状态**：✅ 成功
-- **耗时**：17.17s
+- **耗时**：30.05s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4688,7 +4254,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：单点最低
 - **状态**：✅ 成功
-- **耗时**：8.76s
+- **耗时**：17.43s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4736,7 +4302,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：个人层级聚合
 - **状态**：✅ 成功
-- **耗时**：17.17s
+- **耗时**：23.75s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4771,7 +4337,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：最低极值
 - **状态**：✅ 成功
-- **耗时**：15.46s
+- **耗时**：28.63s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4813,7 +4379,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：最高极值
 - **状态**：✅ 成功
-- **耗时**：7.6s
+- **耗时**：10.61s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4861,7 +4427,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：最低极值
 - **状态**：✅ 成功
-- **耗时**：14.94s
+- **耗时**：23.12s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4900,7 +4466,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：聚合
 - **状态**：✅ 成功
-- **耗时**：17.65s
+- **耗时**：30.37s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -4941,54 +4507,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：聚合
 - **状态**：✅ 成功
-- **耗时**：8.72s
+- **耗时**：47.49s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部所有代表处业绩总和
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 代表处下钻分析
-- **图表**：各代表处达成率排序
-- **折叠面板**：山东代表处 / 湖南代表处 / 粤东代表处 / 津冀代表处 / 黑龙江代表处 / 北京代表处 / 四川代表处 / 新西代表处 / 浙江代表处 / 上海代表处 / 江苏代表处 / 辽宁代表处 / 粤西广西代表处 / 湖北代表处 / 江西代表处 / 陕西代表处 / 云贵代表处 / 晋蒙（蒙西）代表处 / 安徽代表处 / 福建代表处 / 吉林代表处 / 河南代表处 / 重庆代表处 / 餐饮 / 甘青宁代表处
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 25 个代表处", "第一梯队：山东代表处37.63%、湖南代表处34.55%、粤东代表处28.90%、津冀代表处28.86%、黑龙江代表处28.73%、北京代表处26.32%、四川代表处25.98%、新西代表处25.01%、浙江代表处24.09%", "第二梯队：上海代表处24.04%、江苏代表处23.77%、辽宁代表处23.18%、粤西广西代表处22.19%、湖北代表处20.92%、江西代表处20.35%、陕西代表处18.50%、云贵代表处17.84%", "第三梯队：晋蒙（蒙西）代表处17.15%、安徽代表处16.96%、福建代表处15.01%、吉林代表处14.69%、河南代表处13.07%、重庆代表处12.96%、餐饮12.83%、甘青宁代表处11.02%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### E22：电商事业部所有细分业务年度目标营收总和
 
 - **目标数据集**：62
 - **预期行为**：聚合
 - **状态**：✅ 成功
-- **耗时**：15.05s
+- **耗时**：29.85s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5026,7 +4559,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：语义为 top 10
 - **状态**：✅ 成功
-- **耗时**：15.58s
+- **耗时**：29.48s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5068,7 +4601,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：语义为 bottom 10
 - **状态**：✅ 成功
-- **耗时**：7.99s
+- **耗时**：13.77s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5116,7 +4649,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：细分业务
 - **状态**：✅ 成功
-- **耗时**：16.67s
+- **耗时**：24.47s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5154,7 +4687,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：标题/摘要应围绕“消费者事业部整体达成率”
 - **状态**：✅ 成功
-- **耗时**：19.47s
+- **耗时**：25.54s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5202,7 +4735,7 @@ WITH 源数据 AS (
 - **目标数据集**：3
 - **预期行为**：核心结论应给出具体数值，KPI 卡标题贴合问题
 - **状态**：✅ 成功
-- **耗时**：9.57s
+- **耗时**：10.64s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5258,7 +4791,7 @@ WITH raw_data AS (
 - **目标数据集**：2
 - **预期行为**：排名结果卡标题应为“前 3 名分公司”或类似
 - **状态**：✅ 成功
-- **耗时**：8.31s
+- **耗时**：11.86s
 - **路由决策**：wait_boss_confirm
 - **意图**：confirm
 - **是否需要确认**：True
@@ -5272,7 +4805,7 @@ WITH raw_data AS (
 - **目标数据集**：2
 - **预期行为**：筛选结果卡应说明条件，条形图颜色语义一致
 - **状态**：✅ 成功
-- **耗时**：17.17s
+- **耗时**：29.13s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5314,7 +4847,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：对比分析卡应列出四大分公司
 - **状态**：✅ 成功
-- **耗时**：8.37s
+- **耗时**：11.46s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5361,7 +4894,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：对比卡应显示两个业务部，结论针对对比对象
 - **状态**：✅ 成功
-- **耗时**：16.55s
+- **耗时**：27.11s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5399,7 +4932,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：最高结果卡应突出答案分公司
 - **状态**：✅ 成功
-- **耗时**：15.83s
+- **耗时**：30.24s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5441,7 +4974,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：排名卡不应出现“领先”等正向标签
 - **状态**：✅ 成功
-- **耗时**：7.77s
+- **耗时**：10.33s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5489,7 +5022,7 @@ flattened_tree AS (
 - **目标数据集**：2
 - **预期行为**：结论方向应为“缺口/承压”
 - **状态**：✅ 成功
-- **耗时**：15.0s
+- **耗时**：25.38s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5531,7 +5064,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：下钻卡片标题应包含“东部分公司”
 - **状态**：✅ 成功
-- **耗时**：10.42s
+- **耗时**：10.95s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5579,7 +5112,7 @@ WITH 字段提取 AS (
 - **目标数据集**：2
 - **预期行为**：KPI 卡标题应含“总任务金额”
 - **状态**：✅ 成功
-- **耗时**：17.81s
+- **耗时**：36.23s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5620,54 +5153,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：KPI 卡标题应含“年度开单金额”
 - **状态**：✅ 成功
-- **耗时**：8.07s
+- **耗时**：52.21s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部年度开单金额
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 业务部 / 分公司下钻分析
-- **图表**：各业务部 / 分公司达成率排序
-- **折叠面板**：公共办公业务部 / 工业医疗业务部 / 餐饮业务部 / 北部分公司 / 南部分公司 / 东部分公司 / 西部分公司
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 7 个业务部 / 分公司", "第一梯队：公共办公业务部80.76%、工业医疗业务部63.68%、餐饮业务部27.30%", "第二梯队：北部分公司24.91%、南部分公司24.69%", "第三梯队：东部分公司23.71%、西部分公司19.08%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### C13：电商事业部年度目标营收
 
 - **目标数据集**：62
 - **预期行为**：KPI 卡标题应含“年度目标营收”
 - **状态**：✅ 成功
-- **耗时**：15.32s
+- **耗时**：30.94s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5705,7 +5205,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：标题应含“城市分公司”
 - **状态**：✅ 成功
-- **耗时**：15.98s
+- **耗时**：33.18s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5747,7 +5247,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：筛选卡标题应含条件与层级
 - **状态**：✅ 成功
-- **耗时**：8.08s
+- **耗时**：11.58s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5794,7 +5294,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：排名卡标题应含“毛利率”
 - **状态**：✅ 成功
-- **耗时**：17.1s
+- **耗时**：26.81s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5833,7 +5333,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：标题应含“山东分公司”
 - **状态**：✅ 成功
-- **耗时**：17.13s
+- **耗时**：26.19s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5874,7 +5374,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：标题应含“餐饮业务部”
 - **状态**：✅ 成功
-- **耗时**：7.34s
+- **耗时**：11.99s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5882,14 +5382,14 @@ WITH 字段提取 AS (
 - **显示标题**：商用事业部餐饮业务部业绩
 - **报告标题**：经营分析报告
 - **KPI 卡**：[{"title": "总任务金额", "value": "105000000.0"}, {"title": "年度开单金额", "value": "28667839.21"}, {"title": "达成率", "value": "27.3"}, {"title": "剩余任务金额", "value": "76332160.79"}]
-- **章节**：总体判断 / 业务部对比分析
-- **图表**：各业务部达成率排序
-- **折叠面板**：餐饮业务部
+- **章节**：总体判断 / 业务代表对比分析
+- **图表**：各业务代表达成率排序
+- **折叠面板**：周萌 / 贾希 / 靳锋
 - **答案摘要**：{}
-- **叙述**：["本次结果覆盖 1 个业务部", "当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["本次结果覆盖 3 个业务代表", "第一梯队：周萌59.30%", "第二梯队：贾希52.29%", "第三梯队：靳锋21.98%"]
 - **SQL 样例**：
 ```sql
-WITH 汇总结果 AS (
+WITH RECURSIVE 汇总结果 AS (
 WITH raw_data AS (
     SELECT
         TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
@@ -5913,7 +5413,7 @@ flattened_tree AS (
             ELSE '事业部'
         END AS 层级,
         CASE
-            WHEN 业务代表 <> '' THEN COALESCE(NU
+            WHEN 业务代表 <> '' THEN C
 ```
 
 ### C19：电商事业部跨境业务部业绩
@@ -5921,7 +5421,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：标题应含“跨境业务部”
 - **状态**：✅ 成功
-- **耗时**：14.94s
+- **耗时**：23.3s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -5959,7 +5459,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：对比结论应提及两个分公司
 - **状态**：✅ 成功
-- **耗时**：17.04s
+- **耗时**：30.74s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6000,7 +5500,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：对比结论应提及具体分公司
 - **状态**：✅ 成功
-- **耗时**：7.73s
+- **耗时**：9.91s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6047,7 +5547,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：对比结论应提及两个细分业务
 - **状态**：✅ 成功
-- **耗时**：17.18s
+- **耗时**：24.66s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6085,7 +5585,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：总览/对比卡
 - **状态**：✅ 成功
-- **耗时**：15.66s
+- **耗时**：24.47s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6126,54 +5626,21 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：总览/对比卡
 - **状态**：✅ 成功
-- **耗时**：7.55s
+- **耗时**：43.72s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部各代表处达成率分布
-- **报告标题**：经营分析报告
-- **KPI 卡**：[{"title": "总任务金额", "value": "455000000.0"}, {"title": "年度开单金额", "value": "126286318.012767"}, {"title": "达成率", "value": "27.76"}, {"title": "剩余任务金额", "value": "328713681.99"}]
-- **章节**：总体判断 / 代表处下钻分析
-- **图表**：各代表处达成率排序
-- **折叠面板**：山东代表处 / 湖南代表处 / 粤东代表处 / 津冀代表处 / 黑龙江代表处 / 北京代表处 / 四川代表处 / 新西代表处 / 浙江代表处 / 上海代表处 / 江苏代表处 / 辽宁代表处 / 粤西广西代表处 / 湖北代表处 / 江西代表处 / 陕西代表处 / 云贵代表处 / 晋蒙（蒙西）代表处 / 安徽代表处 / 福建代表处 / 吉林代表处 / 河南代表处 / 重庆代表处 / 餐饮 / 甘青宁代表处
-- **答案摘要**：{}
-- **叙述**：["本次结果覆盖 25 个代表处", "第一梯队：山东代表处37.63%、湖南代表处34.55%、粤东代表处28.90%、津冀代表处28.86%、黑龙江代表处28.73%、北京代表处26.32%、四川代表处25.98%、新西代表处25.01%、浙江代表处24.09%", "第二梯队：上海代表处24.04%、江苏代表处23.77%、辽宁代表处23.18%、粤西广西代表处22.19%、湖北代表处20.92%、江西代表处20.35%、陕西代表处18.50%、云贵代表处17.84%", "第三梯队：晋蒙（蒙西）代表处17.15%、安徽代表处16.96%、福建代表处15.01%、吉林代表处14.69%、河南代表处13.07%、重庆代表处12.96%、餐饮12.83%、甘青宁代表处11.02%"]
-- **SQL 样例**：
-```sql
-WITH RECURSIVE 汇总结果 AS (
-WITH raw_data AS (
-    SELECT
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END, '')) AS 分公司,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END, '')) AS 代表处,
-        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END, '')) AS 业务代表,
-        '' AS 业务部,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 总任务金额,
-        SUM(COALESCE(NULLIF(regexp_replace(COALESCE(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '0'), '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC) AS 年度开单金额
-    FROM angel_group_data
-    WHERE COALESCE(NULLIF(TRIM(CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END), ''), '2026') = '2026'
-    GROUP BY 1, 2, 3, 4
-),
-flattened_tree AS (
-    SELECT
-        CASE
-            WHEN 业务代表 <> '' THEN '业务代表'
-            WHEN 代表处 <> '' THEN '代表处'
-            WHEN 分公司 <> '' AND 分公司 LIKE '%业务部' THEN '业务部'
-            WHEN 业务部 <> '' THEN '业务部'
-            WHEN 分公司 <> '' THEN '分公司'
-            ELSE '事业部'
-        END AS 层级,
-        CASE
-            WHEN 业务代表 <> '' THEN C
-```
+- **报告标题**：
+- **⚠️ 异常点**：结果为空
 
 ### C25：电商事业部各业务部预算完成情况
 
 - **目标数据集**：62
 - **预期行为**：总览/对比卡
 - **状态**：✅ 成功
-- **耗时**：15.48s
+- **耗时**：26.15s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6211,7 +5678,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：同时返回最高和最低
 - **状态**：✅ 成功
-- **耗时**：15.89s
+- **耗时**：23.98s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6252,7 +5719,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：集合内极值
 - **状态**：✅ 成功
-- **耗时**：7.98s
+- **耗时**：13.25s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6299,7 +5766,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：双指标
 - **状态**：✅ 成功
-- **耗时**：15.57s
+- **耗时**：19.39s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6337,7 +5804,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：双向排名对比
 - **状态**：✅ 成功
-- **耗时**：15.37s
+- **耗时**：28.81s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6378,16 +5845,19 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：跨分公司下钻对比
 - **状态**：✅ 成功
-- **耗时**：7.32s
+- **耗时**：10.24s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
 - **命中数据集**：[3]
 - **显示标题**：商用事业部东部分公司和南部分公司代表处业绩对比
 - **报告标题**：经营分析报告
-- **章节**：总体判断 / 下一层级对比分析
+- **KPI 卡**：[{"title": "代表处数量", "value": "13"}, {"title": "累计总任务金额", "value": "177000000.0"}, {"title": "累计年度开单金额", "value": "42010387.14276798"}, {"title": "整体达成率", "value": "23.73468200156383"}, {"title": "最高：山东代表处", "value": "37.63"}, {"title": "最低：餐饮", "value": "12.83"}, {"title": "首尾差距", "value": "24.800000000000004"}]
+- **章节**：总体判断 / 代表处对比分析
+- **图表**：各代表处达成率排序
+- **折叠面板**：山东代表处 / 湖南代表处 / 粤东代表处 / 浙江代表处 / 上海代表处 / 江苏代表处 / 粤西广西代表处 / 湖北代表处 / 江西代表处 / 安徽代表处 / 福建代表处 / 河南代表处 / 餐饮
 - **答案摘要**：{}
-- **叙述**：["当前可比对象不足 2 个，不做横向好坏对比。"]
+- **叙述**：["本次结果覆盖 13 个代表处", "对比对象较多，关键指标区聚焦整体、最高和最低，完整 13 个代表处在下方对比表展开。", "首尾差异：山东代表处达成率比安徽代表处高20.67个百分点", "第一梯队：山东代表处37.63%、湖南代表处34.55%、粤东代表处28.90%、浙江代表处24.09%、上海代表处24.04%", "第二梯队：江苏代表处23.77%、粤西广西代表处22.19%、湖北代表处20.92%、江西代表处20.35%", "第三梯队：安徽代表处16.96%、福建代表处15.01%、河南代表处13.07%、餐饮12.83%"]
 - **SQL 样例**：
 ```sql
 WITH 汇总结果 AS (
@@ -6416,14 +5886,13 @@ flattened_tree AS (
         CASE
             WHEN 业务代表 <> '' THEN COALESCE(NU
 ```
-- **⚠️ 异常点**：结果为空
 
 ### X6：电商事业部京东直营、天猫直营、抖音直营业绩排名
 
 - **目标数据集**：62
 - **预期行为**：多对象排名
 - **状态**：✅ 成功
-- **耗时**：16.48s
+- **耗时**：28.48s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6462,7 +5931,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：多条件筛选
 - **状态**：✅ 成功
-- **耗时**：16.16s
+- **耗时**：26.13s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6504,7 +5973,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：多条件筛选
 - **状态**：✅ 成功
-- **耗时**：7.44s
+- **耗时**：14.39s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6549,7 +6018,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：复合筛选+排名
 - **状态**：✅ 成功
-- **耗时**：15.39s
+- **耗时**：22.32s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6585,7 +6054,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：指定名次
 - **状态**：✅ 成功
-- **耗时**：16.09s
+- **耗时**：32.56s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6627,7 +6096,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：指定名次
 - **状态**：✅ 成功
-- **耗时**：7.88s
+- **耗时**：9.76s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6675,7 +6144,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：指定名次
 - **状态**：✅ 成功
-- **耗时**：15.68s
+- **耗时**：26.05s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6711,7 +6180,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：分组极值
 - **状态**：✅ 成功
-- **耗时**：17.79s
+- **耗时**：23.26s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6752,7 +6221,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：分组极值
 - **状态**：✅ 成功
-- **耗时**：7.21s
+- **耗时**：11.5s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6799,7 +6268,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：分组极值
 - **状态**：✅ 成功
-- **耗时**：14.57s
+- **耗时**：19.95s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6834,7 +6303,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：明确排序指标
 - **状态**：✅ 成功
-- **耗时**：15.89s
+- **耗时**：30.95s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6876,7 +6345,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：明确排序指标
 - **状态**：✅ 成功
-- **耗时**：7.55s
+- **耗时**：10.89s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6924,7 +6393,7 @@ flattened_tree AS (
 - **目标数据集**：62
 - **预期行为**：明确排序指标
 - **状态**：✅ 成功
-- **耗时**：16.99s
+- **耗时**：23.74s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -6960,7 +6429,7 @@ SELECT '电商业务' AS 条线,
 - **目标数据集**：2
 - **预期行为**：否定式筛选
 - **状态**：✅ 成功
-- **耗时**：15.15s
+- **耗时**：32.84s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
@@ -7002,7 +6471,7 @@ WITH 字段提取 AS (
 - **目标数据集**：3
 - **预期行为**：否定式筛选
 - **状态**：✅ 成功
-- **耗时**：7.22s
+- **耗时**：11.62s
 - **路由决策**：generate_sql
 - **意图**：detail
 - **是否需要确认**：False
