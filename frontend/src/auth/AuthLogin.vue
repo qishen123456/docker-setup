@@ -2,7 +2,7 @@
   <main class="auth-login-page">
     <section class="auth-hero">
       <div class="auth-hero-mark">
-        <img src="/angel-logo.png" alt="ANGEL" class="auth-hero-logo" />
+        <img src="/angel-logowite.png" alt="ANGEL" class="auth-hero-logo" />
       </div>
       <p class="auth-kicker">ANGEL INTELLIGENCE</p>
       <h1>安吉尔智能问数</h1>
@@ -181,7 +181,6 @@ const startFeishu = async () => {
   height: auto;
   object-fit: contain;
   /* 白色版logo反显 */
-  filter: brightness(0) invert(1);
   opacity: 0.95;
   display: block;
 }

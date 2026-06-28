@@ -113,13 +113,34 @@ def _optional_int(value: Any):
     if not text:
         return None
     return int(text)
-
-
 def _dataset_question_tag(dataset_name: str, dataset_code: str = "") -> str:
-    text = str(dataset_name or dataset_code or "数据集").strip()
-    text = re.sub(r"[（(].*?[）)]", "", text)
-    text = re.sub(r"(数据集|任务达成分析|年度|标准版|测试)", "", text).strip(" -_")
-    return (text or str(dataset_name or dataset_code or "数据集").strip() or "数据集")[:6]
+    raw_text = str(dataset_name or dataset_code or "\u6570\u636e\u96c6").strip()
+    if not raw_text:
+        return "\u6570\u636e\u96c6"
+
+    text = re.sub(r"[\uFF08(].*?[\uFF09)]", "", raw_text)
+    text = re.sub(
+        r"(\u6570\u636e\u96c6|\u6807\u51c6\u7248|\u6807\u51c6|\u6d4b\u8bd5\u7248|\u6d4b\u8bd5|\u5347\u7ea7\u7248|\u9636\u6bb5\u4e00|\u9636\u6bb5\u4e8c|\u9636\u6bb5\u4e09|\u5e74\u5ea6\u4efb\u52a1\u8fbe\u6210\u5206\u6790|\u4efb\u52a1\u8fbe\u6210\u5206\u6790|\u4e1a\u7ee9\u5206\u6790)",
+        "",
+        text,
+    )
+    text = re.sub(r"[-_\s]+", "", text).strip(" -_")
+
+    preferred_patterns = [
+        r"[\u4e00-\u9fa5A-Za-z0-9]+\u4e8b\u4e1a\u90e8",
+        r"[\u4e00-\u9fa5A-Za-z0-9]+\u4e1a\u52a1\u90e8",
+        r"[\u4e00-\u9fa5A-Za-z0-9]+\u5206\u516c\u53f8",
+        r"[\u4e00-\u9fa5A-Za-z0-9]+\u4ee3\u8868\u5904",
+    ]
+    for pattern in preferred_patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(0)
+
+    text = text or raw_text
+    if len(text) <= 8:
+        return text
+    return text[:8]
 
 
 def _shape_common_question(row: Dict[str, Any]) -> Dict[str, Any]:

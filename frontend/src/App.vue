@@ -12,7 +12,7 @@
     <el-aside class="sidebar sa-dark-panel" :class="{ 'sidebar-collapsed': collapsed }" :width="collapsed ? '72px' : '248px'">
       <div class="brand">
         <div class="brand-pill" :class="{ 'is-collapsed': collapsed }">
-          <img src="/angel-logo.png" alt="ANGEL" class="brand-logo" />
+          <img src="/angel-logowite.png" alt="ANGEL" class="brand-logo" />
           <div v-if="!collapsed" class="brand-text">
             <div class="brand-title">ANGEL</div>
             <div class="brand-subtitle">安吉尔智能问数</div>
@@ -1084,7 +1084,6 @@ body,
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
-  filter: brightness(0) invert(1);
   opacity: 0.92;
 }
 
@@ -2118,7 +2117,6 @@ body,
   width: auto;
   object-fit: contain;
   /* logo 是黑色+白底，在深色topbar上需要做白色反转处理 */
-  filter: brightness(0) invert(1);
   opacity: 0.92;
   flex-shrink: 0;
 }

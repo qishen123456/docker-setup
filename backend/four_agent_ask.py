@@ -6897,6 +6897,90 @@ Agent1 路由结果：
             return []
         return [latest_dataset_id]
 
+    @staticmethod
+    def _extract_followup_org_target(question: str) -> str:
+        text = str(question or "").strip()
+        if not text:
+            return ""
+        cleaned = re.sub(r"^(看下|看一下|查下|查一下|问下|问一下|再看下|再看一下|继续看下|继续看一下)", "", text)
+        cleaned = re.sub(r"(的业绩|业绩呢|业绩|表现呢|表现|情况呢|情况|怎么样|如何|呢|吗|呀|吧)$", "", cleaned)
+        level_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司"]
+        for term in level_terms:
+            index = cleaned.find(term)
+            if index <= 0:
+                continue
+            prefix = cleaned[:index].strip()
+            if len(prefix) < 2:
+                continue
+            return f"{prefix}{term}"
+        return ""
+
+    def _build_followup_org_target_miss_result(
+        self,
+        question: str,
+        target_name: str,
+        selected_dataset_ids: List[int],
+    ) -> Dict[str, Any]:
+        catalog = self.repository.get_agent1_catalog()
+        catalog_by_id = {int(item.get("id") or 0): item for item in catalog if item.get("id") is not None}
+        dataset_names = [
+            str(catalog_by_id.get(int(item), {}).get("dataset_name") or f"数据集 {item}")
+            for item in selected_dataset_ids
+        ]
+        scoped_catalog = [item for item in catalog if int(item.get("id") or 0) in {int(ds) for ds in selected_dataset_ids}]
+        permissions = load_data_permissions()
+        nodes = [
+            node for node in (self.organization_route_resolver._load_tree().get("nodes") or [])
+            if isinstance(node, dict) and node.get("enabled", True)
+        ]
+        candidate_names: List[str] = []
+        for node in nodes:
+            dataset_ids = self.organization_route_resolver._dataset_ids_for_node(node, permissions)
+            if not any(int(item) in {int(ds) for ds in selected_dataset_ids} for item in dataset_ids):
+                continue
+            name = str(node.get("name") or "").strip()
+            if len(name) >= 2:
+                candidate_names.append(name)
+        suggestions = get_close_matches(target_name, sorted(set(candidate_names)), n=3, cutoff=0.45)
+        suggestion_text = f"。你是不是想问：{'、'.join(suggestions)}" if suggestions else ""
+        return {
+            "error": f"未识别到“{target_name}”这个组织节点，当前不会继续沿用上一轮对象直接出结果{suggestion_text}",
+            "question": question,
+            "requires_confirmation": False,
+            "conversation_session_id": "",
+            "diagnostics": {
+                "selected_dataset_ids": selected_dataset_ids,
+                "selected_dataset_names": dataset_names,
+                "unresolved_followup_target": target_name,
+                "suggested_targets": suggestions,
+            },
+        }
+
+    def _guard_followup_org_target_resolution(
+        self,
+        question: str,
+        selected_dataset_ids: List[int],
+    ) -> Optional[Dict[str, Any]]:
+        if len(selected_dataset_ids) != 1:
+            return None
+        target_name = self._extract_followup_org_target(question)
+        if not target_name:
+            return None
+        catalog = [
+            item for item in self.repository.get_agent1_catalog()
+            if int(item.get("id") or 0) == int(selected_dataset_ids[0])
+        ]
+        if not catalog:
+            return None
+        route = self.organization_route_resolver.resolve(
+            question,
+            catalog,
+            allowed_dataset_ids=[int(selected_dataset_ids[0])],
+        )
+        if route and (route.get("organization_mentions") or route.get("resolved_members")):
+            return None
+        return self._build_followup_org_target_miss_result(question, target_name, selected_dataset_ids)
+
     def _repair_sql_after_execution_error(
         self,
         question: str,
@@ -8087,6 +8171,19 @@ Agent3 复核结果：
                     self._append_trace(trace, "data_permission.denied", "warning", preferred_dataset_ids=preferred_dataset_ids)
                     self._flush_trace(trace, result)
                     return result
+                followup_target_guard = self._guard_followup_org_target_resolution(question, selected_dataset_ids)
+                if followup_target_guard:
+                    followup_target_guard["conversation_session_id"] = conversation_session_id
+                    self._append_trace(
+                        trace,
+                        "agent1.followup_target_unresolved",
+                        "warning",
+                        selected_dataset_ids=selected_dataset_ids,
+                        unresolved_target=followup_target_guard.get("diagnostics", {}).get("unresolved_followup_target"),
+                        suggestions=followup_target_guard.get("diagnostics", {}).get("suggested_targets", []),
+                    )
+                    self._flush_trace(trace, followup_target_guard)
+                    return followup_target_guard
                 route = {
                     "dataset_ids": selected_dataset_ids,
                     "intent": "detail",
