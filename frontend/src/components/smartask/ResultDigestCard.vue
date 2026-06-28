@@ -315,6 +315,12 @@ const toNumber = (value) => {
   return Number.isFinite(numeric) ? numeric : null
 }
 
+const inferAmountSourceUnit = (hint = '', rawValue = '') => {
+  const text = `${String(hint || '')} ${String(rawValue || '')}`
+  if (/_万元\b|万元|（万）|\(万\)|以万为单位|转换（以万为单位）/.test(text)) return '万元'
+  return ''
+}
+
 const findColumn = (row, matchers = []) => {
   const keys = Object.keys(row || {})
   return keys.find(key => matchers.some(matcher => matcher.test(key))) || ''
@@ -344,19 +350,54 @@ const formatAmountInWan = (value) => {
   return `${numeric.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}万`
 }
 
-const parseAmountInWan = (value) => {
+const parseAmountByContract = (value, hint = '') => {
   if (value === null || value === undefined || value === '') return null
+  const { unit, scale } = amountUnitConfig.value
+  const sourceUnit = inferAmountSourceUnit(hint, value)
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return null
-    // 若数据集 metric 配置为「元」，原始数值是元，统一转为万口径
-    return isYuanAmount.value ? value / 10000 : value
+    if (unit === '万元') {
+      return sourceUnit === '元' ? value / 10000 : value
+    }
+    if (sourceUnit === '万元') return value * 10000
+    return value
   }
   const text = String(value).trim()
   const numeric = Number(text.replace(/[^0-9.-]/g, ''))
   if (!Number.isFinite(numeric)) return null
-  if (text.includes('亿')) return numeric * 10000
-  if (text.includes('万')) return numeric
-  return numeric
+  if (text.includes('亿')) return unit === '万元' ? numeric * 10000 : numeric * 100000000
+  if (text.includes('万')) return unit === '万元' ? numeric : numeric * 10000
+  if (unit === '万元') {
+    if (sourceUnit === '元') return numeric / 10000
+    return numeric
+  }
+  if (sourceUnit === '万元') return numeric * 10000
+  return numeric * (Number(scale) || 1)
+}
+
+const pickMetricKey = (row, preferredMatchers = [], fallbackMatchers = [], excludes = []) => {
+  const keys = Object.keys(row || {})
+  const matches = (key, matchers) => matchers.some(matcher => matcher.test(key))
+  return (
+    keys.find(key => matches(key, preferredMatchers))
+    || keys.find(key => matches(key, fallbackMatchers) && !matches(key, excludes))
+    || ''
+  )
+}
+
+const formatAmountByContract = (value) => {
+  const numeric = toNumber(value)
+  if (numeric === null) return ''
+  const { unit, scale } = amountUnitConfig.value
+  const display = numeric / (Number(scale) || 1)
+  const abs = Math.abs(display)
+  if (unit === '万元') {
+    if (abs >= 10000) return `${(display / 10000).toFixed(2).replace(/\.?0+$/, '')}亿`
+    return `${display.toLocaleString('zh-CN', { maximumFractionDigits: 2 }).replace(/\.?0+$/, '')}万`
+  }
+  if (abs >= 100000000) return `${(display / 100000000).toFixed(2).replace(/\.?0+$/, '')}亿`
+  if (abs >= 10000) return `${(display / 10000).toFixed(1).replace(/\.?0+$/, '')}万`
+  return display.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
 const deriveRemain = (task, actual, remain) => {
@@ -486,24 +527,31 @@ const specDigestRows = computed(() => {
     : []
   const rows = accordions.map((item) => {
     const kpis = Array.isArray(item?.kpis) ? item.kpis : []
-    const findKpi = (matcher) => kpis.find(kpi => matcher.test(kpi?.label || '')) || null
-    const task = findKpi(/总任务|任务金额|任务|目标/i)
-    const actual = findKpi(/年度开单|开单金额|开单|完成|实际|销售/i)
-    const remain = findKpi(/剩余|缺口|差额|remain/i)
-    const rate = findKpi(/达成率|percent|rate/i)
+    const findKpi = (preferred, fallback) => (
+      kpis.find(kpi => preferred.test(kpi?.label || ''))
+      || kpis.find(kpi => fallback.test(kpi?.label || ''))
+      || null
+    )
+    const task = findKpi(/^总任务金额$/, /总任务|任务金额|任务|目标/i)
+    const actual = findKpi(/^年度开单金额$/, /年度开单|开单金额|开单|完成|实际|销售/i)
+    const remain = findKpi(/^剩余任务金额$/, /剩余|缺口|差额|remain/i)
+    const rate = findKpi(/^达成率$/, /达成率|percent|rate/i)
     const rateValue = toNumber(rate?.value)
+    const taskValue = parseAmountByContract(task?.value ?? task?.displayValue, task?.label || task?.key || '')
+    const actualValue = parseAmountByContract(actual?.value ?? actual?.displayValue, actual?.label || actual?.key || '')
+    const remainValue = deriveRemain(taskValue, actualValue, parseAmountByContract(remain?.value ?? remain?.displayValue, remain?.label || remain?.key || ''))
     return {
       name: cleanText(item?.title || item?.name || ''),
       parent: cleanText(item?.parentName || ''),
       level: cleanText(item?.levelLabel || props.dataset?.report_spec?.scope?.compareLevelLabel || ''),
       rate: rateValue,
-      rateText: rate?.value || (rateValue !== null ? `${rateValue.toFixed(2).replace(/\.?0+$/, '')}%` : ''),
-      task: parseAmountInWan(task?.value),
-      actual: parseAmountInWan(actual?.value),
-      remain: deriveRemain(parseAmountInWan(task?.value), parseAmountInWan(actual?.value), parseAmountInWan(remain?.value)),
-      taskText: task?.value || '',
-      actualText: actual?.value || '',
-      remainText: remain?.value || formatAmountInWan(deriveRemain(parseAmountInWan(task?.value), parseAmountInWan(actual?.value), parseAmountInWan(remain?.value))),
+      rateText: rate?.displayValue || rate?.value || (rateValue !== null ? `${rateValue.toFixed(2).replace(/\.?0+$/, '')}%` : ''),
+      task: taskValue,
+      actual: actualValue,
+      remain: remainValue,
+      taskText: formatAmountByContract(taskValue),
+      actualText: formatAmountByContract(actualValue),
+      remainText: formatAmountByContract(remainValue),
     }
   }).filter(item => item.name)
   const level = digestCompareLevel.value
@@ -519,14 +567,28 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   const pathKey = findColumn(row, [/组织路径/, /归属组织/, /组织归属/, /管理链路/, /路径/])
   const levelKey = findColumn(row, [/层级/, /^level$/i])
   const rateKey = findColumn(row, [/达成率/, /completion.*rate/i, /\brate\b/i])
-  const taskKey = rowKeys.find(key => /总任务|任务金额|任务|目标/i.test(key) && !/剩余|缺口|差额|remain/i.test(key)) || ''
-  const actualKey = rowKeys.find(key => /年度开单|开单金额|开单|完成|实际|销售/i.test(key) && !/达成率|完成率|率/i.test(key)) || ''
-  const remainKey = rowKeys.find(key => /剩余任务|剩余|缺口|差额|remain/i.test(key)) || ''
+  const taskKey = pickMetricKey(
+    row,
+    [/^总任务金额$/, /^年度目标营收$/, /^总任务$/, /^目标营收$/],
+    [/总任务|任务金额|任务|目标/i],
+    [/剩余|缺口|差额|remain|达成率|完成率|率/i],
+  )
+  const actualKey = pickMetricKey(
+    row,
+    [/^年度开单金额$/, /^开单金额$/, /^年度开单$/, /^实际完成金额$/, /^销售金额$/],
+    [/年度开单|开单金额|开单|完成|实际|销售/i],
+    [/达成率|完成率|率/i],
+  )
+  const remainKey = pickMetricKey(
+    row,
+    [/^剩余任务金额$/, /^剩余任务$/, /^缺口金额$/, /^剩余缺口$/],
+    [/剩余任务|剩余|缺口|差额|remain/i],
+  )
   const rankGroupKey = findColumn(row, [/排名分组/])
   const undertakerKey = findColumn(row, [/业务承接人/, /任务承接人/, /负责人/])
-  const taskValue = parseAmountInWan(taskKey ? row[taskKey] : null)
-  const actualValue = parseAmountInWan(actualKey ? row[actualKey] : null)
-  const remainValue = deriveRemain(taskValue, actualValue, parseAmountInWan(remainKey ? row[remainKey] : null))
+  const taskValue = parseAmountByContract(taskKey ? row[taskKey] : null, taskKey)
+  const actualValue = parseAmountByContract(actualKey ? row[actualKey] : null, actualKey)
+  const remainValue = deriveRemain(taskValue, actualValue, parseAmountByContract(remainKey ? row[remainKey] : null, remainKey))
   return {
     name: cleanText(nameKey ? row[nameKey] : ''),
     parent: cleanText(parentKey ? row[parentKey] : ''),
@@ -537,9 +599,9 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     task: taskValue,
     actual: actualValue,
     remain: remainValue,
-    taskText: formatAmountInWan(taskValue),
-    actualText: formatAmountInWan(actualValue),
-    remainText: formatAmountInWan(remainValue),
+    taskText: formatAmountByContract(taskValue),
+    actualText: formatAmountByContract(actualValue),
+    remainText: formatAmountByContract(remainValue),
     rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
     undertaker: cleanText(undertakerKey ? row[undertakerKey] : ''),
     raw: row,
@@ -574,15 +636,14 @@ const reportConfig = computed(() => (
 
 // 金额单位适配：部分数据集（如电商）SQL 输出为元，需要按 metric 配置转换为万口径
 const amountUnitConfig = computed(() => {
+  const reportUnit = String(props.dataset?.report_spec?.amountUnit || '').trim()
   const metrics = Array.isArray(reportConfig.value?.metrics) ? reportConfig.value.metrics : []
   const amountMetric = metrics.find((m) => /amount|currency|金额/.test(String(m?.format || '')))
     || metrics.find((m) => /总任务|年度开单|剩余任务|金额/.test(String(m?.label || m?.column || '')))
-  const unit = String(amountMetric?.unit || '').trim()
+  const unit = reportUnit || String(amountMetric?.unit || '').trim()
   const scale = Number(amountMetric?.scale) || 1
   return { unit, scale }
 })
-const isYuanAmount = computed(() => amountUnitConfig.value.unit === '元' && amountUnitConfig.value.scale === 1)
-
 const intentName = computed(() => reportConfig.value?.queryIntent?.intent || props.route?.intent || '')
 const isFilterResult = computed(() => intentName.value === 'filter')
 const isRankingResult = computed(() => intentName.value === 'ranking')
@@ -741,7 +802,14 @@ const metricHint = (label) => {
 
 const normalizeMetricCard = (item, index) => {
   const label = cleanText(item?.label || item?.name || item?.key || `指标${index + 1}`)
-  const value = cleanText(item?.displayValue ?? item?.value ?? '')
+  const rawValue = item?.value
+  const value = /amount|currency/.test(String(item?.format || ''))
+    ? cleanText(
+      formatAmountByContract(parseAmountByContract(rawValue ?? item?.displayValue, label))
+      || item?.displayValue
+      || ''
+    )
+    : cleanText(item?.displayValue ?? rawValue ?? '')
   if (!label || !value) return null
   return {
     key: cleanText(item?.key || `${label}-${index}`),
@@ -1445,7 +1513,7 @@ const comparisonGapItems = computed(() => {
     const diff = Math.abs(left.actual - right.actual)
     const winner = left.actual >= right.actual ? left.name : right.name
     const loser = left.actual >= right.actual ? right.name : left.name
-    items.push({ label: rows.length > 2 ? (isFilterResult.value ? '开单差距' : '首尾开单差') : '开单差', value: `${winner} 比 ${loser} 多 ${formatAmountInWan(diff)}` })
+    items.push({ label: rows.length > 2 ? (isFilterResult.value ? '开单差距' : '首尾开单差') : '开单差', value: `${winner} 比 ${loser} 多 ${formatAmountByContract(diff)}` })
   }
   return items
 })
@@ -1491,7 +1559,7 @@ const comparisonGapLine = computed(() => {
     const diff = Math.abs(left.actual - right.actual)
     const winner = left.actual >= right.actual ? left.name : right.name
     const loser = left.actual >= right.actual ? right.name : left.name
-    lines.push(`${winner}开单金额比${loser}高${formatAmountInWan(diff)}`)
+    lines.push(`${winner}开单金额比${loser}高${formatAmountByContract(diff)}`)
   }
   return lines.length ? `差异：${lines.join('，')}。` : ''
 })
@@ -2063,10 +2131,10 @@ const supportLines = computed(() => {
       lines.push(`达成率差距：${nodeNameWithUndertaker(leader)}${leader.rateText || ''}，${nodeNameWithUndertaker(pressure)}${pressure.rateText || ''}，相差${diff}个百分点。`)
     }
     if (taskRows.length >= 2) {
-      lines.push(`任务体量：${nodeNameWithUndertaker(taskRows[0])}任务${taskRows[0].taskText || formatAmountInWan(taskRows[0].task)}，${nodeNameWithUndertaker(taskRows[taskRows.length - 1])}任务${taskRows[taskRows.length - 1].taskText || formatAmountInWan(taskRows[taskRows.length - 1].task)}。`)
+      lines.push(`任务体量：${nodeNameWithUndertaker(taskRows[0])}任务${taskRows[0].taskText || formatAmountByContract(taskRows[0].task)}，${nodeNameWithUndertaker(taskRows[taskRows.length - 1])}任务${taskRows[taskRows.length - 1].taskText || formatAmountByContract(taskRows[taskRows.length - 1].task)}。`)
     }
     if (remainRows.length >= 2) {
-      lines.push(`缺口压力：${nodeNameWithUndertaker(remainRows[0])}缺口${remainRows[0].remainText || formatAmountInWan(remainRows[0].remain)}，${nodeNameWithUndertaker(remainRows[remainRows.length - 1])}缺口${remainRows[remainRows.length - 1].remainText || formatAmountInWan(remainRows[remainRows.length - 1].remain)}。`)
+      lines.push(`缺口压力：${nodeNameWithUndertaker(remainRows[0])}缺口${remainRows[0].remainText || formatAmountByContract(remainRows[0].remain)}，${nodeNameWithUndertaker(remainRows[remainRows.length - 1])}缺口${remainRows[remainRows.length - 1].remainText || formatAmountByContract(remainRows[remainRows.length - 1].remain)}。`)
     }
     return lines.filter(Boolean)
   }
@@ -2110,7 +2178,7 @@ const supportLines = computed(() => {
       ? Math.abs(leaderValue - tailValue)
       : null
     const gapText = metricGap !== null
-      ? (rankingMetricMeta.value.key === 'rate' ? `${metricGap.toFixed(2).replace(/\.?0+$/, '')}个百分点` : formatAmountInWan(metricGap))
+      ? (rankingMetricMeta.value.key === 'rate' ? `${metricGap.toFixed(2).replace(/\.?0+$/, '')}个百分点` : formatAmountByContract(metricGap))
       : ''
     const riskCount = shown.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
     const headLabel = shown.length > 1 ? '第1名' : '榜首'

@@ -179,6 +179,7 @@ def get_default_config() -> dict:
             "metrics": ["总任务（金额）", "年度开单金额"],
         },
         "sqlOutputContract": {
+            "amountUnit": "元",
             "requiredColumns": ["条线", "层级", "节点名称", "上级名称"],
             "metricColumns": ["总任务金额", "年度开单金额", "达成率", "剩余任务金额"],
             "notes": [
@@ -213,7 +214,7 @@ def get_default_config() -> dict:
             {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
             {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount", "unit": "元", "scale": 1},
         ],
-        "amountUnitConvention": "元",  # 所有金额类指标默认原始值为元，按需要自动展示为万/亿
+        "amountUnitConvention": "元",  # 金额字段的原始数据单位；基础问数/左侧卡片优先按此契约展示
         "levels": [
             {"name": "机构层", "values": ["代表处", "分公司", "业务部"]},
             {"name": "个人层", "values": ["业务代表", "业务员", "业务"]},

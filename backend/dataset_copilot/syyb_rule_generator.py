@@ -154,6 +154,18 @@ summarized_nodes AS (
     FROM flattened_tree
     WHERE 节点名称 <> ''
     GROUP BY 条线, 层级, 上级名称, 节点名称
+    UNION ALL
+    SELECT
+        '事业部层级' AS 条线,
+        '事业部' AS 层级,
+        NULL AS 上级名称,
+        '商用事业部' AS 节点名称,
+        SUM(总任务金额) AS 总任务金额,
+        SUM(年度开单金额) AS 年度开单金额
+    FROM flattened_tree
+    WHERE 上级名称 = '商用事业部'
+      AND 层级 IN ('分公司', '业务部')
+      AND NOT (条线 = '行业条线' AND 层级 = '分公司')
 )
 SELECT
     条线,

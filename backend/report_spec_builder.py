@@ -97,6 +97,64 @@ def _metric_by_key(config: Dict[str, Any], key: str, fallback_tokens: List[str])
     return None
 
 
+def _extract_amount_unit_from_config(config: Dict[str, Any]) -> str:
+    if not isinstance(config, dict):
+        return ""
+
+    direct_candidates = [
+        config.get("amountUnit"),
+        config.get("amountUnitConvention"),
+        (config.get("display") or {}).get("amountUnit") if isinstance(config.get("display"), dict) else "",
+        (config.get("sqlOutputContract") or {}).get("amountUnit") if isinstance(config.get("sqlOutputContract"), dict) else "",
+    ]
+    for candidate in direct_candidates:
+        text = str(candidate or "").strip()
+        if text in {"元", "万元", "亿"}:
+            return text
+
+    return ""
+
+
+def _dataset_amount_unit(
+    dataset: Dict[str, Any],
+    config: Dict[str, Any],
+    columns: Optional[List[str]] = None,
+    profile: Optional[Dict[str, Any]] = None,
+) -> str:
+    configured_unit = _extract_amount_unit_from_config(config)
+    if configured_unit:
+        return configured_unit
+
+    for column in columns or []:
+        if _column_uses_wan_unit(column):
+            return "万元"
+
+    return ""
+
+
+def _normalize_amount_metrics(
+    metrics: List[Dict[str, Any]],
+    dataset: Dict[str, Any],
+    config: Dict[str, Any],
+    columns: Optional[List[str]] = None,
+    profile: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    amount_unit = _dataset_amount_unit(dataset, config, columns, profile)
+    if not amount_unit:
+        return metrics
+
+    normalized: List[Dict[str, Any]] = []
+    for metric in metrics:
+        if not isinstance(metric, dict):
+            continue
+        next_metric = dict(metric)
+        if next_metric.get("format") in {"amount", "currency"}:
+            next_metric["unit"] = amount_unit
+            next_metric["scale"] = 1
+        normalized.append(next_metric)
+    return normalized
+
+
 def _infer_metric_from_columns(columns: List[str], key: str, label: str, tokens: List[str], fmt: str) -> Optional[Dict[str, Any]]:
     channel_tokens = ("线下", "新零售", "燃气", "地产", "定制")
     scored: List[tuple] = []
@@ -555,6 +613,7 @@ def build_report_spec(
         rate_metric = _infer_metric_from_columns(available_columns, "rate", "达成率", ["达成率", "完成率", "率"], "percent")
     if not metric_available(remain_metric):
         remain_metric = _infer_metric_from_columns(available_columns, "remain", "剩余缺口", ["剩余", "缺口", "差额", "待完成"], "amount")
+    profile = get_dataset_profile(dataset.get("dataset_code") or dataset.get("code"), dataset.get("dataset_name") or dataset.get("name"))
     metrics = [
         metric for metric in [task_metric, actual_metric, rate_metric, remain_metric]
         if metric
@@ -562,6 +621,11 @@ def build_report_spec(
         metric for metric in metrics
         if metric and metric not in [task_metric, actual_metric, rate_metric, remain_metric]
     ]
+    metrics = _normalize_amount_metrics(metrics, dataset, config, available_columns, profile)
+    task_metric = next((metric for metric in metrics if str(metric.get("key") or "") == "task"), task_metric)
+    actual_metric = next((metric for metric in metrics if str(metric.get("key") or "") == "actual"), actual_metric)
+    rate_metric = next((metric for metric in metrics if str(metric.get("key") or "") == "rate"), rate_metric)
+    remain_metric = next((metric for metric in metrics if str(metric.get("key") or "") == "remain"), remain_metric)
     ranking_sort_metric = None
     if query_intent.get("intent") == "ranking":
         sort_key = str(query_intent.get("sort_metric_key") or "")
@@ -599,7 +663,6 @@ def build_report_spec(
 
     resolved_names = _resolved_member_names(resolved_entities)
     if not resolved_names:
-        profile = get_dataset_profile(dataset.get("dataset_code") or dataset.get("code"), dataset.get("dataset_name") or dataset.get("name"))
         if profile:
             resolved_names = _resolved_member_names(resolve_member_mentions(question or "", profile))
     explicit_single_focus_name = ""
@@ -794,6 +857,15 @@ def build_report_spec(
             "format": (metric or {}).get("format"),
         })
 
+    def kpi_payload(metric: Dict[str, Any], raw: Dict[str, Any]) -> Dict[str, Any]:
+        value = _row_value(raw, metric)
+        return {
+            "label": metric.get("label") or metric.get("column") or metric.get("key"),
+            "value": value,
+            "displayValue": _format_value(value, metric),
+            "format": metric.get("format"),
+        }
+
     def sum_metric(metric: Optional[Dict[str, Any]]) -> Optional[float]:
         if not metric:
             return None
@@ -977,10 +1049,7 @@ def build_report_spec(
                 "tone": _rate_tone(child_rate, thresholds["personRisk"], thresholds["personBenchmark"]),
                 "tag": child_tag,
                 "kpis": [
-                    {
-                        "label": metric.get("label") or metric.get("column") or metric.get("key"),
-                        "value": _format_value(_row_value(child["raw"], metric), metric),
-                    }
+                    kpi_payload(metric, child["raw"])
                     for metric in [task_metric, actual_metric, rate_metric, remain_metric]
                     if metric
                 ],
@@ -1058,10 +1127,7 @@ def build_report_spec(
             "riskSummary": risk_text,
             "tone": _rate_tone(rate, thresholds["officeRisk"], thresholds["officeBenchmark"]),
             "kpis": [
-                {
-                    "label": metric.get("label") or metric.get("column") or metric.get("key"),
-                    "value": _format_value(_row_value(node["raw"], metric), metric),
-                }
+                kpi_payload(metric, node["raw"])
                 for metric in [task_metric, actual_metric, rate_metric, remain_metric]
                 if metric
             ],
@@ -1226,10 +1292,7 @@ def build_report_spec(
                 "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
                 "tag": comparison_tag_by_name.get(node.get("name")) or "",
                 "kpis": [
-                    {
-                        "label": metric.get("label") or metric.get("column") or metric.get("key"),
-                        "value": _format_value(_row_value(node.get("raw") or {}, metric), metric),
-                    }
+                    kpi_payload(metric, node.get("raw") or {})
                     for metric in [task_metric, actual_metric, rate_metric, remain_metric]
                     if metric
                 ],
@@ -1345,6 +1408,7 @@ def build_report_spec(
     return {
         "version": "2.0",
         "reportTitle": str(config.get("reportTitle") or "业绩分析报告"),
+        "amountUnit": _dataset_amount_unit(dataset, config, available_columns, profile),
         "question": question,
         "answerMode": answer_mode,
         "answerSummary": answer_summary,

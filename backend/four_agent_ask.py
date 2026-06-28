@@ -2442,7 +2442,24 @@ LIMIT 10000
         dataset_code = str(dataset.get("dataset_code") or "")
         dataset_name = str(dataset.get("dataset_name") or "")
         is_ecommerce_dataset = dataset_code == "feishu_tbldianshang" or "电商事业部" in dataset_name
+        is_syyb_dataset = dataset_code in {"angel_business_2026", "angel_business_2026_phase1"} or dataset_name in {
+            "商用事业部",
+            "商用事业部（阶段一升级版）",
+        }
+        compact_question = self._normalize_compact_text(question)
+        syyb_root_question = (
+            is_syyb_dataset
+            and "商用事业部" in compact_question
+            and not re.search(r"分公司|代表处|业务部|业务代表|业务员|条线|排名|排行|最高|最低|前\d+|后\d+", compact_question)
+        )
         if is_ecommerce_dataset and rule_based_sql:
+            return {
+                "mode": "rule_based",
+                "sql": rule_based_sql,
+                "sample_id": None,
+                "sample_score": 0,
+            }
+        if syyb_root_question and rule_based_sql:
             return {
                 "mode": "rule_based",
                 "sql": rule_based_sql,
@@ -2701,7 +2718,70 @@ LIMIT 10000
                         continue
                     if value not in names:
                         names.append(value)
-        return names
+        org_pattern = (
+            r"(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问)?"
+            r"(?:看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下)?"
+            r"\s*([\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部|城市分公司|城市公司))"
+            r"(?=\s*(?:的?(?:业绩|表现|情况|达成率|开单|排名)|呢|吗|呀|吧|$))"
+        )
+        for match in re.findall(org_pattern, text):
+            cleaned = self._clean_org_subject_candidate(match)
+            if cleaned and cleaned not in names and not self._looks_like_structural_subject_phrase(cleaned):
+                names.append(cleaned)
+        return self._normalize_dataset_subject_names(names, context)
+
+    @staticmethod
+    def _clean_org_subject_candidate(value: str) -> str:
+        text = str(value or "").strip("，。！？、 ")
+        text = re.sub(
+            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问|看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)+",
+            "",
+            text,
+        ).strip()
+        text = re.sub(
+            r"(?:的)?(?:业绩如何了|业绩如何|业绩情况|情况如何|完成情况如何|完成的怎么样|完成得怎么样|完成咋样|表现如何|怎么样了|怎么样|如何了|如何)$",
+            "",
+            text,
+        ).strip("，。！？、 ")
+        return text
+
+    def _normalize_dataset_subject_names(
+        self,
+        names: List[str],
+        context: Dict[str, Any],
+    ) -> List[str]:
+        normalized: List[str] = []
+        dataset = self._safe_dict(context.get("dataset"))
+        try:
+            dataset_id = int(dataset.get("id") or 0)
+        except Exception:
+            dataset_id = 0
+        candidate_names: List[str] = []
+        if dataset_id:
+            permissions = load_data_permissions()
+            nodes = self.organization_route_resolver._load_tree().get("nodes") or []
+            for node in nodes:
+                if not isinstance(node, dict) or not node.get("enabled", True):
+                    continue
+                try:
+                    node_dataset_ids = self.organization_route_resolver._dataset_ids_for_node(node, permissions)
+                except Exception:
+                    node_dataset_ids = []
+                if not any(int(item) == dataset_id for item in node_dataset_ids):
+                    continue
+                name = str(node.get("name") or "").strip()
+                if len(name) >= 2:
+                    candidate_names.append(name)
+        unique_candidates = sorted(set(candidate_names))
+        for raw in names or []:
+            cleaned = self._clean_org_subject_candidate(raw)
+            if unique_candidates and cleaned not in unique_candidates:
+                matches = get_close_matches(cleaned, unique_candidates, n=1, cutoff=0.72)
+                if matches:
+                    cleaned = matches[0]
+            if cleaned and cleaned not in normalized:
+                normalized.append(cleaned)
+        return normalized
 
     def _role_person_subject_names(self, question: str) -> List[str]:
         text = str(question or "").replace("\n", " ").strip()
@@ -3034,6 +3114,33 @@ LIMIT 10000
         if org_tree_hint:
             payload["organizationTreeLevelGuidance"] = org_tree_hint
         return json.dumps(payload, ensure_ascii=False, indent=2)
+
+    def _build_sql_output_contract_prompt(self, context: Dict[str, Any]) -> str:
+        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
+        if not config:
+            return ""
+        contract = self._safe_dict(config.get("sqlOutputContract"))
+        amount_unit = str(
+            contract.get("amountUnit")
+            or config.get("amountUnit")
+            or config.get("amountUnitConvention")
+            or ""
+        ).strip() or "元"
+        metric_columns = contract.get("metricColumns") if isinstance(contract.get("metricColumns"), list) else []
+        amount_columns = [
+            str(item)
+            for item in metric_columns
+            if re.search(r"金额|任务|开单|缺口|剩余|销售|收入|成本|利润", str(item))
+        ] or ["总任务金额", "年度开单金额", "剩余任务金额"]
+        return "\n".join([
+            "SQL 输出单位统一规则：",
+            f"1. 本数据集标准金额列输出单位为“{amount_unit}”。",
+            f"2. 以下金额列必须按“{amount_unit}”口径输出数值，不要在列值里拼接中文单位：{', '.join(amount_columns)}。",
+            "3. 如果源字段是元而输出单位为万元，SQL 中必须除以 10000；如果源字段已经是万元，不能再次除以 10000。",
+            "4. 如果源字段是万元而输出单位为元，SQL 中必须乘以 10000；如果源字段已经是元，不能再次乘以 10000。",
+            "5. 达成率统一输出 0-100 的数字，不要带百分号。",
+            "6. SQL 结果只输出纯数值；前端/报告层会根据 report_config 展示 万/亿。",
+        ])
 
     @staticmethod
     def _profile_catalog(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -3627,9 +3734,61 @@ LIMIT 10000
 
     def _dataset_scope_alias_score(self, question: str, dataset: Dict[str, Any]) -> int:
         """仅匹配数据集/业务域级别的显式标识，用于绕过歧义确认的快速命中。"""
-        return self._dataset_alias_match_score(
-            question, dataset, include_profile_levels=False, include_profile_resolution=False
+        normalized_question = self._normalize_compact_text(question)
+        if not normalized_question:
+            return 0
+
+        subject_suffixes = (
+            "事业部",
+            "分公司",
+            "城市分公司",
+            "城市公司",
+            "代表处",
+            "业务部",
+            "业务代表",
+            "业务员",
         )
+        generic_aliases = {
+            "业绩", "分析", "数据", "指标", "结果", "结果指标", "销售业绩",
+            "分公司", "代表处", "业务部", "城市公司", "城市分公司", "业务员", "业务代表", "事业部",
+        }
+        metric_only_aliases = {
+            "达成率", "完成率", "开单", "开单金额", "年度开单", "销售金额", "销售",
+            "任务", "任务金额", "总任务", "年度任务", "任务达成", "剩余任务", "缺口", "差额",
+            "实际", "实际金额", "完成情况", "完成金额",
+        }
+
+        def is_org_member_alias(alias_text: str) -> bool:
+            if alias_text in {str(dataset.get("dataset_name") or ""), str(dataset.get("business_domain") or "")}:
+                return False
+            return any(
+                alias_text.endswith(suffix) and len(alias_text) > len(suffix)
+                for suffix in subject_suffixes
+            )
+
+        score = 0
+        alias_candidates = [
+            ("dataset_name", str(dataset.get("dataset_name") or "").strip()),
+            ("business_domain", str(dataset.get("business_domain") or "").strip()),
+            *[("synonym", str(item or "").strip()) for item in (dataset.get("synonyms", []) or [])],
+        ]
+        for alias_type, alias in alias_candidates:
+            normalized_alias = self._normalize_compact_text(alias)
+            if len(normalized_alias) < 2:
+                continue
+            if normalized_alias in generic_aliases or normalized_alias in metric_only_aliases:
+                continue
+            if alias_type == "synonym" and is_org_member_alias(alias):
+                continue
+            if normalized_alias not in normalized_question:
+                continue
+            if alias_type == "dataset_name":
+                score = max(score, 100)
+            elif alias_type == "business_domain":
+                score = max(score, 98)
+            else:
+                score = max(score, 95)
+        return score
 
     def _compute_dataset_match(self, question: str, dataset: Dict[str, Any], context: Dict[str, Any]) -> int:
         q_tokens = self._tokenize(question)
@@ -4166,8 +4325,14 @@ LIMIT 10000
         allowed_dataset_ids: Optional[List[int]] = None,
         current_question: Optional[str] = None,
     ) -> Dict[str, Any]:
+        catalog_override = None
+        # 兼容历史调试调用：route_with_agent1(question, catalog, current_question=...)
+        if isinstance(trace, list) and trace and all(isinstance(item, dict) and "id" in item for item in trace):
+            catalog_override = trace
+            trace = None
+
         full_catalog = self.repository.get_agent1_catalog()
-        catalog = full_catalog
+        catalog = catalog_override or full_catalog
         if allowed_dataset_ids is not None:
             allowed = {int(item) for item in allowed_dataset_ids}
             catalog = [item for item in catalog if int(item.get("id") or 0) in allowed]
@@ -4368,7 +4533,27 @@ LIMIT 10000
             profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
             if profile:
                 resolved = resolve_member_mentions(question, profile)
-                if resolved.get("all_members"):
+                matched_aliases = [
+                    str(alias or "").strip()
+                    for entity in (resolved.get("entities") or [])
+                    for alias in (entity.get("matched_aliases") or [])
+                    if str(alias or "").strip()
+                ]
+                exact_member_hit = any(
+                    self._normalize_compact_text(member) in self._normalize_compact_text(question)
+                    for member in (resolved.get("all_members") or [])
+                )
+                explicit_level_hit = bool(
+                    re.search(r"代表处|分公司|业务部|城市分公司|城市公司|业务代表|业务员", question)
+                )
+                alias_level_hit = any(
+                    re.search(r"代表处|分公司|业务部|城市分公司|城市公司|业务代表|业务员", alias)
+                    for alias in matched_aliases
+                )
+                if resolved.get("all_members") and (
+                    exact_member_hit
+                    or (explicit_level_hit and alias_level_hit)
+                ):
                     resolved_dataset = dataset
                     resolved_count += 1
         if resolved_count == 1 and resolved_dataset is not None:
@@ -4419,6 +4604,39 @@ LIMIT 10000
                     "arbiter_reason": f"target_level_unique:{matched_levels[0]}",
                     "split_queries": [{"dataset_id": selected_dataset["id"], "sub_query": question}],
                 }
+
+        # 对“明确组织层级 + 多数据集都支持该层级”的问题，优先让 Agent1 的 LLM 参与一次判定，
+        # 避免被前置规则过早截流，保留现有规则作为兜底。
+        if matched_levels and len(supported_candidates) >= 2:
+            llm_level_route = self._agent1_route_with_llm(question, ranked, trace)
+            llm_level_dataset_ids = [int(item) for item in (llm_level_route.get("dataset_ids") or []) if str(item).strip()]
+            if llm_level_dataset_ids:
+                llm_level_route["candidate_dataset_ids"] = llm_level_route.get("candidate_dataset_ids") or [item[0]["id"] for item in ranked[:3]]
+                if llm_level_route.get("requires_confirmation"):
+                    llm_level_route["intent"] = "confirm"
+                    llm_level_route["decision"] = "wait_boss_confirm"
+                    llm_level_route["confirmation_options"] = self._normalize_confirmation_options(
+                        llm_level_route.get("confirmation_options"),
+                        llm_level_route.get("candidate_dataset_ids"),
+                        [item[0].get("dataset_name") or f"数据集{item[0]['id']}" for item in ranked[:3]],
+                    )
+                    llm_level_route["arbiter_reason"] = (
+                        llm_level_route.get("arbiter_reason")
+                        or f"llm_level_disambiguation:{','.join(matched_levels)}"
+                    )
+                    return llm_level_route
+                if len(llm_level_dataset_ids) == 1:
+                    llm_level_route["requires_confirmation"] = False
+                    llm_level_route["intent"] = llm_level_route.get("intent") or "detail"
+                    llm_level_route["decision"] = "generate_sql"
+                    llm_level_route["arbiter_reason"] = (
+                        llm_level_route.get("arbiter_reason")
+                        or f"llm_level_disambiguation:{','.join(matched_levels)}"
+                    )
+                    llm_level_route["split_queries"] = [
+                        {"dataset_id": llm_level_dataset_ids[0], "sub_query": llm_level_route.get("refined_query") or question}
+                    ]
+                    return llm_level_route
 
         history = conversation_context or []
         arbiter_result = self.disambiguation_arbiter.evaluate(
@@ -5401,8 +5619,8 @@ ORDER BY 条线 DESC,
   节点名称
 LIMIT 10000
 """.strip()
-            # 修复：下钻问题中若明确指定了子层级，只返回该层级的子节点；
-            # 同时命中根节点（如商用事业部）和具体子节点时，去掉根节点，避免把整棵树都展开。
+            # 单一对象统一按“命中节点 + 一层下级”返回，最多二级；
+            # 只有业务代表/业务员这种末端节点不再继续下钻。
             report_config = self._safe_dict(context.get("report_config")) or {}
             root_level_values = {
                 str(dimension.get("path")[0]).strip()
@@ -5411,20 +5629,35 @@ LIMIT 10000
             }
             drilldown_entities = [e for e in entity_names if e not in root_level_values] or entity_names
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
+            target_level_hint = str(query_intent.get("target_level") or "").strip()
+            is_terminal_node = (
+                target_level_hint == "业务代表"
+                or "业务代表" in normalized_question
+                or "业务员" in normalized_question
+                or any(name.endswith("业务代表") or name.endswith("业务员") for name in drilldown_entities)
+            )
 
-            child_level_filter = ""
-            child_level_value = ""
-            if "代表处" in normalized_question:
-                child_level_value = "代表处"
-            elif "业务部" in normalized_question:
-                child_level_value = "业务部"
-            elif "业务代表" in normalized_question or "业务员" in normalized_question:
-                child_level_value = "业务代表"
-            if child_level_value:
-                child_level_filter = f"OR 层级 = '{child_level_value}'"
-
-            # 修复：若指定了子层级，递归时不再继续向下展开，避免最终过滤条件把整棵树同层级节点都带出来。
-            recursion_stop = f"AND 父节点.层级 <> '{child_level_value}'" if child_level_value else ""
+            if is_terminal_node:
+                return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE 节点名称 IN ({quoted_entities})
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000
+""".strip()
 
             return f"""
 WITH RECURSIVE 汇总结果 AS (
@@ -5439,13 +5672,13 @@ WITH RECURSIVE 汇总结果 AS (
     FROM 汇总结果 子节点
     JOIN 命中链路 父节点
       ON 子节点.上级名称 = 父节点.节点名称
-    WHERE 1=1 {recursion_stop}
+    WHERE 父节点._depth < 2
 )
 SELECT *
 FROM (
     SELECT DISTINCT ON (节点名称) *
     FROM 命中链路
-    WHERE _depth <= 2 {child_level_filter}
+    WHERE _depth <= 2
     ORDER BY 节点名称, _depth
 ) 去重后
 ORDER BY 条线 DESC,
@@ -6692,6 +6925,8 @@ Agent1 路由结果：
 报告配置（用于 SQL 投影与报告结构，不是源表物理字段清单）：
 {self._build_report_config_prompt(context)}
 
+{self._build_sql_output_contract_prompt(context)}
+
 书架上下文：
 {self._build_context_blob(context)}
 
@@ -6757,6 +6992,8 @@ Agent1 路由结果：
 
 报告配置（用于 SQL 投影与报告结构，不是源表物理字段清单）：
 {self._build_report_config_prompt(context)}
+
+{self._build_sql_output_contract_prompt(context)}
 
 书架上下文：
 {self._build_context_blob(context)}
@@ -6840,6 +7077,28 @@ Agent1 路由结果：
         )
         return best_other[0] >= 90 and best_other[0] >= selected_score + 12
 
+    def _explicit_dataset_ids_from_question(
+        self,
+        question: str,
+        allowed_dataset_ids: Optional[List[int]] = None,
+    ) -> List[int]:
+        """Return dataset ids explicitly named by the current user question."""
+        catalog = self.repository.get_agent1_catalog()
+        if allowed_dataset_ids is not None:
+            allowed = {int(item) for item in allowed_dataset_ids}
+            catalog = [item for item in catalog if int(item.get("id") or 0) in allowed]
+        matched_ids: List[int] = []
+        for dataset in catalog:
+            if self._dataset_scope_alias_score(question, dataset) < 90:
+                continue
+            try:
+                dataset_id = int(dataset.get("id") or 0)
+            except Exception:
+                continue
+            if dataset_id and dataset_id not in matched_ids:
+                matched_ids.append(dataset_id)
+        return matched_ids
+
     def _followup_dataset_hint_from_memory(
         self,
         question: str,
@@ -6878,6 +7137,10 @@ Agent1 路由结果：
         if not any(token in str(question or "") for token in org_level_tokens):
             return []
 
+        target_name = self._extract_followup_org_target(question)
+        if target_name:
+            return [latest_dataset_id]
+
         profile = get_dataset_profile(target_dataset.get("dataset_code"), target_dataset.get("dataset_name"))
         if not self._profile_supports_level(profile, "分公司"):
             return []
@@ -6897,13 +7160,72 @@ Agent1 路由结果：
             return []
         return [latest_dataset_id]
 
+    def _should_keep_followup_dataset_hint(
+        self,
+        question: str,
+        preferred_dataset_ids: Optional[List[int]],
+        allowed_dataset_ids: Optional[List[int]] = None,
+    ) -> bool:
+        if not preferred_dataset_ids:
+            return False
+        try:
+            selected_ids = [int(item) for item in preferred_dataset_ids]
+        except Exception:
+            return False
+        if len(selected_ids) != 1:
+            return False
+        explicit_dataset_ids = self._explicit_dataset_ids_from_question(
+            question,
+            allowed_dataset_ids=allowed_dataset_ids,
+        )
+        if explicit_dataset_ids and selected_ids[0] not in explicit_dataset_ids:
+            return False
+
+        target_name = self._extract_followup_org_target(question)
+        if not target_name:
+            return False
+
+        catalog = [
+            item for item in self.repository.get_agent1_catalog()
+            if int(item.get("id") or 0) == selected_ids[0]
+        ]
+        if not catalog:
+            return False
+
+        route = self.organization_route_resolver.resolve(
+            question,
+            catalog,
+            allowed_dataset_ids=[selected_ids[0]],
+        )
+        if route and (route.get("organization_mentions") or route.get("resolved_members")):
+            return True
+
+        try:
+            dataset_context = self.repository.get_dataset_context(selected_ids[0], question)
+        except Exception:
+            dataset_context = {}
+        resolved = self._resolve_question_entities(question, dataset_context or {})
+        if resolved and (resolved.get("all_members") or []):
+            return True
+        fallback_subjects = self._question_subject_names(question, dataset_context or {}, include_resolved=False)
+        return bool(fallback_subjects)
+
     @staticmethod
     def _extract_followup_org_target(question: str) -> str:
         text = str(question or "").strip()
         if not text:
             return ""
-        cleaned = re.sub(r"^(看下|看一下|查下|查一下|问下|问一下|再看下|再看一下|继续看下|继续看一下)", "", text)
-        cleaned = re.sub(r"(的业绩|业绩呢|业绩|表现呢|表现|情况呢|情况|怎么样|如何|呢|吗|呀|吧)$", "", cleaned)
+        cleaned = re.sub(
+            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问)?"
+            r"(?:看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)",
+            "",
+            text,
+        )
+        cleaned = re.sub(
+            r"(?:的业绩|业绩呢|业绩情况|业绩如何了|业绩如何|业绩|表现呢|表现如何|表现|情况呢|情况如何|情况|怎么样了|怎么样|如何了|如何|呢|吗|呀|吧)$",
+            "",
+            cleaned,
+        )
         level_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司"]
         for term in level_terms:
             index = cleaned.find(term)
@@ -6912,7 +7234,177 @@ Agent1 路由结果：
             prefix = cleaned[:index].strip()
             if len(prefix) < 2:
                 continue
-            return f"{prefix}{term}"
+            return FourAgentAskService._clean_org_subject_candidate(f"{prefix}{term}")
+        return ""
+
+    @staticmethod
+    def _looks_like_org_followup_question(question: str) -> bool:
+        text = str(question or "").strip()
+        if not text:
+            return False
+        has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
+        has_followup_style = bool(re.search(r"继续|再看|再查|看下|看一下|查下|查一下|如何了|怎么样了|情况如何|表现如何", text))
+        return has_org_level and has_followup_style
+
+    def _agent1_resolve_org_subject(
+        self,
+        question: str,
+        conversation_context: Optional[List[Dict[str, Any]]] = None,
+        trace: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        fallback_name = self._extract_followup_org_target(question)
+        fallback = {
+            "subject_name": fallback_name,
+            "subject_level": "",
+            "metric": "",
+            "rewritten_question": "",
+            "is_followup": True,
+            "confidence": 0,
+        }
+        system_prompt = self._get_agent_prompt(
+            1,
+            "你是 Agent1 的组织主体解析器，负责从追问中提取真正的组织节点名称，并去掉口语前后缀。",
+        )
+        history_preview = []
+        for item in (conversation_context or [])[-3:]:
+            if not isinstance(item, dict):
+                continue
+            history_preview.append(
+                {
+                    "question": item.get("question") or item.get("user_question") or "",
+                    "effective_question": item.get("effective_question") or "",
+                }
+            )
+        user_prompt = f"""
+用户当前问题：{question}
+
+最近上下文：{json.dumps(history_preview, ensure_ascii=False)}
+
+任务：
+1. 识别当前问题里的真实组织主体名称，去掉“继续看/再看/看下/如何了/怎么样了”等口语。
+2. 只提取用户当前这一轮明确说出的组织节点，不要沿用上一轮对象替代当前对象。
+3. 如果问题里明确包含 代表处/分公司/业务部/事业部/业务代表/业务员/城市分公司/城市公司，要尽量保留层级词。
+4. 如果无法稳定识别，subject_name 返回空字符串。
+5. rewritten_question 只在识别成功时输出，例如“河南代表处的业绩”。
+
+请输出 JSON：
+{{
+  "subject_name": "",
+  "subject_level": "",
+  "metric": "",
+  "rewritten_question": "",
+  "is_followup": true,
+  "confidence": 0
+}}
+""".strip()
+        result = self._chat_json(
+            system_prompt,
+            user_prompt,
+            fallback,
+            trace=trace,
+            stage="agent1.org_subject",
+            agent_name="Agent1OrgSubject",
+        )
+        subject_name = self._clean_org_subject_candidate(result.get("subject_name") or fallback_name)
+        result["subject_name"] = subject_name
+        rewritten_question = str(result.get("rewritten_question") or "").strip()
+        metric = str(result.get("metric") or "").strip() or "业绩"
+        if subject_name and not rewritten_question:
+            rewritten_question = f"{subject_name}的{metric}"
+        result["rewritten_question"] = rewritten_question
+        result["is_followup"] = bool(result.get("is_followup", True))
+        result["confidence"] = int(result.get("confidence") or 0)
+        return result
+
+    def _validate_resolved_org_subject(
+        self,
+        subject_name: str,
+        dataset_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        candidate = self._clean_org_subject_candidate(subject_name)
+        if not candidate:
+            return {"ok": False, "subject_name": "", "subject_level": "", "source": "empty"}
+
+        normalized_candidate = self._normalize_compact_text(candidate)
+        dataset = self._safe_dict(dataset_context.get("dataset"))
+        dataset_id = int(dataset.get("id") or 0) if str(dataset.get("id") or "").strip() else 0
+
+        tree_matches: List[str] = []
+        if dataset_id:
+            permissions = load_data_permissions()
+            for node in (self.organization_route_resolver._load_tree().get("nodes") or []):
+                if not isinstance(node, dict) or not node.get("enabled", True):
+                    continue
+                try:
+                    node_dataset_ids = self.organization_route_resolver._dataset_ids_for_node(node, permissions)
+                except Exception:
+                    node_dataset_ids = []
+                if not any(int(item) == dataset_id for item in node_dataset_ids):
+                    continue
+                node_name = str(node.get("name") or "").strip()
+                if node_name and self._normalize_compact_text(node_name) == normalized_candidate:
+                    tree_matches.append(node_name)
+
+        if tree_matches:
+            matched = tree_matches[0]
+            return {
+                "ok": True,
+                "subject_name": matched,
+                "subject_level": self._infer_subject_level_from_name(matched),
+                "source": "organization_tree_exact",
+            }
+
+        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        if profile:
+            resolved = resolve_member_mentions(candidate, profile or {})
+            members = [str(item or "").strip() for item in (resolved.get("all_members") or []) if str(item or "").strip()]
+            exact_members = [name for name in members if self._normalize_compact_text(name) == normalized_candidate]
+            if len(exact_members) == 1:
+                matched = exact_members[0]
+                return {
+                    "ok": True,
+                    "subject_name": matched,
+                    "subject_level": self._infer_subject_level_from_name(matched),
+                    "source": "profile_exact",
+                }
+            if len(members) == 1:
+                matched = members[0]
+                return {
+                    "ok": True,
+                    "subject_name": matched,
+                    "subject_level": self._infer_subject_level_from_name(matched),
+                    "source": "profile_unique",
+                }
+
+        normalized_names = self._normalize_dataset_subject_names([candidate], dataset_context)
+        if len(normalized_names) == 1:
+            matched = normalized_names[0]
+            return {
+                "ok": True,
+                "subject_name": matched,
+                "subject_level": self._infer_subject_level_from_name(matched),
+                "source": "dataset_normalize",
+            }
+
+        return {"ok": False, "subject_name": candidate, "subject_level": "", "source": "unresolved"}
+
+    @staticmethod
+    def _infer_subject_level_from_name(subject_name: str) -> str:
+        text = str(subject_name or "").strip()
+        if not text:
+            return ""
+        for suffix, level in (
+            ("城市分公司", "城市分公司"),
+            ("城市公司", "城市公司"),
+            ("代表处", "代表处"),
+            ("业务部", "业务部"),
+            ("分公司", "分公司"),
+            ("事业部", "事业部"),
+            ("业务代表", "业务代表"),
+            ("业务员", "业务代表"),
+        ):
+            if text.endswith(suffix):
+                return level
         return ""
 
     def _build_followup_org_target_miss_result(
@@ -6979,6 +7471,20 @@ Agent1 路由结果：
         )
         if route and (route.get("organization_mentions") or route.get("resolved_members")):
             return None
+
+        # 兜底：组织树可能只维护到分公司层，但数据集画像/真实数据里已有代表处、业务员等下级节点。
+        # 对于已锁定唯一数据集的追问，不应仅因为组织树未收录该节点就误判“未识别”。
+        try:
+            dataset_context = self.repository.get_dataset_context(int(selected_dataset_ids[0]), question)
+        except Exception:
+            dataset_context = {}
+        resolved = self._resolve_question_entities(question, dataset_context or {})
+        if resolved and (resolved.get("all_members") or []):
+            return None
+
+        fallback_subjects = self._question_subject_names(question, dataset_context or {}, include_resolved=False)
+        if fallback_subjects:
+            return None
         return self._build_followup_org_target_miss_result(question, target_name, selected_dataset_ids)
 
     def _repair_sql_after_execution_error(
@@ -7013,6 +7519,8 @@ Agent1 路由结果：
 
 报告配置（用于 SQL 输出别名和报告结构，不是源表物理字段清单）：
 {self._build_report_config_prompt(context)}
+
+{self._build_sql_output_contract_prompt(context)}
 
 书架上下文和真实 DDL：
 {self._build_context_blob(context)}
@@ -7569,6 +8077,32 @@ Agent3 复核结果：
                 context,
                 trace=trace,
             )
+            route_subject_name = str(route.get("resolved_subject_name") or "").strip()
+            if route_subject_name:
+                validated_subject = self._validate_resolved_org_subject(route_subject_name, context)
+                if validated_subject.get("ok"):
+                    subject_name = str(validated_subject.get("subject_name") or "").strip()
+                    subject_level = str(validated_subject.get("subject_level") or "").strip()
+                    context["resolved_subject"] = {
+                        "subject_name": subject_name,
+                        "subject_level": subject_level,
+                        "source": validated_subject.get("source"),
+                    }
+                    context["resolved_entities"] = {
+                        "intent": "single",
+                        "scope_mode": "single",
+                        "entities": [
+                            {
+                                "dimension_name": "组织主体",
+                                "members": [subject_name],
+                                "matched_aliases": [subject_name],
+                                "source": f"validated_subject:{validated_subject.get('source')}",
+                            }
+                        ],
+                        "all_members": [subject_name],
+                        "confidence": 1.0,
+                        "source": f"validated_subject:{validated_subject.get('source')}",
+                    }
             # Agent1 解析结果优先；仅当 Agent1 完全未解析出实体时，才用本地规则兜底
             if not self._resolved_entity_names(context):
                 subject_names = self._question_subject_names(route.get("refined_query", question), context)
@@ -7594,6 +8128,11 @@ Agent3 复核结果：
             if refined_question and refined_question not in intent_question:
                 intent_question = f"{intent_question}\n{refined_question}"
             query_intent = self._resolve_query_intent(intent_question, context)
+            resolved_subject = self._safe_dict(context.get("resolved_subject"))
+            if resolved_subject.get("subject_name"):
+                query_intent["subject_name"] = resolved_subject.get("subject_name")
+            if resolved_subject.get("subject_level"):
+                query_intent["subject_level"] = resolved_subject.get("subject_level")
             report_config = {**report_config, "queryIntent": query_intent}
             context["report_config"] = report_config
             context["query_intent"] = query_intent
@@ -8081,6 +8620,44 @@ Agent3 复核结果：
         trace = self._new_trace(question, "ask", live_callback=live_callback)
         memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
         effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
+        org_subject_resolution = None
+        if self._looks_like_org_followup_question(question):
+            org_subject_resolution = self._agent1_resolve_org_subject(
+                question,
+                conversation_context=memory_history,
+                trace=trace,
+            )
+            rewritten_question = str((org_subject_resolution or {}).get("rewritten_question") or "").strip()
+            if rewritten_question:
+                effective_question = rewritten_question
+                self._append_trace(
+                    trace,
+                    "agent1.org_subject_resolved",
+                    "info",
+                    original_question=question,
+                    rewritten_question=rewritten_question,
+                    subject_name=(org_subject_resolution or {}).get("subject_name"),
+                    subject_level=(org_subject_resolution or {}).get("subject_level"),
+                    confidence=(org_subject_resolution or {}).get("confidence"),
+                )
+        explicit_dataset_ids = self._explicit_dataset_ids_from_question(
+            question,
+            allowed_dataset_ids=allowed_dataset_ids,
+        )
+        explicit_dataset_followup_reset = False
+        if len(explicit_dataset_ids) == 1 and effective_question != question:
+            # 当前追问已明确点名唯一数据集/事业部时，不能把上一轮的事业部文本拼进来。
+            # 否则会形成“消费者事业部 + 商用事业部”混合问题，Agent1 会误判为需要确认。
+            effective_question = question
+            explicit_dataset_followup_reset = True
+        explicit_followup_org_target = self._extract_followup_org_target(question)
+        if explicit_followup_org_target and effective_question != question:
+            # 追问里已经明确给出了新的组织对象时，不要再把上一轮对象正文一并下传。
+            # 否则 SQL 生成阶段容易继续沿用上一轮对象，只把本轮对象当作补充说明。
+            effective_question = (
+                str((org_subject_resolution or {}).get("rewritten_question") or "").strip()
+                or question
+            )
         followup_dataset_hint = self._followup_dataset_hint_from_memory(
             question,
             memory_history,
@@ -8099,6 +8676,8 @@ Agent3 复核结果：
             effective_question=effective_question,
             session_id=conversation_session_id,
             memory_rounds=len(memory_history),
+            explicit_dataset_ids=explicit_dataset_ids,
+            explicit_dataset_followup_reset=explicit_dataset_followup_reset,
             followup_dataset_hint=followup_dataset_hint,
             preferred_dataset_ids=preferred_dataset_ids or [],
             allowed_dataset_ids=allowed_dataset_ids or [],
@@ -8136,14 +8715,27 @@ Agent3 复核结果：
                 preferred_dataset_ids,
                 allowed_dataset_ids,
             ):
-                if followup_hint_locked:
+                if followup_hint_locked and self._should_keep_followup_dataset_hint(
+                    question,
+                    preferred_dataset_ids,
+                    allowed_dataset_ids=allowed_dataset_ids,
+                ):
                     self._append_trace(
                         trace,
                         "agent1.followup_dataset_hint_preserved",
                         "info",
+                        reason="followup_target_resolved_inside_previous_dataset",
+                        preferred_dataset_ids=preferred_dataset_ids or [],
+                    )
+                elif followup_hint_locked:
+                    self._append_trace(
+                        trace,
+                        "agent1.followup_dataset_hint_released",
+                        "info",
                         reason="current_question_explicitly_matches_another_dataset",
                         preferred_dataset_ids=preferred_dataset_ids or [],
                     )
+                    preferred_dataset_ids = []
                 else:
                     self._append_trace(
                         trace,
@@ -8182,8 +8774,6 @@ Agent3 复核结果：
                         unresolved_target=followup_target_guard.get("diagnostics", {}).get("unresolved_followup_target"),
                         suggestions=followup_target_guard.get("diagnostics", {}).get("suggested_targets", []),
                     )
-                    self._flush_trace(trace, followup_target_guard)
-                    return followup_target_guard
                 route = {
                     "dataset_ids": selected_dataset_ids,
                     "intent": "detail",

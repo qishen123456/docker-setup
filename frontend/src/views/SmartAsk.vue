@@ -1340,6 +1340,10 @@ const statusBarText = computed(() => {
 })
 
 const activeReportResult = computed(() => detailReportResult.value || session.state.result || null)
+const latestSessionError = computed(() => {
+  const msg = activeRequestAiMessage.value || currentSessionAiMessage.value
+  return String(msg?.data?.error || session.state.result?.error || '').trim()
+})
 const showAskFlowBadge = ref(true)
 
 const activeAskFlowMeta = computed(() => {
@@ -1512,7 +1516,10 @@ const sanitizeDatasetSelection = () => {
 }
 
 const datasetResults = computed(() => latestDatasets.value)
-const hasSideReport = computed(() => resultPreviews.value.length > 0 || !!latestReport.value)
+const hasSideReport = computed(() => {
+  if (latestSessionError.value) return false
+  return resultPreviews.value.length > 0 || !!latestReport.value
+})
 const sideReportHeading = computed(() => '业绩分析报告')
 
 const reportSceneTemplate = computed(() => {
@@ -1744,6 +1751,27 @@ const formatAmount = (value, metric = {}) => {
   return `${(display / 100000000).toFixed(2).replace(/\.?0+$/, '')}亿`
 }
 
+const resolveAmountMetric = (metric = {}, dataset = null, column = '') => {
+  const nextMetric = { ...(metric || {}) }
+  if (String(nextMetric.unit || '').trim()) return nextMetric
+
+  const reportSpec = dataset?.report_spec || {}
+  const reportUnit = String(reportSpec.amountUnit || '').trim()
+  const metricColumn = String(nextMetric.column || column || '').trim()
+
+  if (reportUnit && isAmountColumn(metricColumn || nextMetric.label || nextMetric.key || '')) {
+    nextMetric.unit = reportUnit
+    nextMetric.scale = Number(nextMetric.scale) || 1
+    return nextMetric
+  }
+
+  return nextMetric
+}
+
+const formatChartAmount = (value, dataset = null, column = '') => (
+  formatAmount(value, resolveAmountMetric({ format: 'amount', column }, dataset, column))
+)
+
 const isAmountColumn = (column = '') => amountColumnPattern.test(String(column || ''))
 const isRateColumn = (column = '') => rateColumnPattern.test(String(column || ''))
 
@@ -1755,9 +1783,9 @@ const formatDisplayValue = (value) => {
   return String(value ?? '-')
 }
 
-const formatValueByColumn = (value, column = '') => {
+const formatValueByColumn = (value, column = '', dataset = null) => {
   if (isAmountColumn(column)) {
-    const metric = {}
+    const metric = resolveAmountMetric({}, dataset, column)
     const col = String(column || '')
     if (/_万元$/.test(col) || /万元$/.test(col)) {
       metric.unit = '万元'
@@ -1768,10 +1796,10 @@ const formatValueByColumn = (value, column = '') => {
   return formatDisplayValue(value)
 }
 
-const formatBusinessValueByColumn = (value, column = '') => {
+const formatBusinessValueByColumn = (value, column = '', dataset = null) => {
   const rawText = String(value ?? '').trim()
   if (rawText && /[万亿%]/.test(rawText)) return rawText
-  return formatValueByColumn(value, column)
+  return formatValueByColumn(value, column, dataset)
 }
 
 const getLabelColumn = (dataset) => {
@@ -1806,7 +1834,7 @@ const getMetricCards = (dataset) => {
     const values = rows.map(row => row[column]).filter(value => typeof value === 'number')
     if (!values.length) return
     const displayValue = rows.length === 1 ? firstRow[column] : Math.max(...values)
-    cards.push({ label: rows.length === 1 ? column : `最高${column}`, value: formatValueByColumn(displayValue, column) })
+    cards.push({ label: rows.length === 1 ? column : `最高${column}`, value: formatValueByColumn(displayValue, column, dataset) })
   })
 
   if (rows.length === 1 && cards.length === 0) {
@@ -1865,10 +1893,10 @@ const formatBusinessAmount = (value) => {
   return formatAmount(value)
 }
 
-const formatMetricByDefinition = (value, metric = {}) => {
+const formatMetricByDefinition = (value, metric = {}, dataset = null) => {
   if (value === null || value === undefined) return '-'
   if (metric.format === 'percent') return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%`
-  if (metric.format === 'amount' || metric.format === 'currency') return formatAmount(value, metric)
+  if (metric.format === 'amount' || metric.format === 'currency') return formatAmount(value, resolveAmountMetric(metric, dataset))
   return formatDisplayValue(value)
 }
 
@@ -2384,6 +2412,7 @@ const buildOfficeDetailRows = (chartSpec = {}, config = {}) => {
   const columns = Array.isArray(chartSpec.columns) && chartSpec.columns.length
     ? chartSpec.columns
     : Object.keys(rows[0] || {})
+  const dataset = chartSpec?.dataset || null
   const nameColumn = columns[0] || '名称'
   const rateColumn = findColumn(columns, column => isRateColumn(column)) || '达成率'
   const taskColumn = findColumn(columns, column => /任务|目标/i.test(column) && !/剩余|缺口/i.test(column))
@@ -2401,11 +2430,11 @@ const buildOfficeDetailRows = (chartSpec = {}, config = {}) => {
       rate,
       rateLabel: isRateColumn(rateColumn) ? `${rate.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}%` : formatDisplayValue(rate),
       task,
-      taskLabel: taskColumn ? formatAmount(task) : '-',
+      taskLabel: taskColumn ? formatAmount(task, resolveAmountMetric({ format: 'amount', column: taskColumn }, dataset, taskColumn)) : '-',
       actual,
-      actualLabel: actualColumn ? formatAmount(actual) : '-',
+      actualLabel: actualColumn ? formatAmount(actual, resolveAmountMetric({ format: 'amount', column: actualColumn }, dataset, actualColumn)) : '-',
       remain,
-      remainLabel: remainColumn ? formatAmount(remain) : '-',
+      remainLabel: remainColumn ? formatAmount(remain, resolveAmountMetric({ format: 'amount', column: remainColumn }, dataset, remainColumn)) : '-',
       label,
       tone: getToneFromDisplayTag(label, getOfficeRateTone(rate, config)),
       progress: Math.max(0, Math.min(100, rate)),
@@ -2519,6 +2548,7 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
             title: `${name}当前层指标`,
             columns: overviewChart?.columns || Object.keys(row || {}),
             rows: [row],
+            dataset,
           },
           drillGroups: [],
         }
@@ -2538,12 +2568,12 @@ const buildBusinessDrillReportFromSpec = (dataset) => {
     const rateValue = toNumber(rateKpi?.value)
     const chartRows = Array.isArray(item.chart?.rows) ? item.chart.rows : []
     const narrative = String(item.narrative || '').trim()
-    const detailRows = buildOfficeDetailRows(item.chart, config)
+    const detailRows = buildOfficeDetailRows({ ...(item.chart || {}), dataset }, config)
     const drillGroups = (Array.isArray(item.drillGroups) ? item.drillGroups : [])
       .map((group) => {
         const groupRateKpi = (group.kpis || []).find(kpi => /率|percent|rate/i.test(kpi.label || ''))
         const groupRateValue = toNumber(groupRateKpi?.value)
-        const groupRows = buildOfficeDetailRows(group.chart, config)
+        const groupRows = buildOfficeDetailRows({ ...(group.chart || {}), dataset }, config)
         const groupTag = group.tag || getOfficeRateTag(groupRateValue, config, '代表处标杆')
         return {
           id: group.id || `${item.id || item.title}-${group.title}`,
@@ -2718,7 +2748,7 @@ const buildBusinessDrillReport = (dataset) => {
     const bestPerson = sortedPeopleDesc[0]
     const worstPerson = sortedPeople[0]
     const formatPersonMetric = (person, metric) => (
-      metric ? formatMetricByDefinition(getNodeMetricValue(person, metric), metric) : '-'
+      metric ? formatMetricByDefinition(getNodeMetricValue(person, metric), metric, dataset) : '-'
     )
     const describePerson = (person) => {
       if (!person) return ''
@@ -2743,10 +2773,10 @@ const buildBusinessDrillReport = (dataset) => {
     }
     })
     const officeKpis = [
-      taskMetric ? { label: taskMetric.label || taskMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) } : null,
-      actualMetric ? { label: actualMetric.label || actualMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) } : null,
-      { label: rateMetric.label || rateMetric.column || '达成率', value: formatMetricByDefinition(rate, rateMetric) },
-      remainMetric ? { label: remainMetric.label || remainMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric) } : null,
+      taskMetric ? { label: taskMetric.label || taskMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric, dataset) } : null,
+      actualMetric ? { label: actualMetric.label || actualMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric, dataset) } : null,
+      { label: rateMetric.label || rateMetric.column || '达成率', value: formatMetricByDefinition(rate, rateMetric, dataset) },
+      remainMetric ? { label: remainMetric.label || remainMetric.column, value: formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric, dataset) } : null,
     ].filter(Boolean)
 
     return {
@@ -2755,7 +2785,7 @@ const buildBusinessDrillReport = (dataset) => {
       parentName: office.parentName,
       tone,
       rate,
-      rateLabel: formatMetricByDefinition(rate, rateMetric),
+      rateLabel: formatMetricByDefinition(rate, rateMetric, dataset),
       progress: Math.max(0, Math.min(100, rate || 0)),
       childCount: sortedPeople.length,
       isLeafLevel: sortedPeople.length === 0,
@@ -2764,13 +2794,14 @@ const buildBusinessDrillReport = (dataset) => {
       tag: getOfficeRateTag(rate, config, '区域标杆'),
       highlight: bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : '',
       rankLabel: '',
-      summary: `${office.name}达成率${formatMetricByDefinition(rate, rateMetric)}，${getOfficeToneLabel(tone)}；任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric) : '-'} / 已完成${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric) : '-'}${remainMetric ? ` / 缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric)}` : ''}。${bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : `暂无${detailLevelLabel}明细`}；${riskPeople.length ? `${riskPeople.length} 个${detailLevelLabel}低于10%风险线` : `暂无低于10%的风险${detailLevelLabel}`}。`,
+      summary: `${office.name}达成率${formatMetricByDefinition(rate, rateMetric, dataset)}，${getOfficeToneLabel(tone)}；任务${taskMetric ? formatMetricByDefinition(getNodeMetricValue(office, taskMetric), taskMetric, dataset) : '-'} / 已完成${actualMetric ? formatMetricByDefinition(getNodeMetricValue(office, actualMetric), actualMetric, dataset) : '-'}${remainMetric ? ` / 缺口${formatMetricByDefinition(getNodeMetricValue(office, remainMetric), remainMetric, dataset)}` : ''}。${bestPerson ? `亮点：${bestPerson.name}达成率${formatPersonMetric(bestPerson, rateMetric)}` : `暂无${detailLevelLabel}明细`}；${riskPeople.length ? `${riskPeople.length} 个${detailLevelLabel}低于10%风险线` : `暂无低于10%的风险${detailLevelLabel}`}。`,
       chartText: `${office.name}下钻到${detailLevelLabel}层：${bestPerson ? `最高为${describePerson(bestPerson)}` : `暂无${detailLevelLabel}明细`}；${worstPerson ? `最低为${describePerson(worstPerson)}。` : ''}`,
       chartSpec: {
         chartType: 'horizontalDrill',
         title: `${office.name}${detailLevelLabel}达成率与缺口`,
         columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
         rows: chartRows,
+        dataset,
       },
       detailRows: buildOfficeDetailRows({
         columns: ['名称', actualMetric?.label || actualMetric?.column || '完成', taskMetric?.label || taskMetric?.column || '任务', remainMetric?.label || remainMetric?.column || '剩余', rateMetric.label || rateMetric.column || '达成率'].filter(Boolean),
@@ -2785,7 +2816,7 @@ const buildBusinessDrillReport = (dataset) => {
 
   const kpis = (config.metrics || []).map(metric => ({
     label: metric.label || metric.column || metric.key,
-    value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric),
+    value: formatMetricByDefinition(model.rootMetrics?.[metric.key], metric, dataset),
   })).filter(item => item.value !== '-')
   const bestOffice = offices[0]
   const worstOffice = offices[offices.length - 1]
@@ -2840,7 +2871,7 @@ const getBusinessMetricCards = (dataset) => {
   ;(config.metrics || []).forEach((metric) => {
     const value = model.rootMetrics?.[metric.key]
     if (value !== null && value !== undefined) {
-      cards.push({ label: metric.label || metric.column || metric.key, value: formatMetricByDefinition(value, metric) })
+      cards.push({ label: metric.label || metric.column || metric.key, value: formatMetricByDefinition(value, metric, dataset) })
     }
   })
   model.levelSections.slice(0, 2).forEach((section) => {
@@ -2897,6 +2928,7 @@ const buildLayeredBusinessCharts = (dataset) => {
         title: `${titlePrefix}${section.levelName}完成情况`,
         columns,
         rows,
+        dataset,
         lowFirst: isNegativeRankingQuestion(),
       }
     })
@@ -3340,13 +3372,13 @@ const getDirectAnswerFromRows = (report) => {
       name: row?.[nameColumn] || row?.节点名称 || row?.名称 || '-',
       level: targetLevel,
       rate: toNumber(row?.[rateColumn]),
-      rateLabel: rateColumn ? formatBusinessValueByColumn(row?.[rateColumn], rateColumn) : '-',
+      rateLabel: rateColumn ? formatBusinessValueByColumn(row?.[rateColumn], rateColumn, dataset) : '-',
       task: toNumber(row?.[taskColumn]),
-      taskLabel: taskColumn ? formatBusinessValueByColumn(row?.[taskColumn], taskColumn) : '-',
+      taskLabel: taskColumn ? formatBusinessValueByColumn(row?.[taskColumn], taskColumn, dataset) : '-',
       actual: toNumber(row?.[actualColumn]),
-      actualLabel: actualColumn ? formatBusinessValueByColumn(row?.[actualColumn], actualColumn) : '-',
+      actualLabel: actualColumn ? formatBusinessValueByColumn(row?.[actualColumn], actualColumn, dataset) : '-',
       remain: toNumber(row?.[remainColumn]),
-      remainLabel: remainColumn ? formatBusinessValueByColumn(row?.[remainColumn], remainColumn) : '-',
+      remainLabel: remainColumn ? formatBusinessValueByColumn(row?.[remainColumn], remainColumn, dataset) : '-',
     }))
     .filter(item => item.name && item.rate !== null)
   if (!candidates.length) return null
@@ -4986,6 +5018,7 @@ const sortRowsForChart = (rows = [], columns = [], lowFirst = false, preferredCo
 const renderChartSpec = (chart, data) => {
   const labelColumn = data.columns?.[0]
   const numericColumns = data.columns?.slice(1) || []
+  const dataset = data?.dataset || null
   const preferredSortColumn = data.sortColumn || ''
   const sortedRows = sortRowsForChart(data.rows || [], data.columns || [], Boolean(data.lowFirst), preferredSortColumn)
   const colorPalette = ['#1A1A1A', '#10B981', '#F59E0B', '#E61F24', '#9CA3AF', '#6B7280']
@@ -5058,7 +5091,14 @@ const renderChartSpec = (chart, data) => {
       yAxis: [
         {
           type: 'value',
-          axisLabel: { color: '#9CA3AF', fontSize: 11, formatter: value => formatAmount(value) },
+          axisLabel: {
+            color: '#9CA3AF',
+            fontSize: 11,
+            formatter: value => {
+              const axisColumn = barColumns.find(column => isAmountColumn(column)) || barColumns[0] || ''
+              return formatChartAmount(value, dataset, axisColumn)
+            },
+          },
           splitLine: { lineStyle: { color: '#F3F4F6', type: 'dashed' } },
         },
         {
@@ -5073,6 +5113,13 @@ const renderChartSpec = (chart, data) => {
           type: 'bar',
           barMaxWidth: 18,
           itemStyle: { borderRadius: [4, 4, 0, 0], color: getMetricColor(column) },
+          label: isAmountColumn(column) ? {
+            show: true,
+            position: 'top',
+            color: '#6B7280',
+            fontSize: 10,
+            formatter: ({ value }) => formatChartAmount(value, dataset, column),
+          } : undefined,
           data: categoryRows.map(row => ({
             value: row[column],
           })),
@@ -5136,7 +5183,7 @@ const renderChartSpec = (chart, data) => {
           position: 'right',
           color: '#9CA3AF',
           fontSize: 10,
-          formatter: ({ value }) => formatAmount(value),
+          formatter: ({ value }) => formatChartAmount(value, dataset, remainColumn),
         },
         data: categoryRows.map(row => row[remainColumn]),
       })
@@ -5186,7 +5233,11 @@ const renderChartSpec = (chart, data) => {
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: '#9CA3AF', fontSize: 11, formatter: value => isAmountColumn(valueColumn) ? formatAmount(value) : value },
+        axisLabel: {
+          color: '#9CA3AF',
+          fontSize: 11,
+          formatter: value => isAmountColumn(valueColumn) ? formatChartAmount(value, dataset, valueColumn) : value,
+        },
         splitLine: { lineStyle: { color: '#F3F4F6', type: 'dashed' } },
       },
       series: [{
@@ -5199,7 +5250,7 @@ const renderChartSpec = (chart, data) => {
           color: '#6B7280',
           fontSize: 11,
           fontWeight: 600,
-          formatter: ({ value }) => formatDisplayValue(value),
+          formatter: ({ value }) => (isAmountColumn(valueColumn) ? formatChartAmount(value, dataset, valueColumn) : formatDisplayValue(value)),
         },
         data: sortedRows.slice(0, 8).map(row => ({
           value: row[valueColumn],
