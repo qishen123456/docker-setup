@@ -55,11 +55,18 @@
         </div>
 
         <div class="sa-composer-main">
-          <div class="sa-textarea-wrap">
+          <div class="sa-textarea-wrap" :class="{ 'is-running': isRunning }">
             <div v-if="statusText" class="sa-composer-status-capsule" :class="statusTone">
               <span class="sa-composer-status-dot"></span>
               <span class="sa-composer-status-text">{{ statusText }}</span>
               <span v-if="statusElapsed" class="sa-composer-status-time">{{ statusElapsed }}</span>
+            </div>
+
+            <div v-if="isRunning" class="sa-composer-running-mask" aria-hidden="true">
+              <div class="sa-composer-running-panel">
+                <span class="sa-composer-running-line"></span>
+                <span class="sa-composer-running-text">正在生成结果，输入区暂不可编辑</span>
+              </div>
             </div>
 
             <textarea
@@ -266,11 +273,11 @@ onMounted(() => {
 }
 
 .sa-composer.is-running {
-  border-color: rgba(230, 31, 36, 0.14);
-  background: #FFFFFF;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, #fcfcfd 0%, #f7f8fb 100%);
   box-shadow:
-    0 12px 28px rgba(15, 23, 42, 0.075),
-    0 0 0 3px rgba(230, 31, 36, 0.035);
+    0 12px 28px rgba(15, 23, 42, 0.06),
+    0 0 0 3px rgba(148, 163, 184, 0.05);
 }
 
 .sa-composer.is-running::before {
@@ -543,7 +550,16 @@ onMounted(() => {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 0 0 1px rgba(17, 24, 39, 0.015);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.sa-textarea-wrap.is-running {
+  border-color: rgba(17, 24, 39, 0.07);
+  background: #FFFFFF;
+  animation: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(17, 24, 39, 0.015);
 }
 
 .sa-textarea-wrap:focus-within {
@@ -551,6 +567,65 @@ onMounted(() => {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 0 0 3px rgba(17, 24, 39, 0.025);
+}
+
+.sa-textarea-wrap.is-running:focus-within {
+  border-color: rgba(17, 24, 39, 0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(17, 24, 39, 0.015);
+}
+
+.sa-composer-running-mask {
+  position: absolute;
+  left: 18px;
+  right: 126px;
+  top: 14px;
+  height: 20px;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sa-composer-running-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sa-composer-running-line {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.2) 0%, rgba(148, 163, 184, 0.8) 50%, rgba(148, 163, 184, 0.2) 100%);
+  animation: sa-running-line-pulse 1.4s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+.sa-composer-running-text {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: left;
+  white-space: nowrap;
+  background: linear-gradient(110deg, rgba(100, 116, 139, 0.82) 0%, rgba(148, 163, 184, 1) 48%, rgba(100, 116, 139, 0.82) 100%);
+  background-size: 220px 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sa-composer-shimmer 2.2s ease-in-out infinite;
 }
 
 .sa-composer-status-capsule {
@@ -636,6 +711,13 @@ onMounted(() => {
   margin-top: 0;
 }
 
+.sa-textarea:disabled {
+  color: rgba(123, 135, 152, 0.14);
+  cursor: not-allowed;
+  caret-color: transparent;
+  -webkit-text-fill-color: rgba(123, 135, 152, 0.14);
+}
+
 .sa-textarea:focus,
 .sa-textarea:focus-visible {
   border: none;
@@ -647,6 +729,10 @@ onMounted(() => {
   color: #9AA3AF;
   font-size: 14px;
   font-weight: 680;
+}
+
+.sa-textarea:disabled::placeholder {
+  color: rgba(168, 178, 193, 0.16);
 }
 
 .sa-composer-footer {
@@ -688,6 +774,16 @@ onMounted(() => {
   padding-left: 34px;
   padding-right: 12px;
   border-radius: 999px;
+  background: #ffffff;
+  box-shadow:
+    inset 0 0 0 1px #E5E7EB;
+}
+
+.sa-composer.is-running .sa-model-corner-select {
+  opacity: 1;
+}
+
+.sa-composer.is-running .sa-model-corner-select :deep(.el-select__wrapper) {
   background: #ffffff;
   box-shadow:
     inset 0 0 0 1px #E5E7EB;
@@ -814,6 +910,16 @@ onMounted(() => {
   to { --sa-composer-angle: 360deg; }
 }
 
+@keyframes sa-composer-shimmer {
+  0% { background-position: -240px 0, 0 0; }
+  100% { background-position: calc(100% + 240px) 0, 0 0; }
+}
+
+@keyframes sa-running-line-pulse {
+  0%, 100% { opacity: 0.45; transform: scaleX(0.88); }
+  50% { opacity: 1; transform: scaleX(1); }
+}
+
 @media (max-width: 900px) {
   .sa-composer {
     margin: 0 0 10px;
@@ -854,6 +960,14 @@ onMounted(() => {
 
   .sa-composer-status-capsule {
     display: none;
+  }
+
+  .sa-composer-running-panel {
+    padding: 0 12px;
+  }
+
+  .sa-composer-running-mask {
+    right: 14px;
   }
 }
 </style>

@@ -1088,6 +1088,32 @@ const normalizeSelectedDatasetIds = (selectedDatasetInput) => {
   return Number.isFinite(value) && value > 0 ? [value] : []
 }
 
+const EXPLICIT_DATASET_SCOPE_RE = /消费者(?:事业部)?|商用(?:事业部)?|电商(?:事业部)?/
+const ORG_LEVEL_TERMS = ['分公司', '城市分公司', '城市公司', '业务部', '代表处', '业务代表', '业务员']
+const ORG_GENERIC_TERMS = [
+  '看下', '看一下', '查下', '查一下', '问下', '问一下', '业绩', '排名', '排行', '情况',
+  '怎么样', '如何', '达成率', '完成率', '完成情况', '表现', '数据', '呢', '吗', '呀', '吧',
+]
+
+const shouldReuseConfirmedDatasetForQuestion = (question, selectedDatasetId) => {
+  if (!Number.isFinite(Number(selectedDatasetId)) || Number(selectedDatasetId) <= 0) return false
+  const rawQuestion = String(question || '').trim()
+  if (!rawQuestion) return false
+  if (EXPLICIT_DATASET_SCOPE_RE.test(rawQuestion)) return false
+  if (!ORG_LEVEL_TERMS.some(term => rawQuestion.includes(term))) return false
+
+  let normalized = rawQuestion.replace(/\s+/g, '')
+  ORG_LEVEL_TERMS.forEach((term) => {
+    normalized = normalized.split(term).join('')
+  })
+  ORG_GENERIC_TERMS.forEach((term) => {
+    normalized = normalized.split(term).join('')
+  })
+  normalized = normalized.replace(/[，。！？、,.!?\-_:：；"“”'‘’()（）【】\[\]0-9]/g, '')
+
+  return normalized.length >= 2
+}
+
 const getConfirmationType = (data = {}) => String(
   data?.confirmation_type
   || data?.route?.confirmation_type
@@ -1758,6 +1784,10 @@ const finalizeFromResult = async (data) => {
   state.result = data
   state.currentSessionId = data?.session_id || state.currentSessionId
   state.conversationSessionId = data?.conversation_session_id || state.conversationSessionId || createSessionId()
+  const routedDatasetIds = normalizeSelectedDatasetIds(data?.route?.dataset_ids)
+  state.selectedDatasetId = routedDatasetIds.length === 1
+    ? routedDatasetIds[0]
+    : (data?.requires_confirmation ? state.selectedDatasetId : null)
   state.updatedAt = new Date().toISOString()
 
   if (data?.error) {
@@ -1797,6 +1827,13 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
   if (!normalizedQuestion) return null
   const currentRunToken = ++runToken
   const selectedIds = normalizeSelectedDatasetIds(selectedDatasetInput)
+  const carrySelectedIds = selectedIds.length > 0
+    ? selectedIds
+    : (
+        shouldReuseConfirmedDatasetForQuestion(normalizedQuestion, state.selectedDatasetId)
+          ? normalizeSelectedDatasetIds(state.selectedDatasetId)
+          : []
+      )
 
   if (activeAbortController) {
     activeAbortController.abort()
@@ -1804,7 +1841,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
   activeAbortController = new AbortController()
 
   state.question = normalizedQuestion
-  state.selectedDatasetId = selectedIds.length === 1 ? selectedIds[0] : null
+  state.selectedDatasetId = carrySelectedIds.length === 1 ? carrySelectedIds[0] : state.selectedDatasetId
   state.status = 'running'
   state.result = null
   state.error = ''
@@ -1817,7 +1854,7 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
   persist()
 
   try {
-    const selected = selectedIds.length > 0 ? selectedIds : undefined
+    const selected = carrySelectedIds.length > 0 ? carrySelectedIds : undefined
     let finalPayload = null
     await sendSmartChatStream(
       normalizedQuestion,
@@ -1844,20 +1881,20 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
     if (!finalPayload) {
       throw new Error('后端实时执行流已结束，但没有返回最终结果。')
     }
-    const autoDatasetIds = selectedIds.length ? selectedIds : []
-    if (selectedIds.length && isDatasetOnlyConfirmation(finalPayload, autoDatasetIds)) {
+    const autoDatasetIds = carrySelectedIds.length ? carrySelectedIds : []
+    if (carrySelectedIds.length && isDatasetOnlyConfirmation(finalPayload, autoDatasetIds)) {
       const option = pickDatasetConfirmationOption(finalPayload, autoDatasetIds)
       appendLog({
         key: 'dataset-confirmation-auto-bypass',
-        title: selectedIds.length ? '沿用当前数据集继续' : '采用唯一数据集继续',
+        title: carrySelectedIds.length ? '沿用当前数据集继续' : '采用唯一数据集继续',
         kind: 'confirmation',
         toolType: 'dataset',
         status: 'running',
-        summary: selectedIds.length
+        summary: carrySelectedIds.length
           ? '当前已选择数据集，本轮不再二次询问数据集口径。'
           : '仅识别到一个可用数据集，本轮自动采用该数据集继续。',
         detailLines: [
-          `${selectedIds.length ? '已选' : '唯一'}数据集 ID：${autoDatasetIds.join('、')}`,
+          `${carrySelectedIds.length ? '已选' : '唯一'}数据集 ID：${autoDatasetIds.join('、')}`,
           option.label ? `自动采用口径：${option.label}` : '自动采用当前数据集继续执行。',
         ],
       })

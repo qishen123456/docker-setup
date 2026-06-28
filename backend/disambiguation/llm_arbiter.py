@@ -12,6 +12,21 @@ ChatJsonFn = Callable[[str, str, Dict[str, Any], Any, str, str], Dict[str, Any]]
 
 
 class DisambiguationArbiter:
+    GENERIC_REASON_TERMS = (
+        "业绩",
+        "排名",
+        "排行",
+        "排序",
+        "开单",
+        "任务",
+        "达成",
+        "表现",
+        "数据",
+        "金额",
+        "收入",
+        "销量",
+    )
+
     def should_arbitrate(self, question: str, candidate_contexts: List[CandidateContext], history: List[Dict[str, Any]]) -> bool:
         return needs_llm_arbitration(question, candidate_contexts, history)
 
@@ -111,11 +126,11 @@ class DisambiguationArbiter:
         # 数据集/业务域名称命中
         for key in ("dataset_name", "business_domain"):
             value = str(dataset.get(key) or "").strip()
-            if value and value in compact_q:
+            if value and value in compact_q and value not in DisambiguationArbiter.GENERIC_REASON_TERMS:
                 return f"命中数据集名称「{value}」"
         for alias in dataset.get("synonyms") or []:
             alias_str = str(alias or "").strip()
-            if alias_str and alias_str in compact_q:
+            if alias_str and alias_str in compact_q and alias_str not in DisambiguationArbiter.GENERIC_REASON_TERMS:
                 return f"命中数据集别名「{alias_str}」"
 
         # 维度/层级别名命中

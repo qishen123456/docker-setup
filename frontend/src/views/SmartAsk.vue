@@ -136,7 +136,7 @@
                               </span>
                             </span>
                             <span class="sa-confirm-spacer"></span>
-                            <span v-if="getConfirmOptionScore(opt) != null" class="sa-confirm-score">
+                            <span v-if="shouldShowConfirmOptionScore(msg, opt)" class="sa-confirm-score">
                               {{ getConfirmOptionScore(opt) }}分
                             </span>
                           </button>
@@ -4611,6 +4611,7 @@ const getConfirmOptionScore = (opt) => {
   const n = Number(raw)
   return Number.isFinite(n) ? Math.round(n) : null
 }
+const shouldShowConfirmOptionScore = () => false
 const getConfirmOptionScorePct = (opt) => {
   const score = getConfirmOptionScore(opt)
   return score == null ? 0 : Math.min(100, Math.max(0, score))

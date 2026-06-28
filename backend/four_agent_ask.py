@@ -1571,6 +1571,8 @@ LIMIT 10000
             top_n = query_intent.get("top_n")
             direction = str(query_intent.get("direction") or "desc")
             rank_word = "排名后" if direction == "asc" else "排名前"
+            if target_level and top_n:
+                return f"{rank_word}{top_n}的{target_level}"
             # 单点“哪个最高/最低”问法，标题直接表达为“最高的分公司”
             if top_n == 1 and (
                 re.search(r"哪个|哪一家", question or "")
@@ -3971,7 +3973,9 @@ LIMIT 10000
                 }
 
         # 分数接近时，按真实数据集名称确认，不再使用无意义的“分公司层级”文案
-        if len(ranked_candidates) >= 2:
+        org_ambiguity_terms = ["分公司", "城市分公司", "城市公司", "代表处", "业务部", "业务代表", "业务员", "条线", "区域", "团队", "组织"]
+        has_org_ambiguity_term = any(term in question for term in org_ambiguity_terms)
+        if len(ranked_candidates) >= 2 and has_org_ambiguity_term:
             top1_score = ranked_candidates[0][1]
             top2_score = ranked_candidates[1][1]
             if abs(top1_score - top2_score) <= 12 and top2_score >= 60:
@@ -4175,30 +4179,6 @@ LIMIT 10000
                 "requires_confirmation": False,
                 "decision": "generate_sql",
             }
-
-        # 修复：带大数字排名的纯层级问题（如“前100的分公司”）未指定事业部时，
-        # 默认命中消费者事业部，避免被随机路由到其他数据集。
-        normalized_compact_route = self._normalize_compact_text(question)
-        if (
-            re.search(r"前\s*\d+\s*的(?:分公司|代表处|业务部|城市分公司)", normalized_compact_route)
-            and not re.search(r"商用|消费者|电商", normalized_compact_route)
-        ):
-            consumer_ds = next((ds for ds in catalog if int(ds.get("id") or 0) == 2), None)
-            if consumer_ds:
-                return {
-                    "dataset_ids": [consumer_ds["id"]],
-                    "intent": "detail",
-                    "refined_query": question,
-                    "requires_confirmation": False,
-                    "decision": "generate_sql",
-                    "match_score": 100,
-                    "route_margin": 100,
-                    "matched_sample_id": None,
-                    "matched_sample_sql": "",
-                    "arbiter_reason": "consumer_default_for_ranking_without_scope",
-                    "candidate_dataset_ids": [consumer_ds["id"]],
-                    "split_queries": [{"dataset_id": consumer_ds["id"], "sub_query": question}],
-                }
 
         org_source_question = current_question or question
         org_route_all = self.organization_route_resolver.resolve(org_source_question, full_catalog)
@@ -4455,6 +4435,13 @@ LIMIT 10000
                 [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked[:3]],
             )
             force_generic_level_confirm = self._is_pure_generic_level_question(question, matched_levels)
+            if (
+                "分公司" in matched_levels
+                and not re.search(r"商用|商用事业部|消费者|消费者事业部|电商|城市分公司|城市公司|代表处|业务部|业务员|业务代表", self._normalize_compact_text(question))
+                and any("商用事业部" in (item[0].get("dataset_name") or "") for item in supported_candidates)
+                and any("消费者" in (item[0].get("dataset_name") or "") for item in supported_candidates)
+            ):
+                force_generic_level_confirm = True
             # 若问题包含具体层级，过滤掉不支持该层级的候选；跨数据集选项在单一层级口径下也不适合自动命中
             if matched_levels and supported_dataset_ids:
                 filtered_options = [
@@ -4487,17 +4474,6 @@ LIMIT 10000
                     runner_opt = sorted_options[1]
                     best_opt_score = best_opt.get("score", 0) or 0
                     runner_opt_score = runner_opt.get("score", 0) or 0
-                    # 修复：问题没有明确事业部前缀时，纯层级歧义默认优先消费者事业部，保证口径稳定。
-                    if not re.search(r"商用|消费者|电商", self._normalize_compact_text(question)):
-                        consumer_opt = next(
-                            (o for o in sorted_options if int((o.get("dataset_ids") or [0])[0]) == 2),
-                            None,
-                        )
-                        if consumer_opt:
-                            best_opt = consumer_opt
-                            best_opt_score = best_opt.get("score", 0) or 0
-                            runner_opt = next((o for o in sorted_options if o is not best_opt), sorted_options[1])
-                            runner_opt_score = runner_opt.get("score", 0) or 0
                     if best_opt_score > runner_opt_score:
                         runner_ds_id = int(runner_opt.get("dataset_ids", [0])[0])
                         runner_ds = next((ctx[0] for ctx in candidate_contexts if int(ctx[0]["id"]) == runner_ds_id), None)
@@ -5469,8 +5445,8 @@ SELECT *
 FROM (
     SELECT DISTINCT ON (节点名称) *
     FROM 命中链路
-    WHERE 节点名称 IN ({quoted_entities}) {child_level_filter}
-    ORDER BY 节点名称
+    WHERE _depth <= 2 {child_level_filter}
+    ORDER BY 节点名称, _depth
 ) 去重后
 ORDER BY 条线 DESC,
   CASE 层级
@@ -5486,7 +5462,80 @@ ORDER BY 条线 DESC,
 LIMIT 10000
 """.strip()
 
-        if all(token in normalized_question for token in ["东部分公司", "南部分公司"]):
+        single_entity_drill_tokens = ["业绩", "绩效", "达成率", "达成", "开单", "完成情况", "完成", "情况", "表现", "分析", "怎么样", "如何"]
+        block_single_entity_shortcuts = (
+            len(entity_names) == 1
+            and any(token in normalized_question for token in single_entity_drill_tokens)
+            and not any(token in normalized_question for token in ["排名", "排行", "Top", "top", "对比", "比较", "分别", "哪些", "列表"])
+        )
+
+        if block_single_entity_shortcuts:
+            report_config = self._safe_dict(context.get("report_config")) or {}
+            root_level_values = {
+                str(dimension.get("path")[0]).strip()
+                for dimension in (report_config.get("analysisDimensions") or [])
+                if isinstance(dimension.get("path") or [], list) and (dimension.get("path") or [])
+            }
+            drilldown_entities = [e for e in entity_names if e not in root_level_values] or entity_names
+            quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
+            target_level_hint = str(query_intent.get("target_level") or "").strip()
+            is_terminal_node = target_level_hint == "业务代表" or any(name.endswith("业务代表") for name in drilldown_entities)
+
+            if is_terminal_node:
+                return f"""
+{syyb_base_sql}
+HAVING 节点名称 IN ({quoted_entities})
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000
+""".strip()
+
+            return f"""
+WITH RECURSIVE 汇总结 果 AS (
+{syyb_base_sql}
+),
+命中链路 AS (
+    SELECT *, 1 AS _depth
+    FROM 汇总结 果
+    WHERE 节点名称 IN ({quoted_entities})
+    UNION ALL
+    SELECT 子节点.*, 父节点._depth + 1
+    FROM 汇总结 果 子节点
+    JOIN 命中链路 父节点
+      ON 子节点.上级名称 = 父节点.节点名称
+    WHERE 父节点._depth < 2
+)
+SELECT *
+FROM (
+    SELECT DISTINCT ON (节点名称) *
+    FROM 命中链路
+    WHERE _depth <= 2
+    ORDER BY 节点名称, _depth
+) 去重后
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000
+""".strip()
+
+        if not block_single_entity_shortcuts and all(token in normalized_question for token in ["东部分公司", "南部分公司"]):
             return f"""
 {syyb_base_sql}
 HAVING 节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')
@@ -5494,7 +5543,7 @@ ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
 LIMIT 10000
 """.strip()
 
-        if all(token in normalized_question for token in ["东部分公司", "达成率", "剩余任务"]):
+        if not block_single_entity_shortcuts and all(token in normalized_question for token in ["东部分公司", "达成率", "剩余任务"]):
             return """
 WITH 字段提取 AS (
   SELECT
@@ -6214,7 +6263,11 @@ WITH 字段提取 AS (
             rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
             if rank_limit <= 0:
                 rank_limit = int(rank_spec.get("limit") or 0)
-            if rank_limit <= 0:
+            explicit_rank_count_requested = bool(
+                self._rank_limit_match(normalized_question)
+                or any(token in normalized_question for token in ["Top", "top", "前", "后", "倒数"])
+            )
+            if rank_limit <= 0 and explicit_rank_count_requested:
                 # 优先读取数据集报告模板中配置的默认 TopN
                 ds_ranking_policy = self._safe_dict(
                     (context.get("report_config") or {}).get("intentPolicies")
@@ -6222,9 +6275,7 @@ WITH 字段提取 AS (
                 rank_limit = self._safe_int(ds_ranking_policy.get("defaultTopN"), 0)
             if rank_limit <= 0:
                 # 用户仅说“排名/排行”但没给数量时，返回全部；只有明确带 Top/前/后/倒数 才默认取 Top3
-                if self._rank_limit_match(normalized_question) or any(
-                    token in normalized_question for token in ["Top", "top", "前", "后", "倒数"]
-                ):
+                if explicit_rank_count_requested:
                     rank_limit = 3
                 else:
                     rank_limit = 0
@@ -6788,6 +6839,63 @@ Agent1 路由结果：
             default=(0, {}),
         )
         return best_other[0] >= 90 and best_other[0] >= selected_score + 12
+
+    def _followup_dataset_hint_from_memory(
+        self,
+        question: str,
+        memory_history: Optional[List[Dict[str, Any]]],
+        allowed_dataset_ids: Optional[List[int]] = None,
+    ) -> List[int]:
+        if not memory_history:
+            return []
+        latest_dataset_ids: List[int] = []
+        for item in reversed(memory_history):
+            dataset_ids = []
+            for raw in item.get("dataset_ids") or []:
+                try:
+                    dataset_ids.append(int(raw))
+                except Exception:
+                    continue
+            if dataset_ids:
+                latest_dataset_ids = dataset_ids
+                break
+        if len(latest_dataset_ids) != 1:
+            return []
+        latest_dataset_id = latest_dataset_ids[0]
+        if allowed_dataset_ids is not None and latest_dataset_id not in {int(item) for item in allowed_dataset_ids}:
+            return []
+
+        catalog = self.repository.get_agent1_catalog()
+        target_dataset = next((item for item in catalog if int(item.get("id") or 0) == latest_dataset_id), None)
+        if not target_dataset:
+            return []
+
+        normalized_question = re.sub(r"\s+", "", str(question or "")).lower()
+        if not normalized_question:
+            return []
+
+        org_level_tokens = ("分公司", "城市分公司", "城市公司", "业务部", "代表处", "业务代表")
+        if not any(token in str(question or "") for token in org_level_tokens):
+            return []
+
+        profile = get_dataset_profile(target_dataset.get("dataset_code"), target_dataset.get("dataset_name"))
+        if not self._profile_supports_level(profile, "分公司"):
+            return []
+
+        alias_hits = []
+        for alias in target_dataset.get("synonyms") or []:
+            alias_text = str(alias or "").strip()
+            compact_alias = re.sub(r"\s+", "", alias_text).lower()
+            if len(compact_alias) < 2:
+                continue
+            if compact_alias not in normalized_question:
+                continue
+            if compact_alias in {"分公司", "城市分公司", "城市公司", "业务部", "代表处", "业绩", "排名"}:
+                continue
+            alias_hits.append(alias_text)
+        if not alias_hits:
+            return []
+        return [latest_dataset_id]
 
     def _repair_sql_after_execution_error(
         self,
@@ -7889,6 +7997,14 @@ Agent3 复核结果：
         trace = self._new_trace(question, "ask", live_callback=live_callback)
         memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
         effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
+        followup_dataset_hint = self._followup_dataset_hint_from_memory(
+            question,
+            memory_history,
+            allowed_dataset_ids=allowed_dataset_ids,
+        )
+        followup_hint_locked = bool(followup_dataset_hint)
+        if followup_dataset_hint and not preferred_dataset_ids:
+            preferred_dataset_ids = followup_dataset_hint
         # 去掉题干前缀的序号，例如 "[ 4] xxx"、"4. xxx"、"第4题 xxx"
         effective_question = re.sub(r"^(?:\[\s*\d+\s*\]|\d+[.．、]\s*|第\s*\d+\s*[题问]\s*)", "", effective_question).strip()
         self._append_trace(
@@ -7899,6 +8015,7 @@ Agent3 复核结果：
             effective_question=effective_question,
             session_id=conversation_session_id,
             memory_rounds=len(memory_history),
+            followup_dataset_hint=followup_dataset_hint,
             preferred_dataset_ids=preferred_dataset_ids or [],
             allowed_dataset_ids=allowed_dataset_ids or [],
             llm_model=self._llm_model or "",
@@ -7935,14 +8052,23 @@ Agent3 复核结果：
                 preferred_dataset_ids,
                 allowed_dataset_ids,
             ):
-                self._append_trace(
-                    trace,
-                    "agent1.preferred_dataset_released",
-                    "info",
-                    reason="current_question_explicitly_matches_another_dataset",
-                    preferred_dataset_ids=preferred_dataset_ids or [],
-                )
-                preferred_dataset_ids = []
+                if followup_hint_locked:
+                    self._append_trace(
+                        trace,
+                        "agent1.followup_dataset_hint_preserved",
+                        "info",
+                        reason="current_question_explicitly_matches_another_dataset",
+                        preferred_dataset_ids=preferred_dataset_ids or [],
+                    )
+                else:
+                    self._append_trace(
+                        trace,
+                        "agent1.preferred_dataset_released",
+                        "info",
+                        reason="current_question_explicitly_matches_another_dataset",
+                        preferred_dataset_ids=preferred_dataset_ids or [],
+                    )
+                    preferred_dataset_ids = []
 
             if preferred_dataset_ids:
                 selected_dataset_ids = [int(item) for item in preferred_dataset_ids]
@@ -8034,6 +8160,14 @@ Agent3 复核结果：
                     self._append_trace(trace, "data_permission.no_allowed_dataset", "warning", allowed_dataset_ids=allowed_dataset_ids or [])
                     self._flush_trace(trace, result)
                     return result
+
+            if route.get("preferred_dataset_override") and route.get("requires_confirmation"):
+                route["requires_confirmation"] = False
+                route["decision"] = "generate_sql"
+                route["confirmation_question"] = ""
+                route["confirmation_options"] = []
+                route["arbiter_reason"] = (route.get("arbiter_reason") or "") + ";preferred_dataset_override"
+                self._append_trace(trace, "agent1.preferred_dataset_confirmation_bypassed", "info", route=route)
 
             if route.get("requires_confirmation"):
                 confirmation_session_id = self._create_confirmation_session(
