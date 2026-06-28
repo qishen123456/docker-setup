@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -55,9 +56,21 @@ class FourAgentAskService:
         self.short_term_memory = ShortTermMemoryStore(max_rounds=8)
         self.disambiguation_arbiter = DisambiguationArbiter()
         self.organization_route_resolver = OrganizationRouteResolver()
+        self._dataset_node_index = self._load_dataset_node_index()
         self._trace_file_path = os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl")
         self._trace_logger = self._build_trace_logger()
         self._load_llm()
+
+    def _load_dataset_node_index(self) -> Dict[str, Any]:
+        path = os.path.join(CURRENT_DIR, "..", "config", "dataset_node_index.json")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+        return {"datasets": [], "flat_alias_index": []}
 
     def _build_trace_logger(self) -> logging.Logger:
         logger = logging.getLogger("smartask.trace")
@@ -2783,6 +2796,73 @@ LIMIT 10000
                 normalized.append(cleaned)
         return normalized
 
+    def _node_index_matches(
+        self,
+        candidate: str,
+        dataset_ids: Optional[List[int]] = None,
+    ) -> List[Dict[str, Any]]:
+        normalized_candidate = self._normalize_compact_text(candidate)
+        if not normalized_candidate:
+            return []
+        allowed_ids = {int(item) for item in (dataset_ids or []) if item is not None}
+        matches: List[Dict[str, Any]] = []
+        seen = set()
+        for alias_item in self._dataset_node_index.get("flat_alias_index") or []:
+            alias = str(alias_item.get("alias") or "").strip()
+            if self._normalize_compact_text(alias) != normalized_candidate:
+                continue
+            for item in alias_item.get("matches") or []:
+                try:
+                    dataset_id = int(item.get("dataset_id") or 0)
+                except Exception:
+                    dataset_id = 0
+                if allowed_ids and dataset_id not in allowed_ids:
+                    continue
+                payload = {
+                    "dataset_id": dataset_id,
+                    "dataset_name": str(item.get("dataset_name") or "").strip(),
+                    "node_name": str(item.get("node_name") or "").strip(),
+                    "node_level": str(item.get("node_level") or "").strip(),
+                    "parent_name": None if item.get("parent_name") is None else str(item.get("parent_name") or "").strip(),
+                    "track": str(item.get("track") or "").strip(),
+                    "alias": alias,
+                }
+                key = (
+                    payload["dataset_id"],
+                    payload["node_name"],
+                    payload["node_level"],
+                    payload["parent_name"],
+                    payload["track"],
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                matches.append(payload)
+        return matches
+
+    def _node_index_unique_match(
+        self,
+        candidate: str,
+        dataset_ids: Optional[List[int]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        matches = self._node_index_matches(candidate, dataset_ids=dataset_ids)
+        if len(matches) == 1:
+            return matches[0]
+        return None
+
+    @staticmethod
+    def _extract_subject_from_confirmation_label(label: str) -> str:
+        text = str(label or "").strip()
+        if not text:
+            return ""
+        text = re.sub(r"^系统推荐[:：]\s*", "", text)
+        for sep in [" - ", " · ", "-", "·"]:
+            if sep in text:
+                text = text.split(sep, 1)[-1].strip()
+                break
+        text = re.sub(r"(的)?(业绩|情况|表现|完成情况|完成率|达成率|数据)$", "", text).strip()
+        return text
+
     def _role_person_subject_names(self, question: str) -> List[str]:
         text = str(question or "").replace("\n", " ").strip()
         names: List[str] = []
@@ -3566,17 +3646,14 @@ LIMIT 10000
         normalized_target = cls._normalize_compact_text(target_level)
         if not normalized_target:
             return False
-        dictionary_values = [
-            str(item.get(key) or "")
-            for item in (context.get("data_dictionary") or [])
-            for key in ("semantic_name", "jsonb_key", "column_name")
-        ]
-        common_questions = [str(item.get("question_text") or "") for item in (context.get("common_questions") or [])]
-        lld_text = str(context.get("lld_content") or "")
-        haystack = cls._normalize_compact_text(" ".join([*dictionary_values, *common_questions, lld_text]))
-        if not haystack:
-            return False
-        return normalized_target in haystack
+        dataset = context.get("dataset") if isinstance(context, dict) else {}
+        profile = get_dataset_profile(
+            (dataset or {}).get("dataset_code"),
+            (dataset or {}).get("dataset_name"),
+        )
+        if profile:
+            return cls._profile_supports_level(profile, target_level)
+        return False
 
     @classmethod
     def _map_dimension_aliases_for_dataset(cls, question: str, dataset: Dict[str, Any]) -> str:
@@ -3875,26 +3952,6 @@ LIMIT 10000
                     for canonical in ordered_levels:
                         if cls._normalize_compact_text(canonical) == normalized_alias and canonical not in seen:
                             seen.append(canonical)
-
-        dictionary_values = [
-            str(item.get(key) or "")
-            for item in (context.get("data_dictionary") or [])
-            for key in ("semantic_name", "jsonb_key", "column_name")
-        ]
-        common_questions = [str(item.get("question_text") or "") for item in (context.get("common_questions") or [])]
-        schema_values = [
-            str(item.get(key) or "")
-            for item in (context.get("schema_definition") or [])
-            for key in ("table_name", "column_name", "semantic_name")
-        ]
-        haystack = cls._normalize_compact_text(
-            " ".join([*dictionary_values, *common_questions, *schema_values, str((context.get("lld_document") or {}).get("content") or "")])
-        )
-        for canonical in ordered_levels:
-            if canonical in seen:
-                continue
-            if cls._normalize_compact_text(canonical) in haystack:
-                seen.append(canonical)
         return seen
 
     def _build_dataset_profile_confirmation(
@@ -4384,6 +4441,90 @@ LIMIT 10000
                 thought=self._build_route_thought(org_route, current_question or question, full_catalog),
             )
             return org_route
+
+        if self._looks_like_org_subject_question(question):
+            resolved_subject = self._agent1_resolve_org_subject(
+                question,
+                conversation_context=conversation_context,
+                trace=trace,
+            ) or {}
+            subject_name = str(resolved_subject.get("subject_name") or "").strip()
+            if subject_name:
+                index_matches = self._node_index_matches(subject_name)
+                available_ids = {int(ds.get("id") or 0) for ds in catalog}
+                matched_dataset_ids = sorted(
+                    {
+                        int(item.get("dataset_id") or 0)
+                        for item in index_matches
+                        if int(item.get("dataset_id") or 0) in available_ids
+                    }
+                )
+                if len(matched_dataset_ids) == 1:
+                    only_id = matched_dataset_ids[0]
+                    rewritten_question = str(resolved_subject.get("rewritten_question") or question).strip() or question
+                    return {
+                        "dataset_ids": [only_id],
+                        "intent": "detail",
+                        "refined_query": rewritten_question,
+                        "requires_confirmation": False,
+                        "decision": "generate_sql",
+                        "match_score": 100,
+                        "route_margin": 100,
+                        "candidate_dataset_ids": matched_dataset_ids,
+                        "arbiter_reason": "node_index_dataset_unique",
+                        "resolved_subject_name": subject_name,
+                        "resolved_subject_level": str(resolved_subject.get("subject_level") or "").strip(),
+                        "split_queries": [
+                            {"dataset_id": only_id, "sub_query": rewritten_question}
+                        ],
+                    }
+                if len(matched_dataset_ids) >= 2:
+                    confirmation_options = []
+                    for item in index_matches:
+                        dataset_id = int(item.get("dataset_id") or 0)
+                        if dataset_id not in matched_dataset_ids:
+                            continue
+                        dataset_name = str(item.get("dataset_name") or f"数据集 {dataset_id}").strip()
+                        node_name = str(item.get("node_name") or "").strip()
+                        node_level = str(item.get("node_level") or "").strip()
+                        confirmation_options.append(
+                            {
+                                "id": f"node_index_{dataset_id}",
+                                "label": f"{dataset_name} - {node_name}",
+                                "description": f"{node_level}层级",
+                                "dataset_ids": [dataset_id],
+                                "option_type": "dataset_disambiguation",
+                                "option_id": f"node_index_{dataset_id}",
+                                "confirmation_type": "dataset_disambiguation",
+                                "resolved_subject_name": node_name,
+                                "resolved_subject_level": node_level,
+                                "scope_filter": {},
+                                "score": 100,
+                            }
+                        )
+                    deduped_options = []
+                    seen_option_ids = set()
+                    for option in confirmation_options:
+                        option_id = option["id"]
+                        if option_id in seen_option_ids:
+                            continue
+                        seen_option_ids.add(option_id)
+                        deduped_options.append(option)
+                    if deduped_options:
+                        return {
+                            "dataset_ids": matched_dataset_ids,
+                            "intent": "confirm",
+                            "refined_query": str(resolved_subject.get("rewritten_question") or question).strip() or question,
+                            "requires_confirmation": True,
+                            "decision": "wait_boss_confirm",
+                            "match_score": 100,
+                            "confirmation_role": "boss",
+                            "confirmation_type": "dataset_disambiguation",
+                            "confirmation_question": f"您说的“{subject_name}”是指哪个数据集里的组织节点？",
+                            "confirmation_options": deduped_options,
+                            "candidate_dataset_ids": matched_dataset_ids,
+                            "arbiter_reason": "node_index_dataset_ambiguous",
+                        }
 
         # 当用户只有一个可访问数据集时，直接命中该数据集，不再走任何歧义确认
         if len(catalog) == 1:
@@ -5557,8 +5698,12 @@ ORDER BY 达成率 ASC, 剩余任务金额 DESC, 节点名称
 LIMIT 50
 """.strip()
 
-        # 优先使用 Agent1 解析的实体（准确性最高），兜底再用本地规则
-        entity_names = self._resolved_entity_names(context)
+        # 优先使用统一校验后的主体，其次才是 Agent1/本地规则提取的实体。
+        resolved_subject_name = str(query_intent.get("subject_name") or "").strip()
+        entity_names = [resolved_subject_name] if resolved_subject_name else []
+        for value in self._resolved_entity_names(context):
+            if value not in entity_names:
+                entity_names.append(value)
         if not entity_names:
             entity_names = self._role_person_subject_names(normalized_question)
         if not entity_names:
@@ -7238,13 +7383,18 @@ Agent1 路由结果：
         return ""
 
     @staticmethod
-    def _looks_like_org_followup_question(question: str) -> bool:
+    def _looks_like_org_subject_question(question: str) -> bool:
         text = str(question or "").strip()
         if not text:
             return False
         has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
-        has_followup_style = bool(re.search(r"继续|再看|再查|看下|看一下|查下|查一下|如何了|怎么样了|情况如何|表现如何", text))
-        return has_org_level and has_followup_style
+        has_spoken_style = bool(
+            re.search(
+                r"继续|再看|再查|看下|看一下|查下|查一下|查询下|问下|分析下|了解下|如何了|怎么样了|情况如何|啥情况了|啥情况|情况咋样|情况怎样|表现如何|那边|这边|那个|这块|那块|想看|帮我看|麻烦看|咋样|怎样",
+                text,
+            )
+        )
+        return has_org_level or has_spoken_style
 
     def _agent1_resolve_org_subject(
         self,
@@ -7328,6 +7478,17 @@ Agent1 路由结果：
         normalized_candidate = self._normalize_compact_text(candidate)
         dataset = self._safe_dict(dataset_context.get("dataset"))
         dataset_id = int(dataset.get("id") or 0) if str(dataset.get("id") or "").strip() else 0
+
+        index_match = self._node_index_unique_match(candidate, dataset_ids=[dataset_id] if dataset_id else None)
+        if index_match:
+            matched = str(index_match.get("node_name") or "").strip()
+            matched_level = str(index_match.get("node_level") or "").strip() or self._infer_subject_level_from_name(matched)
+            return {
+                "ok": True,
+                "subject_name": matched,
+                "subject_level": matched_level,
+                "source": "node_index_unique",
+            }
 
         tree_matches: List[str] = []
         if dataset_id:
@@ -7419,20 +7580,32 @@ Agent1 路由结果：
             str(catalog_by_id.get(int(item), {}).get("dataset_name") or f"数据集 {item}")
             for item in selected_dataset_ids
         ]
-        scoped_catalog = [item for item in catalog if int(item.get("id") or 0) in {int(ds) for ds in selected_dataset_ids}]
-        permissions = load_data_permissions()
-        nodes = [
-            node for node in (self.organization_route_resolver._load_tree().get("nodes") or [])
-            if isinstance(node, dict) and node.get("enabled", True)
-        ]
         candidate_names: List[str] = []
-        for node in nodes:
-            dataset_ids = self.organization_route_resolver._dataset_ids_for_node(node, permissions)
-            if not any(int(item) in {int(ds) for ds in selected_dataset_ids} for item in dataset_ids):
+        allowed_ids = {int(ds) for ds in selected_dataset_ids}
+        for dataset_item in self._dataset_node_index.get("datasets") or []:
+            try:
+                dataset_id = int(dataset_item.get("dataset_id") or 0)
+            except Exception:
+                dataset_id = 0
+            if dataset_id not in allowed_ids:
                 continue
-            name = str(node.get("name") or "").strip()
-            if len(name) >= 2:
-                candidate_names.append(name)
+            for node in dataset_item.get("nodes") or []:
+                name = str(node.get("node_name") or "").strip()
+                if len(name) >= 2:
+                    candidate_names.append(name)
+        if not candidate_names:
+            permissions = load_data_permissions()
+            nodes = [
+                node for node in (self.organization_route_resolver._load_tree().get("nodes") or [])
+                if isinstance(node, dict) and node.get("enabled", True)
+            ]
+            for node in nodes:
+                dataset_ids = self.organization_route_resolver._dataset_ids_for_node(node, permissions)
+                if not any(int(item) in allowed_ids for item in dataset_ids):
+                    continue
+                name = str(node.get("name") or "").strip()
+                if len(name) >= 2:
+                    candidate_names.append(name)
         suggestions = get_close_matches(target_name, sorted(set(candidate_names)), n=3, cutoff=0.45)
         suggestion_text = f"。你是不是想问：{'、'.join(suggestions)}" if suggestions else ""
         return {
@@ -7478,6 +7651,9 @@ Agent1 路由结果：
             dataset_context = self.repository.get_dataset_context(int(selected_dataset_ids[0]), question)
         except Exception:
             dataset_context = {}
+        node_index_match = self._node_index_unique_match(target_name, dataset_ids=[int(selected_dataset_ids[0])])
+        if node_index_match:
+            return None
         resolved = self._resolve_question_entities(question, dataset_context or {})
         if resolved and (resolved.get("all_members") or []):
             return None
@@ -8621,7 +8797,7 @@ Agent3 复核结果：
         memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
         effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
         org_subject_resolution = None
-        if self._looks_like_org_followup_question(question):
+        if self._looks_like_org_subject_question(question):
             org_subject_resolution = self._agent1_resolve_org_subject(
                 question,
                 conversation_context=memory_history,
@@ -8746,6 +8922,34 @@ Agent3 复核结果：
                     )
                     preferred_dataset_ids = []
 
+            if preferred_dataset_ids and self._looks_like_org_subject_question(question):
+                resolved_subject = self._agent1_resolve_org_subject(
+                    question,
+                    conversation_context=memory_history,
+                    trace=trace,
+                ) or {}
+                subject_name = str(resolved_subject.get("subject_name") or "").strip()
+                if subject_name:
+                    index_matches = self._node_index_matches(subject_name)
+                    candidate_dataset_ids = sorted(
+                        {
+                            int(item.get("dataset_id") or 0)
+                            for item in index_matches
+                            if int(item.get("dataset_id") or 0) > 0
+                        }
+                    )
+                    if len(candidate_dataset_ids) >= 2:
+                        self._append_trace(
+                            trace,
+                            "agent1.preferred_dataset_released",
+                            "info",
+                            reason="node_index_dataset_ambiguous",
+                            subject_name=subject_name,
+                            candidate_dataset_ids=candidate_dataset_ids,
+                            preferred_dataset_ids=preferred_dataset_ids or [],
+                        )
+                        preferred_dataset_ids = []
+
             if preferred_dataset_ids:
                 selected_dataset_ids = [int(item) for item in preferred_dataset_ids]
                 if allowed_set is not None:
@@ -8796,8 +9000,9 @@ Agent3 复核结果：
                 }
                 self._append_trace(trace, "agent1.preferred_dataset_bypass", "info", route=route)
             else:
+                route_question = question if self._looks_like_org_subject_question(question) else effective_question
                 route = self.route_with_agent1(
-                    effective_question,
+                    route_question,
                     trace=trace,
                     conversation_context=memory_history,
                     allowed_dataset_ids=allowed_dataset_ids,
@@ -9010,6 +9215,50 @@ Agent3 复核结果：
 
         confirmation_notes = []
         if selected_option_item:
+            resolved_subject_name = str(selected_option_item.get("resolved_subject_name") or "").strip()
+            resolved_subject_level = str(selected_option_item.get("resolved_subject_level") or "").strip()
+            if not resolved_subject_name:
+                label_subject_name = self._extract_subject_from_confirmation_label(
+                    (selected_option_item or {}).get("label") or selected_option or ""
+                )
+                selected_dataset_id = 0
+                if len(route.get("dataset_ids") or []) == 1:
+                    try:
+                        selected_dataset_id = int((route.get("dataset_ids") or [0])[0] or 0)
+                    except Exception:
+                        selected_dataset_id = 0
+                index_match = self._node_index_unique_match(
+                    label_subject_name,
+                    dataset_ids=[selected_dataset_id] if selected_dataset_id else None,
+                ) if label_subject_name else None
+                if index_match:
+                    resolved_subject_name = str(index_match.get("node_name") or "").strip()
+                    resolved_subject_level = str(index_match.get("node_level") or "").strip()
+                elif label_subject_name:
+                    resolved_subject_name = label_subject_name
+            if resolved_subject_name:
+                route["resolved_subject_name"] = resolved_subject_name
+                if resolved_subject_level:
+                    route["resolved_subject_level"] = resolved_subject_level
+                base_query = str(route.get("refined_query") or question or "").strip()
+                original_subject_name = str(route.get("route_subject_name") or route.get("matched_alias") or "").strip()
+                if not original_subject_name:
+                    org_subject_resolution = self._agent1_resolve_org_subject(
+                        question,
+                        conversation_context=[],
+                    ) or {}
+                    original_subject_name = str(org_subject_resolution.get("subject_name") or "").strip()
+                if base_query:
+                    if original_subject_name and original_subject_name in base_query:
+                        route["refined_query"] = base_query.replace(original_subject_name, resolved_subject_name)
+                    elif resolved_subject_name not in base_query:
+                        route["refined_query"] = f"{resolved_subject_name}的业绩"
+                route["refined_query"] = re.sub(
+                    r"(城市分公司)分公司|(代表处)代表处|(业务部)业务部|(分公司)分公司",
+                    lambda m: next(group for group in m.groups() if group),
+                    str(route.get("refined_query") or "").strip(),
+                )
+                confirmation_notes.append(f"确认组织节点：{resolved_subject_name}")
             resolved_members = [str(item).strip() for item in (selected_option_item.get("resolved_members") or []) if str(item).strip()]
             if resolved_members:
                 route["resolved_members"] = resolved_members
