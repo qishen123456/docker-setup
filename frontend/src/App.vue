@@ -88,9 +88,10 @@
                   v-if="historyPreviewList.length && appFeatureAccess.app_history_clear"
                   class="sidebar-history-clear"
                   type="button"
+                  :disabled="isClearingHistory"
                   @click="clearHistoryList"
                 >
-                  清空
+                  {{ isClearingHistory ? '清空中...' : '清空' }}
                 </button>
               </div>
             </div>
@@ -142,8 +143,14 @@
             <div class="history-drawer-title">{{ historySessions.length }} 条分析记录</div>
             <div class="history-drawer-desc">选择任意记录可恢复到分析工作台。</div>
           </div>
-          <button v-if="historySessions.length && appFeatureAccess.app_history_clear" class="history-drawer-clear" type="button" @click="clearHistoryList">
-            清空全部
+          <button
+            v-if="historySessions.length && appFeatureAccess.app_history_clear"
+            class="history-drawer-clear"
+            type="button"
+            :disabled="isClearingHistory"
+            @click="clearHistoryList"
+          >
+            {{ isClearingHistory ? '清空中...' : '清空全部' }}
           </button>
         </div>
         <div v-if="historySessions.length" class="history-drawer-list">
@@ -418,6 +425,7 @@ const currentTime = ref('')
 const historyPanelRef = ref(null)
 const historyPanelHighlighted = ref(false)
 const historyDrawerVisible = ref(false)
+const isClearingHistory = ref(false)
 const userMenuVisible = ref(false)
 
 const roleRank = {
@@ -851,9 +859,20 @@ const clearHistoryList = async () => {
         customClass: 'sa-message-box',
       }
     )
-    clearHistory()
   } catch {
     // user cancelled
+    return
+  }
+
+  isClearingHistory.value = true
+  try {
+    await clearHistory()
+    ElMessage.success('历史对话已清空')
+  } catch (error) {
+    console.error('[clearHistoryList] failed to clear history', error)
+    ElMessage.error('清空失败，历史记录已恢复，请稍后重试')
+  } finally {
+    isClearingHistory.value = false
   }
 }
 

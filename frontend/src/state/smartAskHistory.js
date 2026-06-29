@@ -13,6 +13,10 @@ const pendingRestoreId = ref('')
 const activeHistoryId = ref('')
 let loaded = false
 let historyScope = 'anonymous'
+let isClearing = false
+let clearingPromise = null
+let syncGeneration = 0
+let lastClearGeneration = 0
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const MAX_HISTORY_ITEMS = 50
@@ -138,13 +142,18 @@ const compactHistoryItemForLocal = (item = {}) => {
   if (Array.isArray(snapshot.messages)) {
     snapshot.messages = snapshot.messages
       .slice(-MAX_LOCAL_MESSAGES)
-      .map((message) => ({
-        id: message?.id,
-        role: message?.role,
-        content: compactString(message?.content || '', 3000),
-        loading: false,
-        data: message?.role === 'ai' ? null : undefined,
-      }))
+      .map((message) => {
+        const normalized = {
+          id: message?.id,
+          role: message?.role,
+          content: compactString(message?.content || '', 3000),
+          loading: false,
+        }
+        if (message?.data && typeof message.data === 'object') {
+          normalized.data = compactNestedValue(clone(message.data), 0, 'data')
+        }
+        return normalized
+      })
   }
   next.reportSnapshot = {
     ...snapshot,
@@ -161,6 +170,18 @@ const persistLocalItems = (items) => {
 const persistSmartAskHistory = () => {
   if (typeof window === 'undefined') return
   let items = historySessions.value.slice(0, MAX_LOCAL_HISTORY_ITEMS).map(compactHistoryItemForLocal)
+
+  // 即使 items 为空（例如清空历史），也必须写入 localStorage，
+  // 否则旧数据会原封不动地保留在 localStorage 中。
+  if (items.length === 0) {
+    try {
+      persistLocalItems(items)
+    } catch (error) {
+      console.warn('[smartAskHistory] failed to persist empty history', error)
+    }
+    return
+  }
+
   while (items.length > 0) {
     try {
       persistLocalItems(items)
@@ -254,11 +275,18 @@ const normalizeHistoryItem = (item = {}) => {
 
 const mergeHistoryItems = (localItems = [], remoteItems = []) => {
   const byId = new Map()
-  ;[...remoteItems, ...localItems].forEach((item) => {
+  // 服务端完整版优先写入；本地 compact 版只有时间严格更晚时才覆盖，
+  // 避免同时间戳下本地裁剪数据覆盖服务端完整数据。
+  remoteItems.forEach((item) => {
+    const normalized = normalizeHistoryItem(item)
+    if (!normalized?.id) return
+    byId.set(normalized.id, normalized)
+  })
+  localItems.forEach((item) => {
     const normalized = normalizeHistoryItem(item)
     if (!normalized?.id) return
     const existing = byId.get(normalized.id)
-    if (!existing || itemTime(normalized) >= itemTime(existing)) {
+    if (!existing || itemTime(normalized) > itemTime(existing)) {
       byId.set(normalized.id, normalized)
     }
   })
@@ -279,25 +307,51 @@ const pushHistoryToServer = async (item) => {
 export const syncSmartAskHistoryFromServer = async () => {
   ensureLoaded()
   if (typeof window === 'undefined') return historySessions.value
-  try {
-    const localItems = clone(historySessions.value)
-    const response = await getSmartAskReportHistory(50)
-    const remoteItems = Array.isArray(response?.history) ? response.history : []
-    historySessions.value = mergeHistoryItems(localItems, remoteItems)
-    persistSmartAskHistory()
-
-    const remoteIds = new Set(remoteItems.map(item => item?.id).filter(Boolean))
-    localItems
-      .filter(item => item?.id && !remoteIds.has(item.id))
-      .forEach(item => { pushHistoryToServer(item) })
-  } catch {
-    // Keep localStorage as the fallback cache.
+  if (isClearing) {
+    console.warn('[smartAskHistory] sync skipped: clearing')
+    return historySessions.value
   }
+
+  const startGeneration = ++syncGeneration
+  const startClearGeneration = lastClearGeneration
+  console.warn('[smartAskHistory] sync start', { startGeneration, startClearGeneration, len: historySessions.value.length })
+  let response = null
+  try {
+    response = await getSmartAskReportHistory(50)
+  } catch (error) {
+    console.warn('[smartAskHistory] sync fetch failed', error)
+    return historySessions.value
+  }
+
+  // 请求飞行期间如果发生过清空，或已经有更新的 sync 请求发出，
+  // 丢弃本次结果，避免用旧快照覆盖清空后的状态。
+  if (startClearGeneration !== lastClearGeneration) {
+    console.warn('[smartAskHistory] sync aborted: clear happened during fetch')
+    return historySessions.value
+  }
+  if (startGeneration !== syncGeneration) {
+    console.warn('[smartAskHistory] sync aborted: newer sync started')
+    return historySessions.value
+  }
+
+  const localItems = clone(historySessions.value)
+  const remoteItems = Array.isArray(response?.history) ? response.history : []
+  console.warn('[smartAskHistory] sync merge', { localLen: localItems.length, remoteLen: remoteItems.length })
+  historySessions.value = mergeHistoryItems(localItems, remoteItems)
+  persistSmartAskHistory()
+
+  // 清空后不应再把旧记录推回服务端；通过 startClearGeneration 保证。
+  const remoteIds = new Set(remoteItems.map(item => item?.id).filter(Boolean))
+  localItems
+    .filter(item => item?.id && !remoteIds.has(item.id))
+    .forEach(item => { pushHistoryToServer(item) })
+  console.warn('[smartAskHistory] sync done', { len: historySessions.value.length })
   return historySessions.value
 }
 
 export const upsertSmartAskHistory = (payload) => {
   ensureLoaded()
+  if (isClearing) return ''
   const nextItem = normalizeHistoryItem(payload)
   if (!nextItem) return ''
   pushHistoryToServer(nextItem)
@@ -321,13 +375,37 @@ export const removeSmartAskHistory = (id) => {
   }
 }
 
-export const clearSmartAskHistory = () => {
+export const clearSmartAskHistory = async () => {
   ensureLoaded()
+  if (isClearing) {
+    console.warn('[smartAskHistory] clear already in progress')
+    if (clearingPromise) await clearingPromise
+    return
+  }
+
+  const rollbackSnapshot = clone(historySessions.value)
+  console.warn('[smartAskHistory] clear start', { rollbackLen: rollbackSnapshot.length })
   historySessions.value = []
   activeHistoryId.value = ''
   pendingRestoreId.value = ''
   persistSmartAskHistory()
-  clearSmartAskReportHistory().catch(() => {})
+
+  lastClearGeneration += 1
+  isClearing = true
+  clearingPromise = clearSmartAskReportHistory()
+  try {
+    await clearingPromise
+    console.warn('[smartAskHistory] clear server ok')
+  } catch (error) {
+    // 后端清空失败时回滚本地状态，避免给用户“已清空”的假象
+    console.warn('[smartAskHistory] clear server failed, rollback', error)
+    historySessions.value = rollbackSnapshot
+    persistSmartAskHistory()
+    throw error
+  } finally {
+    isClearing = false
+    clearingPromise = null
+  }
 }
 
 export const findSmartAskHistoryById = (id) => {

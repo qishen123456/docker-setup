@@ -1,0 +1,95 @@
+---
+name: smartask-global-constraints
+description: >
+  SmartAsk 项目通用约束与踩坑记录。适用于任何涉及 SmartAsk 代码、配置、文档改动的任务。
+  核心约束：Docker 运行环境、UTF-8 中文编码、源码在 smartask/ 子目录。
+---
+
+# SmartAsk 项目通用约束
+
+## 1. 项目结构
+
+- 工作目录 `d:\1、工作文件\25.自研项目\13.智能问数v4` 不是项目根目录。
+- **真正的项目根目录是 `smartask/`**。
+- 前端源码：`smartask/frontend/src/`
+- 后端源码：`smartask/backend/`
+- 构建产物：`smartask/frontend/dist/`
+- Agent Skill 目录：`smartask/.agents/skills/`
+
+任何文件操作、路径引用都要以 `smartask/` 为根，不要直接写 `frontend/src/...`。
+
+## 2. Docker 运行约束
+
+- 项目一直以 Docker 方式运行，包含三个服务：`postgres`、`backend`、`frontend`。
+- `docker-compose.yml` 位置：`smartask/docker-compose.yml`。
+- **日常部署/全量重建**：
+  ```bash
+  cd smartask
+  docker compose up -d --build
+  ```
+- **只改前端**：前端 Dockerfile 内部已执行 `pnpm install && pnpm run build`，不需要在宿主机手动 npm/pnpm build，直接重建 frontend 镜像即可：
+  ```bash
+  cd smartask
+  docker compose up -d --build frontend
+  ```
+- **只改后端**：
+  ```bash
+  cd smartask
+  docker compose up -d --build backend
+  ```
+- 数据库数据通过 named volume `smartask_pg_data` 持久化，重建容器不会丢失。
+- 运行期配置（如 `config/feishu_sync.json`、`config/smartask_report_history.json`）通过 bind mount `./config:/app/config` 持久化，重建镜像后仍然保留。
+- 浏览器可能有缓存，前端部署后让用户 **Ctrl+F5 强刷** 或清空缓存再验证。
+
+## 3. 编码约束
+
+- **所有源码、文档、配置文件必须使用 UTF-8 无 BOM 编码**。
+- 中文注释、提示文案、日志、错误信息统一使用 UTF-8，禁止 GBK/GB2312/GB18030。
+- 提交前检查编码：
+  ```bash
+  file -i smartask/frontend/src/state/smartAskHistory.js
+  # 期望输出包含 charset=utf-8
+  ```
+- Windows 环境下 git 可能提示 LF 换 CRLF，这不影响运行时，但不要让 BOM 混入文件。
+
+## 4. 修改前必读
+
+- 先确认 `smartask/AGENTS.md`（如果存在）和所在子目录的 `AGENTS.md`。
+- 先 grep 定位所有调用点，再动手改接口。
+- 优先使用 `Agent(subagent_type="explore")` 做跨文件排查，避免漏掉触发路径。
+- 改动后必须运行对应构建/测试验证：
+  - 前端：`npm run build`
+  - 后端：`python -m pytest tests/ -q`（如后端有 pytest）
+
+## 5. 踩坑记录
+
+### 5.1 历史分析「清空」后记录仍出现
+
+**现象**：用户点击「清空」后，刷新页面或稍等片刻，历史记录重新出现。
+
+**根因**：`frontend/src/state/smartAskHistory.js` 中 `clearSmartAskHistory` 未 `await` 后端请求；同时 `syncSmartAskHistoryFromServer` 在请求飞行期间快照了旧数据，清空后该请求返回，把旧记录 merge 回内存并 persist，甚至 `pushHistoryToServer` 污染服务端。
+
+**修复要点**：
+- `clearSmartAskHistory` 改为 `async`，`await clearSmartAskReportHistory()`，失败回滚。
+- 引入 `isClearing`、`syncGeneration`、`lastClearGeneration` 阻止清空期间的并发写入与旧请求回写。
+- `upsertSmartAskHistory` 在 `isClearing` 期间跳过。
+- `App.vue` 清空按钮加 loading/禁用。
+
+**相关文件**：
+- `smartask/frontend/src/state/smartAskHistory.js`
+- `smartask/frontend/src/App.vue`
+
+### 5.2 历史会话恢复后回答卡片丢失/布局混乱
+
+**现象**：恢复历史对话后，只显示用户问题，AI 消息气泡为空，图表表格不渲染。
+
+**根因**：`compactHistoryItemForLocal` 把 AI 消息的 `data` 置为 `null`；`mergeHistoryItems` 让本地 compact 版覆盖服务端完整版；`restoreSnapshotMessages` 直接使用丢失 data 的 messages。
+
+**修复要点**：
+- 本地 compact 保留 AI `data` 结构，仅递归裁剪大字段。
+- `mergeHistoryItems` 服务端完整版优先，本地版本时间严格更晚才覆盖。
+- `restoreSnapshotMessages` 中 AI `data` 缺失时用 `reportSnapshot.result` 兜底重建。
+
+**相关文件**：
+- `smartask/frontend/src/state/smartAskHistory.js`
+- `smartask/frontend/src/composables/useSmartAskReportHistory.js`

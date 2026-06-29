@@ -123,9 +123,14 @@ export const useSmartAskReportHistory = ({
               }
             }
             if (item?.role === 'ai') {
-              const data = item.data && typeof item.data === 'object'
+              let data = item.data && typeof item.data === 'object'
                 ? filterResultDatasets(clone(item.data))
                 : null
+              // 兜底：本地 compact 或旧数据导致 AI 消息 data 缺失时，
+              // 用报告快照的完整 result 重建，保证回答卡片能正常渲染。
+              if (!data && fallbackResult && typeof fallbackResult === 'object') {
+                data = filterResultDatasets(clone(fallbackResult))
+              }
               return {
                 id: createMessageId(),
                 role: 'ai',
