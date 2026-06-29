@@ -711,14 +711,13 @@ LIMIT 10000
             or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
         )
         target_level = resolve_target_level_from_text()
-        if not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
-            if is_ecommerce_dataset and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
-                target_level = "承接人"
-            else:
-                target_level = "业务代表"
-        # 电商数据集中，口语“业务承接人/负责人”统一收敛到标准层级“承接人”
-        if is_ecommerce_dataset and target_level in {"业务代表", "业务承接人"} and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
+        # 电商数据集中，口语“业务承接人/负责人”统一收敛到标准层级“承接人”。
+        # 优先级高于 resolve_target_level_from_text 对中间层级（如业务部）的命中，
+        # 避免 confirm_by_boss 重写 refined_query 后引入“业务部”把承接人层级覆盖掉。
+        if is_ecommerce_dataset and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
             target_level = "承接人"
+        elif not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
+            target_level = "业务代表"
 
         drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻|下有哪些|有哪些下属|下都", text))
         # “国内业务部的业务经理有哪些”这类“有哪些”列表问法，如果没有数值过滤，也视为下钻取子节点
@@ -6232,7 +6231,11 @@ LIMIT 10000
         }
 
         def infer_user_level() -> str:
-            # 电商口语中“业务代表/业务承接人”等词统一收敛到“承接人”
+            # 电商口语中“业务承接人/负责人”等词统一收敛到“承接人”，优先级最高，
+            # 防止外部改写 refined_query 后把 target_level 带偏。
+            if any(t in q for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
+                return "承接人"
+            # 兼容：intent 已收敛到业务代表/业务承接人时仍映射到承接人
             if intent_target_level in {"业务代表", "业务承接人"} and any(t in q for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
                 return "承接人"
             # 下钻时如果 target_level 和聚焦维度相同（如“国内业务部下属明细”里的“业务部”），应下钻到子层级
@@ -7569,6 +7572,10 @@ Agent1 路由结果：
     def _looks_like_org_subject_question(question: str) -> bool:
         text = str(question or "").strip()
         if not text:
+            return False
+        # 排名/TopN 类问题不应被当作组织主体追问处理，否则数量词（前3、前三等）
+        # 会在重写时被丢掉，导致 SQL 不限制行数、标题也失真。
+        if re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I):
             return False
         has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
         has_spoken_style = bool(

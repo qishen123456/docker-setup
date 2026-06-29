@@ -141,6 +141,51 @@ class EcommerceFilterIntentTest(unittest.TestCase):
         title = service._build_display_title("看下前三的业务承接人", dataset_result)
         self.assertEqual(title, "排名前3的承接人")
 
+    def test_bearer_level_not_overridden_by_rewritten_business_department_query(self):
+        """模拟 confirm_by_boss 把 resolved_subject 改写成业务部后，意图仍解析为承接人"""
+        service = self._service()
+        context = self._context()
+
+        # _run_pipeline 里拼接的 intent_question：
+        # original_question=看下前三的业务承接人
+        # refined_query=国内业务部的业绩
+        combined = "国内业务部的业绩\n看下前三的业务承接人"
+
+        intent = service._resolve_query_intent(combined, context)
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "承接人")
+        self.assertEqual(intent["top_n"], 3)
+
+        context["query_intent"] = intent
+        context["original_question"] = "看下前三的业务承接人"
+        sql = service._build_rule_based_sql(combined, {}, context)
+
+        self.assertIn("层级级别 = '业务经理'", sql)
+        self.assertIn("'承接人' AS 层级", sql)
+        self.assertIn("LIMIT 3", sql)
+
+        dataset_result = {
+            "dataset_name": "飞书电商事业部经营预算",
+            "query_intent": intent,
+            "rows": [{"层级": "承接人"}],
+        }
+        title = service._build_display_title("看下前三的业务承接人", dataset_result)
+        self.assertEqual(title, "排名前3的承接人")
+
+    def test_ranking_bearer_question_not_treated_as_org_subject(self):
+        """排名类问题不应被组织主体解析器改写，避免丢失 top_n 与原始语义"""
+        service = self._service()
+        self.assertFalse(
+            service._looks_like_org_subject_question("看下前三的业务承接人")
+        )
+        self.assertFalse(
+            service._looks_like_org_subject_question("业务承接人业绩排名")
+        )
+        # 普通单对象问法仍应识别为主体问题
+        self.assertTrue(
+            service._looks_like_org_subject_question("国内业务部的业绩如何")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
