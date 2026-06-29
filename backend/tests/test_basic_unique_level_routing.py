@@ -31,6 +31,7 @@ class BasicUniqueLevelRoutingTest(unittest.TestCase):
         }
         catalog = [consumer_dataset, commercial_dataset]
         service.repository.get_agent1_catalog.return_value = catalog
+        service._dataset_node_index = {"flat_alias_index": [], "datasets": []}
         service.repository.get_dataset_context.return_value = {
             "common_questions": [],
             "golden_sql_samples": [],

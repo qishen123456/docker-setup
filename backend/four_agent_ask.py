@@ -564,6 +564,10 @@ LIMIT 10000
         policies = self._safe_dict(config.get("intentPolicies"))
         ranking_policy = self._safe_dict(policies.get("ranking"))
         text = str(question or "").replace("\n", " ").strip()
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_code = str(dataset.get("dataset_code") or "")
+        dataset_name = str(dataset.get("dataset_name") or "")
+        is_ecommerce_dataset = dataset_code == "feishu_tbldianshang" or "电商事业部" in dataset_name
         intent = {
             "intent": "unknown",
             "source": "report_config.intentPolicies",
@@ -708,7 +712,13 @@ LIMIT 10000
         )
         target_level = resolve_target_level_from_text()
         if not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
-            target_level = "业务代表"
+            if is_ecommerce_dataset and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
+                target_level = "承接人"
+            else:
+                target_level = "业务代表"
+        # 电商数据集中，口语“业务承接人/负责人”统一收敛到标准层级“承接人”
+        if is_ecommerce_dataset and target_level in {"业务代表", "业务承接人"} and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
+            target_level = "承接人"
 
         drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻|下有哪些|有哪些下属|下都", text))
         # “国内业务部的业务经理有哪些”这类“有哪些”列表问法，如果没有数值过滤，也视为下钻取子节点
@@ -2751,8 +2761,18 @@ LIMIT 10000
             "",
             text,
         ).strip()
+        # 去掉口语方位/指代词，避免 "上海那边"、"东部那个" 这类干扰
+        text = re.sub(r"那边|那个|这块|那块|这边|这个", "", text).strip()
+        # 去掉前缀数量词，避免 "三个业务部"、"前3分公司" 被当成主体名称
+        text = re.sub(r"^(?:前|第)?\s*(?:三|四|五|六|七|八|九|十|两|几|\d+)\s*(?:个|大|家|者)?", "", text).strip("，。！？、 ")
+        # 去掉尾部通用业务词与口语后缀
         text = re.sub(
-            r"(?:的)?(?:业绩如何了|业绩如何|业绩情况|情况如何|完成情况如何|完成的怎么样|完成得怎么样|完成咋样|表现如何|怎么样了|怎么样|如何了|如何)$",
+            r"(?:的)?(?:业绩.*|表现.*|情况.*|完成情况.*|完成的怎么样.*|完成得怎么样.*|完成咋样.*|啥情况.*|啥.*)$",
+            "",
+            text,
+        )
+        text = re.sub(
+            r"(?:的)?(?:怎么样了|怎么样|如何了|如何|咋样|怎样)$",
             "",
             text,
         ).strip("，。！？、 ")
@@ -2796,6 +2816,58 @@ LIMIT 10000
                 normalized.append(cleaned)
         return normalized
 
+    _GENERIC_LEVEL_ALIASES = {
+        "分公司", "代表处", "业务部", "业务代表", "业务员",
+        "城市分公司", "城市公司", "事业部", "业务承接人",
+    }
+
+    # 口语/显示层级词 -> 节点索引中标准化的 node_level
+    _GENERIC_LEVEL_ALIAS_NORMALIZATION = {
+        "业务承接人": "承接人",
+    }
+
+    def _generic_level_dataset_matches(
+        self,
+        candidate: str,
+        dataset_ids: Optional[List[int]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        当候选词是纯粹的通用层级词（如"分公司"）时，按数据集聚合并返回每个支持该层级的数据集代表。
+        这样可以让"分公司业绩如何"这类问题弹数据集确认，而不是被 LLM 擅自选走。
+        """
+        normalized = self._normalize_compact_text(candidate)
+        if normalized not in self._GENERIC_LEVEL_ALIASES:
+            return []
+        level_to_match = self._GENERIC_LEVEL_ALIAS_NORMALIZATION.get(normalized, normalized)
+        allowed_ids = {int(item) for item in (dataset_ids or []) if item is not None}
+        matches: List[Dict[str, Any]] = []
+        seen: set = set()
+        for alias_item in self._dataset_node_index.get("flat_alias_index") or []:
+            for item in (alias_item.get("matches") or []):
+                try:
+                    dataset_id = int(item.get("dataset_id") or 0)
+                except Exception:
+                    continue
+                if allowed_ids and dataset_id not in allowed_ids:
+                    continue
+                if self._normalize_compact_text(item.get("node_level") or "") != level_to_match:
+                    continue
+                key = (dataset_id, level_to_match)
+                if key in seen:
+                    continue
+                seen.add(key)
+                dataset_name = str(item.get("dataset_name") or "").strip()
+                matches.append({
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_name,
+                    "node_name": level_to_match,
+                    "node_level": level_to_match,
+                    "parent_name": None,
+                    "track": str(item.get("track") or "").strip(),
+                    "alias": normalized,
+                })
+        return matches
+
     def _node_index_matches(
         self,
         candidate: str,
@@ -2805,13 +2877,27 @@ LIMIT 10000
         if not normalized_candidate:
             return []
         allowed_ids = {int(item) for item in (dataset_ids or []) if item is not None}
-        matches: List[Dict[str, Any]] = []
-        seen = set()
+        # 优先精确匹配；无精确命中时，取最长前缀匹配的别名，避免 "上海代表处" 被 "上海" 覆盖。
+        matched_aliases: List[Tuple[str, int, List[Dict[str, Any]]]] = []
         for alias_item in self._dataset_node_index.get("flat_alias_index") or []:
             alias = str(alias_item.get("alias") or "").strip()
-            if self._normalize_compact_text(alias) != normalized_candidate:
-                continue
-            for item in alias_item.get("matches") or []:
+            normalized_alias = self._normalize_compact_text(alias)
+            if normalized_alias == normalized_candidate or normalized_candidate.startswith(normalized_alias):
+                matched_aliases.append((alias, len(normalized_alias), alias_item.get("matches") or []))
+        if not matched_aliases:
+            # 兜底：候选词是通用层级词时，按数据集聚合返回支持该层级的数据集代表
+            return self._generic_level_dataset_matches(candidate, dataset_ids=dataset_ids)
+        exact = next((item for item in matched_aliases if len(item[0]) == len(candidate)), None)
+        if exact is None:
+            exact = next((item for item in matched_aliases if self._normalize_compact_text(item[0]) == normalized_candidate), None)
+        selected_aliases = [exact] if exact else [
+            item for item in matched_aliases
+            if item[1] == max(a[1] for a in matched_aliases)
+        ]
+        matches: List[Dict[str, Any]] = []
+        seen: set = set()
+        for alias, _, item_matches in selected_aliases:
+            for item in item_matches:
                 try:
                     dataset_id = int(item.get("dataset_id") or 0)
                 except Exception:
@@ -5167,6 +5253,8 @@ LIMIT 10000
 
         syyb_base_sql = self._build_syyb_base_sql(context)
 
+        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "事业部"}
+
         intent_is_filter = query_intent.get("intent") == "filter"
         intent_is_comparison = query_intent.get("intent") == "comparison"
         intent_is_aggregate = query_intent.get("intent") == "aggregate"
@@ -5728,6 +5816,16 @@ LIMIT 50
                     entity_names.append(cleaned)
         if not entity_names:
             entity_names = self._question_subject_names(normalized_question, context)
+
+        # 如果实体名只是通用层级词（如"分公司"），按该层级过滤而不是按节点名过滤
+        resolved_subject_name = str(query_intent.get("subject_name") or "").strip()
+        generic_level_only = (
+            bool(entity_names and all(name in generic_level_terms for name in entity_names))
+            or resolved_subject_name in generic_level_terms
+        )
+        if generic_level_only:
+            entity_names = []
+
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             # 修复：问题中包含下钻词，或询问某组织下特定层级（如“分公司代表处业绩”）时，
@@ -5776,7 +5874,7 @@ LIMIT 10000
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
             target_level_hint = str(query_intent.get("target_level") or "").strip()
             is_terminal_node = (
-                target_level_hint == "业务代表"
+                target_level_hint in {"业务代表", "业务员"}
                 or "业务代表" in normalized_question
                 or "业务员" in normalized_question
                 or any(name.endswith("业务代表") or name.endswith("业务员") for name in drilldown_entities)
@@ -5990,6 +6088,27 @@ FROM 基础数据
 LIMIT 100
 """.strip()
 
+        # 兜底：纯通用层级词（如"分公司"）按层级返回所有节点
+        if generic_level_only and intent_target_level:
+            return f"""
+{syyb_base_sql}
+SELECT *
+FROM 汇总结果
+WHERE 层级 = '{intent_target_level}'
+ORDER BY 条线 DESC,
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  上级名称,
+  节点名称
+LIMIT 10000
+""".strip()
+
         return ""
 
     def _build_ecommerce_sql(self, normalized_question: str, context: Dict[str, Any]) -> str:
@@ -6108,9 +6227,14 @@ LIMIT 100
             "任务承接人": {"actual": "业务经理", "mode": "manager"},
             "负责人": {"actual": "业务经理", "mode": "manager"},
             "业务经理": {"actual": "业务经理", "mode": "manager"},
+            # 兜底：消费者/商用常用的“业务代表”在电商口语里对应负责人层级
+            "业务代表": {"actual": "业务经理", "mode": "manager"},
         }
 
         def infer_user_level() -> str:
+            # 电商口语中“业务代表/业务承接人”等词统一收敛到“承接人”
+            if intent_target_level in {"业务代表", "业务承接人"} and any(t in q for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
+                return "承接人"
             # 下钻时如果 target_level 和聚焦维度相同（如“国内业务部下属明细”里的“业务部”），应下钻到子层级
             # 筛选/对比问题里如果已聚焦到具体节点且 target_level 就是该节点所在维度，也默认下钻到子层级，
             # 避免“国内业务部完成超过500万的”被理解为对所有业务部做过滤。
@@ -6378,6 +6502,7 @@ LIMIT 100
         city_field_key = consumer_key("城市分公司")
         city_field_expr = f"COALESCE(NULLIF(TRIM(fields->>'{city_field_key}'), ''), '')"
         query_intent = self._safe_dict(context.get("query_intent"))
+        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "事业部"}
         intent_is_ranking = query_intent.get("intent") == "ranking"
         intent_target_level = str(query_intent.get("target_level") or "")
         if intent_target_level in {"城市公司", "城市分公司"}:
@@ -6416,12 +6541,22 @@ LIMIT 100
                     entity_names.append(normalized)
         entity_names = list(dict.fromkeys(entity_names))
 
+        # 如果实体名只是通用层级词（如"分公司"），按该层级过滤而不是按节点名过滤
+        resolved_subject_name = str(query_intent.get("subject_name") or "").strip()
+        generic_level_only = (
+            bool(entity_names and all(name in generic_level_terms for name in entity_names))
+            or resolved_subject_name in generic_level_terms
+        )
+        if generic_level_only:
+            entity_names = []
+
         scope_filter = ""
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
+            include_root = any(name == "消费者事业部" for name in entity_names)
+            root_clause = "节点名称 = '消费者事业部' OR " if include_root else ""
             scope_filter = f"""
-WHERE 节点名称 = '消费者事业部'
-   OR 节点名称 IN ({quoted_entities})
+WHERE {root_clause}节点名称 IN ({quoted_entities})
    OR 上级名称 IN ({quoted_entities})
    OR 上级名称 IN (
        SELECT 节点名称
@@ -6429,6 +6564,8 @@ WHERE 节点名称 = '消费者事业部'
        WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
    )
 """
+        elif generic_level_only and intent_target_level:
+            scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
         intent_is_comparison = query_intent.get("intent") == "comparison"
         intent_is_aggregate = query_intent.get("intent") == "aggregate"
@@ -7361,17 +7498,19 @@ Agent1 路由结果：
         if not text:
             return ""
         cleaned = re.sub(
-            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问)?"
+            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问|帮我查|帮我看|麻烦查|麻烦看)?"
             r"(?:看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)",
             "",
             text,
         )
         cleaned = re.sub(
-            r"(?:的业绩|业绩呢|业绩情况|业绩如何了|业绩如何|业绩|表现呢|表现如何|表现|情况呢|情况如何|情况|怎么样了|怎么样|如何了|如何|呢|吗|呀|吧)$",
+            r"(?:的)?(?:业绩|表现|情况|完成情况|完成率|达成率|数据|结果|咋样|怎样|如何|怎么样|如何了|怎么样了|呢|吗|呀|吧)$",
             "",
             cleaned,
         )
-        level_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司"]
+        # 去掉口语方位/指代词
+        cleaned = re.sub(r"那边|那个|这块|那块|这边|这个", "", cleaned).strip("，。！？、 ")
+        level_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "事业部"]
         for term in level_terms:
             index = cleaned.find(term)
             if index <= 0:
@@ -7379,8 +7518,52 @@ Agent1 路由结果：
             prefix = cleaned[:index].strip()
             if len(prefix) < 2:
                 continue
+            # 如果前缀是过滤条件（含数字/%/运算符）而非组织名，不要把它和层级词拼接
+            if re.search(r"[\d%<>=]", prefix):
+                continue
             return FourAgentAskService._clean_org_subject_candidate(f"{prefix}{term}")
+        # 兜底：去掉口语词后如果剩余文本>=2字，也视为候选主体（如"上海"、"东部"）
+        bare = FourAgentAskService._clean_org_subject_candidate(cleaned)
+        if len(bare) >= 2:
+            return bare
         return ""
+
+    def _extract_bare_org_subject_by_node_index(self, question: str) -> str:
+        """
+        去掉口语前后缀后，用节点索引匹配剩余候选主体。
+        用于兜底 LLM 未识别出的地名/组织简称（如"上海"、"东部"）。
+        """
+        text = str(question or "").strip()
+        if not text:
+            return ""
+        cleaned = self._clean_org_subject_candidate(text)
+        if len(cleaned) < 2:
+            return ""
+        # 精确匹配或前缀命中节点索引
+        if self._node_index_matches(cleaned):
+            return cleaned
+        normalized_cleaned = self._normalize_compact_text(cleaned)
+        best_alias = ""
+        best_len = 0
+        for alias_item in self._dataset_node_index.get("flat_alias_index") or []:
+            alias = str(alias_item.get("alias") or "").strip()
+            normalized_alias = self._normalize_compact_text(alias)
+            if not normalized_alias or len(normalized_alias) < 2:
+                continue
+            if normalized_cleaned.startswith(normalized_alias) and len(normalized_alias) > best_len:
+                # 避免把纯通用层级词当作独立主体（通用层级已在 _generic_level_dataset_matches 处理）
+                if normalized_alias in self._GENERIC_LEVEL_ALIASES:
+                    continue
+                best_alias = alias
+                best_len = len(normalized_alias)
+        if best_alias:
+            return best_alias
+        # 最终兜底：候选中包含通用层级词时，直接返回该层级词
+        # 用于“低于30%的分公司”这类带过滤条件的问题，确保能触发数据集确认
+        for term in sorted(self._GENERIC_LEVEL_ALIASES, key=len, reverse=True):
+            if term in normalized_cleaned:
+                return term
+        return best_alias
 
     @staticmethod
     def _looks_like_org_subject_question(question: str) -> bool:
@@ -7394,7 +7577,11 @@ Agent1 路由结果：
                 text,
             )
         )
-        return has_org_level or has_spoken_style
+        # 兜底：地名/组织简称 + 业绩/表现/情况等通用词，也视为可能的主体问法
+        has_generic_org_metric = bool(
+            re.search(r"^[\u4e00-\u9fa5]{2,}(?:业绩|表现|情况|咋样|怎样)", text)
+        )
+        return has_org_level or has_spoken_style or has_generic_org_metric
 
     def _agent1_resolve_org_subject(
         self,
@@ -7402,7 +7589,7 @@ Agent1 路由结果：
         conversation_context: Optional[List[Dict[str, Any]]] = None,
         trace: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        fallback_name = self._extract_followup_org_target(question)
+        fallback_name = self._extract_followup_org_target(question) or self._extract_bare_org_subject_by_node_index(question)
         fallback = {
             "subject_name": fallback_name,
             "subject_level": "",
@@ -7434,8 +7621,9 @@ Agent1 路由结果：
 1. 识别当前问题里的真实组织主体名称，去掉“继续看/再看/看下/如何了/怎么样了”等口语。
 2. 只提取用户当前这一轮明确说出的组织节点，不要沿用上一轮对象替代当前对象。
 3. 如果问题里明确包含 代表处/分公司/业务部/事业部/业务代表/业务员/城市分公司/城市公司，要尽量保留层级词。
-4. 如果无法稳定识别，subject_name 返回空字符串。
-5. rewritten_question 只在识别成功时输出，例如“河南代表处的业绩”。
+4. 数量词（如“三个”、“前3”、“几家”）不是组织主体的一部分，只保留层级/节点名称；例如“三个业务部”的主体是“业务部”，“前3分公司”的主体是“分公司”。
+5. 如果无法稳定识别，subject_name 返回空字符串。
+6. rewritten_question 只在识别成功时输出，例如“河南代表处的业绩”、“业务部的业绩”。
 
 请输出 JSON：
 {{
@@ -9184,6 +9372,14 @@ Agent3 复核结果：
                     self._append_trace(trace, "data_permission.confirm_selected_denied", "warning", selected_dataset_ids=selected_dataset_ids)
                     self._flush_trace(trace, result)
                     return result
+            # 通过 dataset_ids 确认时，也要找到对应的 option 以获取 resolved_subject_name
+            if len(route["dataset_ids"]) == 1 and not selected_option_item:
+                selected_dataset_id = route["dataset_ids"][0]
+                selected_option_item = next(
+                    (item for item in confirmation_options
+                     if item.get("dataset_ids") and int(item["dataset_ids"][0]) == selected_dataset_id),
+                    None,
+                )
         else:
             option_text = (selected_option_item or {}).get("label") or (selected_option or "").strip()
             if selected_option_item and selected_option_item.get("dataset_ids"):
@@ -9253,6 +9449,15 @@ Agent3 复核结果：
                         route["refined_query"] = base_query.replace(original_subject_name, resolved_subject_name)
                     elif resolved_subject_name not in base_query:
                         route["refined_query"] = f"{resolved_subject_name}的业绩"
+                route["refined_query"] = re.sub(
+                    r"(城市分公司)分公司|(代表处)代表处|(业务部)业务部|(分公司)分公司",
+                    lambda m: next(group for group in m.groups() if group),
+                    str(route.get("refined_query") or "").strip(),
+                )
+                # 清理确认后 refined_query 中残留的口语词，避免 SQL 生成被干扰
+                route["refined_query"] = self._clean_org_subject_candidate(
+                    str(route.get("refined_query") or "").strip()
+                )
                 route["refined_query"] = re.sub(
                     r"(城市分公司)分公司|(代表处)代表处|(业务部)业务部|(分公司)分公司",
                     lambda m: next(group for group in m.groups() if group),

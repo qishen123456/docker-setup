@@ -51,6 +51,7 @@ MIGRATIONS = [
     "20260430_report_config.sql",
     "20260509_report_thresholds.sql",
     "20260512_system_event_logs.sql",
+    "20260627_ecommerce_standard_view.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")

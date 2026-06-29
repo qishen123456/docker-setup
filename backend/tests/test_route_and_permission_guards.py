@@ -220,9 +220,10 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         sql = service._build_rule_based_sql("看下商用业务代表靳锋 的业绩情况", {}, context)
 
         self.assertIn("'靳锋'", sql)
-        self.assertIn("WITH RECURSIVE", sql)
+        # 业务代表属于末端节点，按基线 1.1 只返回本节点，不再下钻
+        self.assertNotIn("WITH RECURSIVE", sql)
         self.assertIn("节点名称 IN ('靳锋')", sql)
-        self.assertIn("JOIN 命中链路 父节点", sql)
+        self.assertNotIn("JOIN 命中链路 父节点", sql)
 
     def test_agent1_resolved_entities_take_priority_over_local_rules(self):
         """Agent1 解析结果优先，本地规则兜底"""
