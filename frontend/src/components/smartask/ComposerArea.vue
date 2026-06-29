@@ -704,6 +704,7 @@ onMounted(() => {
   min-height: 20px;
   max-height: 132px;
   resize: none;
+  overflow: hidden;
   line-height: 1.45;
   color: #111827;
   background: transparent;

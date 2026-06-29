@@ -10,7 +10,7 @@ from psycopg2.extras import Json
 import time
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import threading
 import schedule
 
@@ -743,9 +743,16 @@ class FeishuSyncService:
                     records_to_sync,
                     config.get("_field_items") or [],
                 )
+
+                # 全量模式下先清空目标表，确保与飞书当前视图完全一致。
+                if config.get('sync_mode') == 'full':
+                    print(f"全量同步：清空表 {table_name}")
+                    cursor.execute(sql.SQL("TRUNCATE TABLE {table}").format(table=sql.Identifier(table_name)))
+                    write_log(config['id'], 'INFO', f'全量同步：已清空表 {table_name}')
+
                 for record in normalized_records:
                     record_id = record.get('record_id', '')
-                    # 使用UPSERT操作
+                    # 使用UPSERT操作（增量模式依赖唯一约束去重，全量模式已清空表）
                     upsert_sql = sql.SQL("""
                         INSERT INTO {table} (record_id, fields, sync_time, created_time, updated_time)
                         VALUES (%s, %s, %s, %s, %s)
@@ -769,8 +776,19 @@ class FeishuSyncService:
             if conn:
                 conn.close()
     
-    def sync_single_config(self, config: Dict) -> bool:
-        """同步单个配置"""
+    def sync_single_config(self, config_or_id: Union[Dict, int, str]) -> bool:
+        """同步单个配置。支持传入配置对象或配置 ID，
+        传入 ID 时会重新读取最新配置，避免定时任务使用启动时的旧配置。"""
+        if isinstance(config_or_id, dict):
+            config = config_or_id
+        else:
+            config_id = int(config_or_id)
+            configs = get_feishu_configs()
+            config = next((c for c in configs if c.get('id') == config_id), None)
+            if not config:
+                print(f"未找到配置: {config_id}")
+                return False
+
         try:
             print(f"\n开始同步配置: {config['name']}")
             update_sync_status(config['id'], 'running')
@@ -835,8 +853,9 @@ class FeishuSyncService:
         for config in configs:
             if config.get('is_active'):
                 frequency = int(config.get('sync_frequency', 30))  # 分钟
+                # 传入 config_id 而不是 config 对象，确保每次执行都读取最新配置
                 schedule.every(frequency).minutes.do(
-                    self.sync_single_config, config
+                    self.sync_single_config, config['id']
                 ).tag(f"feishu_sync_{config['id']}")
         
         # 立即执行一次同步

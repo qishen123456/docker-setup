@@ -4,6 +4,7 @@
 
 import json
 import os
+from copy import deepcopy
 from datetime import datetime
 from config_manager import apply_env_feishu_overrides, read_json, write_json
 
@@ -38,7 +39,7 @@ def _path(filename):
     return os.path.join(BASE_DIR, 'config', filename)
 
 def read_feishu_config():
-    """读取飞书同步配置"""
+    """读取飞书同步配置（应用 .env 全局覆盖，用于展示和运行时使用）"""
     try:
         config = read_json('feishu_sync.json')
         if config:
@@ -51,6 +52,22 @@ def read_feishu_config():
     except Exception as e:
         print(f"读取飞书同步配置失败: {e}")
         return apply_env_feishu_overrides(DEFAULT_FEISHU_CONFIG)
+
+
+def read_feishu_config_raw():
+    """读取飞书同步配置原始内容（不应用 .env 覆盖，用于写入持久化）"""
+    try:
+        config = read_json('feishu_sync.json')
+        if config:
+            return deepcopy(config)
+        write_feishu_config(DEFAULT_FEISHU_CONFIG)
+        return deepcopy(DEFAULT_FEISHU_CONFIG)
+    except FileNotFoundError:
+        write_feishu_config(DEFAULT_FEISHU_CONFIG)
+        return deepcopy(DEFAULT_FEISHU_CONFIG)
+    except Exception as e:
+        print(f"读取飞书同步配置失败: {e}")
+        return deepcopy(DEFAULT_FEISHU_CONFIG)
 
 def write_feishu_config(config):
     """写入飞书同步配置"""
@@ -69,7 +86,7 @@ def get_feishu_configs():
 
 def add_feishu_config(data):
     """添加飞书同步配置"""
-    config = read_feishu_config()
+    config = read_feishu_config_raw()
     sync_configs = config.get('sync_configs', [])
     
     # 生成新ID
@@ -105,7 +122,7 @@ def add_feishu_config(data):
 
 def update_feishu_config(config_id, data):
     """更新飞书同步配置"""
-    config = read_feishu_config()
+    config = read_feishu_config_raw()
     sync_configs = config.get('sync_configs', [])
     
     for i, item in enumerate(sync_configs):
@@ -130,7 +147,7 @@ def update_feishu_config(config_id, data):
 
 def delete_feishu_config(config_id):
     """删除飞书同步配置"""
-    config = read_feishu_config()
+    config = read_feishu_config_raw()
     sync_configs = config.get('sync_configs', [])
     
     sync_configs = [item for item in sync_configs if item['id'] != config_id]
@@ -140,7 +157,7 @@ def delete_feishu_config(config_id):
 
 def update_sync_status(config_id, status, sync_time=None):
     """更新同步状态"""
-    config = read_feishu_config()
+    config = read_feishu_config_raw()
     sync_configs = config.get('sync_configs', [])
     
     for item in sync_configs:

@@ -1136,32 +1136,52 @@
   ],
   "common_questions": [
     {
-      "question_text": "消费者事业部业绩怎么样？",
+      "question_text": "消费者事业部业绩怎么样",
       "sort_order": 10
     },
     {
-      "question_text": "各分公司业绩排名",
+      "question_text": "消费者事业部各分公司业绩排名",
       "sort_order": 20
     },
     {
-      "question_text": "哪些城市分公司达成率低于10%？",
+      "question_text": "消费者事业部哪个分公司完成率最高",
       "sort_order": 30
     },
     {
-      "question_text": "哪个分公司低于30%？",
-      "sort_order": 35
-    },
-    {
-      "question_text": "消费者事业部剩余缺口最大的组织有哪些？",
+      "question_text": "消费者事业部缺口最大的分公司",
       "sort_order": 40
     },
     {
-      "question_text": "四条业务线贡献如何？",
+      "question_text": "消费者事业部倒数前3的城市分公司",
       "sort_order": 50
     },
     {
-      "question_text": "某个分公司业绩怎么样？",
+      "question_text": "哪些城市分公司达成率低于10%",
       "sort_order": 60
+    },
+    {
+      "question_text": "消费者事业部各城市分公司业绩排名",
+      "sort_order": 70
+    },
+    {
+      "question_text": "云贵渝分公司的业绩",
+      "sort_order": 80
+    },
+    {
+      "question_text": "云贵渝分公司下属城市分公司业绩",
+      "sort_order": 90
+    },
+    {
+      "question_text": "消费者事业部年度开单金额最高的城市分公司",
+      "sort_order": 100
+    },
+    {
+      "question_text": "山东分公司的业绩",
+      "sort_order": 110
+    },
+    {
+      "question_text": "江浙沪分公司和京津分公司对比",
+      "sort_order": 120
     }
   ],
   "regression_cases": [

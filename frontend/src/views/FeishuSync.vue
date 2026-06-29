@@ -754,9 +754,11 @@ const parseFeishuLink = async () => {
       return
     }
     const parsed = result.parsed || {}
-    form.value.base_id = parsed.base_id || form.value.base_id
-    form.value.table_id = parsed.table_id || form.value.table_id
-    form.value.view_id = parsed.view_id || form.value.view_id
+    // 编辑已有配置时，新解析出的链接字段必须无条件覆盖旧值，
+    // 包括 view_id 为空时也要清空，避免旧链接残留。
+    if (parsed.base_id) form.value.base_id = parsed.base_id
+    if (parsed.table_id) form.value.table_id = parsed.table_id
+    form.value.view_id = parsed.view_id || ''
     if (!form.value.target_table && parsed.table_id) form.value.target_table = suggestTargetTable(parsed.table_id)
     if (!form.value.name && parsed.table_id) form.value.name = `飞书表 ${parsed.table_id.slice(-6)}`
     if (!form.value.description && url) form.value.description = `由飞书链接自动解析创建：${url}`

@@ -386,26 +386,39 @@ def _build_default_feishu_sync_config() -> Dict[str, Any]:
 
 
 def apply_env_feishu_overrides(config: dict) -> dict:
-    env_keys = (
+    # .env 仅用于覆盖全局/敏感字段和开关状态，不再覆盖飞书链接字段。
+    # base_id/table_id/view_id/target_table/sync_mode/sync_frequency 由前端管理，
+    # 避免 .env 中的旧链接把前端新保存的配置冲掉。
+    global_env_keys = (
         'SMARTASK_FEISHU_LABEL',
         'SMARTASK_FEISHU_DESCRIPTION',
         'SMARTASK_FEISHU_APP_ID',
         'SMARTASK_FEISHU_APP_SECRET',
+        'SMARTASK_FEISHU_IS_ACTIVE',
+    )
+    link_env_keys = (
         'SMARTASK_FEISHU_BASE_ID',
         'SMARTASK_FEISHU_TABLE_ID',
         'SMARTASK_FEISHU_VIEW_ID',
         'SMARTASK_FEISHU_TARGET_TABLE',
         'SMARTASK_FEISHU_SYNC_MODE',
         'SMARTASK_FEISHU_SYNC_FREQUENCY',
-        'SMARTASK_FEISHU_IS_ACTIVE',
     )
-    if not _has_any_env(*env_keys):
+    has_global_env = _has_any_env(*global_env_keys)
+    has_link_env = _has_any_env(*link_env_keys)
+
+    if not has_global_env and not has_link_env:
         return config
 
     payload = deepcopy(config or {})
     sync_configs = [dict(item) for item in payload.get('sync_configs', [])]
-    if not sync_configs:
+
+    # 首次部署：没有任何配置，且 .env 提供了链接字段，则创建默认配置
+    if not sync_configs and has_link_env:
         sync_configs = [_build_default_feishu_sync_config()]
+
+    if not sync_configs:
+        return payload
 
     target = sync_configs[0]
     target.update({
@@ -413,15 +426,22 @@ def apply_env_feishu_overrides(config: dict) -> dict:
         "description": _env_text('SMARTASK_FEISHU_DESCRIPTION', target.get('description', '')),
         "app_id": _env_text('SMARTASK_FEISHU_APP_ID', target.get('app_id', '')),
         "app_secret": _env_secret('SMARTASK_FEISHU_APP_SECRET', target.get('app_secret', '')),
-        "base_id": _env_text('SMARTASK_FEISHU_BASE_ID', target.get('base_id', '')),
-        "table_id": _env_text('SMARTASK_FEISHU_TABLE_ID', target.get('table_id', '')),
-        "view_id": _env_text('SMARTASK_FEISHU_VIEW_ID', target.get('view_id', '')),
-        "target_table": _env_text('SMARTASK_FEISHU_TARGET_TABLE', target.get('target_table', 'feishu_sync_demo')),
-        "sync_mode": _env_text('SMARTASK_FEISHU_SYNC_MODE', target.get('sync_mode', 'incremental')),
-        "sync_frequency": _env_text('SMARTASK_FEISHU_SYNC_FREQUENCY', target.get('sync_frequency', '30')),
         "is_active": _env_bool('SMARTASK_FEISHU_IS_ACTIVE', bool(target.get('is_active', False))),
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     })
+
+    # 仅在首次创建默认配置时，才用 .env 的链接字段填充，
+    # 已有配置或前端保存后不再覆盖。
+    is_fresh_config = not config or not config.get('sync_configs')
+    if is_fresh_config and has_link_env:
+        target.update({
+            "base_id": _env_text('SMARTASK_FEISHU_BASE_ID', target.get('base_id', '')),
+            "table_id": _env_text('SMARTASK_FEISHU_TABLE_ID', target.get('table_id', '')),
+            "view_id": _env_text('SMARTASK_FEISHU_VIEW_ID', target.get('view_id', '')),
+            "target_table": _env_text('SMARTASK_FEISHU_TARGET_TABLE', target.get('target_table', 'feishu_sync_demo')),
+            "sync_mode": _env_text('SMARTASK_FEISHU_SYNC_MODE', target.get('sync_mode', 'incremental')),
+            "sync_frequency": _env_text('SMARTASK_FEISHU_SYNC_FREQUENCY', target.get('sync_frequency', '30')),
+        })
 
     payload['sync_configs'] = sync_configs
     payload['next_id'] = max(payload.get('next_id', 2), len(sync_configs) + 1)

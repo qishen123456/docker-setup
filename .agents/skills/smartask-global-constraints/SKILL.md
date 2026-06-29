@@ -93,3 +93,29 @@ description: >
 **相关文件**：
 - `smartask/frontend/src/state/smartAskHistory.js`
 - `smartask/frontend/src/composables/useSmartAskReportHistory.js`
+
+### 5.3 飞书数据同步更换链接后仍同步旧表
+
+**现象**：在「飞书数据同步」页面修改了飞书链接并保存，但同步任务实际执行的仍是旧链接对应的表。
+
+**根因**：
+- `.env` 中的 `SMARTASK_FEISHU_BASE_ID / TABLE_ID / VIEW_ID / TARGET_TABLE / SYNC_MODE / SYNC_FREQUENCY` 会覆盖 `config/feishu_sync.json` 中第 1 条配置的链接字段。
+- `feishu_sync_manager.update_sync_status()` 读取的是被 `.env` 覆盖后的配置，更新状态时会把它写回 JSON，进一步把新链接冲掉。
+- 前端编辑已有配置时，`parseFeishuLink()` 使用 `||` 短路，`base_id/table_id` 无法覆盖旧值；`view_id` 为空时也保留旧值。
+- 定时调度器 `feishu_sync_service.start_scheduler()` 把启动时的 `config` 对象作为闭包传入 `schedule`，修改配置后定时任务仍用旧配置。
+
+**修复要点**：
+- `config_manager.apply_env_feishu_overrides` 只让 `.env` 覆盖 `app_id / app_secret / is_active` 等全局/敏感字段，不再覆盖链接字段。
+- `feishu_sync_manager` 的增删改查/状态更新使用 `read_feishu_config_raw()`，写入时不经过 `.env` 覆盖。
+- `feishu_sync_service` 定时任务传 `config_id`，执行时重新读取最新配置。
+- 前端 `parseFeishuLink()` 无条件覆盖 `base_id/table_id`，`view_id` 为空时显式清空。
+
+**迁移注意**：
+- 修复后在前端保存新链接，确认 `config/feishu_sync.json` 已更新，再重新导出运行态包。
+- `backend/imports/runtime_config_bundle.json` 若仍包含旧链接，新环境首次部署会自动导入旧链接；建议用新导出的运行态包替换它。
+
+**相关文件**：
+- `smartask/backend/config_manager.py`
+- `smartask/backend/feishu_sync_manager.py`
+- `smartask/backend/feishu_sync_service.py`
+- `smartask/frontend/src/views/FeishuSync.vue`

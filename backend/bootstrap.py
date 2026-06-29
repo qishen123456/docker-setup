@@ -202,6 +202,22 @@ def _import_angel_bundle() -> None:
         traceback.print_exc()
 
 
+ECOMMERCE_COMMON_QUESTIONS = [
+    {"question_text": "电商事业部的业绩", "sort_order": 10},
+    {"question_text": "电商事业部三大业务部年度目标营收对比", "sort_order": 20},
+    {"question_text": "电商事业部业务部业绩排名", "sort_order": 30},
+    {"question_text": "国内业务部的业绩", "sort_order": 40},
+    {"question_text": "国内业务部有哪些细分业务", "sort_order": 50},
+    {"question_text": "净水业务下有哪些业务经理", "sort_order": 60},
+    {"question_text": "电商事业部细分业务达成率排名", "sort_order": 70},
+    {"question_text": "京东直营和天猫直营对比", "sort_order": 80},
+    {"question_text": "电商事业部业务承接人业绩排名", "sort_order": 90},
+    {"question_text": "电商事业部负责人刘志伟的业绩", "sort_order": 100},
+    {"question_text": "电商事业部达成率低于30%的细分业务有哪些", "sort_order": 110},
+    {"question_text": "电商事业部前5的细分业务", "sort_order": 120},
+]
+
+
 def _sync_builtin_datasets() -> None:
     if os.getenv("SMARTASK_BOOTSTRAP_SKIP_BUILTINS", "").lower() in {"1", "true", "yes"}:
         log("SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1，跳过内置数据集模板同步")
@@ -217,6 +233,42 @@ def _sync_builtin_datasets() -> None:
         )
     except Exception as exc:
         log(f"同步内置数据集模板失败（非致命）: {exc}")
+        traceback.print_exc()
+
+
+def _sync_ecommerce_common_questions() -> None:
+    """同步电商数据集常用问题（该数据集由标准视图迁移创建，无 payload 模板）。"""
+    if os.getenv("SMARTASK_BOOTSTRAP_SKIP_BUILTINS", "").lower() in {"1", "true", "yes"}:
+        return
+    try:
+        import psycopg2
+
+        with psycopg2.connect(**_datasource_kwargs()) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM bs_datasets WHERE dataset_code = %s LIMIT 1;",
+                    ("feishu_tbldianshang",),
+                )
+                row = cur.fetchone()
+                if not row:
+                    log("未找到电商数据集 feishu_tbldianshang，跳过常用问题同步")
+                    return
+                dataset_id = row[0]
+                cur.execute(
+                    "DELETE FROM bs_common_questions WHERE dataset_id = %s;",
+                    (dataset_id,),
+                )
+                for item in ECOMMERCE_COMMON_QUESTIONS:
+                    cur.execute(
+                        """
+                        INSERT INTO bs_common_questions(dataset_id, question_text, sort_order, is_active)
+                        VALUES (%s, %s, %s, TRUE);
+                        """,
+                        (dataset_id, item["question_text"], item["sort_order"]),
+                    )
+        log(f"已同步电商数据集常用问题: dataset_id={dataset_id} 共{len(ECOMMERCE_COMMON_QUESTIONS)}条")
+    except Exception as exc:
+        log(f"同步电商数据集常用问题失败（非致命）: {exc}")
         traceback.print_exc()
 
 
@@ -266,6 +318,7 @@ def main() -> None:
             log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
 
         _sync_builtin_datasets()
+        _sync_ecommerce_common_questions()
 
     log("========== Bootstrap 完成，启动 Flask ==========")
     app_path = os.path.join(CURRENT_DIR, "app.py")
