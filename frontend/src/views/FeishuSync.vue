@@ -120,6 +120,10 @@
                 <span>按任务和结果筛选，失败记录会优先暴露出来。</span>
               </div>
               <div class="fs-log-actions">
+                <el-radio-group v-model="logViewMode" size="small">
+                  <el-radio-button label="batch">按运行批次</el-radio-button>
+                  <el-radio-button label="flat">平铺视图</el-radio-button>
+                </el-radio-group>
                 <el-select v-model="logTaskFilter" size="small" placeholder="任务" clearable>
                   <el-option label="全部任务" value="" />
                   <el-option v-for="item in logTaskOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -138,7 +142,7 @@
                 </el-popconfirm>
               </div>
             </div>
-            <el-table :data="filteredAllLogs" size="small" border class="fs-compact-table" max-height="420">
+            <el-table v-if="logViewMode === 'flat'" :data="filteredAllLogs" size="small" border class="fs-compact-table" max-height="420">
               <el-table-column label="时间" min-width="154">
                 <template #default="{ row }">{{ formatTime(row.timestamp) || row.timestamp }}</template>
               </el-table-column>
@@ -154,7 +158,56 @@
                 <template #default="{ row }">{{ row.message || '-' }}</template>
               </el-table-column>
             </el-table>
-            <el-empty v-if="!filteredAllLogs.length" description="暂无匹配日志" :image-size="80" />
+
+            <el-table v-else :data="logBatches" size="small" border class="fs-compact-table" max-height="420" row-key="id">
+              <el-table-column type="expand" width="40">
+                <template #default="{ row }">
+                  <div class="fs-batch-detail">
+                    <div class="fs-batch-detail-header">
+                      <span class="fs-batch-detail-time">{{ formatTime(row.startTime) }}（持续 {{ row.durationText }}）</span>
+                      <span class="fs-batch-detail-task">{{ row.taskName }}</span>
+                      <el-tag :type="getLogLevelType(row.finalLevel)" size="small" effect="light">{{ getLogLevelText(row.finalLevel) }}</el-tag>
+                      <span class="fs-batch-detail-count">{{ row.count }} 步</span>
+                    </div>
+                    <el-table :data="row.logs" size="small" border :show-header="false" class="fs-batch-inner-table">
+                      <el-table-column width="154">
+                        <template #default="{ row: log }">{{ formatTime(log.timestamp) }}</template>
+                      </el-table-column>
+                      <el-table-column width="88">
+                        <template #default="{ row: log }">
+                          <el-tag :type="getLogLevelType(log.level)" size="small" effect="light">{{ getLogLevelText(log.level) }}</el-tag>
+                        </template>
+                      </el-table-column>
+                      <el-table-column>
+                        <template #default="{ row: log }">{{ log.message || '-' }}</template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="时间" min-width="154">
+                <template #default="{ row }">
+                  <div>{{ formatTime(row.startTime) }}</div>
+                  <div class="fs-batch-duration">持续 {{ row.durationText }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="任务" min-width="150" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.taskName }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="88">
+                <template #default="{ row }">
+                  <el-tag :type="getLogLevelType(row.finalLevel)" effect="light">{{ getLogLevelText(row.finalLevel) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="步骤" width="72">
+                <template #default="{ row }">{{ row.count }} 步</template>
+              </el-table-column>
+              <el-table-column label="概要" min-width="260" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.logs[row.logs.length - 1]?.message || '-' }}</template>
+              </el-table-column>
+            </el-table>
+
+            <el-empty v-if="logViewMode === 'flat' ? !filteredAllLogs.length : !logBatches.length" description="暂无匹配日志" :image-size="80" />
           </section>
         </el-tab-pane>
 
@@ -525,6 +578,9 @@ const scheduleKeyword = ref('')
 const scheduleFrequencyFilter = ref('')
 const logTaskFilter = ref('')
 const logLevelFilter = ref('')
+const logViewMode = ref('batch') // 'flat' | 'batch'
+const BATCH_GAP_MS = 60 * 1000 // 同一次运行相邻日志最大间隔 60 秒
+const expandedBatches = ref(new Set())
 
 let statusPollTimer = null
 
@@ -595,6 +651,67 @@ const filteredAllLogs = computed(() => allLogs.value.filter((item) => {
   const matchLevel = !logLevelFilter.value || String(item.level || '').toUpperCase() === logLevelFilter.value
   return matchTask && matchLevel
 }))
+
+const logBatches = computed(() => {
+  const parseTime = (t) => t ? new Date(t).getTime() : 0
+  const groups = new Map()
+  filteredAllLogs.value.forEach((item) => {
+    const cid = String(item.config_id ?? '')
+    if (!groups.has(cid)) groups.set(cid, [])
+    groups.get(cid).push(item)
+  })
+
+  const batches = []
+  groups.forEach((logs, configId) => {
+    logs.sort((a, b) => parseTime(a.timestamp) - parseTime(b.timestamp))
+    let current = null
+    logs.forEach((log) => {
+      const ts = parseTime(log.timestamp)
+      if (!current || ts - parseTime(current.logs[current.logs.length - 1].timestamp) > BATCH_GAP_MS) {
+        current = {
+          id: `${configId}_${ts}`,
+          config_id: configId,
+          taskName: taskNameById(configId),
+          logs: [log],
+          startTime: ts,
+          endTime: ts,
+        }
+        batches.push(current)
+      } else {
+        current.logs.push(log)
+        current.endTime = Math.max(current.endTime, ts)
+      }
+    })
+  })
+
+  // 按开始时间倒序
+  batches.sort((a, b) => b.startTime - a.startTime)
+
+  return batches.map((batch) => {
+    const hasError = batch.logs.some((l) => String(l.level || '').toUpperCase() === 'ERROR')
+    const hasSuccess = batch.logs.some((l) => String(l.level || '').toUpperCase() === 'SUCCESS')
+    const finalLevel = hasError ? 'ERROR' : hasSuccess ? 'SUCCESS' : 'INFO'
+    const durationMs = batch.endTime - batch.startTime
+    return {
+      ...batch,
+      hasError,
+      finalLevel,
+      count: batch.logs.length,
+      durationText: durationMs < 1000 ? '<1秒' : `${Math.round(durationMs / 1000)}秒`,
+    }
+  })
+})
+
+const toggleBatch = (row) => {
+  const key = row.id
+  const next = new Set(expandedBatches.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedBatches.value = next
+}
+
+const isBatchExpanded = (row) => expandedBatches.value.has(row.id)
+
 const nextRunSummary = computed(() => {
   const next = scheduleRows.value.find((item) => item.nextRunAt)
   if (!next) return activeCount.value ? '等待首轮调度' : '暂无启用任务'
@@ -1820,5 +1937,54 @@ onUnmounted(() => {
   .fs-hero h2 {
     font-size: 26px;
   }
+}
+
+.fs-batch-detail {
+  padding: 0 16px 16px 48px;
+  background: #f9fafb;
+}
+
+.fs-batch-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  font-size: 13px;
+}
+
+.fs-batch-detail-time {
+  color: #6B7280;
+}
+
+.fs-batch-detail-task {
+  font-weight: 600;
+  color: #111827;
+}
+
+.fs-batch-detail-count {
+  color: #6B7280;
+  margin-left: auto;
+}
+
+.fs-batch-inner-table {
+  background: #ffffff;
+}
+
+.fs-batch-duration {
+  color: #6B7280;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.fs-log-actions .el-radio-group {
+  margin-right: 8px;
 }
 </style>
