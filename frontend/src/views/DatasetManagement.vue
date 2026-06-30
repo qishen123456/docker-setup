@@ -322,6 +322,49 @@
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
+
+              <!-- 数据转换 -->
+              <el-tab-pane label="数据转换" name="transforms">
+                <div class="toolbar">
+                  <el-button
+                    v-if="isFeatureEnabled('dataset_transform_edit') && selectedCanEdit"
+                    size="small"
+                    type="primary"
+                    @click="openTransformEditor()"
+                  >新增转换任务</el-button>
+                  <el-button size="small" @click="loadTransforms" :loading="transformLoading">刷新</el-button>
+                </div>
+                <el-table :data="transforms" border size="small" v-loading="transformLoading">
+                  <el-table-column label="任务名称" min-width="160">
+                    <template #default="{ row }">{{ row.name }}</template>
+                  </el-table-column>
+                  <el-table-column label="源表 → 目标" min-width="220">
+                    <template #default="{ row }">
+                      <div>{{ row.source_table }} →</div>
+                      <div><el-tag size="small" effect="plain">{{ row.target_type }}</el-tag> {{ row.target_name }}</div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="自动执行" width="90">
+                    <template #default="{ row }">{{ row.auto_run_on_sync ? '是' : '否' }}</template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="140">
+                    <template #default="{ row }">
+                      <div v-if="row.last_run_status">
+                        <el-tag :type="row.last_run_status === 'success' ? 'success' : 'danger'" size="small" effect="light">{{ row.last_run_status }}</el-tag>
+                        <div class="text-muted" style="font-size: 11px;">{{ formatTime(row.last_run_at) }}</div>
+                      </div>
+                      <span v-else class="text-muted">尚未执行</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="180" fixed="right">
+                    <template #default="{ row }">
+                      <el-button link type="primary" size="small" :loading="transformRunLoading[row.id]" @click="handleRunTransform(row)">执行</el-button>
+                      <el-button v-if="isFeatureEnabled('dataset_transform_edit') && selectedCanEdit" link type="primary" size="small" @click="openTransformEditor(row)">编辑</el-button>
+                      <el-button v-if="isFeatureEnabled('dataset_transform_edit') && selectedCanEdit" link type="danger" size="small" @click="handleDeleteTransform(row)">删除</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
             </el-tabs>
           </template>
         </el-card>
@@ -593,6 +636,69 @@
         </el-form>
       </div>
     </el-drawer>
+
+    <!-- 数据转换编辑弹窗 -->
+    <el-dialog v-model="transformDialogVisible" :title="isTransformEdit ? '编辑转换任务' : '新增转换任务'" width="780px" destroy-on-close top="5vh">
+      <el-form label-width="110px" :disabled="!selectedCanEdit">
+        <el-row :gutter="14">
+          <el-col :span="12">
+            <el-form-item label="任务名称" required>
+              <el-input v-model="transformForm.name" placeholder="例如：电商事业部视图" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="源表" required>
+              <el-input v-model="transformForm.source_table" placeholder="例如：feishu_tbldianshang" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="14">
+          <el-col :span="12">
+            <el-form-item label="目标类型">
+              <el-select v-model="transformForm.target_type" style="width: 100%">
+                <el-option label="视图 VIEW" value="view" />
+                <el-option label="表 TABLE" value="table" />
+                <el-option label="物化视图 MATERIALIZED VIEW" value="materialized_view" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="目标名称" required>
+              <el-input v-model="transformForm.target_name" placeholder="例如：v_feishu_tbldianshang" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="转换 SQL" required>
+          <div style="margin-bottom: 6px;">
+            <el-button size="small" @click="applyEcommerceTemplate">套用电商事业部模板</el-button>
+            <el-button size="small" :loading="transformTestLoading" @click="handleTestTransformSql">测试 SQL</el-button>
+            <span class="muted-text" style="margin-left: 8px;">只允许单条 SELECT 或 WITH 语句，可用 <code v-pre>{{source_table}}</code> 占位符</span>
+          </div>
+          <el-input v-model="transformForm.transform_sql" type="textarea" :rows="14" resize="vertical" placeholder="输入 SELECT 语句..." />
+        </el-form-item>
+        <el-row :gutter="14">
+          <el-col :span="8">
+            <el-form-item label="自动执行">
+              <el-switch v-model="transformForm.auto_run_on_sync" active-text="源表同步后自动执行" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="启用状态">
+              <el-switch v-model="transformForm.is_active" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="绑定同步任务">
+              <el-input v-model="transformForm.sync_dependency" placeholder="可选：飞书同步配置名称/ID" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeTransformEditor">取消</el-button>
+        <el-button type="primary" :loading="transformLoading" @click="saveTransform">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -602,7 +708,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBookshelfDataset, deleteBookshelfDataset, getBookshelfDatasetFull,
   extractBookshelfDictionaryFromPg, generateBookshelfDatasetFromPrompt, getBookshelfDatasets, getDataSources, getSourceTables,
-  saveBookshelfDatasetFull, updateBookshelfDataset
+  saveBookshelfDatasetFull, updateBookshelfDataset,
+  getDatasetTransforms, createDatasetTransform, updateDatasetTransform, deleteDatasetTransform,
+  runDatasetTransform, testDatasetTransformSql
 } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
 import {
@@ -659,6 +767,24 @@ const full = reactive({
   schema_definition: [], table_relations: [], golden_sql_samples: [],
   agent_prompts: [], external_configs: []
 })
+
+const transforms = ref([])
+const transformDialogVisible = ref(false)
+const transformEditId = ref(null)
+const transformLoading = ref(false)
+const transformRunLoading = ref({})
+const transformTestLoading = ref(false)
+const transformForm = reactive({
+  name: '',
+  source_table: '',
+  target_type: 'view',
+  target_name: '',
+  transform_sql: '',
+  is_active: true,
+  auto_run_on_sync: false,
+  sync_dependency: ''
+})
+const isTransformEdit = computed(() => Boolean(transformEditId.value))
 
 const selectedDataset = computed(() => datasets.value.find(item => Number(item.id) === Number(selectedDatasetId.value)) || null)
 const selectedCanEdit = computed(() => Boolean(selectedDataset.value?.can_edit))
@@ -1574,6 +1700,7 @@ const selectDataset = async (dataset) => {
   FULL_COLLECTION_KEYS.forEach(key => { full[key] = r[key] || [] })
   qualitySummary.value = r.quality_summary || null
   isDirty.value = false
+  await loadTransforms()
 }
 
 const onSelectDataset = async (item) => {
@@ -1907,6 +2034,172 @@ const removeSchema = (i) => {
   full.schema_definition.splice(i, 1); markDirty()
 }
 const addSchema = () => openSchemaEditor()
+
+// ========== 数据转换 ==========
+const loadTransforms = async () => {
+  if (!selectedDatasetId.value) {
+    transforms.value = []
+    return
+  }
+  transformLoading.value = true
+  try {
+    const r = await getDatasetTransforms(selectedDatasetId.value)
+    transforms.value = r.transforms || []
+  } catch (error) {
+    transforms.value = []
+  } finally {
+    transformLoading.value = false
+  }
+}
+const resetTransformForm = () => {
+  Object.assign(transformForm, {
+    name: '',
+    source_table: '',
+    target_type: 'view',
+    target_name: '',
+    transform_sql: '',
+    is_active: true,
+    auto_run_on_sync: false,
+    sync_dependency: ''
+  })
+}
+const openTransformEditor = (row = null) => {
+  if (!ensureSelectedCanEdit()) return
+  transformEditId.value = row ? row.id : null
+  resetTransformForm()
+  if (row) {
+    Object.assign(transformForm, {
+      name: row.name || '',
+      source_table: row.source_table || '',
+      target_type: row.target_type || 'view',
+      target_name: row.target_name || '',
+      transform_sql: row.transform_sql || '',
+      is_active: row.is_active !== false,
+      auto_run_on_sync: row.auto_run_on_sync === true,
+      sync_dependency: row.sync_dependency || ''
+    })
+  }
+  transformDialogVisible.value = true
+}
+const closeTransformEditor = () => {
+  transformDialogVisible.value = false
+  transformEditId.value = null
+  resetTransformForm()
+}
+const saveTransform = async () => {
+  if (!ensureSelectedCanEdit()) return
+  if (!transformForm.name.trim()) { ElMessage.warning('请输入任务名称'); return }
+  if (!transformForm.source_table.trim()) { ElMessage.warning('请输入源表名'); return }
+  if (!transformForm.target_name.trim()) { ElMessage.warning('请输入目标名称'); return }
+  if (!transformForm.transform_sql.trim()) { ElMessage.warning('请输入转换 SQL'); return }
+  transformLoading.value = true
+  try {
+    const payload = {
+      name: transformForm.name.trim(),
+      source_table: transformForm.source_table.trim(),
+      target_type: transformForm.target_type,
+      target_name: transformForm.target_name.trim(),
+      transform_sql: transformForm.transform_sql.trim(),
+      is_active: transformForm.is_active,
+      auto_run_on_sync: transformForm.auto_run_on_sync,
+      sync_dependency: transformForm.sync_dependency.trim()
+    }
+    if (transformEditId.value) {
+      await updateDatasetTransform(transformEditId.value, payload)
+      ElMessage.success('转换任务更新成功')
+    } else {
+      await createDatasetTransform(selectedDatasetId.value, payload)
+      ElMessage.success('转换任务创建成功')
+    }
+    closeTransformEditor()
+    await loadTransforms()
+  } finally {
+    transformLoading.value = false
+  }
+}
+const handleDeleteTransform = async (row) => {
+  if (!ensureSelectedCanEdit()) return
+  try {
+    await ElMessageBox.confirm(`确认删除转换任务 "${row.name}" 吗？`, '删除确认', { type: 'warning' })
+    await deleteDatasetTransform(row.id)
+    ElMessage.success('转换任务已删除')
+    await loadTransforms()
+  } catch (error) {
+    if (error !== 'cancel') {
+      // ElMessage.error 已由 api 拦截器处理
+    }
+  }
+}
+const handleRunTransform = async (row) => {
+  transformRunLoading.value = { ...transformRunLoading.value, [row.id]: true }
+  try {
+    const r = await runDatasetTransform(row.id)
+    ElMessage.success(r.message || '执行成功')
+    await loadTransforms()
+  } finally {
+    transformRunLoading.value = { ...transformRunLoading.value, [row.id]: false }
+  }
+}
+const handleTestTransformSql = async () => {
+  if (!transformForm.transform_sql.trim()) { ElMessage.warning('请输入转换 SQL'); return }
+  transformTestLoading.value = true
+  try {
+    const r = await testDatasetTransformSql({
+      target_type: transformForm.target_type,
+      target_name: transformForm.target_name || 'test_target',
+      source_table: transformForm.source_table,
+      transform_sql: transformForm.transform_sql.trim()
+    })
+    if (r.success) ElMessage.success(r.message || '测试成功')
+    else ElMessage.error(r.error || '测试失败')
+  } finally {
+    transformTestLoading.value = false
+  }
+}
+const applyEcommerceTemplate = () => {
+  transformForm.source_table = 'feishu_tbldianshang'
+  transformForm.target_name = 'v_feishu_tbldianshang'
+  transformForm.target_type = 'view'
+  transformForm.transform_sql = `SELECT
+  id,
+  record_id,
+  fields->>'状态' AS 审批状态,
+  fields->>'编号' AS 编号,
+  fields->>'经营主体' AS 集团,
+  fields->>'事业部' AS 事业部,
+  NULLIF(fields->>'业务部','') AS 业务部,
+  NULLIF(fields->>'业务承接角色','') AS 细分业务,
+  fields->>'层级级别' AS 层级级别,
+  fields->>'任务承接人' AS 负责人,
+  fields->>'任务维护人' AS 上级负责人,
+  NULLIF(trim(fields->>'总任务（金额）'),'')::numeric AS 年度目标营收,
+  NULLIF(trim(fields->>'年度开单金额'),'')::numeric AS 年度开单金额,
+  NULLIF(trim(fields->>'总任务达成率'),'')::numeric AS 总任务达成率,
+  NULLIF(trim(fields->>'当前月份任务达成率'),'')::numeric AS 当前月份任务达成率,
+  NULLIF(trim(fields->>'截止当前目标阈值达成率'),'')::numeric AS 截止当前目标阈值达成率,
+  NULLIF(trim(fields->>'本月开单金额'),'')::numeric AS 本月开单金额,
+  NULLIF(trim(fields->>'本月当前目标阈值'),'')::numeric AS 本月当前目标阈值,
+  NULLIF(trim(fields->>'年度阈值/开单差额（万）'),'')::numeric AS 年度阈值开单差额万,
+  NULLIF(trim(fields->>'月度阈值/开单差额（万）'),'')::numeric AS 月度阈值开单差额万,
+  NULLIF(trim(fields->>'总金额转换（以万为单位）'),'')::numeric AS 总金额转换万,
+  NULLIF(trim(fields->>'年度开单金额转换（以万为单位）'),'')::numeric AS 年度开单金额转换万,
+  fields->>'链接字段(勿删)' AS 组织路径,
+  fields->>'当前年' AS 当前年,
+  fields->>'当前月' AS 当前月,
+  NULLIF(trim(fields->>'2601'),'')::numeric AS q1目标,
+  NULLIF(trim(fields->>'2602'),'')::numeric AS q2目标,
+  NULLIF(trim(fields->>'2603'),'')::numeric AS q3目标,
+  NULLIF(trim(fields->>'2604'),'')::numeric AS q4目标
+FROM {{source_table}}
+WHERE fields IS NOT NULL AND fields <> '{}'::jsonb
+  AND NULLIF(fields->>'编号','') IS NOT NULL`
+}
+const formatTime = (value) => {
+  if (!value) return '-'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleString('zh-CN', { hour12: false })
+}
 
 // ========== 工具函数 ==========
 const ddlPreview = (t) => { const n = String(t || '').replace(/\s+/g, ' ').trim(); return n ? (n.length > 120 ? n.slice(0, 120) + '...' : n) : '暂无 DDL' }

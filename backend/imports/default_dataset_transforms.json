@@ -1,0 +1,24 @@
+[
+  {
+    "dataset_code": "feishu_tbldianshang",
+    "name": "电商事业部标准视图",
+    "source_table": "feishu_tbldianshang",
+    "target_type": "view",
+    "target_name": "v_feishu_tbldianshang",
+    "transform_sql": "SELECT\n  id,\n  record_id,\n  fields->>'状态' AS 审批状态,\n  fields->>'编号' AS 编号,\n  fields->>'经营主体' AS 集团,\n  fields->>'事业部' AS 事业部,\n  NULLIF(fields->>'业务部','') AS 业务部,\n  NULLIF(fields->>'业务承接角色','') AS 细分业务,\n  fields->>'层级级别' AS 层级级别,\n  fields->>'任务承接人' AS 负责人,\n  fields->>'任务维护人' AS 上级负责人,\n  NULLIF(trim(fields->>'总任务（金额）'),'')::numeric AS 年度目标营收,\n  NULLIF(trim(fields->>'年度开单金额'),'')::numeric AS 年度开单金额,\n  NULLIF(trim(fields->>'总任务达成率'),'')::numeric AS 总任务达成率,\n  NULLIF(trim(fields->>'当前月份任务达成率'),'')::numeric AS 当前月份任务达成率,\n  NULLIF(trim(fields->>'截止当前目标阈值达成率'),'')::numeric AS 截止当前目标阈值达成率,\n  NULLIF(trim(fields->>'本月开单金额'),'')::numeric AS 本月开单金额,\n  NULLIF(trim(fields->>'本月当前目标阈值'),'')::numeric AS 本月当前目标阈值,\n  NULLIF(trim(fields->>'年度阈值/开单差额（万）'),'')::numeric AS 年度阈值开单差额万,\n  NULLIF(trim(fields->>'月度阈值/开单差额（万）'),'')::numeric AS 月度阈值开单差额万,\n  NULLIF(trim(fields->>'总金额转换（以万为单位）'),'')::numeric AS 总金额转换万,\n  NULLIF(trim(fields->>'年度开单金额转换（以万为单位）'),'')::numeric AS 年度开单金额转换万,\n  fields->>'链接字段(勿删)' AS 组织路径,\n  fields->>'当前年' AS 当前年,\n  fields->>'当前月' AS 当前月,\n  NULLIF(trim(fields->>'2601'),'')::numeric AS q1目标,\n  NULLIF(trim(fields->>'2602'),'')::numeric AS q2目标,\n  NULLIF(trim(fields->>'2603'),'')::numeric AS q3目标,\n  NULLIF(trim(fields->>'2604'),'')::numeric AS q4目标\nFROM {{source_table}}\nWHERE fields IS NOT NULL AND fields <> '{}'::jsonb\n  AND NULLIF(fields->>'编号','') IS NOT NULL",
+    "is_active": true,
+    "auto_run_on_sync": true,
+    "sync_dependency": ""
+  },
+  {
+    "dataset_code": "angel_business_2026_phase1",
+    "name": "商用事业部标准视图",
+    "source_table": "angel_group_data",
+    "target_type": "view",
+    "target_name": "v_angel_group_data",
+    "transform_sql": "SELECT\n  id,\n  record_id,\n  fields->>'状态' AS 审批状态,\n  fields->>'编号' AS 编号,\n  fields->>'经营主体' AS 经营主体,\n  fields->>'事业部' AS 事业部,\n  NULLIF(fields->>'分公司','') AS 分公司,\n  NULLIF(fields->>'代表处','') AS 代表处,\n  NULLIF(fields->>'业务代表','') AS 业务代表,\n  fields->>'层级级别' AS 层级级别,\n  fields->>'总任务承接人' AS 总任务承接人,\n  fields->>'任务维护人' AS 任务维护人,\n  NULLIF(trim(fields->>'总任务（金额）'),'')::numeric AS 年度目标营收,\n  NULLIF(trim(fields->>'年度开单金额'),'')::numeric AS 年度开单金额,\n  NULLIF(trim(fields->>'总任务达成率'),'')::numeric AS 总任务达成率,\n  NULLIF(trim(fields->>'当前月份任务达成率'),'')::numeric AS 当前月份任务达成率,\n  NULLIF(trim(fields->>'截止当前目标阈值达成率'),'')::numeric AS 截止当前目标阈值达成率,\n  NULLIF(trim(fields->>'本月开单金额'),'')::numeric AS 本月开单金额,\n  NULLIF(trim(fields->>'本月当前目标阈值'),'')::numeric AS 本月当前目标阈值,\n  NULLIF(trim(fields->>'年度阈值/开单差额（万）'),'')::numeric AS 年度阈值开单差额万,\n  NULLIF(trim(fields->>'月度阈值/开单差额（万）'),'')::numeric AS 月度阈值开单差额万,\n  NULLIF(trim(fields->>'总金额转换（以万为单位）'),'')::numeric AS 总金额转换万,\n  NULLIF(trim(fields->>'年度开单金额转换（以万为单位）'),'')::numeric AS 年度开单金额转换万,\n  fields->>'链接字段(勿删)' AS 组织路径,\n  fields->>'当前年' AS 当前年,\n  fields->>'当前月' AS 当前月,\n  NULLIF(trim(fields->>'2601'),'')::numeric AS q1目标,\n  NULLIF(trim(fields->>'2602'),'')::numeric AS q2目标,\n  NULLIF(trim(fields->>'2603'),'')::numeric AS q3目标,\n  NULLIF(trim(fields->>'2604'),'')::numeric AS q4目标\nFROM {{source_table}}\nWHERE fields IS NOT NULL AND fields <> '{}'::jsonb\n  AND NULLIF(fields->>'编号','') IS NOT NULL",
+    "is_active": true,
+    "auto_run_on_sync": true,
+    "sync_dependency": ""
+  }
+]

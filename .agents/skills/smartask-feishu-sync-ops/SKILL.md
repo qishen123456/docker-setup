@@ -123,3 +123,87 @@ python scripts/export_runtime_config.py --output backend/imports/runtime_config_
 ```bash
 docker compose exec backend python /app/scripts/export_runtime_config.py --output /app/backend/imports/runtime_config_bundle.json
 ```
+
+## 9. 同步后自动生成业务视图（数据集转换）
+
+### 9.1 正确做法
+
+不要再把 `CREATE VIEW` 硬编码到 `feishu_sync_service.py` 的同步流程里。
+
+SmartAsk 提供通用「数据集转换」机制：
+
+- 任务表：`bs_dataset_transforms`（由迁移 `backend/migrations/20260630_dataset_transforms.sql` 创建）
+- 业务服务：`backend/dataset_transform_service.py`
+- API 控制器：`backend/controllers/dataset_transforms.py`
+- 前端管理：数据集管理页面 →「数据转换」标签页
+- 默认任务配置：`backend/imports/default_dataset_transforms.json`
+- 自动触发点：`feishu_sync_service.sync_data_to_postgres()` 在 `conn.commit()` 之后调用 `transform_service.run_transforms_by_source_table(table_name)`
+
+### 9.2 新增默认视图的步骤
+
+1. 在 `backend/imports/default_dataset_transforms.json` 中新增一条任务，例如：
+
+```json
+{
+  "dataset_code": "angel_business_2026_phase1",
+  "name": "商用事业部标准视图",
+  "source_table": "angel_group_data",
+  "target_type": "view",
+  "target_name": "v_angel_group_data",
+  "transform_sql": "SELECT ... FROM {{source_table}} WHERE ...",
+  "is_active": true,
+  "auto_run_on_sync": true
+}
+```
+
+2. `transform_sql` 只能是以 `SELECT` 或 `WITH` 开头的单条语句，可用 `{{source_table}}` 占位符。
+3. 重新 build backend 并重启容器：
+
+```bash
+cd smartask
+docker compose up -d --build backend
+```
+
+4. Bootstrap 会根据 `dataset_code` 找到对应数据集，自动插入任务；如果源表已有数据会立即执行生成视图；否则等飞书同步成功后自动生成。
+
+### 9.3 已踩过的坑
+
+1. **feature flag 被 legacy 集合清理**：`backend/feature_flags.py` 顶层的 `_DATASET_LEGACY_MAINTENANCE_KEYS` 会在模块加载时 pop 掉 `_edit` 后缀的 flag。新增的数据转换开关 `dataset_transform_edit` 不能放在这个集合里，否则前端按钮和接口权限校验会失效。
+
+2. **`{{source_table}}` 占位符未替换**：`execute_transform` 必须显式把 `{{source_table}}` 替换成任务中的 `source_table`，否则执行 SQL 会报 `syntax error at or near "{"`。
+
+3. **已存在视图刷新失败**：`CREATE OR REPLACE VIEW` 不支持减少列。`view` 类型的 DDL 要先 `DROP VIEW IF EXISTS ... CASCADE;` 再创建，才能保证源表字段变化后视图仍能刷新。
+
+4. **测试 SQL 也要传 source_table**：前端「测试 SQL」按钮必须把 `source_table` 一起传给 `/api/dataset-transforms/test-sql`，否则含占位符的模板测试会失败。
+
+5. **view 类型用 DROP CASCADE**：刷新视图时会级联删除依赖它的对象。如果要在转换出的视图之上再建视图，建议使用 `table` 或 `materialized_view` 类型。
+
+## 10. 删除转换任务会自动清理视图
+
+删除 `bs_dataset_transforms` 中的任务时，`delete_transform()` 会先根据 `target_type` + `target_name` 执行对应的 DROP 语句：
+
+- `view` → `DROP VIEW IF EXISTS <target_name> CASCADE;`
+- `table` → `DROP TABLE IF EXISTS <target_name> CASCADE;`
+- `materialized_view` → `DROP MATERIALIZED VIEW IF EXISTS <target_name> CASCADE;`
+
+清理目标对象失败不会影响任务记录的删除，只会记录 warning 日志。
+
+因此管理视图的方式就是管理转换任务：
+
+- **前端**：数据集管理 → 数据转换 → 删除任务，视图一起删掉。
+- **API**：`DELETE /api/dataset-transforms/<id>`
+- **数据库兜底**：`DROP VIEW/TABLE/MATERIALIZED VIEW IF EXISTS <name> CASCADE;`
+
+## 11. 数据转换任务已纳入运行态迁移
+
+`bs_dataset_transforms` 已加入 `backend/runtime_migration.py` 的 `BOOKSHELF_TABLES` / `DATASET_REFERENCE_TABLES` / `NATURAL_KEY_COLUMNS`：
+
+- 导出运行态包时会包含数据转换任务。
+- 导入时会根据 `dataset_id` + `target_name` 去重/更新。
+- `dataset_id` 会随 `bs_datasets` 的导入自动映射到新环境生成的 ID。
+
+因此：
+
+- 老环境导出运行态包 → 新环境导入 → 转换任务跟着过来。
+- 如果新环境源表已有数据，bootstrap 会立即执行生成视图。
+- 如果源表还没数据，等飞书同步成功后自动触发。

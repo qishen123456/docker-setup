@@ -71,6 +71,7 @@ EXCLUDED_CONFIG_FILES = {
 BOOKSHELF_TABLES = [
     "bs_datasets",
     "bs_dataset_synonyms",
+    "bs_dataset_transforms",
     "bs_lld_documents",
     "bs_data_dictionary_items",
     "bs_schema_definitions",
@@ -92,6 +93,7 @@ RUNTIME_TABLES = [*BOOKSHELF_TABLES, *SYSTEM_TABLES]
 DELETE_ORDER = list(reversed(RUNTIME_TABLES))
 DATASET_REFERENCE_TABLES = {
     "bs_dataset_synonyms",
+    "bs_dataset_transforms",
     "bs_lld_documents",
     "bs_data_dictionary_items",
     "bs_schema_definitions",
@@ -107,6 +109,7 @@ DATASET_REFERENCE_TABLES = {
 NATURAL_KEY_COLUMNS = {
     "bs_datasets": ["dataset_code"],
     "bs_dataset_synonyms": ["dataset_id", "synonym"],
+    "bs_dataset_transforms": ["dataset_id", "target_name"],
     "bs_lld_documents": ["dataset_id", "title", "version"],
     "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key", "semantic_name"],
     "bs_schema_definitions": ["dataset_id", "table_name"],

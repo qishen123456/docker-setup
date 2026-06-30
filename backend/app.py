@@ -44,6 +44,7 @@ from controllers.bookshelf import bookshelf_bp
 from controllers.dashboard import dashboard_bp
 from controllers.datasources import datasources_bp
 from controllers.data_permissions import data_permissions_bp
+from controllers.dataset_transforms import dataset_transform_bp
 from controllers.feishu_sync import feishu_bp
 from controllers.feature_flags import feature_flags_bp
 from controllers.ask_flow import ask_flow_bp
@@ -91,6 +92,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(datasources_bp)
 app.register_blueprint(data_permissions_bp)
+app.register_blueprint(dataset_transform_bp)
 app.register_blueprint(ai_models_bp)
 app.register_blueprint(feishu_bp)
 app.register_blueprint(smart_chat_bp)

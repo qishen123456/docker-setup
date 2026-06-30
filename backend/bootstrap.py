@@ -52,12 +52,14 @@ MIGRATIONS = [
     "20260509_report_thresholds.sql",
     "20260512_system_event_logs.sql",
     "20260627_ecommerce_standard_view.sql",
+    "20260630_dataset_transforms.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
 BOOKSHELF_BUNDLE = os.path.join(IMPORTS_DIR, "bookshelf_bundle.json")
 ANGEL_BUNDLE = os.path.join(IMPORTS_DIR, "angel_group_data_bundle.json")
 RUNTIME_CONFIG_BUNDLE = os.path.join(IMPORTS_DIR, "runtime_config_bundle.json")
+DEFAULT_TRANSFORMS_BUNDLE = os.path.join(IMPORTS_DIR, "default_dataset_transforms.json")
 
 
 def log(msg: str) -> None:
@@ -236,6 +238,125 @@ def _sync_builtin_datasets() -> None:
         traceback.print_exc()
 
 
+def _sync_default_dataset_transforms() -> None:
+    """同步默认数据集转换任务。
+
+    新系统部署时，只要内置数据集（如电商事业部）已通过 bundle 导入，
+    就自动为其创建对应的视图/表转换任务。如果源表已有数据，立即执行一次，
+    让视图在飞书同步前或同步后都能自动出现，无需手动跑脚本。
+    """
+    if os.getenv("SMARTASK_BOOTSTRAP_SKIP_BUILTINS", "").lower() in {"1", "true", "yes"}:
+        log("SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1，跳过默认转换任务同步")
+        return
+    if not os.path.exists(DEFAULT_TRANSFORMS_BUNDLE):
+        log("未找到 default_dataset_transforms.json，跳过默认转换任务同步")
+        return
+    try:
+        import json
+        import psycopg2
+
+        with open(DEFAULT_TRANSFORMS_BUNDLE, "r", encoding="utf-8") as fh:
+            default_transforms = json.load(fh)
+        if not isinstance(default_transforms, list):
+            log("default_dataset_transforms.json 格式应为数组，跳过")
+            return
+    except Exception as exc:
+        log(f"读取 default_dataset_transforms.json 失败（非致命）: {exc}")
+        return
+
+    try:
+        from dataset_transform_service import transform_service
+    except Exception as exc:
+        log(f"导入 transform_service 失败，默认转换任务仅做预置不自动执行（非致命）: {exc}")
+        transform_service = None
+
+    inserted_count = 0
+    executed_count = 0
+    skipped_count = 0
+
+    try:
+        with psycopg2.connect(**_datasource_kwargs()) as conn:
+            with conn.cursor() as cur:
+                for item in default_transforms:
+                    dataset_code = str(item.get("dataset_code") or "").strip()
+                    name = str(item.get("name") or "").strip()
+                    target_name = str(item.get("target_name") or "").strip()
+                    source_table = str(item.get("source_table") or "").strip()
+                    if not dataset_code or not name or not target_name or not source_table:
+                        log(f"默认转换任务配置不完整，跳过: {item}")
+                        continue
+
+                    cur.execute(
+                        "SELECT id FROM bs_datasets WHERE dataset_code = %s AND is_active = TRUE LIMIT 1;",
+                        (dataset_code,),
+                    )
+                    row = cur.fetchone()
+                    if not row:
+                        log(f"未找到数据集 {dataset_code}，跳过默认转换任务: {name}")
+                        skipped_count += 1
+                        continue
+                    dataset_id = row[0]
+
+                    # 按目标名去重：避免重复创建同名视图/表
+                    cur.execute(
+                        "SELECT id FROM bs_dataset_transforms WHERE dataset_id = %s AND target_name = %s LIMIT 1;",
+                        (dataset_id, target_name),
+                    )
+                    if cur.fetchone():
+                        log(f"数据集 {dataset_code} 已存在目标为 {target_name} 的转换任务，跳过")
+                        skipped_count += 1
+                        continue
+
+                    cur.execute(
+                        """
+                        INSERT INTO bs_dataset_transforms
+                            (dataset_id, name, source_table, target_type, target_name,
+                             transform_sql, is_active, auto_run_on_sync, sync_dependency,
+                             updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        RETURNING id;
+                        """,
+                        (
+                            dataset_id,
+                            name,
+                            source_table,
+                            str(item.get("target_type") or "view").strip().lower(),
+                            target_name,
+                            str(item.get("transform_sql") or "").strip(),
+                            bool(item.get("is_active", True)),
+                            bool(item.get("auto_run_on_sync", True)),
+                            str(item.get("sync_dependency") or ""),
+                        ),
+                    )
+                    new_id = cur.fetchone()[0]
+                    conn.commit()
+                    inserted_count += 1
+                    log(f"已预置默认转换任务: {name} (id={new_id}) -> {target_name}")
+
+                    # 如果源表已经有数据，立即执行一次，保证视图立即可用
+                    try:
+                        cur.execute(
+                            "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s LIMIT 1;",
+                            (source_table,),
+                        )
+                        table_exists = cur.fetchone() is not None
+                        if table_exists and transform_service:
+                            result = transform_service.execute_transform(int(new_id), triggered_by="bootstrap")
+                            if result.get("success"):
+                                executed_count += 1
+                                log(f"默认转换任务已立即执行: {target_name}")
+                            else:
+                                log(f"默认转换任务立即执行失败（非致命）: {result.get('message')}")
+                    except Exception as exc:
+                        log(f"默认转换任务立即执行异常（非致命）: {exc}")
+    except Exception as exc:
+        log(f"同步默认转换任务失败（非致命）: {exc}")
+        traceback.print_exc()
+        return
+
+    log(f"默认转换任务同步完成: 新增 {inserted_count} 个, 立即执行 {executed_count} 个, 跳过 {skipped_count} 个")
+
+
 def _sync_ecommerce_common_questions() -> None:
     """同步电商数据集常用问题（该数据集由标准视图迁移创建，无 payload 模板）。"""
     if os.getenv("SMARTASK_BOOTSTRAP_SKIP_BUILTINS", "").lower() in {"1", "true", "yes"}:
@@ -318,6 +439,7 @@ def main() -> None:
             log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
 
         _sync_builtin_datasets()
+        _sync_default_dataset_transforms()
         _sync_ecommerce_common_questions()
 
     log("========== Bootstrap 完成，启动 Flask ==========")

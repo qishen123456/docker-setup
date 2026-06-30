@@ -766,6 +766,15 @@ class FeishuSyncService:
                 
                 conn.commit()
                 print(f"成功同步{len(normalized_records)}条记录到{table_name}")
+
+            # 触发关联的数据集转换任务（失败不影响同步任务状态）
+            try:
+                from dataset_transform_service import transform_service
+                triggered = transform_service.run_transforms_by_source_table(table_name)
+                if triggered:
+                    write_log(config['id'], 'INFO', f"已触发 {len(triggered)} 个数据集转换任务")
+            except Exception as e:
+                write_log(config['id'], 'ERROR', f"触发数据集转换任务失败: {e}")
             
             return True
             

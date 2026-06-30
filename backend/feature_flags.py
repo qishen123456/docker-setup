@@ -724,6 +724,18 @@ DEFAULT_FEATURE_FLAGS: dict[str, Any] = {
             "roles": ["super_admin", "admin"],
             "experimental": False,
         },
+        "dataset_transform_edit": {
+            "label": "数据转换维护",
+            "description": "数据资产页，控制数据转换任务的新增、编辑、删除和手动执行。",
+            "category": "按钮 · 数据资产管理",
+            "module": "dataset_management",
+            "module_label": "数据资产管理",
+            "kind": "button",
+            "order": 425,
+            "enabled": True,
+            "roles": ["super_admin", "admin"],
+            "experimental": True,
+        },
         "dataset_prompt_edit": {
             "label": "提示词维护",
             "description": "数据资产页，控制 Agent 提示词片段新增、编辑、删除。",

@@ -111,6 +111,13 @@ export const upsertReportConfig = (datasetId, config) => api.put(`/datasets/${da
 export const deleteReportConfig = (datasetId) => api.delete(`/datasets/${datasetId}/report-config`)
 export const getDefaultReportConfig = () => api.get('/report-config/default')
 
+export const getDatasetTransforms = (datasetId) => api.get(`/datasets/${datasetId}/transforms`)
+export const createDatasetTransform = (datasetId, data) => api.post(`/datasets/${datasetId}/transforms`, data)
+export const updateDatasetTransform = (id, data) => api.put(`/dataset-transforms/${id}`, data)
+export const deleteDatasetTransform = (id) => api.delete(`/dataset-transforms/${id}`)
+export const runDatasetTransform = (id) => api.post(`/dataset-transforms/${id}/run`)
+export const testDatasetTransformSql = (data) => api.post('/dataset-transforms/test-sql', data)
+
 export const getFeishuSyncConfigs = () => api.get('/feishu-sync')
 export const createFeishuSyncConfig = (data) => api.post('/feishu-sync', data)
 export const updateFeishuSyncConfig = (id, data) => api.put(`/feishu-sync/${id}`, data)
