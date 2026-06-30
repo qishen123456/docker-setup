@@ -360,7 +360,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Grid, Refresh } from '@element-plus/icons-vue'
-import { getReportConfig, upsertReportConfig, deleteReportConfig, getDefaultReportConfig } from '../api/index.js'
+import api, { getReportConfig, upsertReportConfig, deleteReportConfig, getDefaultReportConfig } from '../api/index.js'
 import { useFeatureFlags } from '../state/featureFlags.js'
 import axios from 'axios'
 
@@ -521,8 +521,8 @@ const applyIntentPoliciesText = () => {
 
 const loadDatasets = async () => {
   try {
-    const r = await axios.get('/api/bookshelves/datasets')
-    datasets.value = (r.data?.datasets || r.data || []).map(ds => ({ ...ds, _hasConfig: false }))
+    const r = await api.get('/bookshelves/datasets')
+    datasets.value = (r?.datasets || r || []).map(ds => ({ ...ds, _hasConfig: false }))
     // Check which have configs
     for (const ds of datasets.value) {
       try {

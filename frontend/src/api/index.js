@@ -43,15 +43,11 @@ api.interceptors.response.use(
 )
 
 export const healthCheck = () => api.get('/health', { timeout: 3000, silent: true })
-export const getDashboard = () => api.get('/dashboard')
 
 export const getCurrentUser = () => api.get('/auth/me', { timeout: 5000, silent: true })
 export const logout = () => api.post('/auth/logout').finally(() => clearAuthToken())
 export const passwordLogin = (data) => api.post('/auth/login', data)
-export const adminLogin = (data) => api.post('/auth/admin/login', data)
 export const changePassword = (data) => api.post('/auth/change-password', data)
-export const getEmployeePermissions = () => api.get('/auth/employee-permissions')
-export const saveEmployeePermissions = (employees) => api.put('/auth/employee-permissions', { employees })
 export const getFeishuLoginUrl = () => api.get('/auth/feishu/login-url')
 export const feishuInAppAuth = (authCode) => api.post('/feishu/auth', { auth_code: authCode })
 
@@ -69,18 +65,10 @@ export const importAdvancedSkills = (manifest) => api.post('/admin/advanced-capa
 export const getDataPermissions = () => api.get('/admin/data-permissions')
 export const saveDataPermissions = (rules) => api.put('/admin/data-permissions', { rules })
 export const getRbacOverview = () => api.get('/admin/rbac/overview')
-export const createRbacRole = (data) => api.post('/admin/rbac/roles', data)
-export const updateRbacRole = (id, data) => api.put(`/admin/rbac/roles/${id}`, data)
-export const deleteRbacRole = (id) => api.delete(`/admin/rbac/roles/${id}`)
-export const createRbacGroup = (data) => api.post('/admin/rbac/groups', data)
-export const updateRbacGroup = (id, data) => api.put(`/admin/rbac/groups/${id}`, data)
-export const deleteRbacGroup = (id) => api.delete(`/admin/rbac/groups/${id}`)
 export const createRbacUser = (data) => api.post('/admin/rbac/users', data)
 export const updateRbacUser = (id, data) => api.put(`/admin/rbac/users/${id}`, data)
 export const resetRbacUserPassword = (id, data = {}) => api.post(`/admin/rbac/users/${id}/reset-password`, data)
 export const bulkUpdateRbacUsers = (data) => api.post('/admin/rbac/users/bulk', data)
-export const getRbacUserPermissions = (id) => api.get(`/admin/rbac/users/${id}/permissions`)
-export const getRbacDatasetAccess = (id) => api.get(`/admin/rbac/datasets/${id}/access`)
 export const getOrganizationTrees = () => api.get('/admin/organization-trees')
 export const previewOrganizationTreeImport = (data) => api.post('/admin/organization-trees/import/preview', data)
 export const applyOrganizationTreeImport = (data) => api.post('/admin/organization-trees/import/apply', data)
@@ -102,7 +90,6 @@ export const previewRuntimeMigrationImport = (bundle, options = {}) =>
 export const importRuntimeMigrationBundle = (bundle, options = {}) =>
   api.post('/runtime-migration/import', { bundle, ...options })
 export const createRuntimeMigrationBackup = () => api.post('/runtime-migration/backup')
-export const getRuntimeMigrationBackups = () => api.get('/runtime-migration/backups')
 
 export const getDataSources = () => api.get('/datasources')
 export const createDataSource = (data) => api.post('/datasources', data)
@@ -136,11 +123,9 @@ export const parseFeishuUrl = (url) => api.post('/feishu-sync/parse-url', { url 
 export const previewFeishuSchema = (data) => api.post('/feishu-sync/schema-preview', data)
 export const getFeishuSyncLogs = (configId, limit = 'all') => api.get(`/feishu-sync/logs/${configId}?limit=${limit}`)
 export const getAllFeishuSyncLogs = (limit = 'all') => api.get(`/feishu-sync/logs?limit=${limit}`)
-export const getFeishuSyncLogStats = () => api.get('/feishu-sync/logs/stats')
 export const clearFeishuSyncLogs = (configId) => api.post(`/feishu-sync/logs/${configId}/clear`)
 export const clearAllFeishuSyncLogs = () => api.post('/feishu-sync/logs/clear')
 
-export const getBookshelfHealth = () => api.get('/bookshelves/health')
 export const getBookshelfDatasets = (params = {}) => api.get('/bookshelves/datasets', { params })
 export const createBookshelfDataset = async (data) => {
   try {
@@ -309,6 +294,5 @@ export const clearSmartAskReportHistory = () => api.delete('/smart-chat/report-h
 export const confirmByBoss = (payload) => api.post('/smart-chat/confirm-by-boss', payload)
 export const confirmByBossStream = (payload, signal, onEvent) =>
   sendSseRequest('/api/smart-chat/confirm-by-boss/stream', payload, signal, onEvent)
-export const getVannaStatus = () => api.get('/bookshelves/health')
 
 export default api

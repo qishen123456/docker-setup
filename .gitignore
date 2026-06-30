@@ -32,10 +32,25 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Docker bind-mount runtime data (DO NOT delete these directories; they are mounted into containers)
+# - logs/          : feishu sync logs + fallback system logs
+# - backend/logs/  : backend fallback system logs
+# - backend/data/  : agent_registry.json + dataset_dimension_profiles.json
+# - config/        : runtime JSON configs (already protected below)
+# - backups/       : runtime backups
+# - backend/imports/: import bundles
+# They are gitignored so generated files don't get committed, but the directories must exist.
 logs/
+backend/logs/
+backend/data/
 diagnostics/
 backups/
 backend/imports/*_backup_*.json
+
+# Generated test artifacts
+config/smartask_test_results_*.json
+config/smartask_test_report_*.md
 
 # Env files
 .env
@@ -58,6 +73,9 @@ temp/
 # Chroma / vector store local data
 chroma_db/
 backend/chroma_db_source_*/
+
+# Dataset Copilot generated payloads
+backend/dataset_copilot/output/*.json
 
 # Secrets (only ignore known single-file secrets; do NOT ignore /config folder)
 config.json
@@ -188,14 +206,12 @@ backend/check_tables.py
 backend/check_table_structure.py
 backend/create_angel_table.py
 backend/drop_angel_table.py
-backend/dataset_dimension_profiles.py
 backend/fill_syyb_dataset.py
 backend/init_smart_training.py
 backend/update_dataset_config.py
 backend/update_dataset_content.py
 backend/test_*.py
 backend/requirements_utf8.txt
-backend/verify_deployment.py
 backend/*.log
 
 # Frontend legacy views (no active route)

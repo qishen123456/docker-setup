@@ -236,8 +236,8 @@ doctor.ps1                   # 用户机诊断包入口
 reset.ps1                    # 重启/重建/清空数据入口
 backend/Dockerfile           # 后端镜像（CMD: python bootstrap.py，同时复制 scripts/ 供容器内测试）
 backend/bootstrap.py         # 容器启动引导：迁移 + 首次数据导入
-backend/export_runtime_config.py   # 导出 config/*.json 为 runtime bundle
-backend/import_runtime_config.py   # 幂等导入 runtime bundle
+scripts/export_runtime_config.py   # 导出 config/*.json 为 runtime bundle
+scripts/import_runtime_config.py   # 幂等导入 runtime bundle
 backend/migrations/*.sql     # PostgreSQL schema 迁移
 backend/imports/*.json       # 元数据 / 业务数据快照（首次导入）
 scripts/integration_test.py  # 部署后真实接口集成测试（deploy/update 可在容器内执行）

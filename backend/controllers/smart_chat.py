@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ask_flow import ask_flow_controller
 from ask_flow.contracts import AskRequest, ConfirmRequest
-from datasource_router import router as legacy_router
 import dataset_report_config as drc
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
@@ -1057,34 +1056,3 @@ def confirm_by_boss_stream():
     response.headers["X-Accel-Buffering"] = "no"
     return response
 
-
-@smart_chat_bp.route("/api/data-sources", methods=["GET"])
-def list_data_sources():
-    try:
-        sources = []
-        for ds_id, config in legacy_router.data_sources.items():
-            sources.append(
-                {
-                    "id": ds_id,
-                    "name": config["name"],
-                    "type": config["type"],
-                    "keywords": legacy_router.keywords.get(ds_id, []),
-                }
-            )
-        return jsonify({"data_sources": sources, "total": len(sources)})
-    except Exception as exc:
-        return jsonify({"error": f"list data sources failed: {exc}"}), 500
-
-
-@smart_chat_bp.route("/api/test-source-identification", methods=["POST"])
-def test_source_identification():
-    try:
-        payload = request.get_json() or {}
-        question = (payload.get("question") or "").strip()
-        if not question:
-            return jsonify({"error": "Question cannot be empty."}), 400
-
-        route = ask_flow_controller.route_with_agent1(question)
-        return jsonify({"question": question, "route": route})
-    except Exception as exc:
-        return jsonify({"error": f"route test failed: {exc}"}), 500

@@ -1,8 +1,8 @@
 ---
 name: smartask-global-constraints
 description: >
-  SmartAsk 项目通用约束与踩坑记录。适用于任何涉及 SmartAsk 代码、配置、文档改动的任务。
-  核心约束：Docker 运行环境、UTF-8 中文编码、源码在 smartask/ 子目录。
+  SmartAsk 项目通用约束与踩坑记录。适用于任何涉及 SmartAsk 代码、配置、文档、清理改动的任务。
+  核心约束：Docker 运行环境、UTF-8 中文编码、源码在 smartask/ 子目录、代码清理时保护持久化目录。
 ---
 
 # SmartAsk 项目通用约束
@@ -144,11 +144,64 @@ description: >
 - `smartask/backend/feishu_sync_service.py`
 - `smartask/frontend/src/views/FeishuSync.vue`
 
-## 6. 本项目已封装的技能索引
+## 6. 代码清理安全守则
+
+基于 `docs/code_cleanup_candidates.md` 进行清理时，必须区分 **「可删除的运行时产物」** 和 **「必须保留的 Docker bind-mount 持久化数据」**，不要把后者物理删除。
+
+### 6.1 必须保留的持久化目录（DO NOT DELETE）
+
+这些目录被 `docker-compose.yml` bind mount 进容器，或代码运行时会写入业务数据。它们可以被 `.gitignore`，但工作区目录必须存在：
+
+| 目录 | 用途 | 删除后果 |
+|---|---|---|
+| `config/` | 运行态 JSON 配置（AI 模型、数据源、飞书同步、权限、功能开关等） | 所有配置丢失 |
+| `logs/` | 飞书同步日志 `feishu_sync_*.log`、系统日志 fallback | 飞书同步历史日志消失 |
+| `backend/logs/` | 后端系统日志 fallback | 系统日志 fallback 丢失 |
+| `backend/data/` | `agent_registry.json`、`dataset_dimension_profiles.json` | 智能体配置/维度画像丢失或回退到默认 |
+| `backups/` | 运行态备份包 | 备份丢失 |
+| `backend/imports/` | 首次导入的元数据/业务数据 bundle | 新环境首次部署无法自动导入 |
+
+### 6.2 可以删除的运行时产物
+
+这些只影响构建/缓存，删除后可重建：
+
+- `frontend/dist/`
+- `frontend/node_modules/`
+- `frontend/.vite/`、`frontend/.vite-cache/`、`frontend/node_modules/.vite-smartask/`
+- `backend/.pytest_cache/`
+- `backend/**/__pycache__/`
+- 单个 `*.log` 文件
+
+### 6.3 清理后验证 checklist
+
+- `docker compose build` 成功
+- `docker compose up -d` 后三服务 healthy
+- 访问 `/api/health` 返回 200
+- 打开各管理配置页面，确认列表能加载、保存不报错
+- 飞书同步页面「统一运行日志」tab 能正常显示（如已删除历史日志，后续同步会重新生成）
+
+### 6.4 踩坑记录：误删 `logs/` 导致飞书同步日志清空
+
+**现象**：按 `code_cleanup_candidates.md` 清理 safe 项后，飞书同步页面的「统一运行日志」显示为空，历史同步记录丢失。
+
+**根因**：飞书同步日志存在 `smartask/logs/feishu_sync_{config_id}.log` 文件中，清理时把 `logs/` 目录作为运行时产物整体删除了。
+
+**修复要点**：
+- 重建 `smartask/logs/` 和 `smartask/backend/logs/` 目录。
+- 在 `.gitignore` 中明确标注这些目录为 Docker bind-mount 持久化数据。
+- 后续清理时只删单个 `*.log` 文件或真正的构建/缓存产物，不要删目录。
+
+**相关文件**：
+- `smartask/docker-compose.yml`
+- `smartask/.gitignore`
+- `smartask/backend/feishu_sync_logger.py`
+- `smartask/backend/system_log_store.py`
+
+## 7. 本项目已封装的技能索引
 
 处理对应主题时，优先加载相关 SKILL，不要把细节重新推理一遍：
 
-- `smartask-global-constraints`（本技能）：通用约束、Docker/UTF-8、上述踩坑记录。
+- `smartask-global-constraints`（本技能）：通用约束、Docker/UTF-8、代码清理安全守则、上述踩坑记录。
 - `smartask-ranking-debug`：排名/TopN 类问数效果异常排查。
 - `smartask-feishu-sync-ops`：飞书同步配置、手动同步、全量清表、链接不生效等运维排查。
 - `smartask-runtime-migration`：运行态配置导入导出、backup_all、部署后配置恢复。

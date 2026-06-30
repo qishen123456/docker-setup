@@ -170,7 +170,9 @@
 | `frontend/node_modules/` | 依赖目录 | Gitignored。 | safe | 从工作区删除 |
 | `backend/.pytest_cache/` | 缓存 | Gitignored。 | safe | 从工作区删除 |
 | `backend/**/__pycache__/` | 缓存 | Gitignored。 | safe | 从工作区删除 |
-| `logs/` | 日志 | Gitignored。 | safe | 从工作区删除 |
+| `logs/` | 日志 | Gitignored；**飞书同步日志和系统日志 fallback 写入此处，属于运行时持久化数据**。 | verify | 保留目录，仅删除过期单日志文件 |
+| `backend/logs/` | 日志 | Gitignored；**后端系统日志 fallback 写入此处**。 | verify | 保留目录 |
+| `backend/data/` | 运行时数据 | `agent_registry.json`、`dataset_dimension_profiles.json` 写入此处。 | verify | 保留目录及文件 |
 | `backups/` | 备份 | Gitignored；可保留近期备份。 | verify | 制定保留策略后清理旧备份 |
 
 ---
@@ -202,7 +204,7 @@
 3. **处理 verify 项**：将诊断/批量测试脚本统一移到 `tools/` 或 `scripts/archive/`，不要散落在 `backend/` 根目录。
 4. **文档合并**：决定 `docs/` 与 `config/` 中重复文档的权威版本。
 5. **依赖清理**：移除 `plotly`、`typing-inspection` 并验证容器构建与运行。
-6. **删除工作区运行时产物**：`frontend/dist/`、`frontend/node_modules/`、`__pycache__/`、`.pytest_cache/`、`logs/`、过期 `backups/`。
+6. **删除工作区运行时产物**：`frontend/dist/`、`frontend/node_modules/`、`__pycache__/`、`.pytest_cache/`、过期 `backups/`。注意：`logs/` 目录本身不能删除（飞书同步日志持久化在此），仅可删除过期单日志文件。
 
 ---
 
