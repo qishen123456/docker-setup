@@ -57,9 +57,33 @@ description: >
 - 先确认 `smartask/AGENTS.md`（如果存在）和所在子目录的 `AGENTS.md`。
 - 先 grep 定位所有调用点，再动手改接口。
 - 优先使用 `Agent(subagent_type="explore")` 做跨文件排查，避免漏掉触发路径。
-- 改动后必须运行对应构建/测试验证：
-  - 前端：`npm run build`
-  - 后端：`python -m pytest tests/ -q`（如后端有 pytest）
+- 改动后必须运行对应构建/测试验证。本项目以 **Docker 运行**为主，验证方式分两种：
+
+### 4.1 Docker 运行环境（推荐 / 生产一致）
+
+- **只改前端**：前端 Dockerfile 已内置 `pnpm run build`，宿主机无需手动 build，直接重建镜像：
+  ```bash
+  cd smartask
+  docker compose up -d --build frontend
+  ```
+  部署后让用户 **Ctrl+F5 强刷** 或清空缓存再验证。
+- **只改后端**：
+  - 想让改动生效：
+    ```bash
+    cd smartask
+    docker compose up -d --build backend
+    ```
+  - 只想在容器内跑测试（不重建镜像）：
+    ```bash
+    docker exec -it smartask-backend python -m pytest tests/ -q
+    ```
+
+### 4.2 Windows 本地开发环境
+
+仅参考 `README_WINDOWS.md` 在本地启服务时使用：
+
+- 前端：`npm run build`
+- 后端：`python -m pytest tests/ -q`（如后端有 pytest）
 
 ## 5. 踩坑记录
 
@@ -119,3 +143,16 @@ description: >
 - `smartask/backend/feishu_sync_manager.py`
 - `smartask/backend/feishu_sync_service.py`
 - `smartask/frontend/src/views/FeishuSync.vue`
+
+## 6. 本项目已封装的技能索引
+
+处理对应主题时，优先加载相关 SKILL，不要把细节重新推理一遍：
+
+- `smartask-global-constraints`（本技能）：通用约束、Docker/UTF-8、上述踩坑记录。
+- `smartask-ranking-debug`：排名/TopN 类问数效果异常排查。
+- `smartask-feishu-sync-ops`：飞书同步配置、手动同步、全量清表、链接不生效等运维排查。
+- `smartask-runtime-migration`：运行态配置导入导出、backup_all、部署后配置恢复。
+- `smartask-skill-maintenance`：代码改动后判断并更新对应 SKILL。
+- `smartask-skill-usage-guide`：SKILL 使用与维护操作指引（人类用户和 AI 都读）。
+
+当用户明确提到某技能名称或对应主题时，先读取对应 SKILL.md，再执行操作。
