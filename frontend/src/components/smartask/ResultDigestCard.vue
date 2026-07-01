@@ -615,6 +615,8 @@ const normalizedRows = computed(() => rows.value.map((row) => {
 }).filter(item => item.name))
 
 const isComparisonQuestion = computed(() => resolvedMemberNames.value.length >= 2 || /对比|比较|差异|哪个|谁更|分别|各自|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
+// 明确对比词：只有问题文本里出现这些词，才展示对比模板/文案
+const isExplicitComparisonQuestion = computed(() => /对比|比较|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
 const asksLowest = computed(() => /最低|最差|不好|垫底|落后|风险/.test(questionText.value))
 const asksRepresentative = computed(() => /代表处/.test(questionText.value))
 const asksBusinessPerson = computed(() => /业务代表|业务员/.test(questionText.value))
@@ -625,14 +627,11 @@ const rowHasChildren = (row, items = normalizedRows.value) => (
 )
 const isMultiChildCollectionMode = computed(() => {
   if (!isCollectionAnswerMode.value || isComparisonDigest.value || rankSides.value === 'both') return false
-  if (specScope.value?.focusNode && resolvedMemberNames.value.length <= 1) return false
   const rows = secondaryDrillRows.value
   if (rows.length < 2) return false
   const parents = [...new Set(rows.map(item => cleanText(item?.parent)).filter(Boolean))]
-  if (!parents.length) return false
-  const leafRows = rows.filter(item => !rowHasChildren(item))
-  if (!leafRows.length || leafRows.length !== rows.length) return false
-  return resolvedMemberNames.value.length !== 1
+  // 有明确父级就按 parent 分组展示；标签仍按全局 rate 排名计算
+  return parents.length >= 1
 })
 const reportConfig = computed(() => (
   props.dataset?.report_config
@@ -866,6 +865,18 @@ const primaryKpiCards = computed(() => {
       isLeader: index === 0,
       tone: index === 0 ? 'good' : 'neutral',
     }))
+  }
+  // 末端节点查询：展示个人核心指标，不走集合模式
+  if (isLeafFocus.value) {
+    const focus = singleFocusRow.value
+    if (focus) {
+      return [
+        focus.taskText ? { key: 'task', label: '总任务金额', value: focus.taskText, hint: '年度目标总量', tone: 'neutral' } : null,
+        focus.actualText ? { key: 'actual', label: '年度开单金额', value: focus.actualText, hint: '当前已完成金额', tone: 'neutral' } : null,
+        focus.rateText ? { key: 'rate', label: '达成率', value: focus.rateText, hint: '整体推进进度', tone: metricTone('达成率', focus.rateText) } : null,
+        focus.remainText ? { key: 'remain', label: '剩余任务金额', value: focus.remainText, hint: '后续需推进缺口', tone: 'danger' } : null,
+      ].filter(Boolean)
+    }
   }
   if (isCollectionAnswerMode.value) {
     const collectionRows = rankedCollectionRows.value
@@ -1426,7 +1437,11 @@ const comparisonDigestRows = computed(() => {
   return parsedComparisonRows.value
 })
 
-const isComparisonDigest = computed(() => comparisonDigestRows.value.length >= 2)
+// 明确对比才走对比逻辑：必须问题文本含对比词，且返回节点不少于 2 个
+const isComparisonDigest = computed(() => (
+  comparisonDigestRows.value.length >= 2
+  && isExplicitComparisonQuestion.value
+))
 const showComparisonDigest = computed(() => isComparisonDigest.value && !isRankingAnswerMode.value)
 
 const comparisonParentNames = computed(() => {
@@ -1695,7 +1710,8 @@ const expectedDetailLevel = computed(() => {
 })
 
 const secondaryDrillAllRows = computed(() => {
-  const isComparisonScope = comparisonDigestRows.value.length >= 2
+  // ranking 模式统一走管理层层级列表，不要误入对比作用域
+  const isComparisonScope = comparisonDigestRows.value.length >= 2 && !isRankingAnswerMode.value
   if (isComparisonScope && !comparisonDrillRows.value.length && !isRankingQuestion.value) return []
   if (!isComparisonScope && isLeafFocus.value && !focusDrillRows.value.length) return []
   const source = isComparisonScope && comparisonDrillRows.value.length
@@ -1789,7 +1805,8 @@ const secondaryDrillGroups = computed(() => {
     }]
   }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
-  const shouldGroup = !explicitRequestedRankLimit.value && comparisonParentNames.value.length >= 2 && parents.length >= 1
+  // 有明确父级就按 parent 分组展示，与 isMultiChildCollectionMode 保持一致
+  const shouldGroup = parents.length >= 1
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
 
   const parentOrder = comparisonParentNames.value
@@ -1922,9 +1939,16 @@ const secondaryBarWidth = (row) => {
 }
 
 const secondaryRelativeTier = (row) => {
-  const rows = (isRankingQuestion.value ? rankedCollectionRows.value : secondaryDrillAllRows.value)
-    .filter(item => secondaryMetricValue(item) !== null && secondaryMetricValue(item) !== undefined)
-    .sort((left, right) => (secondaryMetricValue(right) ?? -Infinity) - (secondaryMetricValue(left) ?? -Infinity))
+  const rowRate = toNumber(row?.rate)
+  // 0% 完成率不可能是领先/稳定，直接判为压力
+  if (rowRate === 0) return 'pressure'
+
+  // 标签统一按全局达成率（rate）排名，不按当前 ranking 指标或组内重算
+  const sourceRows = isRankingQuestion.value ? rankedCollectionRows.value : secondaryDrillAllRows.value
+  const rows = sourceRows
+    .filter(item => toNumber(item?.rate) !== null)
+    .sort((left, right) => (toNumber(right?.rate) ?? -Infinity) - (toNumber(left?.rate) ?? -Infinity))
+
   const index = rows.findIndex(item => (
     item.name === row?.name &&
     item.parent === row?.parent &&

@@ -346,5 +346,64 @@ class QueryIntentMetricTest(unittest.TestCase):
         self.assertIn("LIMIT 6", sql)
 
 
+    def test_city_branch_overview_is_ranking_all_nodes(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("城市分公司的业绩", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "城市分公司")
+        self.assertEqual(intent["top_n"], 0)
+        self.assertEqual(intent["sort_metric_key"], "rate")
+        self.assertTrue(intent.get("_level_overview"))
+
+    def test_branch_overview_is_ranking_all_nodes(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("分公司的业绩", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertEqual(intent["top_n"], 0)
+
+    def test_level_only_terms_are_not_org_subject_questions(self):
+        service = self._service()
+
+        self.assertFalse(service._looks_like_org_subject_question("城市分公司的业绩"))
+        self.assertFalse(service._looks_like_org_subject_question("分公司业绩"))
+        self.assertFalse(service._looks_like_org_subject_question("业务部业绩"))
+
+    def test_specific_node_is_still_org_subject_question(self):
+        service = self._service()
+
+        self.assertTrue(service._looks_like_org_subject_question("郑州城市公司业绩"))
+        self.assertTrue(service._looks_like_org_subject_question("江浙沪分公司业绩"))
+
+    def test_consumer_sql_default_branch_filters_by_target_level(self):
+        service = self._service()
+        context = {
+            "dataset": {
+                "dataset_code": "consumer_business_standard_v1",
+                "dataset_name": "消费者事业部",
+            },
+            "query_intent": {
+                "intent": "unknown",
+                "target_level": "城市分公司",
+            },
+            "data_dictionary": [{"jsonb_key": "城市分公司"}],
+            "resolved_entities": {"all_members": [], "entities": []},
+        }
+
+        sql = service._build_consumer_business_sql("城市分公司", context)
+
+        self.assertIn("WHERE 层级 = '城市分公司'", sql)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -592,6 +592,13 @@ LIMIT 10000
         }
 
         def resolve_target_level_from_text() -> str:
+            # 优先识别"节点 + 的 + 子层级"结构，避免"江浙沪分公司的城市分公司"被解析成 target_level="分公司"
+            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+            level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
+            child_level_match = re.search(rf"(?:的|之下|下面|下属)\s*({level_pattern})\b", text)
+            if child_level_match:
+                return child_level_match.group(1)
+
             aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
             matches = []
             for level, level_aliases in aliases.items():
@@ -786,6 +793,38 @@ LIMIT 10000
                     "matched_triggers": ["aggregate"],
                 })
                 return intent
+
+        # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）识别为下钻
+        resolved_names = self._resolved_entity_names(context)
+        has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
+        if (
+            resolved_names
+            and not filter_problem
+            and not has_ranking_token
+            and intent.get("intent") == "unknown"
+        ):
+            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+            aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
+            target_aliases = {target_level} | set(str(item) for item in (aliases.get(target_level) or []) if item) if target_level else set()
+            for name in resolved_names:
+                if not name or name in level_like_values:
+                    continue
+                # 节点名本身已经是目标层级实例的（如"业务代表靳锋"中的"靳锋"若 endswith 业务代表），不应视为下钻
+                if target_aliases and any(name.endswith(alias) for alias in target_aliases):
+                    continue
+                # 只有当问题文本中明确出现"节点名 + 目标子层级"结构时才下钻
+                # 例："江浙沪分公司的城市分公司" -> 节点名"江浙沪分公司" + "城市分公司"
+                # 直接从文本中匹配节点名后的层级词，不依赖 resolve_target_level_from_text 的结果
+                level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
+                match = re.search(rf"{re.escape(name)}(?:的|之下|下面|下属)?\s*({level_pattern})", text)
+                if match:
+                    intent.update({
+                        "intent": "drilldown",
+                        "target_level": match.group(1),
+                        "output_mode": "children_first",
+                        "matched_triggers": ["entity_with_target_level"],
+                    })
+                    return intent
 
         # Comparison intent: A 超过/大于/小于/等于 B (B is not a pure number)
         # 1) Symbol comparison (e.g. A > B, A >= B)
@@ -1097,6 +1136,47 @@ LIMIT 10000
         if any(token in text for token in extra_ranking_tokens):
             matched_triggers.append("extra_sort")
         if not matched_triggers:
+            # 层级 Overview：X层级 + 业绩/情况，无数值/对比/排名/聚合关键词 → 按 ranking/top_n=0 返回全部
+            is_level_overview = (
+                target_level
+                and re.search(r"(?:业绩|表现|情况|咋样|怎样|如何)", text)
+                and not filter_problem
+                and not drilldown_problem
+                and not asks_aggregate
+            )
+            # 如果 resolved 了具体节点，且 target_level 只是该节点名的一部分（如"江浙沪分公司业绩"），
+            # 则不把它当作纯层级 Overview，继续后续规则处理。
+            if is_level_overview:
+                resolved_names = self._resolved_entity_names(context)
+                if resolved_names:
+                    level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+                    target_aliases = {target_level} | set(str(item) for item in (ranking_policy.get("targetLevelAliases", {}).get(target_level) or []) if item)
+                    if any(
+                        name and name not in level_like_values
+                        and any(name.endswith(alias) for alias in target_aliases)
+                        for name in resolved_names
+                    ):
+                        is_level_overview = False
+
+            if is_level_overview:
+                config_metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
+                default_metric = next(
+                    (item for item in config_metrics if str(item.get("key") or "") == "rate"),
+                    None,
+                ) or {}
+                intent.update({
+                    "intent": "ranking",
+                    "target_level": target_level,
+                    "top_n": 0,
+                    "sort_metric_key": default_metric.get("key") or "rate",
+                    "sort_metric_column": default_metric.get("column") or default_metric.get("label") or "达成率",
+                    "direction": "desc",
+                    "rank_sides": "",
+                    "output_mode": ranking_policy.get("outputMode") or "topn_only",
+                    "matched_triggers": ["level_overview"],
+                    "_level_overview": True,
+                })
+                return intent
             if target_level:
                 intent["target_level"] = target_level
             return intent
@@ -6600,6 +6680,10 @@ WHERE {root_clause}节点名称 IN ({quoted_entities})
         elif generic_level_only and intent_target_level:
             scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
+        # 兜底：即使识别规则没命中，只要 target_level 明确，默认 SQL 也只返回该层级
+        if not scope_filter and intent_target_level:
+            scope_filter = f"WHERE 层级 = '{intent_target_level}'"
+
         intent_is_comparison = query_intent.get("intent") == "comparison"
         intent_is_aggregate = query_intent.get("intent") == "aggregate"
 
@@ -7615,6 +7699,12 @@ Agent1 路由结果：
         text = str(question or "").strip()
         if not text:
             return False
+        # 纯层级词（如"城市分公司"）+ 业绩/情况，不应走主体追问，应直接按层级 Overview 处理
+        level_only_terms = {"分公司", "代表处", "业务部", "城市分公司", "城市公司", "事业部", "业务代表", "业务员"}
+        stripped = re.sub(r"^(?:看下|看一下|查下|查一下|查询|看看|请看下|请查下)", "", text)
+        stripped = re.sub(r"(?:的)?(?:业绩|表现|情况|咋样|怎样|如何|咋样了|怎样了|如何了)$", "", stripped).strip("，,、 的")
+        if stripped in level_only_terms:
+            return False
         # 排名/TopN 类问题不应被当作组织主体追问处理，否则数量词（前3、前三等）
         # 会在重写时被丢掉，导致 SQL 不限制行数、标题也失真。
         if re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I):
@@ -7628,6 +7718,12 @@ Agent1 路由结果：
             )
         )
         if has_numeric_threshold:
+            return False
+        # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）应直接走 drilldown 规则，
+        # 不要经过 Agent1 改写，避免子层级信息被丢失。
+        level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+        level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
+        if re.search(rf"[\u4e00-\u9fa5A-Za-z0-9（）()]{{2,}}(?:的|之下|下面|下属)?\s*({level_pattern})\s*$", text):
             return False
         has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
         has_spoken_style = bool(

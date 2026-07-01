@@ -1361,13 +1361,16 @@ def build_report_spec(
             answer_text = f"{extreme_label}的{compare_label}是 {ranked_nodes[0].get('name')}"
         else:
             answer_title = "排名结果"
-            answer_text = (
-                f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出前{rank_limit}和后{rank_limit}个{compare_label}的排序结果"
-                if rank_sides == "both" and ranked_nodes
-                else f"已按{sort_metric.get('label') or sort_metric.get('column') or '指标'}输出 {len(ranked_nodes)} 个{compare_label}的排序结果"
-                if ranked_nodes
-                else f"当前没有可排序的{compare_label}结果"
-            )
+            sort_label = sort_metric.get('label') or sort_metric.get('column') or '指标'
+            if rank_sides == "both" and ranked_nodes:
+                answer_text = f"已按{sort_label}输出前{rank_limit}和后{rank_limit}个{compare_label}的排序结果"
+            elif not ranked_nodes:
+                answer_text = f"当前没有可排序的{compare_label}结果"
+            elif query_intent.get("_level_overview"):
+                order_phrase = "从低到高" if low_first else "从高到低"
+                answer_text = f"共 {len(ranked_nodes)} 个{compare_label}，按{sort_label}{order_phrase}排序"
+            else:
+                answer_text = f"已按{sort_label}输出 {len(ranked_nodes)} 个{compare_label}的排序结果"
         answer_summary = {
             "mode": "ranking",
             "title": answer_title,
@@ -1383,17 +1386,22 @@ def build_report_spec(
             "bottomNames": [node.get("name") for node in bottom_nodes],
         }
     elif answer_mode == "drilldown" and not answer_summary:
+        focus_name = focus_node.get("name") if focus_node else ""
+        child_count = len(comparison_nodes)
+        is_leaf_focus = bool(focus_node) and not bool(focus_node.get("children"))
+        if is_leaf_focus:
+            answer_text = f"已定位到 {focus_name}，当前展示其个人业绩指标"
+        elif focus_node and comparison_nodes:
+            answer_text = f"已定位到 {focus_name}，当前展示其下一级 {child_count} 个{compare_label}"
+        else:
+            answer_text = f"当前展示 {child_count} 个{compare_label}下级节点"
         answer_summary = {
             "mode": "drilldown",
             "title": "下钻结果",
             "targetLevel": compare_label,
-            "focusNode": focus_node.get("name") if focus_node else "",
-            "childCount": len(comparison_nodes),
-            "text": (
-                f"已定位到 {focus_node.get('name')}，当前展示其下一级 {len(comparison_nodes)} 个{compare_label}"
-                if focus_node and comparison_nodes
-                else f"当前展示 {len(comparison_nodes)} 个{compare_label}下级节点"
-            ),
+            "focusNode": focus_name,
+            "childCount": child_count,
+            "text": answer_text,
         }
 
     # 单点最高/最低问题，默认把答案节点作为聚焦节点，让前端展示其下级明细

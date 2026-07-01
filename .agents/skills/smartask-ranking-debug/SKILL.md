@@ -1,10 +1,13 @@
 ---
 name: smartask-ranking-debug
 description: >
-  SmartAsk 排名/TopN 类问数效果异常时的快速排查与定位。
-  适用于：用户问「前N的业务承接人/业务部/分公司/代表处」等排名问题，
-  但返回行数不对、标题重复/截断、层级被覆盖、confirm 后结果失真等场景。
-  当用户反馈「问的是前三，但返回了全部」或「标题出现重复文本」时触发使用。
+  SmartAsk 排名/TopN/层级 Overview 类问数效果异常时的快速排查与定位。
+  适用于：用户问「前N的业务承接人/业务部/分公司/代表处」「X层级的业绩咋样」
+  「X节点下的Y层级」等问题，但返回行数不对、标题重复/截断、层级被覆盖、
+  层级 Overview 没走 ranking、前三问题误走 drilldown、0% 显示相对领先、
+  非对比问题出现「本次对比」文案等场景。
+  当用户反馈「问的是前三，但返回了全部」「标题出现重复文本」
+  「城市分公司的业绩咋样没走排名」「0% 怎么还相对领先」「没问对比怎么出现对比」时触发使用。
 ---
 
 # SmartAsk 排名类问题排查
@@ -18,7 +21,10 @@ description: >
 - 关键文件：
   - `backend/four_agent_ask.py` — 意图解析、SQL 生成、confirm 流程
   - `backend/dataset_report_config.py` — 默认 ranking policy 配置
+  - `backend/report_spec_builder.py` — 报告契约、answerSummary 文案
   - `backend/tests/test_ecommerce_filter_intent.py` — 电商承接人相关回归测试
+  - `backend/tests/test_query_intent_metrics.py` — 消费者/商用意图识别回归测试
+  - `frontend/src/components/smartask/ResultDigestCard.vue` — 结果展示、分组、标签、对比模板
   - `config/confirmed_behaviors_baseline.md` — 已确认效果基线
 
 ## 快速复现脚本
@@ -91,6 +97,49 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 常见坑：
 - `effective_question` 被 Agent1 重写后丢失原问题关键词
 - `route.refined_query` 变成 `XX的业绩`，与 `original_question` 拼接后覆盖 ranking 语义
+
+### 5. 层级 Overview 没走 ranking？
+
+代表问题：
+- `城市分公司的业绩`
+- `业务部的业绩情况`
+
+预期：
+- `intent=ranking`，`top_n=0`
+- `answerMode=ranking`
+
+若变成 `drilldown`/`filter`/`comparison`：
+- 检查 `_resolve_query_intent` 是否先命中了 filter 条件（如数值阈值、范围）
+- 检查是否被 drilldown 规则（`具体节点 + 目标子层级`）提前拦截
+- 检查 `_looks_like_org_subject_question` 是否把问题重写成普通详情
+
+### 6. 排名问题误走 drilldown？
+
+代表问题：
+- `看下前三的城市分公司`
+- `前5的业务代表`
+
+预期：
+- `intent=ranking`，`top_n` 正确
+
+若 `answerMode=drilldown`：
+- 检查 `_resolved_entity_names(context)` 是否被 LLM 解析出错误实体（如把“前三的城市分公司”解析成多个分公司）
+- 检查“具体节点+目标子层级” drilldown 规则是否在 ranking 词前拦截
+- 修复：确保该规则跳过含排名/TopN 词的问题
+
+### 7. 0% 显示「相对领先」？
+
+排查：
+- `ResultDigestCard.vue` 中 `secondaryRelativeTier` 是否按全局 `rate` 排序
+- 是否误按 ranking 指标（如任务金额、开单金额）排序分层
+- 0% 是否被特殊处理为 `pressure`
+
+### 8. 非对比问题出现「本次对比」文案？
+
+排查：
+- `isComparisonDigest` 是否只基于返回行数（`comparisonDigestRows.length >= 2`）判断
+- `showComparisonDigest` 是否同时要求问题文本含明确对比词
+- 前端收紧后，只有 `对比/比较/差异/和…比/跟…比/与…比/vs` 才走对比模板
 
 ## 修复后必做
 
