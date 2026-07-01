@@ -136,7 +136,20 @@ const compactHistoryItemForLocal = (item = {}) => {
   if (Array.isArray(result.dataset_results)) {
     result.dataset_results = result.dataset_results.map(compactDatasetResult)
   }
-  if (Array.isArray(result.logs)) result.logs = []
+  if (Array.isArray(result.logs)) {
+    // 保留含 SQL 的关键日志，便于历史详情里查看 SQL；其余日志清空节省空间。
+    result.logs = result.logs
+      .filter(log => log && (log.sql || log.sqlTitle || String(log.key || '').includes('sql') || String(log.kind || '').includes('sql')))
+      .slice(-10)
+      .map((log) => {
+        const next = { ...log }
+        if (Array.isArray(next.detailLines)) {
+          next.detailLines = next.detailLines.map(line => compactString(line, 2000))
+        }
+        if (next.summary) next.summary = compactString(next.summary, 2000)
+        return next
+      })
+  }
   if (typeof result.report === 'string') result.report = compactString(result.report)
   if (typeof result.answer === 'string') result.answer = compactString(result.answer)
   if (Array.isArray(snapshot.messages)) {

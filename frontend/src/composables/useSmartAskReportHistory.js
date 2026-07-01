@@ -32,8 +32,7 @@ export const useSmartAskReportHistory = ({
   }
 
   const createHistoryId = () => {
-    const sessionId = session.state.conversationSessionId || session.state.currentSessionId
-    if (sessionId) return `history-report-${sessionId}`
+    // 每条历史记录必须独立，不能复用会话 ID，否则同一会话下多次问数会互相覆盖。
     if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
       return `history-report-${window.crypto.randomUUID()}`
     }

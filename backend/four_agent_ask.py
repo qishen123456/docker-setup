@@ -691,13 +691,17 @@ LIMIT 10000
         _metric_pattern = re.compile(
             r"(年度开单金额|年度开单|开单金额|开单|完成金额|完成|总任务金额|总任务|任务金额|任务|达成率|完成率|剩余任务金额|剩余任务|缺口)"
             r"\s*(大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|等于|>=|<=|>|<|=)"
-            r"\s*(\d+(?:\.\d+)?)\s*%?"
+            r"\s*(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?"
         )
         for m in _metric_pattern.finditer(text):
             col = _metric_name_map.get(m.group(1), "")
             op = _metric_op_map.get(m.group(2), ">=" if any(t in m.group(2) for t in ["大", "高", "超"]) else "<=")
             if col:
-                filter_conditions.append({"column": col, "operator": op, "value": float(m.group(3))})
+                # intent 层保留用户输入的原始数值，单位换算推迟到 SQL 构建阶段，
+                # 保持 intent 测试与 SQL 测试的数值口径一致。
+                raw_value = float(m.group(3))
+                unit = m.group(4) or ""
+                filter_conditions.append({"column": col, "operator": op, "value": raw_value, "unit": unit})
         # 达成率范围也作为 between 条件加入
         for m in re.finditer(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text):
             filter_conditions.append({"column": "达成率", "operator": "between", "value": float(m.group(1)), "value2": float(m.group(2))})
@@ -911,7 +915,7 @@ LIMIT 10000
 
         # 金额类指标在 X 到 Y 之间
         amount_range_match = re.search(
-            r"(年度开单金额|开单金额|总任务金额|年度目标营收|任务金额|剩余任务金额).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间",
+            r"(年度开单金额|开单金额|总任务金额|年度目标营收|任务金额|剩余任务金额).*?(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?\s*之间",
             text,
         )
         if amount_range_match:
@@ -921,6 +925,7 @@ LIMIT 10000
                 "总任务金额": "task", "年度目标营收": "task", "任务金额": "task",
                 "剩余任务金额": "remain",
             }
+            # intent 层保留原始数值，单位换算推迟到 SQL 构建阶段
             intent.update({
                 "intent": "filter",
                 "target_level": target_level,
@@ -928,7 +933,7 @@ LIMIT 10000
                 "filter_metric_column": metric_name,
                 "filter_operator": "between",
                 "filter_value": float(amount_range_match.group(2)),
-                "filter_value2": float(amount_range_match.group(3)),
+                "filter_value2": float(amount_range_match.group(5)),
                 "direction": "asc",
                 "output_mode": "matched_nodes_first",
                 "matched_triggers": ["filter_amount_range"],
@@ -1984,6 +1989,12 @@ LIMIT 10000
                 or filter_metric_key == "rate"
             )
             threshold_text = self._format_metric(filter_value, "%" if is_rate_metric else "")
+            # 金额类阈值按题干单位展示，避免“低于500”这种歧义
+            if not is_rate_metric and filter_value is not None and question:
+                if "亿" in question and float(filter_value) < 10000:
+                    threshold_text = f"{int(filter_value)}亿" if float(filter_value) == int(filter_value) else f"{filter_value}亿"
+                elif "万" in question and float(filter_value) < 10000:
+                    threshold_text = f"{int(filter_value)}万" if float(filter_value) == int(filter_value) else f"{filter_value}万"
             scoped_rows = [
                 row for row in valid_rows
                 if not target_level or normalized_text(row, level_col) == target_level
@@ -5262,6 +5273,17 @@ LIMIT 10000
         filter_value = query_intent.get("filter_value")
         allowed_filter_columns = {"总任务金额", "年度开单金额", "达成率", "剩余任务金额"}
 
+        def normalize_syyb_threshold_value(raw: float, col: str) -> float:
+            # 与 _build_ecommerce_sql 保持一致：intent 层保留原始值，SQL 阶段根据问题中的单位换算
+            if col == "达成率":
+                return raw
+            q = normalized_question
+            if "亿" in q and raw < 10000:
+                return raw * 100000000
+            if "万" in q and raw < 10000:
+                return raw * 10000
+            return raw
+
         syyb_metric_map = {
             "总任务金额": "总任务金额",
             "总任务": "总任务金额",
@@ -5328,12 +5350,14 @@ LIMIT 200
                     if col not in allowed_filter_columns:
                         continue
                     try:
-                        val_sql = f"{float(val):g}"
+                        scaled_val = normalize_syyb_threshold_value(float(val), col)
+                        val_sql = f"{scaled_val:g}"
                     except (TypeError, ValueError):
                         continue
                     if op == "between":
                         try:
-                            val2_sql = f"{float(val2):g}"
+                            scaled_val2 = normalize_syyb_threshold_value(float(val2), col) if val2 is not None else scaled_val
+                            val2_sql = f"{scaled_val2:g}"
                         except (TypeError, ValueError):
                             val2_sql = ""
                         if val2_sql:
@@ -5343,7 +5367,13 @@ LIMIT 200
                     else:
                         where_parts.append(f"{col} {op} {val_sql}")
                 if not where_parts:
-                    where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
+                    try:
+                        scaled_filter_value = normalize_syyb_threshold_value(float(filter_value), filter_metric_column)
+                        filter_value_sql = f"{scaled_filter_value:g}"
+                    except (TypeError, ValueError):
+                        filter_value_sql = ""
+                    if filter_value_sql:
+                        where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
                 if intent_target_level:
                     where_parts.insert(0, f"层级 = '{intent_target_level}'")
                 if "行业条线" in normalized_question:
@@ -6722,6 +6752,17 @@ WITH 字段提取 AS (
         }
         filter_level = filter_level_map.get(intent_target_level, "城市分公司" if city_level_requested else "")
 
+        def normalize_consumer_threshold_value(raw: float, col: str) -> float:
+            # 与 syyb/ecommerce 保持一致：intent 层保留原始值，SQL 阶段根据问题中的单位换算
+            if col == "达成率":
+                return raw
+            q = normalized_question
+            if "亿" in q and raw < 10000:
+                return raw * 100000000
+            if "万" in q and raw < 10000:
+                return raw * 10000
+            return raw
+
         # 消费者指标同义词（含 _万 后缀与组合口径），提前供过滤/聚合/对比复用
         consumer_metric_map = {
             "总实际_万": "年度开单金额",
@@ -6830,7 +6871,8 @@ WITH 字段提取 AS (
 
         if asks_threshold_filter:
             try:
-                filter_value_sql = f"{float(filter_value):g}"
+                scaled_filter_value = normalize_consumer_threshold_value(float(filter_value), filter_metric_column)
+                filter_value_sql = f"{scaled_filter_value:g}"
             except (TypeError, ValueError):
                 filter_value_sql = ""
             if filter_value_sql:
@@ -7576,6 +7618,16 @@ Agent1 路由结果：
         # 排名/TopN 类问题不应被当作组织主体追问处理，否则数量词（前3、前三等）
         # 会在重写时被丢掉，导致 SQL 不限制行数、标题也失真。
         if re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I):
+            return False
+        # 带数值阈值/单位（如小于500万、超过80%）的筛选问题，应走 filter 路径，
+        # 不要当成组织主体追问处理，避免过滤条件被 refined_query 覆盖掉。
+        has_numeric_threshold = bool(
+            re.search(
+                r"(?:大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|不足|等于|>=|<=|>|<)\s*(?:\d+(?:\.\d+)?)\s*(?:万|亿|%)?",
+                text,
+            )
+        )
+        if has_numeric_threshold:
             return False
         has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
         has_spoken_style = bool(

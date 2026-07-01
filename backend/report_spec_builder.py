@@ -1266,6 +1266,16 @@ def build_report_spec(
             filter_value = float(query_intent.get("filter_value"))
         except (TypeError, ValueError):
             filter_value = thresholds.get("officeRisk") if filter_operator in {"<", "<="} else None
+        # intent 层保留原始数值，report spec 阶段根据问题中的单位换算，与 SQL 层口径一致
+        is_rate_metric = (
+            (filter_metric or {}).get("format") == "percent"
+            or "率" in str((filter_metric or {}).get("label") or "")
+        )
+        if not is_rate_metric and filter_value is not None:
+            if "亿" in question and filter_value < 10000:
+                filter_value = filter_value * 100000000
+            elif "万" in question and filter_value < 10000:
+                filter_value = filter_value * 10000
 
         def filter_matches(node: Dict[str, Any]) -> bool:
             value = _row_value(node.get("raw") or {}, filter_metric)

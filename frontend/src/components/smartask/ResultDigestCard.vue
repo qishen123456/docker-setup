@@ -43,6 +43,9 @@
           <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
             <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
           </div>
+          <div v-if="isComparisonDigestLimited" class="sa-comparison-more-hint">
+            数据较多，仅展示达成率 Top {{ COMPARISON_TOP_N }}，还有 {{ comparisonTopRemainingCount }} 个{{ comparisonLevelLabel }}未展示，点击「查看详情」看完整结果。
+          </div>
         </div>
         <p v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</p>
       </div>
@@ -86,6 +89,9 @@
           </div>
           <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
         </div>
+      </div>
+      <div v-if="isComparisonDigestLimited" class="sa-comparison-more-hint">
+        数据较多，仅展示达成率 Top {{ COMPARISON_TOP_N }}，还有 {{ comparisonTopRemainingCount }} 个{{ comparisonLevelLabel }}未展示，点击「查看详情」看完整结果。
       </div>
     </div>
 
@@ -768,9 +774,7 @@ const balancedGridColumns = (count) => {
   if (!count || count <= 1) return 1
   if (count <= 4) return count
   if (count === 5 || count === 6) return 3
-  if (count <= 8) return 4
-  const approx = Math.round(Math.sqrt(count))
-  return Math.max(3, approx)
+  return 4
 }
 
 const balancedGridClass = (prefix, count) => `${prefix}-${count}`
@@ -1076,6 +1080,10 @@ const twoSidedRankRows = (items = []) => {
 }
 
 const rankedCollectionRows = computed(() => {
+  // filter 类问题优先使用和核心结论一致的数据源，避免数量口径不一致。
+  if (isFilterComparisonQuestion.value && filterComparisonRows.value.length) {
+    return filterComparisonRows.value
+  }
   const source = secondaryDrillRows.value.length
     ? secondaryDrillRows.value
     : managementLayerRows.value.length
@@ -1335,10 +1343,21 @@ const isFilterComparisonQuestion = computed(() => Boolean(
 
 const filterComparisonRows = computed(() => {
   if (!isFilterComparisonQuestion.value) return []
-  const scopedRows = normalizedRows.value
-    .filter(item => rowMatchesLevel(item, digestCompareLevel.value) && item.rate !== null)
-  return scopedRows.length >= 2
-    ? [...scopedRows].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+  const target = normalizeLevelHint(digestCompareLevel.value)
+  const all = normalizedRows.value.filter(item => item.rate !== null)
+  const strict = all.filter(item => rowMatchesLevel(item, digestCompareLevel.value))
+  if (strict.length >= 2) {
+    return [...strict].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+  }
+  // 严格匹配不足时，按 row.level 或 name 中的层级提示做模糊兜底，
+  // 避免后端 level 字段不规范导致核心结论和关键指标数量不一致。
+  const fallback = all.filter(item => {
+    const rowLevel = normalizeLevelHint(item.level)
+    const nameLevel = normalizeLevelHint(item.name)
+    return rowLevel === target || nameLevel === target
+  })
+  return fallback.length >= 2
+    ? [...fallback].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
     : []
 })
 
@@ -1429,6 +1448,8 @@ const rawRowText = (row) => Object.values(row?.raw || {})
 
 const rowMatchedParentName = (row, parentNames = []) => parentNames.find((parent) => {
   if (sameOrgName(row?.parent, parent)) return true
+  // 数据本身已有 parent 时，不再用 raw 文本做模糊匹配，避免历史记录/长文本里的公司名被错配为 parent。
+  if (cleanText(row?.parent)) return false
   const rawText = rawRowText(row)
   return rawText ? rawText.includes(parent) : false
 }) || ''
@@ -1445,9 +1466,27 @@ const comparisonLevelLabel = computed(() => {
   return '对象'
 })
 
-const visibleComparisonDigestRows = computed(() => {
-  return comparisonDigestRows.value
+const COMPARISON_TOP_N = 10
+const COMPARISON_TOP_THRESHOLD = 20
+
+const limitedComparisonDigestRows = computed(() => {
+  const rows = comparisonDigestRows.value
+  if (rows.length <= COMPARISON_TOP_THRESHOLD) return rows
+  return [...rows]
+    .filter(item => item.rate !== null)
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, COMPARISON_TOP_N)
 })
+
+const isComparisonDigestLimited = computed(() => (
+  comparisonDigestRows.value.length > COMPARISON_TOP_THRESHOLD
+))
+
+const comparisonTopRemainingCount = computed(() => (
+  Math.max(0, comparisonDigestRows.value.length - COMPARISON_TOP_N)
+))
+
+const visibleComparisonDigestRows = computed(() => limitedComparisonDigestRows.value)
 
 const comparisonGridClass = computed(() => balancedGridClass('is-count', visibleComparisonDigestRows.value.length))
 const comparisonGridStyle = computed(() => balancedGridStyle(visibleComparisonDigestRows.value.length))
@@ -1472,7 +1511,7 @@ const comparisonChartTitle = computed(() => {
 
 const comparisonChartRows = computed(() => {
   if (!showComparisonChart.value) return []
-  const rows = [...comparisonDigestRows.value].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
+  const rows = [...limitedComparisonDigestRows.value].sort((a, b) => (b.rate ?? -Infinity) - (a.rate ?? -Infinity))
   const maxRate = Math.max(...rows.map(item => item.rate || 0), 0)
   return rows.map((row) => ({
     ...row,
@@ -1629,7 +1668,8 @@ const comparisonDrillRows = computed(() => {
       item.parent &&
       parentNames.some(parent => sameOrgName(item.parent, parent)) &&
       !parentNames.some(parent => sameOrgName(item.name, parent)) &&
-      (!detailLevel || rowMatchesLevel(item, detailLevel))
+      // 严格匹配 detailLevel，避免层级关系混乱导致历史记录下错配父子。
+      (!detailLevel || item.level === detailLevel)
     ))
 })
 
@@ -3160,10 +3200,10 @@ const actionItems = computed(() => {
 }
 
 .sa-comparison-chart {
-  margin-top: 10px;
-  padding: 15px 16px 13px;
+  margin-top: 8px;
+  padding: 8px 10px 8px;
   border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 16px;
+  border-radius: 10px;
   background:
     linear-gradient(180deg, rgba(248, 246, 243, 0.96) 0%, rgba(255, 255, 255, 0.99) 100%);
 }
@@ -3177,7 +3217,7 @@ const actionItems = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .sa-comparison-chart-head strong {
@@ -3189,16 +3229,16 @@ const actionItems = computed(() => {
 
 .sa-comparison-chart-body {
   display: grid;
-  gap: 10px;
+  gap: 4px;
   position: relative;
 }
 
 .sa-comparison-chart-row {
   display: grid;
-  grid-template-columns: minmax(120px, 168px) minmax(0, 1fr) auto;
-  gap: 10px 14px;
+  grid-template-columns: minmax(96px, 132px) minmax(0, 1fr) auto;
+  gap: 6px 10px;
   align-items: center;
-  padding: 12px 0;
+  padding: 4px 0;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -3220,30 +3260,30 @@ const actionItems = computed(() => {
 .sa-comparison-chart-label {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   color: #111827;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .sa-comparison-chart-label strong {
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.3;
   font-weight: 800;
 }
 
 .sa-comparison-chart-label small {
   color: #9CA3AF;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.35;
   font-weight: 600;
 }
 
 .sa-comparison-chart-track {
   position: relative;
-  height: 14px;
-  border-radius: 8px;
+  height: 6px;
+  border-radius: 3px;
   overflow: hidden;
   background:
     linear-gradient(90deg, rgba(30, 30, 30, 0.05) 0%, rgba(30, 30, 30, 0.02) 100%);
@@ -3271,7 +3311,7 @@ const actionItems = computed(() => {
 
 .sa-comparison-chart-value {
   color: #111827;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   text-align: right;
   white-space: nowrap;
@@ -3306,6 +3346,13 @@ const actionItems = computed(() => {
   color: #C41E1A;
   font-size: 11px;
   font-weight: 700;
+}
+
+.sa-comparison-more-hint {
+  margin-top: 8px;
+  color: #9CA3AF;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .sa-boss-answer-link {
