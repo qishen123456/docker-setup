@@ -156,7 +156,7 @@
               </div>
               <div class="sa-drill-group-cell">
                 <strong>{{ group.meta.taskText || '-' }}</strong>
-                <span>完成 {{ group.meta.actualText || '-' }}</span>
+                <span>完成 {{ group.meta.actualText || '-' }}{{ group.meta.rateText ? `（${group.meta.rateText}）` : '' }}</span>
               </div>
               <div class="sa-drill-group-cell">{{ group.meta.remainText || '-' }}</div>
               <div class="sa-drill-group-cell is-metric">
@@ -184,7 +184,7 @@
             </div>
             <div class="sa-drill-number">
               <strong>{{ row.taskText || '-' }}</strong>
-              <span>完成 {{ row.actualText || '-' }}</span>
+              <span>完成 {{ row.actualText || '-' }}{{ row.rateText ? `（${row.rateText}）` : '' }}</span>
             </div>
             <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
             <div class="sa-drill-rate" :class="secondaryRateTone(row)">
@@ -2035,32 +2035,45 @@ const secondaryBarWidth = (row) => {
   return `${Math.max(3, Math.min(100, Number(value) / max * 100))}%`
 }
 
-const secondaryRelativeTier = (row) => {
-  const rowRate = toNumber(row?.rate)
-  // 0% 完成率不可能是领先/稳定，直接判为压力
-  if (rowRate === 0) return 'pressure'
+const rowIdentityKey = (row) => `${row?.level || ''}|${row?.parent || ''}|${row?.name || ''}`
 
-  // 标签统一按全局达成率（rate）排名，不按当前 ranking 指标或组内重算
+const secondaryRelativeTierMap = computed(() => {
+  // 标签按当前展示指标排序分层，不再固定按达成率
   const sourceRows = isRankingQuestion.value ? rankedCollectionRows.value : secondaryDrillAllRows.value
   const rows = sourceRows
-    .filter(item => toNumber(item?.rate) !== null)
-    .sort((left, right) => (toNumber(right?.rate) ?? -Infinity) - (toNumber(left?.rate) ?? -Infinity))
+    .filter(item => toNumber(secondaryMetricValue(item)) !== null)
+    .sort((left, right) => (toNumber(secondaryMetricValue(right)) ?? -Infinity) - (toNumber(secondaryMetricValue(left)) ?? -Infinity))
 
-  const index = rows.findIndex(item => (
-    item.name === row?.name &&
-    item.parent === row?.parent &&
-    item.level === row?.level
-  ))
-  if (index < 0) return null
-  if (rows.length === 1) return 'single'
-  if (rows.length === 2) return index === 0 ? 'leader' : 'pressure'
+  const map = new Map()
+  const len = rows.length
+  if (len === 0) return map
+  if (len === 1) {
+    map.set(rowIdentityKey(rows[0]), 'single')
+    return map
+  }
+  if (len === 2) {
+    map.set(rowIdentityKey(rows[0]), 'leader')
+    map.set(rowIdentityKey(rows[1]), 'pressure')
+    return map
+  }
 
-  const topCount = Math.max(1, Math.ceil(rows.length / 3))
-  const pressureCount = Math.max(1, Math.floor(rows.length / 3))
-  const pressureStart = rows.length - pressureCount
-  if (index < topCount) return 'leader'
-  if (index >= pressureStart) return 'pressure'
-  return 'steady'
+  const topCount = Math.max(1, Math.ceil(len / 3))
+  const pressureCount = Math.max(1, Math.floor(len / 3))
+  const pressureStart = len - pressureCount
+  rows.forEach((item, index) => {
+    let tier = 'steady'
+    if (index < topCount) tier = 'leader'
+    else if (index >= pressureStart) tier = 'pressure'
+    map.set(rowIdentityKey(item), tier)
+  })
+  return map
+})
+
+const secondaryRelativeTier = (row) => {
+  const rowValue = toNumber(secondaryMetricValue(row))
+  // 当前指标是达成率且为 0% 时，不可能是领先/稳定，直接判为压力
+  if (rankingMetricMeta.value.key === 'rate' && rowValue === 0) return 'pressure'
+  return secondaryRelativeTierMap.value.get(rowIdentityKey(row)) || null
 }
 
 const secondaryRateTone = (row) => {

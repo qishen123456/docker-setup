@@ -163,6 +163,7 @@ summarized_nodes AS (
         MAX(分公司) AS 分公司,
         MAX(代表处) AS 代表处,
         MAX(业务部) AS 业务部,
+        MAX(业务代表) AS 业务代表,
         SUM(总任务金额) AS 总任务金额,
         SUM(年度开单金额) AS 年度开单金额
     FROM flattened_tree
@@ -178,6 +179,7 @@ summarized_nodes AS (
         '' AS 分公司,
         '' AS 代表处,
         '' AS 业务部,
+        '' AS 业务代表,
         SUM(总任务金额) AS 总任务金额,
         SUM(年度开单金额) AS 年度开单金额
     FROM flattened_tree
@@ -194,6 +196,7 @@ SELECT
     分公司,
     代表处,
     业务部,
+    业务代表,
     总任务金额,
     年度开单金额,
     CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,

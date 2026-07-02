@@ -1183,6 +1183,16 @@ LIMIT 10000
                         for name in resolved_names
                     ):
                         is_level_overview = False
+                    # 如果 resolved 的是具体业务员成员，也不按层级概览处理，而是按单点查询
+                    if is_level_overview:
+                        overview_profile = get_dataset_profile(dataset_code, dataset_name)
+                        if overview_profile:
+                            overview_person_members: set = set()
+                            for level in overview_profile.get("levels") or []:
+                                if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
+                                    overview_person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+                            if any(name in overview_person_members for name in resolved_names):
+                                is_level_overview = False
 
             if is_level_overview:
                 config_metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
@@ -6056,13 +6066,59 @@ LIMIT 50
                 or has_explicit_compare
             )
             if comparison_intent:
+                # 对比分支也要区人名与组织节点
+                cmp_profile = get_dataset_profile(dataset_code, dataset_name)
+                cmp_person_members: set = set()
+                if cmp_profile:
+                    for level in cmp_profile.get("levels") or []:
+                        if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
+                            cmp_person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+                cmp_person_names = [e for e in entity_names if e in cmp_person_members]
+                cmp_org_names = [e for e in entity_names if e not in cmp_person_names]
+                cmp_where_parts = []
+                if cmp_org_names and cmp_person_names:
+                    # 对比同时含组织与人名：分别按组织字段和业务代表返回
+                    org_where_parts = []
+                    for org in cmp_org_names:
+                        safe_org = org.replace("'", "''")
+                        if org.endswith("事业部"):
+                            org_where_parts.append(f"事业部 = '{safe_org}'")
+                        elif org.endswith("分公司"):
+                            org_where_parts.append(f"分公司 = '{safe_org}'")
+                        elif org.endswith("代表处"):
+                            org_where_parts.append(f"代表处 = '{safe_org}'")
+                        elif org.endswith("业务部"):
+                            org_where_parts.append(f"业务部 = '{safe_org}'")
+                        else:
+                            org_where_parts.append(f"节点名称 = '{safe_org}' OR 上级名称 = '{safe_org}'")
+                    quoted_persons = ",".join("'" + item.replace("'", "''") + "'" for item in cmp_person_names)
+                    cmp_where_parts.append(f"({' OR '.join(org_where_parts)} OR 业务代表 IN ({quoted_persons}))")
+                elif cmp_org_names:
+                    org_where_parts = []
+                    for org in cmp_org_names:
+                        safe_org = org.replace("'", "''")
+                        if org.endswith("事业部"):
+                            org_where_parts.append(f"事业部 = '{safe_org}'")
+                        elif org.endswith("分公司"):
+                            org_where_parts.append(f"分公司 = '{safe_org}'")
+                        elif org.endswith("代表处"):
+                            org_where_parts.append(f"代表处 = '{safe_org}'")
+                        elif org.endswith("业务部"):
+                            org_where_parts.append(f"业务部 = '{safe_org}'")
+                        else:
+                            org_where_parts.append(f"节点名称 = '{safe_org}' OR 上级名称 = '{safe_org}'")
+                    cmp_where_parts.append(f"({' OR '.join(org_where_parts)})")
+                elif cmp_person_names:
+                    quoted_persons = ",".join("'" + item.replace("'", "''") + "'" for item in cmp_person_names)
+                    cmp_where_parts.append(f"业务代表 IN ({quoted_persons})")
+                cmp_where = " AND ".join(cmp_where_parts) if cmp_where_parts else "TRUE"
                 return f"""
 WITH 汇总结果 AS (
 {syyb_base_sql}
 )
 SELECT *
 FROM 汇总结果
-WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
+WHERE {cmp_where}
 ORDER BY 条线 DESC,
   CASE 层级
     WHEN '事业部' THEN 0
@@ -6087,21 +6143,69 @@ LIMIT 10000
             drilldown_entities = [e for e in entity_names if e not in root_level_values] or entity_names
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
             target_level_hint = str(query_intent.get("target_level") or "").strip()
+            # 预读业务员画像成员，用于判断 drilldown_entities 中是否包含具体人名
+            terminal_profile = get_dataset_profile(dataset_code, dataset_name)
+            terminal_person_members: set = set()
+            if terminal_profile:
+                for level in terminal_profile.get("levels") or []:
+                    if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
+                        terminal_person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+            terminal_person_names = [e for e in drilldown_entities if e in terminal_person_members]
             is_terminal_node = (
                 target_level_hint in {"业务代表", "业务员"}
                 or "业务代表" in normalized_question
                 or "业务员" in normalized_question
                 or any(name.endswith("业务代表") or name.endswith("业务员") for name in drilldown_entities)
+                or bool(terminal_person_names)
             )
 
             if is_terminal_node:
+                # 区分业务代表人名与组织节点名：人名按业务代表字段过滤，组织节点按节点/上级过滤
+                profile = get_dataset_profile(dataset_code, dataset_name)
+                person_members: set = set()
+                if profile:
+                    for level in profile.get("levels") or []:
+                        if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
+                            person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+                person_names = [e for e in drilldown_entities if e in person_members]
+                org_names = [e for e in drilldown_entities if e not in person_names]
+                where_parts = []
+                # 明确对比且同时含组织与人名时，保守按节点/人名分别返回，不做范围限定
+                mixed_with_compare = (
+                    has_explicit_compare
+                    and bool(org_names)
+                    and bool(person_names)
+                )
+                if mixed_with_compare:
+                    quoted_all = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
+                    where_parts.append(f"节点名称 IN ({quoted_all}) OR 上级名称 IN ({quoted_all}) OR 业务代表 IN ({quoted_all})")
+                else:
+                    if org_names:
+                        org_where_parts = []
+                        for org in org_names:
+                            safe_org = org.replace("'", "''")
+                            if org.endswith("事业部"):
+                                org_where_parts.append(f"事业部 = '{safe_org}'")
+                            elif org.endswith("分公司"):
+                                org_where_parts.append(f"分公司 = '{safe_org}'")
+                            elif org.endswith("代表处"):
+                                org_where_parts.append(f"代表处 = '{safe_org}'")
+                            elif org.endswith("业务部"):
+                                org_where_parts.append(f"业务部 = '{safe_org}'")
+                            else:
+                                org_where_parts.append(f"节点名称 = '{safe_org}' OR 上级名称 = '{safe_org}'")
+                        where_parts.append(f"({' OR '.join(org_where_parts)})")
+                    if person_names:
+                        quoted_persons = ",".join("'" + item.replace("'", "''") + "'" for item in person_names)
+                        where_parts.append(f"业务代表 IN ({quoted_persons})")
+                terminal_where = " AND ".join(where_parts) if where_parts else "TRUE"
                 return f"""
 WITH 汇总结果 AS (
 {syyb_base_sql}
 )
 SELECT *
 FROM 汇总结果
-WHERE 节点名称 IN ({quoted_entities})
+WHERE {terminal_where}
 ORDER BY 条线 DESC,
   CASE 层级
     WHEN '事业部' THEN 0
