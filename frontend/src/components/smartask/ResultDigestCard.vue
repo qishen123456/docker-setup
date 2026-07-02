@@ -639,8 +639,18 @@ const normalizedRows = computed(() => rows.value.map((row) => {
 }).filter(item => item.name))
 
 const isComparisonQuestion = computed(() => resolvedMemberNames.value.length >= 2 || /对比|比较|差异|哪个|谁更|分别|各自|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
-// 明确对比词：只有问题文本里出现这些词，才展示对比模板/文案
-const isExplicitComparisonQuestion = computed(() => /对比|比较|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
+// 明确对比词 + 点名两个对象，才展示对比模板/文案
+const hasExplicitCompareWord = computed(() => /对比|比较|差异|和.+比|跟.+比|与.+比|\bvs\b/i.test(questionText.value))
+// 问题里直接点名两个对象（如"赵标和靳锋的业绩"）也视为对比意图
+const hasNamedPair = computed(() => (
+  resolvedMemberNames.value.length === 2
+  && /和|与|及/.test(questionText.value)
+))
+// 筛选/排名场景即使结果只有 2 个也不走对比模板
+const isFilterOrRanking = computed(() => /(?:大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|不足|等于|>=|<=|>|<)\s*(?:\d+(?:\.\d+)?)\s*(?:万|亿|%)?|前\s*\d+|后\s*\d+|排名|排行|top\s*\d*|哪些|所有|各|每个|最高|最低|最好|最差/i.test(questionText.value))
+const isExplicitComparisonQuestion = computed(() => (
+  (hasExplicitCompareWord.value || hasNamedPair.value) && !isFilterOrRanking.value
+))
 const asksLowest = computed(() => /最低|最差|不好|垫底|落后|风险/.test(questionText.value))
 const asksRepresentative = computed(() => /代表处/.test(questionText.value))
 const asksBusinessPerson = computed(() => /业务代表|业务员/.test(questionText.value))
@@ -650,7 +660,8 @@ const rowHasChildren = (row, items = normalizedRows.value) => (
   items.some(item => item?.parent && row?.name && sameOrgName(item.parent, row.name))
 )
 const isMultiChildCollectionMode = computed(() => {
-  if (!isCollectionAnswerMode.value || isComparisonDigest.value || rankSides.value === 'both') return false
+  // 排名问题不按 parent 分组，避免整体排名顺序被打乱；hover 仍可查看上级
+  if (!isCollectionAnswerMode.value || isComparisonDigest.value || rankSides.value === 'both' || isRankingQuestion.value) return false
   const rows = secondaryDrillRows.value
   if (rows.length < 2) return false
   const parents = [...new Set(rows.map(item => cleanText(item?.parent)).filter(Boolean))]
@@ -1879,8 +1890,8 @@ const secondaryDrillGroups = computed(() => {
     }]
   }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
-  // 有明确父级就按 parent 分组展示，与 isMultiChildCollectionMode 保持一致
-  const shouldGroup = parents.length >= 1
+  // 排名问题不按 parent 分组，保持全局排名顺序；其他场景有明确父级再分组
+  const shouldGroup = parents.length >= 1 && !isRankingQuestion.value
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
 
   const parentOrder = comparisonParentNames.value

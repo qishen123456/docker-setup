@@ -8679,33 +8679,56 @@ Agent3 复核结果：
             )
             # 保留 Agent1.5 提取的 ranking_params，避免后续重新构造 resolved_entities 时丢失
             preserved_ranking_params = (context.get("resolved_entities") or {}).get("ranking_params")
-            route_subject_name = str(route.get("resolved_subject_name") or "").strip()
-            if route_subject_name:
-                validated_subject = self._validate_resolved_org_subject(route_subject_name, context)
-                if validated_subject.get("ok"):
-                    subject_name = str(validated_subject.get("subject_name") or "").strip()
-                    subject_level = str(validated_subject.get("subject_level") or "").strip()
-                    context["resolved_subject"] = {
-                        "subject_name": subject_name,
-                        "subject_level": subject_level,
-                        "source": validated_subject.get("source"),
-                    }
-                    context["resolved_entities"] = {
-                        "intent": "single",
-                        "scope_mode": "single",
-                        "entities": [
-                            {
-                                "dimension_name": "组织主体",
-                                "members": [subject_name],
-                                "matched_aliases": [subject_name],
-                                "source": f"validated_subject:{validated_subject.get('source')}",
-                            }
-                        ],
-                        "all_members": [subject_name],
-                        "ranking_params": preserved_ranking_params,
-                        "confidence": 1.0,
-                        "source": f"validated_subject:{validated_subject.get('source')}",
-                    }
+            # 如果问题含并列多个人名（如“赵标和靳锋的业绩”），优先用规则提取的多人，
+            # 避免 Agent1 单主体解析把其中一个人覆盖掉。
+            coordinated_names = self._question_subject_names(
+                route.get("refined_query", question), context, include_resolved=False
+            )
+            if len(coordinated_names) > 1:
+                context["resolved_entities"] = {
+                    "intent": "compare",
+                    "scope_mode": "compare",
+                    "entities": [
+                        {
+                            "dimension_name": "业务主体",
+                            "members": coordinated_names,
+                            "matched_aliases": coordinated_names,
+                            "source": "question_subject_coordinated",
+                        }
+                    ],
+                    "all_members": coordinated_names,
+                    "ranking_params": preserved_ranking_params,
+                    "confidence": 0.85,
+                    "source": "question_subject_coordinated",
+                }
+            else:
+                route_subject_name = str(route.get("resolved_subject_name") or "").strip()
+                if route_subject_name:
+                    validated_subject = self._validate_resolved_org_subject(route_subject_name, context)
+                    if validated_subject.get("ok"):
+                        subject_name = str(validated_subject.get("subject_name") or "").strip()
+                        subject_level = str(validated_subject.get("subject_level") or "").strip()
+                        context["resolved_subject"] = {
+                            "subject_name": subject_name,
+                            "subject_level": subject_level,
+                            "source": validated_subject.get("source"),
+                        }
+                        context["resolved_entities"] = {
+                            "intent": "single",
+                            "scope_mode": "single",
+                            "entities": [
+                                {
+                                    "dimension_name": "组织主体",
+                                    "members": [subject_name],
+                                    "matched_aliases": [subject_name],
+                                    "source": f"validated_subject:{validated_subject.get('source')}",
+                                }
+                            ],
+                            "all_members": [subject_name],
+                            "ranking_params": preserved_ranking_params,
+                            "confidence": 1.0,
+                            "source": f"validated_subject:{validated_subject.get('source')}",
+                        }
             # Agent1 解析结果优先；仅当 Agent1 完全未解析出实体时，才用本地规则兜底
             if not self._resolved_entity_names(context):
                 subject_names = self._question_subject_names(route.get("refined_query", question), context)
