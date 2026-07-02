@@ -163,7 +163,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('question', 'update')" link type="primary" @click="openItemEditor('question', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('question', 'delete')" link type="danger" @click="full.common_questions.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('question', 'delete')" link type="danger" @click="deleteCollectionItem('question', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -179,7 +179,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('regression', 'update')" link type="primary" @click="openItemEditor('regression', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('regression', 'delete')" link type="danger" @click="full.regression_cases.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('regression', 'delete')" link type="danger" @click="deleteCollectionItem('regression', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -195,7 +195,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('synonym', 'update')" link type="primary" @click="openItemEditor('synonym', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('synonym', 'delete')" link type="danger" @click="full.synonyms.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('synonym', 'delete')" link type="danger" @click="deleteCollectionItem('synonym', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -211,7 +211,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('lld', 'update')" link type="primary" @click="openItemEditor('lld', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('lld', 'delete')" link type="danger" @click="full.lld_documents.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('lld', 'delete')" link type="danger" @click="deleteCollectionItem('lld', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -233,7 +233,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('dict', 'update')" link type="primary" @click="openItemEditor('dict', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('dict', 'delete')" link type="danger" @click="full.data_dictionary.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('dict', 'delete')" link type="danger" @click="deleteCollectionItem('dict', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -268,7 +268,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('relation', 'update')" link type="primary" @click="openItemEditor('relation', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('relation', 'delete')" link type="danger" @click="full.table_relations.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('relation', 'delete')" link type="danger" @click="deleteCollectionItem('relation', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -285,7 +285,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('golden', 'update')" link type="primary" @click="openItemEditor('golden', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('golden', 'delete')" link type="danger" @click="full.golden_sql_samples.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('golden', 'delete')" link type="danger" @click="deleteCollectionItem('golden', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -301,7 +301,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('prompt', 'update')" link type="primary" @click="openItemEditor('prompt', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('prompt', 'delete')" link type="danger" @click="full.agent_prompts.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('prompt', 'delete')" link type="danger" @click="deleteCollectionItem('prompt', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -317,7 +317,7 @@
                   <el-table-column label="操作" width="130">
                     <template #default="{ $index }">
                       <el-button v-if="canUseDatasetAction('extcfg', 'update')" link type="primary" @click="openItemEditor('extcfg', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('extcfg', 'delete')" link type="danger" @click="full.external_configs.splice($index, 1); markDirty()">删除</el-button>
+                      <el-button v-if="canUseDatasetAction('extcfg', 'delete')" link type="danger" @click="deleteCollectionItem('extcfg', $index)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -858,6 +858,22 @@ const ensureSelectedCanEdit = () => {
 const markDirty = () => {
   if (!canSaveShelfContent.value) return
   isDirty.value = true
+}
+const deleteCollectionItem = async (type, index) => {
+  const key = COLLECTIONS[type]
+  if (!key || !Array.isArray(full[key])) return
+  const removed = full[key].splice(index, 1)
+  markDirty()
+  // 常见问题支持部分保存；其他类型需具备完整 dataset_save 权限才可自动保存
+  const canAutoSave = canUseDatasetFeature('dataset_save') || type === 'question'
+  if (!canAutoSave) {
+    ElMessage.info('已删除，请记得点击「保存书架内容」后生效')
+    return
+  }
+  const ok = await saveFull()
+  if (!ok) {
+    full[key].splice(index, 0, ...removed)
+  }
 }
 const qualityAlertType = computed(() => {
   if (!qualitySummary.value) return 'info'

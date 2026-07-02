@@ -376,9 +376,12 @@ def _sync_ecommerce_common_questions() -> None:
                     return
                 dataset_id = row[0]
                 cur.execute(
-                    "DELETE FROM bs_common_questions WHERE dataset_id = %s;",
+                    "SELECT COUNT(*) FROM bs_common_questions WHERE dataset_id = %s;",
                     (dataset_id,),
                 )
+                if cur.fetchone()[0] > 0:
+                    log(f"电商数据集常用问题已存在，跳过内置同步: dataset_id={dataset_id}")
+                    return
                 for item in ECOMMERCE_COMMON_QUESTIONS:
                     cur.execute(
                         """
