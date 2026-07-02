@@ -34,6 +34,7 @@
 
 末端例外：
 - 如果对象已经是 `业务代表`，则只返回本节点，不再继续下钻
+- 末端个人节点（业务代表/个人）不展示“下一级 X 个业务代表”，应展示个人业绩指标（总任务金额、年度开单金额、达成率、剩余任务金额）
 
 不允许行为：
 - 问单一个分公司，只返回分公司本身
@@ -42,6 +43,8 @@
 
 当前修复点：
 - [backend/four_agent_ask.py](/D:/1.智能问数项目/本地测试版2.0/smartask/backend/four_agent_ask.py)
+- [backend/report_spec_builder.py](/D:/1.智能问数项目/本地测试版2.0/smartask/backend/report_spec_builder.py)
+- [frontend/src/components/smartask/ResultDigestCard.vue](/D:/1.智能问数项目/本地测试版2.0/smartask/frontend/src/components/smartask/ResultDigestCard.vue)
 
 最小验证：
 - 返回结果中必须包含目标节点本身
@@ -158,6 +161,38 @@
 
 当前修复点：
 - `backend/four_agent_ask.py`
+
+### 2.6 口语化排名数量由 LLM 提取并受规则校验
+
+代表问题：
+- `消费者事业部，业绩排名垫底的 3 家分公司`
+- `倒数前三的分公司`
+
+已确认行为：
+- 每次问数都调用 Agent1.5 做语义解析，并输出 `ranking_params`（`top_n` / `rank_sides` / `direction` / `metric_hint`）
+- 后端规则优先：若规则已提取到明确数量，直接使用规则；规则未提取到时，才读取 LLM 的 `top_n`
+- 最终 `top_n` 受 `0-20` 范围校验
+- 非排名问题不受 ranking 参数影响，原有意图（detail/filter/comparison/aggregate 等）保持不变
+
+当前修复点：
+- `backend/four_agent_ask.py`
+- `backend/tests/test_query_intent_metrics.py`
+
+### 2.7 "最X" 没有数量时默认取 1 条
+
+代表问题：
+- `业绩最差的业务代表` → 默认返回倒数第 1
+- `业绩最好的分公司` → 默认返回正数第 1
+- `垫底的分公司` → 默认返回倒数第 1
+
+已确认行为：
+- 问题含 `最好/最差/最高/最低/最大/最小/垫底` 等明确极端方向词，但没有数字时，`top_n=1`
+- 纯"排名/排行"没有数量时，仍返回全量排序结果（`top_n=0`），不受影响
+- 明确数量时按数量执行
+
+当前修复点：
+- `backend/four_agent_ask.py`
+- `backend/tests/test_query_intent_metrics.py`
 
 ## 3. 路由确认类
 
@@ -360,6 +395,7 @@
 - 达成率为 `0%` 的节点必须显示为压力/风险，不能显示为“相对领先”
 - 只有问题文本中明确出现对比词（`对比/比较/差异/和…比/跟…比/与…比/vs`）时，才展示对比模板与“本次对比”文案
 - ranking 模式不应误入对比作用域，导致下方排名列表消失
+- 末端个人节点（业务代表/个人）应展示个人业绩指标，不应出现“下一级 X 个业务代表”
 
 当前修复点：
 - `frontend/src/components/smartask/ResultDigestCard.vue`
@@ -386,6 +422,7 @@
 - 发送任意问题后观察输入框运行态
 - 确认 0% 达成率节点不显示“相对领先”
 - 确认非明确对比问题不出现“本次对比”文案
+- 确认末端个人节点展示个人业绩指标（例如：`商用事业部业务代表靳锋的业绩`）
 
 ## 7. 更新规则
 

@@ -126,6 +126,11 @@ flattened_tree AS (
             WHEN COALESCE(NULLIF(分公司, ''), NULLIF(业务部, '')) LIKE '%分公司' THEN '区域条线'
             ELSE '事业部层级'
         END AS 条线,
+        '商用事业部' AS 事业部,
+        分公司,
+        代表处,
+        业务部,
+        业务代表,
         总任务金额,
         年度开单金额
     FROM raw_data
@@ -138,6 +143,11 @@ flattened_tree AS (
         '商用事业部' AS 上级名称,
         分公司 AS 节点名称,
         '行业条线' AS 条线,
+        '商用事业部' AS 事业部,
+        分公司,
+        '' AS 代表处,
+        分公司 AS 业务部,
+        '' AS 业务代表,
         总任务金额,
         年度开单金额
     FROM raw_data
@@ -149,6 +159,10 @@ summarized_nodes AS (
         层级,
         上级名称,
         节点名称,
+        MAX(事业部) AS 事业部,
+        MAX(分公司) AS 分公司,
+        MAX(代表处) AS 代表处,
+        MAX(业务部) AS 业务部,
         SUM(总任务金额) AS 总任务金额,
         SUM(年度开单金额) AS 年度开单金额
     FROM flattened_tree
@@ -160,6 +174,10 @@ summarized_nodes AS (
         '事业部' AS 层级,
         NULL AS 上级名称,
         '商用事业部' AS 节点名称,
+        '商用事业部' AS 事业部,
+        '' AS 分公司,
+        '' AS 代表处,
+        '' AS 业务部,
         SUM(总任务金额) AS 总任务金额,
         SUM(年度开单金额) AS 年度开单金额
     FROM flattened_tree
@@ -172,6 +190,10 @@ SELECT
     层级,
     节点名称,
     上级名称,
+    事业部,
+    分公司,
+    代表处,
+    业务部,
     总任务金额,
     年度开单金额,
     CASE WHEN 总任务金额 = 0 THEN 0 ELSE ROUND((年度开单金额 / 总任务金额) * 100, 2) END AS 达成率,

@@ -50,6 +50,48 @@ class QueryIntentMetricTest(unittest.TestCase):
         self.assertEqual(intent["top_n"], 3)
         self.assertEqual(intent["direction"], "asc")
 
+    def test_llm_ranking_params_fills_missing_top_n_for_colloquial_bottom(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+            "resolved_entities": {
+                "ranking_params": {
+                    "top_n": 3,
+                    "rank_sides": "bottom",
+                    "direction": "asc",
+                    "metric_hint": "达成率",
+                }
+            },
+        }
+
+        # "垫底"被规则识别为 bottom 方向，但数量解析不到，应由 LLM 补充
+        intent = service._resolve_query_intent("消费者事业部，业绩排名垫底的 3 家分公司", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertEqual(intent["top_n"], 3)
+        self.assertEqual(intent["direction"], "asc")
+        self.assertEqual(intent["rank_sides"], "bottom")
+
+    def test_rule_top_n_takes_precedence_over_llm_ranking_params(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+            "resolved_entities": {
+                "ranking_params": {
+                    "top_n": 5,
+                    "rank_sides": "bottom",
+                }
+            },
+        }
+
+        # 规则已明确提取到"前三"，应优先使用规则，不受 LLM 的 5 干扰
+        intent = service._resolve_query_intent("看下前三的分公司", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertEqual(intent["top_n"], 3)
+
     def test_explicit_lowest_three_rep_offices_use_global_limit(self):
         service = self._service()
         context = {
@@ -403,6 +445,59 @@ class QueryIntentMetricTest(unittest.TestCase):
         sql = service._build_consumer_business_sql("城市分公司", context)
 
         self.assertIn("WHERE 层级 = '城市分公司'", sql)
+
+    def test_superlative_bottom_without_number_defaults_to_one(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("业绩最差的业务代表", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "业务代表")
+        self.assertEqual(intent["top_n"], 1)
+        self.assertEqual(intent["direction"], "asc")
+        self.assertEqual(intent["rank_sides"], "bottom")
+
+    def test_superlative_top_without_number_defaults_to_one(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("业绩最好的分公司", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertEqual(intent["top_n"], 1)
+        self.assertEqual(intent["direction"], "desc")
+        self.assertEqual(intent["rank_sides"], "top")
+
+    def test_superlative_with_explicit_number_uses_number(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("业绩最差的 3 个业务代表", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "业务代表")
+        self.assertEqual(intent["top_n"], 3)
+        self.assertEqual(intent["direction"], "asc")
+
+    def test_plain_ranking_without_number_still_returns_all(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+        }
+
+        intent = service._resolve_query_intent("业务代表业绩排名", context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "业务代表")
+        self.assertEqual(intent["top_n"], 0)
 
 
 if __name__ == "__main__":

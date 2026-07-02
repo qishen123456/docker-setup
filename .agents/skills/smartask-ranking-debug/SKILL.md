@@ -5,9 +5,10 @@ description: >
   适用于：用户问「前N的业务承接人/业务部/分公司/代表处」「X层级的业绩咋样」
   「X节点下的Y层级」等问题，但返回行数不对、标题重复/截断、层级被覆盖、
   层级 Overview 没走 ranking、前三问题误走 drilldown、0% 显示相对领先、
-  非对比问题出现「本次对比」文案等场景。
+  非对比问题出现「本次对比」文案、垫底/落后等口语化数量未被识别等场景。
   当用户反馈「问的是前三，但返回了全部」「标题出现重复文本」
-  「城市分公司的业绩咋样没走排名」「0% 怎么还相对领先」「没问对比怎么出现对比」时触发使用。
+  「城市分公司的业绩咋样没走排名」「0% 怎么还相对领先」「没问对比怎么出现对比」
+  「垫底 3 家怎么返回了全部」「业绩最差怎么一条都没返回」时触发使用。
 ---
 
 # SmartAsk 排名类问题排查
@@ -79,6 +80,7 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 若 `intent` 正确但 SQL 无 LIMIT：
 - 检查 `_build_ecommerce_sql` / `_build_consumer_business_sql` / `_build_syyb_sql` 的 ranking 分支是否正确读取 `top_n`
 - 检查是否走了 agent_generate 分支，模型生成了不带 LIMIT 的 SQL
+- 检查用户是否用了口语化表达（如「垫底 3 家」「落后 3 个」），当前 `_rank_request_spec` / `_rank_limit_match` 的正则未覆盖这些词
 
 ### 3. 标题重复或截断？
 
@@ -140,6 +142,57 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 - `isComparisonDigest` 是否只基于返回行数（`comparisonDigestRows.length >= 2`）判断
 - `showComparisonDigest` 是否同时要求问题文本含明确对比词
 - 前端收紧后，只有 `对比/比较/差异/和…比/跟…比/与…比/vs` 才走对比模板
+
+### 9. 垫底/落后等口语化数量未识别？
+
+代表问题：
+- `消费者事业部，业绩排名垫底的 3 家分公司`
+- `倒数前三的分公司`
+
+预期：
+- `intent=ranking`，`rank_sides=bottom`，`top_n=3`
+- SQL 应按达成率升序并 `LIMIT 3`
+
+排查：
+- Agent1.5 的 prompt 是否已要求输出 `ranking_params`
+- `_normalize_entity_resolution` 是否正确解析并校验 LLM 返回的 `ranking_params`
+- `_run_pipeline` 是否把 LLM 的 `ranking_params` 合并进 `context["resolved_entities"]`
+- `_resolve_query_intent` 是否在规则未提取到 `top_n` 时读取 LLM 的 `ranking_params.top_n`
+- 最终 `top_n` 是否经过 `0-20` 范围校验
+
+若返回全部：
+- 检查 `_rank_request_spec` 是否把「垫底」仅识别为方向词，没有提取后面的数字
+- 检查 `_rank_limit_match` 是否只支持 `前/后/倒数/最高/最低/第` + 数字，未覆盖 `垫底/落后`
+- 修复方向：规则优先，LLM 补漏；或在正则中把 `垫底/落后` 作为 `后N` 同义表达处理
+
+### 10. 末端个人节点展示错误？
+
+代表问题：
+- `商用事业部业务代表靳锋的业绩`
+
+预期：
+- `answerMode=drilldown`
+- `answerSummary.text` 为「已定位到 靳锋，当前展示其个人业绩指标」
+- 前端 KPI 卡片展示：总任务金额、年度开单金额、达成率、剩余任务金额
+- 不应出现「下一级 1 个业务代表」
+
+排查：
+- 检查 `report_spec_builder.py` 对末端节点是否使用个人业绩文案
+- 检查 `ResultDigestCard.vue` 中 `isLeafFocus.value` 分支是否正确展示个人 KPI
+
+### 11. "最X" 没数量时返回 0 条或全部？
+
+代表问题：
+- `业绩最差的业务代表` → 预期返回倒数第 1
+- `业绩最好的分公司` → 预期返回正数第 1
+- `垫底的分公司` → 预期返回倒数第 1
+- `业务代表业绩排名` → 预期返回全量排序（不受影响）
+
+排查：
+- 检查 `_resolve_query_intent` 是否把 `最好/最差/最高/最低/垫底` 识别为 ranking triggers
+- 检查 `_resolve_query_intent` 中"最X"默认 1 的逻辑是否生效
+- 检查 `_build_rule_based_sql` / `_build_syyb_sql` 的 ranking 分支是否优先使用 `query_intent.top_n`
+- 检查 LLM 补漏的 `ranking_params.top_n` 是否会覆盖"最X"默认 1（应仅在没有 LLM 数量时才默认 1）
 
 ## 修复后必做
 

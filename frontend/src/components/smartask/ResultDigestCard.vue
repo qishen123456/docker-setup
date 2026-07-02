@@ -95,6 +95,30 @@
       </div>
     </div>
 
+    <!-- filter / ranking 等单结果场景的横向条形图 -->
+    <div v-if="showFilterRateChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="结果分布">
+      <div class="sa-comparison-chart-head">
+        <strong>{{ filterRateChartTitle }}</strong>
+      </div>
+      <div class="sa-comparison-chart-body">
+        <div
+          v-for="row in filterRateChartRows"
+          :key="`filter-chart-${row.name}`"
+          class="sa-comparison-chart-row"
+        >
+          <div class="sa-comparison-chart-label">
+            <strong>{{ row.name }}</strong>
+            <small v-if="row.tag">{{ row.tag }}</small>
+            <small v-else-if="row.parent">上级：{{ row.parent }}</small>
+          </div>
+          <div class="sa-comparison-chart-track" aria-hidden="true">
+            <i :style="{ width: row.barWidth }"></i>
+          </div>
+          <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="insightCards.length" class="sa-report-mini-section">
       <div class="sa-section-label">三、结构看板</div>
       <div class="sa-insight-grid">
@@ -657,7 +681,21 @@ const resultVerb = computed(() => {
   if (isRankingResult.value) return '排名'
   return '对比'
 })
-const riskThreshold = computed(() => Number(reportConfig.value?.officeRiskThreshold || reportConfig.value?.riskThreshold || 10))
+const riskThreshold = computed(() => {
+  // filter 模式下，如果用户问题明确指定了达成率/完成率阈值，优先使用问题中的阈值
+  // 而不是固定使用 reportConfig 里的默认风险线，避免"低于20%"显示为"未命中10%风险线"
+  const summary = primaryAnswerSummary.value
+  if (
+    isFilterResult.value
+    && summary
+    && summary.value !== undefined
+    && summary.value !== null
+    && /达成率|完成率/.test(String(summary.metricLabel || ''))
+  ) {
+    return Number(summary.value)
+  }
+  return Number(reportConfig.value?.officeRiskThreshold || reportConfig.value?.riskThreshold || 10)
+})
 const reportDebug = computed(() => (
   props.dataset?.report_debug
   || props.dataset?.report_spec?.debug
@@ -1531,6 +1569,42 @@ const comparisonChartRows = computed(() => {
   return rows.map((row) => ({
     ...row,
     barWidth: maxRate > 0 ? `${Math.max(10, ((row.rate || 0) / maxRate) * 100)}%` : '10%',
+  }))
+})
+
+// filter/ranking 等场景后端会返回 horizontalRateBar chart，但非对比问题不会走到 comparisonChart
+// 这里直接把后端的 chart 渲染出来，避免只有 1 条或 filter 结果没有条形图
+const filterRateChart = computed(() => {
+  const charts = reportSpec.value?.charts || []
+  return charts.find(item => item?.chartType === 'horizontalRateBar') || null
+})
+const showFilterRateChart = computed(() => (
+  // 只给 filter 场景补充条形图；ranking 下面已经有排名表格，不再重复渲染
+  isFilterResult.value
+  && filterRateChart.value
+  && Array.isArray(filterRateChart.value.rows)
+  && filterRateChart.value.rows.length > 0
+  && !showComparisonChart.value
+))
+const filterRateChartTitle = computed(() => filterRateChart.value?.title || '结果分布')
+const filterRateChartRows = computed(() => {
+  if (!showFilterRateChart.value) return []
+  const rows = filterRateChart.value.rows
+  const sortColumn = filterRateChart.value.sortColumn || '达成率'
+  const lowFirst = filterRateChart.value.lowFirst
+  const sorted = [...rows].sort((a, b) => {
+    const av = Number(a?.[sortColumn] ?? a?.达成率 ?? -Infinity)
+    const bv = Number(b?.[sortColumn] ?? b?.达成率 ?? -Infinity)
+    return lowFirst ? av - bv : bv - av
+  })
+  const maxRate = Math.max(...sorted.map(item => Number(item?.达成率 || item?.[sortColumn] || 0)), 0)
+  return sorted.map((row) => ({
+    name: row?.名称 || row?.name || row?.节点名称 || '',
+    rate: Number(row?.达成率 || row?.[sortColumn] || 0),
+    rateText: `${row?.达成率 || row?.[sortColumn] || '-'}%`,
+    barWidth: maxRate > 0 ? `${Math.max(10, (Number(row?.达成率 || row?.[sortColumn] || 0) / maxRate) * 100)}%` : '10%',
+    tag: row?.标签 || '',
+    parent: row?.上级名称 || row?.parent || '',
   }))
 })
 

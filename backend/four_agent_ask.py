@@ -1132,7 +1132,7 @@ LIMIT 10000
             return item.lower() in text.lower()
 
         matched_triggers = [item for item in triggers if item and trigger_matched(item)]
-        extra_ranking_tokens = ["排序", "从高到低", "从低到高", "最多", "最少", "最大", "最小", "缺口最大"]
+        extra_ranking_tokens = ["排序", "从高到低", "从低到高", "最多", "最少", "最大", "最小", "缺口最大", "最好", "最差", "最高", "最低", "垫底"]
         if any(token in text for token in extra_ranking_tokens):
             matched_triggers.append("extra_sort")
         if not matched_triggers:
@@ -1186,12 +1186,26 @@ LIMIT 10000
         top_n = rank_spec.get("limit") if rank_spec.get("limit") is not None else None
         if top_n is not None:
             top_n = max(0, min(max_top_n, top_n))
+
+        # 规则未提取到数量时，尝试读取 Agent1.5/LLM 解析的 ranking_params 作为补充
+        # 规则优先，LLM 仅补漏，避免影响现有明确问法
+        llm_ranking_params = (context.get("resolved_entities") or {}).get("ranking_params") if isinstance(context, dict) else None
+        llm_filled_top_n = False
+        if (top_n == 0 or top_n is None) and isinstance(llm_ranking_params, dict):
+            llm_top_n = llm_ranking_params.get("top_n")
+            if isinstance(llm_top_n, int) and llm_top_n > 0:
+                top_n = max(0, min(max_top_n, llm_top_n))
+                intent["_llm_top_n_fallback"] = True
+                llm_filled_top_n = True
+
         # 单点最高/最低问法（“哪个最高/最低”或“最低的分公司”）默认只取 1 个，避免和“排名前 N”混淆
         # 只要没有显式数量（如“最低的三个”），且不是“最高和最低”同时问，就按单点处理
+        # "垫底"也视为明确的倒数第一方向；若 LLM 已补漏数量，则不再覆盖。
         if (
             (top_n == 0 or top_n is None)
+            and not llm_filled_top_n
             and rank_spec.get("sides") != "both"
-            and any(t in text for t in ["最高", "最低", "最好", "最差"])
+            and any(t in text for t in ["最高", "最低", "最好", "最差", "垫底"])
             and not self._rank_limit_match(text)
         ):
             top_n = 1
@@ -3523,6 +3537,29 @@ LIMIT 10000
         except Exception:
             confidence_value = 0
 
+        # 解析并校验 LLM 输出的 ranking_params
+        ranking_params = None
+        raw_ranking = raw.get("ranking_params")
+        if isinstance(raw_ranking, dict):
+            try:
+                llm_top_n = int(raw_ranking.get("top_n")) if raw_ranking.get("top_n") is not None else None
+            except Exception:
+                llm_top_n = None
+            llm_sides = str(raw_ranking.get("rank_sides") or "").strip().lower()
+            if llm_sides not in {"top", "bottom", "both"}:
+                llm_sides = ""
+            llm_direction = str(raw_ranking.get("direction") or "").strip().lower()
+            if llm_direction not in {"asc", "desc"}:
+                llm_direction = ""
+            llm_metric = str(raw_ranking.get("metric_hint") or "").strip() or None
+            if llm_top_n is not None or llm_sides or llm_direction or llm_metric:
+                ranking_params = {
+                    "top_n": llm_top_n,
+                    "rank_sides": llm_sides,
+                    "direction": llm_direction,
+                    "metric_hint": llm_metric,
+                }
+
         return {
             "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else str(raw.get("intent") or fallback.get("intent") or "unknown")),
             "scope_mode": scope_mode,
@@ -3530,6 +3567,7 @@ LIMIT 10000
             "all_members": ordered_members,
             "confidence": confidence_value,
             "source": str(raw.get("source") or ("llm_semantic" if ordered_members else fallback.get("source") or "unknown")),
+            "ranking_params": ranking_params,
         }
 
     @staticmethod
@@ -3588,7 +3626,8 @@ LIMIT 10000
 2. 用户表达多个同层级对象时，scope_mode=compare，并保持用户表达顺序。
 3. 用户只表达一个组织对象时，scope_mode=single。
 4. 用户表达集合口径但没有要求分别比较时，scope_mode=aggregate；若有“分别/各/对比/比较/谁更/差异”等比较意图，scope_mode=compare。
-5. 不确定时 entities 留空，不要硬猜。
+5. 用户问排名/TopN/前几/后几/垫底/倒数等时，scope_mode=ranking，并在 ranking_params 中输出数量与方向。
+6. 不确定时 entities 留空，不要硬猜。
 
 请输出 JSON：
 {{
@@ -3602,8 +3641,21 @@ LIMIT 10000
       "reason": "一句话说明"
     }}
   ],
+  "ranking_params": {{
+    "top_n": null,
+    "rank_sides": null,
+    "direction": null,
+    "metric_hint": null
+  }},
   "confidence": 0.0
 }}
+
+ranking_params 说明：
+- 仅在 scope_mode=ranking 或问题含排名意图时填写；否则为 null。
+- top_n：用户明确要求的数量（如“前 3”=3，“垫底 5 家”=5）。未明确时填 null。
+- rank_sides：top / bottom / both。例如“前 N”=top，“垫底/倒数/后 N”=bottom。
+- direction：asc / desc。例如“最高/最好/前 N”=desc，“最低/最差/垫底/倒数”=asc。
+- metric_hint：用户指定的排序指标，如“达成率”“开单金额”“任务金额”。未指定时填 null。
 """
         raw = self._chat_json(
             system_prompt,
@@ -3642,6 +3694,15 @@ LIMIT 10000
                 if value and value not in names:
                     names.append(value)
         return names
+
+    @staticmethod
+    def _looks_like_ranking_question(question: str) -> bool:
+        text = str(question or "").lower()
+        return bool(re.search(
+            r"前\s*(?:\d+|[一二两三四五六七八九十]+)|后\s*(?:\d+|[一二两三四五六七八九十]+)|"
+            r"倒数|排名|排行|\btop\s*\d*|最高|最低|最好|最差|最大|最小|垫底|落后",
+            text,
+        ))
 
     @staticmethod
     def _route_entity_resolution(route: Dict[str, Any]) -> Dict[str, Any]:
@@ -5601,7 +5662,8 @@ LIMIT 200
         )
         if is_phase1_dataset and has_ranking_intent:
             rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
-            configured_limit = int(rank_spec.get("limit") or 0)
+            # 优先使用 intent 层已解析的 top_n（含 LLM 补漏、最X默认1 等后处理），再用规则兜底
+            configured_limit = int(query_intent.get("top_n") if query_intent.get("top_n") is not None else (rank_spec.get("limit") or 0))
             rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
             # 只有题干带明确数量词（Top/前/后/倒数）才默认取 Top3；仅说“排名/排行”时返回全部
             default_rank_limit = 3 if self._rank_limit_match(normalized_question) or any(
@@ -8591,11 +8653,32 @@ Agent3 复核结果：
             report_config = dict(saved_report_config or report_config_store.get_default_config())
             context["route"] = route
             context["report_config"] = report_config
-            context["resolved_entities"] = self._route_entity_resolution(route) or self._resolve_question_entities(
-                route.get("refined_query", question),
+            route_entities = self._route_entity_resolution(route) or {}
+            # 每次都调用 Agent1.5 做语义解析，并提取 ranking_params。
+            # route 解析出的实体与 LLM 解析结果合并：实体以 route 为准，
+            # ranking_params 以 LLM 为准；规则优先，LLM 仅补漏。
+            entity_resolution_question = route.get("refined_query") or question
+            llm_entities = self._resolve_question_entities(
+                entity_resolution_question,
                 context,
                 trace=trace,
+            ) or {}
+            resolved_entities = dict(route_entities)
+            if llm_entities.get("ranking_params"):
+                resolved_entities["ranking_params"] = llm_entities["ranking_params"]
+            context["resolved_entities"] = resolved_entities or llm_entities
+            self._append_trace(
+                trace,
+                "pipeline.resolved_entities_merged",
+                "info",
+                entity_resolution_question=entity_resolution_question,
+                route_entities_keys=list(route_entities.keys()) if route_entities else [],
+                llm_entities_keys=list(llm_entities.keys()) if llm_entities else [],
+                ranking_params=llm_entities.get("ranking_params"),
+                resolved_entities_keys=list(context["resolved_entities"].keys()),
             )
+            # 保留 Agent1.5 提取的 ranking_params，避免后续重新构造 resolved_entities 时丢失
+            preserved_ranking_params = (context.get("resolved_entities") or {}).get("ranking_params")
             route_subject_name = str(route.get("resolved_subject_name") or "").strip()
             if route_subject_name:
                 validated_subject = self._validate_resolved_org_subject(route_subject_name, context)
@@ -8619,6 +8702,7 @@ Agent3 复核结果：
                             }
                         ],
                         "all_members": [subject_name],
+                        "ranking_params": preserved_ranking_params,
                         "confidence": 1.0,
                         "source": f"validated_subject:{validated_subject.get('source')}",
                     }
@@ -8640,6 +8724,7 @@ Agent3 复核结果：
                         "all_members": subject_names,
                         "confidence": 0.66,
                         "source": "question_subject_fallback",
+                        "ranking_params": preserved_ranking_params,
                     }
             refined_question = str(route.get("refined_query") or question or "")
             original_question = str(route.get("original_question") or question or "").strip()
