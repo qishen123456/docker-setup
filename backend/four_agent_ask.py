@@ -448,14 +448,36 @@ class FourAgentAskService:
 
     def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
         text = str(text or "")
-        top_requested = bool(re.search(r"(?:Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好|第\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:名|位)?)", text))
-        bottom_requested = bool(re.search(r"(?:后\s*(?:\d+|[一二两三四五六七八九十]+)|倒数|最低|最差|垫底)", text))
-        match = self._rank_limit_match(text)
-        limit = self._parse_cn_int(match.group(1), default_limit) if match else default_limit
-        if limit:
-            limit = max(1, min(max_limit, limit))
+        top_match = re.search(r"(?:Top|TOP|top|前)\s*(\d+|[一二两三四五六七八九十]+)", text)
+        bottom_match = re.search(r"(?:后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", text)
+        generic_match = self._rank_limit_match(text)
+
+        top_limit = self._parse_cn_int(top_match.group(1), 0) if top_match else 0
+        bottom_limit = self._parse_cn_int(bottom_match.group(1), 0) if bottom_match else 0
+
+        # 兼容旧逻辑：没有明确前/后数量时，从通用匹配提取
+        if not top_limit and not bottom_limit and generic_match:
+            generic_limit = self._parse_cn_int(generic_match.group(1), default_limit)
+            if re.search(r"(?:后|倒数|最低|最差|垫底)", text):
+                bottom_limit = generic_limit
+            else:
+                top_limit = generic_limit
+
+        top_requested = bool(top_match or re.search(r"(?:Top|TOP|top|最高|最好|第\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:名|位)?)", text))
+        bottom_requested = bool(bottom_match or re.search(r"(?:倒数|最低|最差|垫底)", text))
+
+        effective_limit = max(top_limit, bottom_limit) or default_limit
+        if effective_limit:
+            effective_limit = max(1, min(max_limit, effective_limit))
+        if top_limit:
+            top_limit = max(1, min(max_limit, top_limit))
+        if bottom_limit:
+            bottom_limit = max(1, min(max_limit, bottom_limit))
+
         return {
-            "limit": limit,
+            "limit": effective_limit,
+            "top_limit": top_limit,
+            "bottom_limit": bottom_limit,
             "sides": "both" if top_requested and bottom_requested else ("bottom" if bottom_requested else "top"),
             "direction": "asc" if bottom_requested and not top_requested else "desc",
         }
@@ -471,12 +493,16 @@ class FourAgentAskService:
         direction: str,
         rank_limit: int,
         rank_sides: str = "",
+        top_rank_limit: int = 0,
+        bottom_rank_limit: int = 0,
         tie_breaker: str = "剩余任务金额 DESC, 节点名称",
     ) -> str:
         direction = "ASC" if str(direction).upper() == "ASC" else "DESC"
         rank_limit = int(rank_limit or 0)
+        top_limit = int(top_rank_limit or rank_limit or 0)
+        bottom_limit = int(bottom_rank_limit or rank_limit or 0)
         if rank_sides == "both":
-            if rank_limit > 0:
+            if top_limit > 0 or bottom_limit > 0:
                 return f"""
 {source_cte},
 {output_cte} AS (
@@ -492,16 +518,16 @@ class FourAgentAskService:
     WHERE {where_clause}
 ),
 双向排名结果 AS (
-    SELECT *, CASE WHEN 前排名 <= {rank_limit} THEN '前{rank_limit}' ELSE '后{rank_limit}' END AS 排名分组
+    SELECT *, CASE WHEN 前排名 <= {top_limit} THEN '前{top_limit}' ELSE '后{bottom_limit}' END AS 排名分组
     FROM {output_cte}
-    WHERE 前排名 <= {rank_limit} OR 后排名 <= {rank_limit}
+    WHERE 前排名 <= {top_limit} OR 后排名 <= {bottom_limit}
 )
 SELECT *
 FROM 双向排名结果
-ORDER BY CASE 排名分组 WHEN '前{rank_limit}' THEN 1 ELSE 2 END,
-         CASE WHEN 排名分组 = '前{rank_limit}' THEN 前排名 ELSE 后排名 END,
+ORDER BY CASE 排名分组 WHEN '前{top_limit}' THEN 1 ELSE 2 END,
+         CASE WHEN 排名分组 = '前{top_limit}' THEN 前排名 ELSE 后排名 END,
          节点名称
-LIMIT {rank_limit * 2}
+LIMIT {top_limit + bottom_limit}
 """.strip()
             return f"""
 {source_cte},
@@ -1242,6 +1268,8 @@ LIMIT 10000
             "intent": "ranking",
             "target_level": target_level,
             "top_n": top_n,
+            "top_limit": rank_spec.get("top_limit") or 0,
+            "bottom_limit": rank_spec.get("bottom_limit") or 0,
             "sort_metric_key": metric.get("key") or "",
             "sort_metric_column": metric.get("column") or metric.get("label") or "",
             "direction": direction,
@@ -5665,6 +5693,9 @@ LIMIT 200
             # 优先使用 intent 层已解析的 top_n（含 LLM 补漏、最X默认1 等后处理），再用规则兜底
             configured_limit = int(query_intent.get("top_n") if query_intent.get("top_n") is not None else (rank_spec.get("limit") or 0))
             rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
+            # 分别解析用户明确要求的前 N 与后 N，支持“前3后5”等双向不同数量
+            top_rank_limit = int(query_intent.get("top_limit") if query_intent.get("top_limit") is not None else (rank_spec.get("top_limit") or 0))
+            bottom_rank_limit = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec.get("bottom_limit") or 0))
             # 只有题干带明确数量词（Top/前/后/倒数）才默认取 Top3；仅说“排名/排行”时返回全部
             default_rank_limit = 3 if self._rank_limit_match(normalized_question) or any(
                 token in normalized_question for token in ["Top", "top", "前", "后", "倒数"]
@@ -5763,6 +5794,8 @@ WITH 业务代表原始 AS (
                         direction=order_direction,
                         rank_limit=rank_limit,
                         rank_sides=rank_sides,
+                        top_rank_limit=top_rank_limit,
+                        bottom_rank_limit=bottom_rank_limit,
                         tie_breaker="剩余任务金额 DESC, 组织路径",
                     )
                 if asks_grouped_rank:
@@ -5811,6 +5844,8 @@ LIMIT {rank_limit}
                         direction=order_direction,
                         rank_limit=rank_limit,
                         rank_sides=rank_sides,
+                        top_rank_limit=top_rank_limit,
+                        bottom_rank_limit=bottom_rank_limit,
                         tie_breaker="剩余任务金额 DESC, 节点名称",
                     )
                 if configured_limit > 0 or asks_extreme_rank:
@@ -5866,6 +5901,8 @@ LIMIT 10000
                     direction=order_direction,
                     rank_limit=rank_limit,
                     rank_sides=rank_sides,
+                    top_rank_limit=top_rank_limit,
+                    bottom_rank_limit=bottom_rank_limit,
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
             if target_is_branch or "分公司" in normalized_question:
@@ -5878,6 +5915,8 @@ LIMIT 10000
                     direction=order_direction,
                     rank_limit=rank_limit,
                     rank_sides=rank_sides,
+                    top_rank_limit=top_rank_limit,
+                    bottom_rank_limit=bottom_rank_limit,
                     tie_breaker="剩余任务金额 DESC, 节点名称",
                 )
 
@@ -5902,6 +5941,8 @@ LIMIT 10000
                 top_n_fallback = rank_spec_fallback.get("limit")
             rank_limit_fallback = max(0, min(20, int(top_n_fallback or 0)))
             rank_sides_fallback = str(query_intent.get("rank_sides") or rank_spec_fallback.get("sides") or "")
+            top_rank_limit_fallback = int(query_intent.get("top_limit") if query_intent.get("top_limit") is not None else (rank_spec_fallback.get("top_limit") or 0))
+            bottom_rank_limit_fallback = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec_fallback.get("bottom_limit") or 0))
             order_direction_fallback = "ASC" if rank_sides_fallback == "bottom" else "DESC"
 
             # 修复：目标层级如果匹配到 analysisDimensions 的根节点名称（如“商用事业部”），
@@ -5942,6 +5983,8 @@ LIMIT 10000
                 direction=order_direction_fallback,
                 rank_limit=rank_limit_fallback,
                 rank_sides=rank_sides_fallback,
+                top_rank_limit=top_rank_limit_fallback,
+                bottom_rank_limit=bottom_rank_limit_fallback,
                 tie_breaker="剩余任务金额 DESC, 节点名称",
             )
 
@@ -6963,6 +7006,8 @@ WITH 字段提取 AS (
         )
         rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
         rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
+        consumer_top_rank_limit = int(query_intent.get("top_limit") if query_intent.get("top_limit") is not None else (rank_spec.get("top_limit") or 0))
+        consumer_bottom_rank_limit = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec.get("bottom_limit") or 0))
 
         def consumer_rank_limit() -> int:
             rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
@@ -7172,6 +7217,8 @@ LIMIT 200
                 direction=order_direction,
                 rank_limit=rank_limit,
                 rank_sides=rank_sides,
+                top_rank_limit=consumer_top_rank_limit,
+                bottom_rank_limit=consumer_bottom_rank_limit,
                 tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
             )
         if asks_branch_ranking and not asks_branch_extremes and not (channel_metric and asks_best_branch):
@@ -7190,6 +7237,8 @@ LIMIT 200
                     direction=order_direction,
                     rank_limit=rank_limit,
                     rank_sides=rank_sides,
+                    top_rank_limit=consumer_top_rank_limit,
+                    bottom_rank_limit=consumer_bottom_rank_limit,
                     tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
                 )
             # 原有逻辑：用户没有明确层级时，才返回「分公司 + 城市分公司」上下级数据
@@ -7203,6 +7252,8 @@ LIMIT 200
                     direction=order_direction,
                     rank_limit=rank_limit,
                     rank_sides=rank_sides,
+                    top_rank_limit=consumer_top_rank_limit,
+                    bottom_rank_limit=consumer_bottom_rank_limit,
                     tie_breaker="年度开单金额 DESC, 剩余任务金额 DESC, 节点名称",
                 )
             return f"""

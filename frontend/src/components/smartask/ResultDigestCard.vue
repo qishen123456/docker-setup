@@ -1115,6 +1115,18 @@ const twoSidedRankDisplayLimit = (items = []) => {
   return Math.max(1, Math.ceil(source.length / 2))
 }
 
+const twoSidedRankDisplayCounts = (items = []) => {
+  const source = items.filter(item => item?.name)
+  const groupedFromBackend = source.filter(item => item.rankGroup)
+  if (groupedFromBackend.length) {
+    const topCount = groupedFromBackend.filter(item => item.rankGroup?.includes('前')).length
+    const bottomCount = groupedFromBackend.filter(item => item.rankGroup?.includes('后')).length
+    return { top: Math.max(topCount, 1), bottom: Math.max(bottomCount, 1) }
+  }
+  const limit = twoSidedRankDisplayLimit(items)
+  return { top: limit, bottom: limit }
+}
+
 const twoSidedRankRows = (items = []) => {
   const limit = twoSidedRankDisplayLimit(items)
   const source = items.filter(item => item?.name)
@@ -1845,22 +1857,22 @@ const drillSectionLabel = computed(() => {
 const secondaryDrillGroups = computed(() => {
   const rows = secondaryDrillRows.value
   if (rankSides.value === 'both') {
-    const limit = twoSidedRankDisplayLimit(rows)
+    const counts = twoSidedRankDisplayCounts(rows)
     const topRows = rows.filter(item => item.rankGroup?.includes('前'))
     const bottomRows = rows.filter(item => item.rankGroup?.includes('后'))
-    const fallbackTopRows = topRows.length ? topRows : sortRankingRows(rows, 'desc').slice(0, limit)
-    const fallbackBottomRows = bottomRows.length ? bottomRows : sortRankingRows(rows, 'asc').slice(0, limit)
+    const fallbackTopRows = topRows.length ? topRows : sortRankingRows(rows, 'desc').slice(0, counts.top)
+    const fallbackBottomRows = bottomRows.length ? bottomRows : sortRankingRows(rows, 'asc').slice(0, counts.bottom)
     return [
       {
         key: 'rank-top',
-        title: `前${limit}名`,
+        title: `前${counts.top}名`,
         index: 0,
         tone: 'top',
         rows: fallbackTopRows,
       },
       {
         key: 'rank-bottom',
-        title: `后${limit}名`,
+        title: `后${counts.bottom}名`,
         index: 1,
         tone: 'bottom',
         rows: fallbackBottomRows,
@@ -1975,8 +1987,8 @@ const secondaryDrillSummary = computed(() => {
       return ''
     }
     if (rankSides.value === 'both') {
-      const limit = twoSidedRankDisplayLimit(shown)
-      return `按${rankingMetricMeta.value.label}取前${limit}和后${limit}个${rankingLevelLabel.value}，完整明细见下表`
+      const counts = twoSidedRankDisplayCounts(shown)
+      return `按${rankingMetricMeta.value.label}取前${counts.top}和后${counts.bottom}个${rankingLevelLabel.value}，完整明细见下表`
     }
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
     return `按${rankingMetricMeta.value.label}取${directionText}${shown.length}个${rankingLevelLabel.value}，完整明细见下表`
@@ -2165,16 +2177,16 @@ const directAnswer = computed(() => {
   if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
     if (rankSides.value === 'both') {
       const rows = rankedCollectionRows.value
-      const limit = twoSidedRankDisplayLimit(rows)
+      const counts = twoSidedRankDisplayCounts(rows)
       const topRows = rows.filter(item => item.rankGroup.includes('前')).length
         ? rows.filter(item => item.rankGroup.includes('前'))
-        : sortRankingRows(rows, 'desc').slice(0, limit)
+        : sortRankingRows(rows, 'desc').slice(0, counts.top)
       const bottomRows = rows.filter(item => item.rankGroup.includes('后')).length
         ? rows.filter(item => item.rankGroup.includes('后'))
-        : sortRankingRows(rows, 'asc').slice(0, limit)
+        : sortRankingRows(rows, 'asc').slice(0, counts.bottom)
       const topNames = topRows.map(item => item.name).filter(Boolean).join('、')
       const bottomNames = bottomRows.map(item => item.name).filter(Boolean).join('、')
-      return `本轮已按${rankingMetricMeta.value.label}生成${rankingLevelLabel.value}前${limit}和后${limit}结果；前${limit}为${topNames || '见下方明细'}，后${limit}为${bottomNames || '见下方明细'}。完整名单见排名结果。`
+      return `本轮已按${rankingMetricMeta.value.label}生成${rankingLevelLabel.value}前${counts.top}和后${counts.bottom}结果；前${counts.top}为${topNames || '见下方明细'}，后${counts.bottom}为${bottomNames || '见下方明细'}。完整名单见排名结果。`
     }
     const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
     const rows = rankedCollectionRows.value
@@ -2306,16 +2318,16 @@ const supportLines = computed(() => {
       return lines
     }
     if (rankSides.value === 'both') {
-      const limit = twoSidedRankDisplayLimit(shown)
+      const counts = twoSidedRankDisplayCounts(shown)
       const topRows = shown.filter(item => item.rankGroup.includes('前')).length
         ? shown.filter(item => item.rankGroup.includes('前'))
-        : sortRankingRows(shown, 'desc').slice(0, limit)
+        : sortRankingRows(shown, 'desc').slice(0, counts.top)
       const bottomRows = shown.filter(item => item.rankGroup.includes('后')).length
         ? shown.filter(item => item.rankGroup.includes('后'))
-        : sortRankingRows(shown, 'asc').slice(0, limit)
+        : sortRankingRows(shown, 'asc').slice(0, counts.bottom)
       return [
-        topRows.length ? `前${limit}结果：${topRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
-        bottomRows.length ? `后${limit}结果：${bottomRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
+        topRows.length ? `前${counts.top}结果：${topRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
+        bottomRows.length ? `后${counts.bottom}结果：${bottomRows.map(item => `${item.name}${rankingMetricText(item) ? ` ${rankingMetricText(item)}` : ''}`).join('、')}。` : '',
         `风险提醒：排名看${rankingMetricMeta.value.label}，健康度仍要结合达成率和缺口一起判断。`,
       ].filter(Boolean)
     }
