@@ -21,7 +21,7 @@
       </div>
       <div class="sa-welcome-copy">
         <div class="sa-welcome-label">安吉尔经营分析顾问</div>
-        <div class="sa-welcome-text">{{ displayText }}</div>
+        <div class="sa-welcome-text" :class="{ 'is-typing': isTyping }">{{ displayText }}</div>
       </div>
     </div>
 
@@ -88,13 +88,20 @@ defineEmits(['quick-ask', 'refresh-questions'])
 
 const displayText = ref('')
 const currentIndex = ref(0)
+const isTyping = ref(false)
 
 const typeWriter = () => {
-  if (currentIndex.value < props.welcomeText.length) {
-    displayText.value += props.welcomeText[currentIndex.value]
-    currentIndex.value++
-    setTimeout(typeWriter, 30) // 火山引擎规格：每字30ms
+  isTyping.value = true
+  const run = () => {
+    if (currentIndex.value < props.welcomeText.length) {
+      displayText.value += props.welcomeText[currentIndex.value]
+      currentIndex.value++
+      setTimeout(run, 30) // 火山引擎规格：每字30ms
+    } else {
+      isTyping.value = false
+    }
   }
+  run()
 }
 
 onMounted(() => {
@@ -199,7 +206,7 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
-.sa-welcome-text::after {
+.sa-welcome-text.is-typing::after {
   content: '|';
   margin-left: 5px;
   color: rgba(230, 31, 36, 0.72);

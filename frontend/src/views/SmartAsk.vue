@@ -4449,6 +4449,7 @@ const resetForNewChat = () => {
   nextTick(() => {
     scheduleChatScroll(20, 'auto')
     schedulePanelScroll(20, 'auto', true)
+    focusComposer()
   })
 }
 
@@ -5674,14 +5675,9 @@ onUnmounted(() => {
   margin: 0 0 14px;
 }
 
-.sa-chat-panel.is-detail-hidden :deep(.sa-composer-body) {
-  grid-template-columns: minmax(260px, max-content) minmax(0, 1fr);
-  gap: 16px;
-}
-
 .sa-chat-panel.is-detail-hidden :deep(.sa-side-dataset-card),
 .sa-chat-panel.is-detail-hidden :deep(.sa-textarea-wrap) {
-  min-height: 72px;
+  min-height: 88px;
 }
 
 .sa-chat-panel.is-detail-hidden :deep(.sa-side-dataset-label) {
@@ -8679,4 +8675,3 @@ button.sa-compare-row:hover {
   }
 }
 </style>
-

@@ -616,9 +616,22 @@ const normalizedRows = computed(() => rows.value.map((row) => {
   )
   const rankGroupKey = findColumn(row, [/排名分组/])
   const undertakerKey = findColumn(row, [/业务承接人/, /任务承接人/, /负责人/])
-  const taskValue = parseAmountByContract(taskKey ? row[taskKey] : null, taskKey)
+  let taskValue = parseAmountByContract(taskKey ? row[taskKey] : null, taskKey)
+  // 兜底：如果 pickMetricKey 没命中或值为空，再精确/模糊找一次任务金额列
+  if (taskValue === null) {
+    const exactTaskKey = Object.keys(row || {}).find(k => /^总任务金额$/.test(k))
+    if (exactTaskKey) taskValue = parseAmountByContract(row[exactTaskKey], exactTaskKey)
+  }
+  if (taskValue === null) {
+    const fuzzyTaskKey = Object.keys(row || {}).find(k => /总任务|任务金额|任务额|任务目标|目标营收/i.test(k) && !/剩余|缺口|差额|达成|完成|率|实际|开单|销售/i.test(k))
+    if (fuzzyTaskKey) taskValue = parseAmountByContract(row[fuzzyTaskKey], fuzzyTaskKey)
+  }
   const actualValue = parseAmountByContract(actualKey ? row[actualKey] : null, actualKey)
   const remainValue = deriveRemain(taskValue, actualValue, parseAmountByContract(remainKey ? row[remainKey] : null, remainKey))
+  const formattedTask = formatAmountByContract(taskValue)
+  if (typeof window !== 'undefined' && /分公司/.test(String(row[nameKey] || ''))) {
+    console.warn('[DEBUG task] name=', row[nameKey], 'keys=', Object.keys(row), 'taskKey=', taskKey, 'taskRaw=', row[taskKey], 'taskValue=', taskValue, 'taskText=', formattedTask)
+  }
   return {
     name: cleanText(nameKey ? row[nameKey] : ''),
     parent: cleanText(parentKey ? row[parentKey] : ''),
@@ -629,7 +642,7 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     task: taskValue,
     actual: actualValue,
     remain: remainValue,
-    taskText: formatAmountByContract(taskValue),
+    taskText: formattedTask,
     actualText: formatAmountByContract(actualValue),
     remainText: formatAmountByContract(remainValue),
     rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
