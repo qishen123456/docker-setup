@@ -585,11 +585,84 @@ ORDER BY 全局排名, {metric_column} {direction}, {tie_breaker}
 LIMIT 10000
 """.strip()
 
+    @staticmethod
+    def _normalize_chinese_numbers(text: str) -> str:
+        """把常见中文数字（如一亿、两千万）归一化为阿拉伯数字+单位，便于阈值正则匹配。"""
+        chinese_digit = {
+            "零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+            "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+        }
+        unit_multipliers = {"十": 10, "百": 100, "千": 1000, "万": 10000, "亿": 100000000}
+
+        def _parse_integer(s: str) -> float:
+            s = s.replace("个", "")
+            total = 0.0
+            section = 0.0
+            current = 0.0
+            for ch in s:
+                if ch in chinese_digit:
+                    current = chinese_digit[ch]
+                elif ch == "十":
+                    if current == 0:
+                        current = 1
+                    section += current * 10
+                    current = 0
+                elif ch == "百":
+                    section += current * 100
+                    current = 0
+                elif ch == "千":
+                    section += current * 1000
+                    current = 0
+                elif ch == "万":
+                    section += current
+                    total += section * 10000
+                    section = 0
+                    current = 0
+                elif ch == "亿":
+                    section += current
+                    total += section * 100000000
+                    section = 0
+                    current = 0
+            section += current
+            total += section
+            return total
+
+        def _parse(s: str) -> float:
+            s = s.replace("个", "")
+            if "点" in s:
+                integer_part, decimal_part = s.split("点", 1)
+                integer_value = _parse_integer(integer_part) if integer_part else 0
+                decimal_str = "".join(
+                    str(chinese_digit.get(c, c)) for c in decimal_part
+                    if c in chinese_digit or c.isdigit()
+                )
+                decimal_value = float("0." + decimal_str) if decimal_str else 0.0
+                return integer_value + decimal_value
+            return _parse_integer(s)
+
+        def _repl(m: re.Match) -> str:
+            num_str = m.group(1)
+            unit = m.group(2)
+            try:
+                value = _parse(num_str)
+            except Exception:
+                return m.group(0)
+            if value == int(value):
+                return f"{int(value)}{unit}"
+            return f"{value}{unit}"
+
+        return re.sub(
+            r"([一二两三四五六七八九十百千万亿点零]+)(?:个)?(万|亿)",
+            _repl,
+            text,
+        )
+
     def _resolve_query_intent(self, question: str, context: Dict[str, Any]) -> Dict[str, Any]:
         config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
         policies = self._safe_dict(config.get("intentPolicies"))
         ranking_policy = self._safe_dict(policies.get("ranking"))
         text = str(question or "").replace("\n", " ").strip()
+        text = self._normalize_chinese_numbers(text)
         dataset = self._safe_dict(context.get("dataset"))
         dataset_code = str(dataset.get("dataset_code") or "")
         dataset_name = str(dataset.get("dataset_name") or "")
@@ -677,8 +750,10 @@ LIMIT 10000
         filter_operator = ""
         if re.search(r"低于|不足|小于|低过|少于", text):
             filter_operator = "<"
-        elif re.search(r"高于|超过|大于|不少于|不低于|达到|达成率高", text):
+        elif re.search(r"高于|超过|不少于|不低于|达到|达成率高|大于等于", text):
             filter_operator = ">="
+        elif re.search(r"大于", text):
+            filter_operator = ">"
         filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
         filter_value = float(filter_value_match.group(1)) if filter_value_match else None
         level_only_filter = bool(
@@ -820,9 +895,47 @@ LIMIT 10000
                 })
                 return intent
 
+        # 多具体对象 + 层级 Overview 词，按 filter/list 返回，避免误走末端个人 KPI
+        level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
+        org_suffixes = ["分公司", "代表处", "业务部", "事业部", "城市分公司", "城市公司"]
+        resolved_names = self._resolved_entity_names(context)
+        if not resolved_names:
+            resolved_names = self._question_subject_names(text, context, include_resolved=False)
+        specific_names = [n for n in resolved_names if n and n not in level_like_values]
+        # 没命中层级词，但提取到多个看起来像人名的对象时，兜底到业务代表层级
+        if (
+            not target_level
+            and len(specific_names) >= 2
+            and all(len(n) <= 4 and not any(n.endswith(s) for s in org_suffixes) for n in specific_names)
+        ):
+            target_level = "业务代表"
+        overview_tokens = ["业绩", "表现", "情况", "咋样", "怎样", "如何"]
+        has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
+        if (
+            len(specific_names) >= 2
+            and target_level
+            and not filter_problem
+            and not drilldown_problem
+            and not asks_aggregate
+            and not has_ranking_token
+            and any(token in text for token in overview_tokens)
+            and intent.get("intent") == "unknown"
+        ):
+            intent.update({
+                "intent": "filter",
+                "target_level": target_level,
+                "filter_metric_key": "level_only",
+                "filter_metric_column": "",
+                "filter_operator": "",
+                "filter_value": None,
+                "direction": "desc",
+                "output_mode": "matched_nodes_first",
+                "matched_triggers": ["multi_entity_level_overview"],
+            })
+            return intent
+
         # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）识别为下钻
         resolved_names = self._resolved_entity_names(context)
-        has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
         if (
             resolved_names
             and not filter_problem
@@ -853,8 +966,14 @@ LIMIT 10000
                     return intent
 
         # Comparison intent: A 超过/大于/小于/等于 B (B is not a pure number)
-        # 1) Symbol comparison (e.g. A > B, A >= B)
-        symbol_match = re.search(r"(.+?)\s*([><=≥≤]+)\s*(.+)", text)
+        # 如果整体满足 filter 条件（如“看下大于一个亿的分公司”），优先走 filter 逻辑，不要误判为对比
+        if filter_problem:
+            symbol_match = None
+            comparison_match = None
+            vs_match = None
+        else:
+            # 1) Symbol comparison (e.g. A > B, A >= B)
+            symbol_match = re.search(r"(.+?)\s*([><=≥≤]+)\s*(.+)", text)
         if symbol_match:
             left_text = symbol_match.group(1).strip()
             right_text = symbol_match.group(3).strip()
@@ -874,7 +993,10 @@ LIMIT 10000
                     return intent
 
         # 2) Chinese comparison (e.g. A 大于 B)
-        comparison_match = re.search(r"(.+?)(超过|大于|高于|多于|不小于|小于|低于|少于|等于)(.+)", text)
+        if not filter_problem:
+            comparison_match = re.search(r"(.+?)(超过|大于|高于|多于|不小于|小于|低于|少于|等于)(.+)", text)
+        else:
+            comparison_match = None
         if comparison_match:
             left_text = comparison_match.group(1).strip()
             right_text = comparison_match.group(3).strip()
@@ -2814,8 +2936,18 @@ LIMIT 10000
             return [text]
         return []
 
+    @staticmethod
+    def _has_specific_node(context: Dict[str, Any]) -> bool:
+        resolved = context.get("resolved_entities") or {}
+        flag = resolved.get("has_specific_node")
+        if isinstance(flag, bool):
+            return flag
+        return True
+
     def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
         names = self._resolved_entity_names(context) if include_resolved else []
+        if not self._has_specific_node(context):
+            return names
         text = str(question or "").replace("\n", " ").strip()
 
         # 优先提取带角色前缀的具体人名（如“业务代表靳锋”），角色前缀比语义解析更精确，
@@ -2849,6 +2981,12 @@ LIMIT 10000
             if candidate not in names:
                 names.append(candidate)
 
+        level_only_values = {"分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司", "业务代表"}
+
+        def _is_level_only_candidate(value: str) -> bool:
+            bare = re.sub(r"^的+", "", value)
+            return value in level_only_values or bare in level_only_values
+
         for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部|事业部)", text):
             cleaned = match.strip("，,、 和与及的业绩情况表现整体")
             if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
@@ -2856,6 +2994,8 @@ LIMIT 10000
             if any(token in cleaned for token in ["哪些", "所有", "各", "每个", "业务线", "任务完成", "最好", "最高", "最低", "哪个"]):
                 continue
             if self._looks_like_structural_subject_phrase(cleaned):
+                continue
+            if _is_level_only_candidate(cleaned):
                 continue
             if cleaned and cleaned not in names:
                 names.append(cleaned)
@@ -2891,7 +3031,7 @@ LIMIT 10000
         )
         for match in re.findall(org_pattern, text):
             cleaned = self._clean_org_subject_candidate(match)
-            if cleaned and cleaned not in names and not self._looks_like_structural_subject_phrase(cleaned):
+            if cleaned and cleaned not in names and not self._looks_like_structural_subject_phrase(cleaned) and not _is_level_only_candidate(cleaned):
                 names.append(cleaned)
         return self._normalize_dataset_subject_names(names, context)
 
@@ -3598,6 +3738,12 @@ LIMIT 10000
                     "metric_hint": llm_metric,
                 }
 
+        has_specific_node = raw.get("has_specific_node")
+        if not isinstance(has_specific_node, bool):
+            # LLM 未显式输出该标志时，按是否解析出真实成员推断：
+            # 没有真实成员则视为未指定具体节点，避免 fallback 正则误触发。
+            has_specific_node = bool(ordered_members)
+
         return {
             "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else str(raw.get("intent") or fallback.get("intent") or "unknown")),
             "scope_mode": scope_mode,
@@ -3606,6 +3752,7 @@ LIMIT 10000
             "confidence": confidence_value,
             "source": str(raw.get("source") or ("llm_semantic" if ordered_members else fallback.get("source") or "unknown")),
             "ranking_params": ranking_params,
+            "has_specific_node": has_specific_node,
         }
 
     @staticmethod
@@ -3666,6 +3813,9 @@ LIMIT 10000
 4. 用户表达集合口径但没有要求分别比较时，scope_mode=aggregate；若有“分别/各/对比/比较/谁更/差异”等比较意图，scope_mode=compare。
 5. 用户问排名/TopN/前几/后几/垫底/倒数等时，scope_mode=ranking，并在 ranking_params 中输出数量与方向。
 6. 不确定时 entities 留空，不要硬猜。
+7. 判断用户是否明确指定了具体的组织节点：
+   - 如果只提到层级或集合口径（如“分公司”“城市分公司”“大于一个亿的分公司”），没有点名具体分公司/代表处/业务部/城市分公司，has_specific_node=false。
+   - 如果提到了“东部分公司”“上海城市分公司”“赵标”等具体节点名，has_specific_node=true。
 
 请输出 JSON：
 {{
@@ -3685,6 +3835,7 @@ LIMIT 10000
     "direction": null,
     "metric_hint": null
   }},
+  "has_specific_node": true,
   "confidence": 0.0
 }}
 
@@ -5499,6 +5650,16 @@ ranking_params 说明：
                 where_parts.append("条线 = '行业条线'")
             elif "区域条线" in normalized_question:
                 where_parts.append("条线 = '区域条线'")
+            # 若明确点名了多个具体对象，再按对象过滤，避免误走末端个人 KPI
+            entity_names = self._resolved_entity_names(context) or self._question_subject_names(normalized_question, context, include_resolved=False)
+            if entity_names:
+                specific_names = [n for n in entity_names if n and n not in generic_level_terms]
+                if specific_names:
+                    quoted_names = ",".join("'" + n.replace("'", "''") + "'" for n in specific_names)
+                    if intent_target_level == "业务代表":
+                        where_parts.append(f"业务代表 IN ({quoted_names})")
+                    else:
+                        where_parts.append(f"节点名称 IN ({quoted_names}) OR 上级名称 IN ({quoted_names})")
             where_clause = " AND ".join(where_parts) if where_parts else "TRUE"
             return f"""
 WITH 汇总结果 AS (
@@ -6016,16 +6177,19 @@ LIMIT 50
         for value in self._resolved_entity_names(context):
             if value not in entity_names:
                 entity_names.append(value)
-        if not entity_names:
+        # 是否提到具体节点以 Agent1.5 的 has_specific_node 为准；
+        # 未明确点名具体节点时，跳过本地正则兜底，避免把“大于一个亿的分公司”等当成实体。
+        has_specific_node = self._has_specific_node(context)
+        if not entity_names and has_specific_node:
             entity_names = self._role_person_subject_names(normalized_question)
         if not entity_names:
             entity_names = self._question_subject_names(normalized_question, context, include_resolved=False)
-        if not entity_names:
+        if not entity_names and has_specific_node:
             profile = get_dataset_profile(dataset_code, dataset_name)
             if profile:
                 semantic_fallback = resolve_member_mentions(normalized_question, profile)
                 entity_names = [str(item).strip() for item in (semantic_fallback.get("all_members") or []) if str(item).strip()]
-        if not entity_names:
+        if not entity_names and has_specific_node:
             for match in re.findall(r"[\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:代表处|分公司|业务部)", normalized_question):
                 cleaned = match.strip("，,、 和与及的业绩情况表现")
                 if re.search(r"\d|万", cleaned):

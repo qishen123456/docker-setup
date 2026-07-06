@@ -246,7 +246,8 @@ class QueryIntentMetricTest(unittest.TestCase):
 
         sql = service._build_rule_based_sql("对比下东西部业绩完成情况", {}, context)
 
-        self.assertIn("WHERE 节点名称 IN ('东部分公司','西部分公司') OR 上级名称 IN ('东部分公司','西部分公司')", sql)
+        # 当前多节点对比按字段等值 OR 生成，不再使用旧的 节点名称/上级名称 IN 并行子句
+        self.assertIn("(分公司 = '东部分公司' OR 分公司 = '西部分公司')", sql)
         self.assertNotIn("WITH RECURSIVE", sql)
         self.assertNotIn("JOIN 命中链路", sql)
 

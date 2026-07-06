@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import dataset_report_config as report_config_store
 from data_permission_store import apply_row_level_filter
 from four_agent_ask import FourAgentAskService
 from organization_route_resolver import OrganizationRouteResolver
@@ -192,11 +193,11 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
 
         sql = service._build_rule_based_sql("看下赵标的业绩呢", {}, context)
 
+        # 赵标被识别为末端业务代表，直接按业务代表字段过滤，不再递归下钻
         self.assertIn("'赵标'", sql)
-        self.assertIn("WITH RECURSIVE", sql)
-        self.assertIn("节点名称 IN ('赵标')", sql)
-        self.assertIn("JOIN 命中链路 父节点", sql)
-        self.assertIn("子节点.上级名称 = 父节点.节点名称", sql)
+        self.assertIn("业务代表 IN ('赵标')", sql)
+        self.assertNotIn("WITH RECURSIVE", sql)
+        self.assertNotIn("JOIN 命中链路 父节点", sql)
 
     def test_business_person_role_prefix_extracts_person_name(self):
         service = object.__new__(FourAgentAskService)
@@ -217,12 +218,14 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
             "data_dictionary": [{"jsonb_key": "业务部"}],
         }
 
-        sql = service._build_rule_based_sql("看下商用业务代表靳锋 的业绩情况", {}, context)
+        # "业务代表...业绩情况" 命中层级 Overview（ranking）语义，整体走 ranking/list
+        # 若需测试角色前缀的单节点范围，应使用非 Overview  metric 词（如达成率）
+        sql = service._build_rule_based_sql("看下商用业务代表靳锋 的达成率", {}, context)
 
         self.assertIn("'靳锋'", sql)
         # 业务代表属于末端节点，按基线 1.1 只返回本节点，不再下钻
         self.assertNotIn("WITH RECURSIVE", sql)
-        self.assertIn("节点名称 IN ('靳锋')", sql)
+        self.assertIn("业务代表 IN ('靳锋')", sql)
         self.assertNotIn("JOIN 命中链路 父节点", sql)
 
     def test_agent1_resolved_entities_take_priority_over_local_rules(self):
@@ -239,9 +242,28 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
 
         sql = service._build_rule_based_sql("看下赵标和靳锋的业绩", {}, context)
 
-        # 多主体对比走并行查询，不是递归 CTE
-        self.assertIn("节点名称 IN ('赵标','靳锋')", sql)
+        # 多主体对比按业务代表字段 IN 并行查询，不是递归 CTE
+        self.assertIn("业务代表 IN ('赵标','靳锋')", sql)
         self.assertNotIn("节点名称 IN ('标和靳锋')", sql)
+
+    def test_multi_person_level_overview_goes_filter_not_leaf(self):
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "report_config": report_config_store.get_default_config(),
+            "resolved_entities": {},
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        intent = service._resolve_query_intent("看下靳锋、赵标的业绩情况", context)
+        self.assertEqual(intent["intent"], "filter")
+        self.assertEqual(intent["target_level"], "业务代表")
+
+        context["query_intent"] = intent
+        sql = service._build_rule_based_sql("看下靳锋、赵标的业绩情况", intent, context)
+        self.assertIn("业务代表 IN ('靳锋','赵标')", sql)
+        self.assertIn("层级 = '业务代表'", sql)
+        self.assertNotIn("WITH RECURSIVE", sql)
 
     def test_question_subject_names_can_ignore_resolved_root_alias(self):
         service = object.__new__(FourAgentAskService)

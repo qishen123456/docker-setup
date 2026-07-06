@@ -115,6 +115,9 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 - 检查是否被 drilldown 规则（`具体节点 + 目标子层级`）提前拦截
 - 检查 `_looks_like_org_subject_question` 是否把问题重写成普通详情
 
+注意：
+- 当问题同时包含层级词（如 `业务代表`）和 Overview 词（如 `业绩/情况/咋样`）时，即使带了具体人名（如 `业务代表靳锋 的业绩情况`），也会按层级 Overview 走 `ranking/top_n=0`，不会提取单个人名做过滤。这是当前已确认行为。
+
 ### 6. 排名问题误走 drilldown？
 
 代表问题：

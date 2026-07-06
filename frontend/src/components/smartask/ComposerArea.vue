@@ -642,8 +642,9 @@ onMounted(() => {
 
 .sa-composer-status-capsule {
   position: absolute;
-  left: 0;
-  bottom: 0;
+  right: 0;
+  bottom: 44px;
+  left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;

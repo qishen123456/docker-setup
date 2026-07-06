@@ -95,26 +95,40 @@
       </div>
     </div>
 
-    <!-- filter / ranking 等单结果场景的横向条形图 -->
-    <div v-if="showFilterRateChart" class="sa-comparison-chart sa-comparison-chart--in-kpi" aria-label="结果分布">
-      <div class="sa-comparison-chart-head">
-        <strong>{{ filterRateChartTitle }}</strong>
-      </div>
-      <div class="sa-comparison-chart-body">
+    <!-- filter 结果分布：直接复用排名明细的表格样式 -->
+    <div v-if="showFilterRateChart" class="sa-report-mini-section">
+      <div class="sa-section-label">{{ filterRateChartTitle }}</div>
+      <div class="sa-drill-table is-ranking" role="table" aria-label="结果分布">
+        <div class="sa-drill-row is-head" role="row">
+          <span>节点</span>
+          <span>任务 / 开单</span>
+          <span>缺口</span>
+          <span>达成率</span>
+        </div>
         <div
           v-for="row in filterRateChartRows"
           :key="`filter-chart-${row.name}`"
-          class="sa-comparison-chart-row"
+          class="sa-drill-row"
+          role="row"
         >
-          <div class="sa-comparison-chart-label">
+          <div class="sa-drill-node">
             <strong>{{ row.name }}</strong>
-            <small v-if="row.tag">{{ row.tag }}</small>
-            <small v-else-if="row.parent">上级：{{ row.parent }}</small>
+            <span>{{ row.parent ? `上级：${row.parent}` : row.level }}</span>
           </div>
-          <div class="sa-comparison-chart-track" aria-hidden="true">
-            <i :style="{ width: row.barWidth }"></i>
+          <div class="sa-drill-number">
+            <strong>{{ row.taskText || '-' }}</strong>
+            <span>开单 {{ row.actualText || '-' }}</span>
           </div>
-          <div class="sa-comparison-chart-value">{{ row.rateText || '-' }}</div>
+          <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
+          <div class="sa-drill-rate" :class="row.rateTone">
+            <div class="sa-drill-rate-head">
+              <strong>{{ row.rateText }}</strong>
+              <em v-if="row.tag" class="sa-filter-tag">{{ row.tag }}</em>
+            </div>
+            <div class="sa-drill-bar" aria-hidden="true">
+              <i :style="{ width: row.barWidth }"></i>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1633,15 +1647,36 @@ const filterRateChartRows = computed(() => {
     const bv = Number(b?.[sortColumn] ?? b?.达成率 ?? -Infinity)
     return lowFirst ? av - bv : bv - av
   })
-  const maxRate = Math.max(...sorted.map(item => Number(item?.达成率 || item?.[sortColumn] || 0)), 0)
-  return sorted.map((row) => ({
-    name: row?.名称 || row?.name || row?.节点名称 || '',
-    rate: Number(row?.达成率 || row?.[sortColumn] || 0),
-    rateText: `${row?.达成率 || row?.[sortColumn] || '-'}%`,
-    barWidth: maxRate > 0 ? `${Math.max(10, (Number(row?.达成率 || row?.[sortColumn] || 0) / maxRate) * 100)}%` : '10%',
-    tag: row?.标签 || '',
-    parent: row?.上级名称 || row?.parent || '',
-  }))
+  return sorted.map((row) => {
+    const name = row?.名称 || row?.name || row?.节点名称 || ''
+    const normalizedRow = normalizedRows.value.find(item => item.name === name)
+    const rawRate = toNumber(row?.达成率 ?? row?.[sortColumn])
+    const rateNum = Number.isFinite(rawRate) ? rawRate : null
+    const rateText = rateNum !== null
+      ? `${rateNum.toFixed(2).replace(/\.?0+$/, '')}%`
+      : (normalizedRow?.rateText || '-')
+    const tag = row?.标签 || ''
+    let rateTone = 'is-warn'
+    if (/领先|标杆|优秀/.test(tag)) rateTone = 'is-success'
+    else if (/风险|承压|落后|垫底|尾/.test(tag)) rateTone = 'is-danger'
+    const rateValue = rateNum ?? normalizedRow?.rate ?? null
+    const barWidth = rateValue !== null && !Number.isNaN(Number(rateValue))
+      ? `${Math.max(0, Math.min(100, Number(rateValue)))}%`
+      : '0%'
+    return {
+      name,
+      rate: rateNum ?? 0,
+      rateText,
+      barWidth,
+      tag,
+      rateTone,
+      parent: normalizedRow?.parent || row?.上级名称 || row?.parent || '',
+      level: normalizedRow?.level || '',
+      taskText: normalizedRow?.taskText || '',
+      actualText: normalizedRow?.actualText || '',
+      remainText: normalizedRow?.remainText || '',
+    }
+  })
 })
 
 const comparisonLaneRows = computed(() => {
@@ -3464,13 +3499,18 @@ const actionItems = computed(() => {
   white-space: nowrap;
 }
 
-.sa-comparison-chart-actual {
-  color: #9CA3AF;
+.sa-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  color: #6B7280;
   font-size: 10px;
   font-weight: 600;
-  line-height: 1.4;
-  text-align: right;
-  white-space: nowrap;
+  line-height: 1.3;
+  font-style: normal;
 }
 
 .sa-kpi-card.is-compare-leader {
