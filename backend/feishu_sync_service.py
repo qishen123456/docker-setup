@@ -775,6 +775,31 @@ class FeishuSyncService:
                     write_log(config['id'], 'INFO', f"已触发 {len(triggered)} 个数据集转换任务")
             except Exception as e:
                 write_log(config['id'], 'ERROR', f"触发数据集转换任务失败: {e}")
+
+            # 飞书同步成功后，只重建受影响数据集的节点索引，避免启动时或手工兜底生成。
+            try:
+                from build_dataset_node_index import rebuild_dataset_node_index_for_source_table
+
+                rebuild_result = rebuild_dataset_node_index_for_source_table(table_name)
+                if rebuild_result.get("rebuilt"):
+                    write_log(
+                        config["id"],
+                        "INFO",
+                        "已重建 dataset_node_index.json，"
+                        f"source_table={rebuild_result.get('source_table')} "
+                        f"datasets={rebuild_result.get('dataset_codes', [])} "
+                        f"dataset_ids={rebuild_result.get('dataset_ids', [])}",
+                    )
+                else:
+                    write_log(
+                        config["id"],
+                        "INFO",
+                        "跳过 dataset_node_index 重建，"
+                        f"source_table={rebuild_result.get('source_table')} "
+                        f"reason={rebuild_result.get('reason', 'no_rebuilt_dataset')}",
+                    )
+            except Exception as e:
+                write_log(config["id"], "ERROR", f"重建 dataset_node_index 失败: {e}")
             
             return True
             

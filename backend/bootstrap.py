@@ -14,6 +14,7 @@ Env switches:
     SMARTASK_BOOTSTRAP_FORCE_IMPORT=1       -> import bundles even if bs_datasets is non-empty
     SMARTASK_BOOTSTRAP_FORCE_CONFIG=1       -> overwrite existing config files from runtime bundle
     SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1      -> skip built-in dataset template sync
+    SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT=1  -> skip first-time bundle import when bs_datasets is empty
 """
 from __future__ import annotations
 
@@ -425,7 +426,10 @@ def main() -> None:
 
         existing = _bs_dataset_count()
         force_import = os.getenv("SMARTASK_BOOTSTRAP_FORCE_IMPORT", "").lower() in {"1", "true", "yes"}
-        if existing == 0 or force_import:
+        skip_first_import = os.getenv("SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT", "").lower() in {"1", "true", "yes"}
+        if existing == 0 and skip_first_import and not force_import:
+            log("SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT=1，跳过首次 bundle 导入，等待手动迁移")
+        elif existing == 0 or force_import:
             log(f"检测到 bs_datasets={existing}，开始首次数据导入...（force={force_import}）")
             _import_bookshelf_bundle()
             _import_angel_bundle()

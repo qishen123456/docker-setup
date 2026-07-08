@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-SmartAsk Linux 更新脚本
+SmartAsk 更新脚本（兼容 Linux / macOS）
 
 用法：
   bash update.sh
@@ -220,7 +220,7 @@ cleanup_compose_recreate_leftovers() {
   fi
 
   warn "检测到上次 Docker Compose 重建中断留下的临时容器，准备清理。"
-  echo "$ids" | xargs -r docker rm -f >/dev/null || true
+  printf "%s\n" "$ids" | xargs docker rm -f >/dev/null 2>/dev/null || true
   warn "临时容器已清理，继续更新。"
 }
 
@@ -307,7 +307,7 @@ has_encrypted_runtime_secret() {
   if [[ -f .env ]] && grep -q "enc:v1:" .env; then
     return 0
   fi
-  if [[ -d config ]] && grep -Rqs "enc:v1:" config --include='*.json'; then
+  if [[ -d config ]] && find config -type f -name '*.json' -exec grep -qs "enc:v1:" {} +; then
     return 0
   fi
   return 1
@@ -438,11 +438,16 @@ if config_dir.exists():
             continue
 
 failed = []
+non_blocking_failed = []
 for label, value in targets:
     try:
         decrypt_secret_value(value)
     except Exception as exc:
-        failed.append(f"{label}: {exc}")
+        item = f"{label}: {exc}"
+        if label.startswith("config/ai_settings.json.") and ".api_key_b64" in label:
+            non_blocking_failed.append(item)
+        else:
+            failed.append(item)
 
 if failed:
     print("以下密文无法用当前主密钥解开：", file=sys.stderr)
@@ -451,6 +456,13 @@ if failed:
     if len(failed) > 20:
         print(f"  ... 还有 {len(failed) - 20} 项", file=sys.stderr)
     raise SystemExit(1)
+
+if non_blocking_failed:
+    print("以下 AI 模型密钥无法用当前主密钥解开，更新不会因此中断；如需使用对应模型，请在管理页面重新保存 API Key：", file=sys.stderr)
+    for item in non_blocking_failed[:20]:
+        print(f"  - {item}", file=sys.stderr)
+    if len(non_blocking_failed) > 20:
+        print(f"  ... 还有 {len(non_blocking_failed) - 20} 项", file=sys.stderr)
 
 print(f"  [OK] enc:v1 密文解密校验通过，共 {len(targets)} 项")
 PY

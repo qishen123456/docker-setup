@@ -1,13 +1,19 @@
 {
-  "generated_at": "2026-06-28T14:20:03.412985+00:00",
+  "generated_at": "2026-07-08T08:12:51.478411+00:00",
   "dataset_ids": [
     2,
     3,
     62
   ],
+  "dataset_codes": [
+    "consumer_business_standard_v1",
+    "angel_business_2026_phase1",
+    "feishu_tbldianshang"
+  ],
   "datasets": [
     {
       "dataset_id": 2,
+      "dataset_code": "consumer_business_standard_v1",
       "dataset_name": "消费者事业部任务达成分析（标准版）",
       "source_id": 1,
       "node_count": 83,
@@ -2758,10 +2764,11 @@
     },
     {
       "dataset_id": 3,
+      "dataset_code": "angel_business_2026_phase1",
       "dataset_name": "商用事业部开单金额",
       "source_id": 1,
-      "node_count": 117,
-      "alias_count": 145,
+      "node_count": 118,
+      "alias_count": 146,
       "nodes": [
         {
           "node_name": "商用事业部",
@@ -3529,6 +3536,16 @@
           "match_key": "张定超"
         },
         {
+          "node_name": "蔡朗",
+          "node_level": "业务代表",
+          "parent_name": "河南代表处",
+          "track": "区域条线",
+          "aliases": [
+            "蔡朗"
+          ],
+          "match_key": "蔡朗"
+        },
+        {
           "node_name": "袁浩东",
           "node_level": "业务代表",
           "parent_name": "河南代表处",
@@ -3549,16 +3566,6 @@
           "match_key": "季刚"
         },
         {
-          "node_name": "张光伟",
-          "node_level": "业务代表",
-          "parent_name": "津冀代表处",
-          "track": "区域条线",
-          "aliases": [
-            "张光伟"
-          ],
-          "match_key": "张光伟"
-        },
-        {
           "node_name": "张永在",
           "node_level": "业务代表",
           "parent_name": "津冀代表处",
@@ -3567,6 +3574,16 @@
             "张永在"
           ],
           "match_key": "张永在"
+        },
+        {
+          "node_name": "王建",
+          "node_level": "业务代表",
+          "parent_name": "津冀代表处",
+          "track": "区域条线",
+          "aliases": [
+            "王建"
+          ],
+          "match_key": "王建"
         },
         {
           "node_name": "吴金宝",
@@ -4523,17 +4540,6 @@
           ]
         },
         {
-          "alias": "张光伟",
-          "matches": [
-            {
-              "node_name": "张光伟",
-              "node_level": "业务代表",
-              "parent_name": "津冀代表处",
-              "track": "区域条线"
-            }
-          ]
-        },
-        {
           "alias": "张卫军",
           "matches": [
             {
@@ -5029,6 +5035,17 @@
           ]
         },
         {
+          "alias": "王建",
+          "matches": [
+            {
+              "node_name": "王建",
+              "node_level": "业务代表",
+              "parent_name": "津冀代表处",
+              "track": "区域条线"
+            }
+          ]
+        },
+        {
           "alias": "王志军",
           "matches": [
             {
@@ -5211,6 +5228,17 @@
               "node_name": "蔡文举",
               "node_level": "业务代表",
               "parent_name": "粤西广西代表处",
+              "track": "区域条线"
+            }
+          ]
+        },
+        {
+          "alias": "蔡朗",
+          "matches": [
+            {
+              "node_name": "蔡朗",
+              "node_level": "业务代表",
+              "parent_name": "河南代表处",
               "track": "区域条线"
             }
           ]
@@ -5611,6 +5639,7 @@
     },
     {
       "dataset_id": 62,
+      "dataset_code": "feishu_tbldianshang",
       "dataset_name": "电商事业部开单金额",
       "source_id": 1,
       "node_count": 30,
@@ -6268,6 +6297,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "丁杰",
           "node_level": "业务代表",
@@ -6281,6 +6311,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "万州城市公司",
           "node_level": "城市分公司",
@@ -6294,6 +6325,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "万州城市公司",
           "node_level": "城市分公司",
@@ -6307,6 +6339,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "三明城市公司",
           "node_level": "城市分公司",
@@ -6320,6 +6353,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "三明城市公司",
           "node_level": "城市分公司",
@@ -6333,6 +6367,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "上海城市公司",
           "node_level": "城市分公司",
@@ -6341,6 +6376,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "上海代表处",
           "node_level": "代表处",
@@ -6354,6 +6390,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "上海代表处",
           "node_level": "代表处",
@@ -6367,6 +6404,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "上海城市公司",
           "node_level": "城市分公司",
@@ -6380,6 +6418,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "东南亚",
           "node_level": "业务承接角色",
@@ -6393,6 +6432,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "东莞城市公司",
           "node_level": "城市分公司",
@@ -6406,6 +6446,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "东莞城市公司",
           "node_level": "城市分公司",
@@ -6419,6 +6460,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "东部分公司",
           "node_level": "分公司",
@@ -6432,6 +6474,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "东部分公司",
           "node_level": "分公司",
@@ -6445,6 +6488,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "临沂城市公司",
           "node_level": "城市分公司",
@@ -6458,6 +6502,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "临沂城市公司",
           "node_level": "城市分公司",
@@ -6471,6 +6516,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "乐山城市公司",
           "node_level": "城市分公司",
@@ -6484,6 +6530,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "乐山城市公司",
           "node_level": "城市分公司",
@@ -6497,6 +6544,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "于翔彦",
           "node_level": "业务代表",
@@ -6510,6 +6558,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "云贵代表处",
           "node_level": "代表处",
@@ -6523,6 +6572,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "云贵代表处",
           "node_level": "代表处",
@@ -6536,6 +6586,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "云贵渝分公司",
           "node_level": "分公司",
@@ -6549,6 +6600,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "云贵渝分公司",
           "node_level": "分公司",
@@ -6562,6 +6614,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "亚马逊",
           "node_level": "业务承接角色",
@@ -6575,6 +6628,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "京东直营",
           "node_level": "业务承接角色",
@@ -6588,6 +6642,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "京津分公司",
           "node_level": "分公司",
@@ -6601,6 +6656,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "京津分公司",
           "node_level": "分公司",
@@ -6614,6 +6670,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "付滨",
           "node_level": "业务代表",
@@ -6627,6 +6684,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "保定城市公司",
           "node_level": "城市分公司",
@@ -6640,6 +6698,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "保定城市公司",
           "node_level": "城市分公司",
@@ -6653,6 +6712,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "党超超",
           "node_level": "业务代表",
@@ -6666,6 +6726,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "公共办公业务部",
           "node_level": "业务部",
@@ -6674,6 +6735,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "公共办公业务部",
           "node_level": "分公司",
@@ -6687,6 +6749,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "公共办公业务部",
           "node_level": "业务部",
@@ -6695,6 +6758,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "公共办公业务部",
           "node_level": "分公司",
@@ -6708,6 +6772,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "其他",
           "node_level": "业务承接角色",
@@ -6721,6 +6786,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "净水业务",
           "node_level": "业务承接角色",
@@ -6734,6 +6800,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6742,6 +6809,7 @@
         },
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6750,6 +6818,7 @@
         },
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6758,6 +6827,7 @@
         },
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6766,6 +6836,7 @@
         },
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6774,6 +6845,7 @@
         },
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "刘志伟",
           "node_level": "承接人",
@@ -6787,6 +6859,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "刘灿",
           "node_level": "业务代表",
@@ -6800,6 +6873,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "北京城市公司",
           "node_level": "城市分公司",
@@ -6808,6 +6882,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "北京代表处",
           "node_level": "代表处",
@@ -6821,6 +6896,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "北京代表处",
           "node_level": "代表处",
@@ -6834,6 +6910,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "北京城市公司",
           "node_level": "城市分公司",
@@ -6847,6 +6924,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "北部分公司",
           "node_level": "分公司",
@@ -6860,6 +6938,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "北部分公司",
           "node_level": "分公司",
@@ -6873,6 +6952,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "南昌城市公司",
           "node_level": "城市分公司",
@@ -6886,6 +6966,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "南昌城市公司",
           "node_level": "城市分公司",
@@ -6899,6 +6980,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "南部分公司",
           "node_level": "分公司",
@@ -6912,6 +6994,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "南部分公司",
           "node_level": "分公司",
@@ -6925,6 +7008,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "卢辉",
           "node_level": "业务代表",
@@ -6938,6 +7022,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "厦门城市公司",
           "node_level": "城市分公司",
@@ -6951,6 +7036,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "厦门城市公司",
           "node_level": "城市分公司",
@@ -6964,6 +7050,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "台净业务",
           "node_level": "业务承接角色",
@@ -6977,6 +7064,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "史利伟",
           "node_level": "业务代表",
@@ -6990,6 +7078,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "吉林代表处",
           "node_level": "代表处",
@@ -7003,6 +7092,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "吉林代表处",
           "node_level": "代表处",
@@ -7016,6 +7106,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "吴三英",
           "node_level": "业务代表",
@@ -7029,6 +7120,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "吴岩",
           "node_level": "业务代表",
@@ -7042,6 +7134,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "吴金宝",
           "node_level": "业务代表",
@@ -7055,6 +7148,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "呙涛",
           "node_level": "业务代表",
@@ -7068,6 +7162,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "周萌",
           "node_level": "业务代表",
@@ -7081,6 +7176,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "周超",
           "node_level": "业务代表",
@@ -7094,6 +7190,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "周顺超",
           "node_level": "业务代表",
@@ -7107,6 +7204,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "哈尔滨城市公司",
           "node_level": "城市分公司",
@@ -7120,6 +7218,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "哈尔滨城市公司",
           "node_level": "城市分公司",
@@ -7133,6 +7232,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "唐山城市公司",
           "node_level": "城市分公司",
@@ -7146,6 +7246,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "唐山城市公司",
           "node_level": "城市分公司",
@@ -7159,6 +7260,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "商用事业部",
           "node_level": "事业部",
@@ -7172,6 +7274,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "商用事业部",
           "node_level": "事业部",
@@ -7185,6 +7288,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "四川代表处",
           "node_level": "代表处",
@@ -7198,6 +7302,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "四川代表处",
           "node_level": "代表处",
@@ -7211,6 +7316,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "国内业务部",
           "node_level": "业务部",
@@ -7224,6 +7330,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "国内业务部",
           "node_level": "业务部",
@@ -7237,6 +7344,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大同城市公司",
           "node_level": "城市分公司",
@@ -7250,6 +7358,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大同城市公司",
           "node_level": "城市分公司",
@@ -7263,6 +7372,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大理城市公司",
           "node_level": "城市分公司",
@@ -7276,6 +7386,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大理城市公司",
           "node_level": "城市分公司",
@@ -7289,6 +7400,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大连城市公司",
           "node_level": "城市分公司",
@@ -7302,6 +7414,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "大连城市公司",
           "node_level": "城市分公司",
@@ -7315,6 +7428,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "天津城市公司",
           "node_level": "城市分公司",
@@ -7328,6 +7442,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "天津城市公司",
           "node_level": "城市分公司",
@@ -7341,6 +7456,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "天猫直营",
           "node_level": "业务承接角色",
@@ -7354,6 +7470,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "太原城市公司",
           "node_level": "城市分公司",
@@ -7367,6 +7484,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "太原城市公司",
           "node_level": "城市分公司",
@@ -7380,6 +7498,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "姜升旭",
           "node_level": "业务代表",
@@ -7393,6 +7512,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "孙永桃",
           "node_level": "业务代表",
@@ -7406,6 +7526,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "孙运龙",
           "node_level": "业务代表",
@@ -7419,6 +7540,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "孙逊",
           "node_level": "业务代表",
@@ -7432,6 +7554,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "季刚",
           "node_level": "业务代表",
@@ -7445,6 +7568,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "安徽代表处",
           "node_level": "代表处",
@@ -7458,6 +7582,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "安徽代表处",
           "node_level": "代表处",
@@ -7471,6 +7596,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "宋云飞",
           "node_level": "业务代表",
@@ -7484,6 +7610,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宜昌城市公司",
           "node_level": "城市分公司",
@@ -7497,6 +7624,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宜昌城市公司",
           "node_level": "城市分公司",
@@ -7510,6 +7638,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宜春城市公司",
           "node_level": "城市分公司",
@@ -7523,6 +7652,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宜春城市公司",
           "node_level": "城市分公司",
@@ -7536,6 +7666,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宝鸡城市公司",
           "node_level": "城市分公司",
@@ -7549,6 +7680,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "宝鸡城市公司",
           "node_level": "城市分公司",
@@ -7562,6 +7694,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "山东分公司",
           "node_level": "分公司",
@@ -7570,6 +7703,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "山东代表处",
           "node_level": "代表处",
@@ -7583,6 +7717,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "山东代表处",
           "node_level": "代表处",
@@ -7596,6 +7731,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "山东分公司",
           "node_level": "分公司",
@@ -7609,6 +7745,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川北城市公司",
           "node_level": "城市分公司",
@@ -7622,6 +7759,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川北城市公司",
           "node_level": "城市分公司",
@@ -7635,6 +7773,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川南城市公司",
           "node_level": "城市分公司",
@@ -7648,6 +7787,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川南城市公司",
           "node_level": "城市分公司",
@@ -7661,6 +7801,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川藏分公司",
           "node_level": "分公司",
@@ -7674,6 +7815,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川藏分公司",
           "node_level": "分公司",
@@ -7687,6 +7829,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川西城市公司",
           "node_level": "城市分公司",
@@ -7700,6 +7843,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "川西城市公司",
           "node_level": "城市分公司",
@@ -7713,6 +7857,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "工业医疗业务部",
           "node_level": "业务部",
@@ -7721,6 +7866,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "工业医疗业务部",
           "node_level": "分公司",
@@ -7734,6 +7880,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "工业医疗业务部",
           "node_level": "业务部",
@@ -7742,6 +7889,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "工业医疗业务部",
           "node_level": "分公司",
@@ -7755,6 +7903,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "常德城市公司",
           "node_level": "城市分公司",
@@ -7768,6 +7917,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "常德城市公司",
           "node_level": "城市分公司",
@@ -7781,6 +7931,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "广州城市公司",
           "node_level": "城市分公司",
@@ -7794,6 +7945,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "广州城市公司",
           "node_level": "城市分公司",
@@ -7807,6 +7959,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "康鹏",
           "node_level": "业务代表",
@@ -7820,6 +7973,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "廉博",
           "node_level": "业务代表",
@@ -7833,6 +7987,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "廊坊城市公司",
           "node_level": "城市分公司",
@@ -7846,6 +8001,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "廊坊城市公司",
           "node_level": "城市分公司",
@@ -7855,23 +8011,11 @@
       ]
     },
     {
-      "alias": "张光伟",
-      "matches": [
-        {
-          "dataset_id": 3,
-          "dataset_name": "商用事业部开单金额",
-          "node_name": "张光伟",
-          "node_level": "业务代表",
-          "parent_name": "津冀代表处",
-          "track": "区域条线"
-        }
-      ]
-    },
-    {
       "alias": "张卫军",
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张卫军",
           "node_level": "业务代表",
@@ -7885,6 +8029,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张坤",
           "node_level": "业务代表",
@@ -7898,6 +8043,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张定超",
           "node_level": "业务代表",
@@ -7911,6 +8057,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张松",
           "node_level": "业务代表",
@@ -7924,6 +8071,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张林强",
           "node_level": "业务代表",
@@ -7937,6 +8085,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张永在",
           "node_level": "业务代表",
@@ -7950,6 +8099,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "张良",
           "node_level": "业务代表",
@@ -7963,6 +8113,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "彭文雪",
           "node_level": "业务代表",
@@ -7976,6 +8127,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "徐会峰",
           "node_level": "业务代表",
@@ -7989,6 +8141,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "成都城市公司",
           "node_level": "城市分公司",
@@ -8002,6 +8155,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "成都城市公司",
           "node_level": "城市分公司",
@@ -8015,6 +8169,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "戴亚轩",
           "node_level": "业务代表",
@@ -8028,6 +8183,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "抖音直营",
           "node_level": "业务承接角色",
@@ -8041,6 +8197,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "新乡城市公司",
           "node_level": "城市分公司",
@@ -8054,6 +8211,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "新乡城市公司",
           "node_level": "城市分公司",
@@ -8067,6 +8225,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "新疆城市公司",
           "node_level": "城市分公司",
@@ -8080,6 +8239,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "新疆城市公司",
           "node_level": "城市分公司",
@@ -8093,6 +8253,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "新西代表处",
           "node_level": "代表处",
@@ -8106,6 +8267,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "新西代表处",
           "node_level": "代表处",
@@ -8119,6 +8281,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "昆明城市公司",
           "node_level": "城市分公司",
@@ -8132,6 +8295,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "昆明城市公司",
           "node_level": "城市分公司",
@@ -8145,6 +8309,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "晋城城市公司",
           "node_level": "城市分公司",
@@ -8158,6 +8323,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "晋城城市公司",
           "node_level": "城市分公司",
@@ -8171,6 +8337,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "晋蒙（蒙西）代表处",
           "node_level": "代表处",
@@ -8184,6 +8351,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "晋蒙（蒙西）代表处",
           "node_level": "代表处",
@@ -8197,6 +8365,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "曲靖城市公司",
           "node_level": "城市分公司",
@@ -8210,6 +8379,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "曲靖城市公司",
           "node_level": "城市分公司",
@@ -8223,6 +8393,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "曾庆凌",
           "node_level": "承接人",
@@ -8236,6 +8407,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "朱卫锋",
           "node_level": "业务代表",
@@ -8249,6 +8421,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "朱小波",
           "node_level": "业务代表",
@@ -8262,6 +8435,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "朱英杰",
           "node_level": "业务代表",
@@ -8275,6 +8449,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "李书贵",
           "node_level": "业务代表",
@@ -8288,6 +8463,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "李小平",
           "node_level": "业务代表",
@@ -8301,6 +8477,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "李文子",
           "node_level": "业务代表",
@@ -8314,6 +8491,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "李文强",
           "node_level": "业务代表",
@@ -8327,6 +8505,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "李金良",
           "node_level": "承接人",
@@ -8340,6 +8519,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "李雨峰",
           "node_level": "业务代表",
@@ -8353,6 +8533,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "杜延翔",
           "node_level": "业务代表",
@@ -8366,6 +8547,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "杨傲男",
           "node_level": "业务代表",
@@ -8379,6 +8561,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "杨浩",
           "node_level": "业务代表",
@@ -8392,6 +8575,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "林卫兵",
           "node_level": "业务代表",
@@ -8405,6 +8589,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "栾天龙",
           "node_level": "业务代表",
@@ -8418,6 +8603,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "桂东城市公司",
           "node_level": "城市分公司",
@@ -8431,6 +8617,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "桂东城市公司",
           "node_level": "城市分公司",
@@ -8444,6 +8631,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "桂南城市公司",
           "node_level": "城市分公司",
@@ -8457,6 +8645,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "桂南城市公司",
           "node_level": "城市分公司",
@@ -8470,6 +8659,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "榆林城市公司",
           "node_level": "城市分公司",
@@ -8483,6 +8673,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "榆林城市公司",
           "node_level": "城市分公司",
@@ -8496,6 +8687,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "武汉城市公司",
           "node_level": "城市分公司",
@@ -8509,6 +8701,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "武汉城市公司",
           "node_level": "城市分公司",
@@ -8522,6 +8715,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "江浙沪分公司",
           "node_level": "分公司",
@@ -8535,6 +8729,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "江浙沪分公司",
           "node_level": "分公司",
@@ -8548,6 +8743,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "江苏代表处",
           "node_level": "代表处",
@@ -8561,6 +8757,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "江苏代表处",
           "node_level": "代表处",
@@ -8574,6 +8771,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "江西代表处",
           "node_level": "代表处",
@@ -8587,6 +8785,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "江西代表处",
           "node_level": "代表处",
@@ -8600,6 +8799,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "沈阳城市公司",
           "node_level": "城市分公司",
@@ -8613,6 +8813,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "沈阳城市公司",
           "node_level": "城市分公司",
@@ -8626,6 +8827,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "河北分公司",
           "node_level": "分公司",
@@ -8639,6 +8841,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "河北分公司",
           "node_level": "分公司",
@@ -8652,6 +8855,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "河南代表处",
           "node_level": "代表处",
@@ -8665,6 +8869,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "河南代表处",
           "node_level": "代表处",
@@ -8678,6 +8883,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "洛阳城市公司",
           "node_level": "城市分公司",
@@ -8691,6 +8897,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "洛阳城市公司",
           "node_level": "城市分公司",
@@ -8704,6 +8911,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "津冀代表处",
           "node_level": "代表处",
@@ -8717,6 +8925,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "津冀代表处",
           "node_level": "代表处",
@@ -8730,6 +8939,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "洪磊",
           "node_level": "业务代表",
@@ -8743,6 +8953,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "济南城市公司",
           "node_level": "城市分公司",
@@ -8756,6 +8967,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "济南城市公司",
           "node_level": "城市分公司",
@@ -8769,6 +8981,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "浙东城市公司",
           "node_level": "城市分公司",
@@ -8782,6 +8995,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "浙东城市公司",
           "node_level": "城市分公司",
@@ -8795,6 +9009,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "浙江代表处",
           "node_level": "代表处",
@@ -8808,6 +9023,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "浙江代表处",
           "node_level": "代表处",
@@ -8821,6 +9037,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "浙西城市公司",
           "node_level": "城市分公司",
@@ -8834,6 +9051,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "浙西城市公司",
           "node_level": "城市分公司",
@@ -8847,6 +9065,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "消费者事业部",
           "node_level": "事业部",
@@ -8860,6 +9079,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "消费者事业部",
           "node_level": "事业部",
@@ -8873,6 +9093,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "淄博城市公司",
           "node_level": "城市分公司",
@@ -8886,6 +9107,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "淄博城市公司",
           "node_level": "城市分公司",
@@ -8899,6 +9121,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "深圳城市公司",
           "node_level": "城市分公司",
@@ -8912,6 +9135,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "深圳城市公司",
           "node_level": "城市分公司",
@@ -8925,6 +9149,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "湖北代表处",
           "node_level": "代表处",
@@ -8938,6 +9163,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "湖北代表处",
           "node_level": "代表处",
@@ -8951,6 +9177,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "湖南分公司",
           "node_level": "分公司",
@@ -8959,6 +9186,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "湖南代表处",
           "node_level": "代表处",
@@ -8972,6 +9200,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "湖南代表处",
           "node_level": "代表处",
@@ -8985,6 +9214,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "湖南分公司",
           "node_level": "分公司",
@@ -8998,6 +9228,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "滤芯",
           "node_level": "业务承接角色",
@@ -9011,6 +9242,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "烟台城市公司",
           "node_level": "城市分公司",
@@ -9024,6 +9256,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "烟台城市公司",
           "node_level": "城市分公司",
@@ -9037,6 +9270,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "王向辉",
           "node_level": "业务代表",
@@ -9050,6 +9284,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "王园",
           "node_level": "业务代表",
@@ -9063,6 +9298,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "王帅",
           "node_level": "业务代表",
@@ -9072,10 +9308,25 @@
       ]
     },
     {
+      "alias": "王建",
+      "matches": [
+        {
+          "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
+          "dataset_name": "商用事业部开单金额",
+          "node_name": "王建",
+          "node_level": "业务代表",
+          "parent_name": "津冀代表处",
+          "track": "区域条线"
+        }
+      ]
+    },
+    {
       "alias": "王志军",
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "王志军",
           "node_level": "业务代表",
@@ -9089,6 +9340,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "王鹏",
           "node_level": "业务代表",
@@ -9102,6 +9354,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "甘青宁城市公司",
           "node_level": "城市分公司",
@@ -9110,6 +9363,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "甘青宁代表处",
           "node_level": "代表处",
@@ -9123,6 +9377,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "甘青宁代表处",
           "node_level": "代表处",
@@ -9136,6 +9391,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "甘青宁城市公司",
           "node_level": "城市分公司",
@@ -9149,6 +9405,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "电商事业部",
           "node_level": "事业部",
@@ -9162,6 +9419,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "电商事业部",
           "node_level": "事业部",
@@ -9175,6 +9433,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "皖北城市公司",
           "node_level": "城市分公司",
@@ -9188,6 +9447,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "皖北城市公司",
           "node_level": "城市分公司",
@@ -9201,6 +9461,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "皖南城市公司",
           "node_level": "城市分公司",
@@ -9214,6 +9475,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "皖南城市公司",
           "node_level": "城市分公司",
@@ -9227,6 +9489,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "直营零售部",
           "node_level": "业务部",
@@ -9240,6 +9503,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "石剑锋",
           "node_level": "业务代表",
@@ -9253,6 +9517,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "石家庄城市公司",
           "node_level": "城市分公司",
@@ -9266,6 +9531,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "石家庄城市公司",
           "node_level": "城市分公司",
@@ -9279,6 +9545,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "福州城市公司",
           "node_level": "城市分公司",
@@ -9292,6 +9559,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "福州城市公司",
           "node_level": "城市分公司",
@@ -9305,6 +9573,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "福建代表处",
           "node_level": "代表处",
@@ -9318,6 +9587,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "福建代表处",
           "node_level": "代表处",
@@ -9331,6 +9601,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "程欢",
           "node_level": "业务代表",
@@ -9344,6 +9615,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "粤东代表处",
           "node_level": "代表处",
@@ -9357,6 +9629,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "粤东代表处",
           "node_level": "代表处",
@@ -9370,6 +9643,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "粤桂琼分公司",
           "node_level": "分公司",
@@ -9383,6 +9657,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "粤桂琼分公司",
           "node_level": "分公司",
@@ -9396,6 +9671,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "粤西城市公司",
           "node_level": "城市分公司",
@@ -9409,6 +9685,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "粤西城市公司",
           "node_level": "城市分公司",
@@ -9422,6 +9699,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "粤西广西代表处",
           "node_level": "代表处",
@@ -9435,6 +9713,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "粤西广西代表处",
           "node_level": "代表处",
@@ -9448,6 +9727,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "纪正洋",
           "node_level": "业务代表",
@@ -9461,6 +9741,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "绵阳城市公司",
           "node_level": "城市分公司",
@@ -9474,6 +9755,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "绵阳城市公司",
           "node_level": "城市分公司",
@@ -9487,6 +9769,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "罗湾湾",
           "node_level": "承接人",
@@ -9500,6 +9783,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "肖凌聪",
           "node_level": "业务代表",
@@ -9513,6 +9797,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "胡根",
           "node_level": "承接人",
@@ -9526,6 +9811,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏中城市公司",
           "node_level": "城市分公司",
@@ -9539,6 +9825,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏中城市公司",
           "node_level": "城市分公司",
@@ -9552,6 +9839,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏北城市公司",
           "node_level": "城市分公司",
@@ -9565,6 +9853,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏北城市公司",
           "node_level": "城市分公司",
@@ -9578,6 +9867,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏南城市公司",
           "node_level": "城市分公司",
@@ -9591,6 +9881,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "苏南城市公司",
           "node_level": "城市分公司",
@@ -9604,6 +9895,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "范炳诚",
           "node_level": "业务代表",
@@ -9617,6 +9909,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "董峰",
           "node_level": "业务代表",
@@ -9630,6 +9923,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "蔡文举",
           "node_level": "业务代表",
@@ -9639,10 +9933,25 @@
       ]
     },
     {
+      "alias": "蔡朗",
+      "matches": [
+        {
+          "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
+          "dataset_name": "商用事业部开单金额",
+          "node_name": "蔡朗",
+          "node_level": "业务代表",
+          "parent_name": "河南代表处",
+          "track": "区域条线"
+        }
+      ]
+    },
+    {
       "alias": "薛奇",
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "薛奇",
           "node_level": "业务代表",
@@ -9656,6 +9965,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "衡阳城市公司",
           "node_level": "城市分公司",
@@ -9669,6 +9979,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "衡阳城市公司",
           "node_level": "城市分公司",
@@ -9682,6 +9993,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "袁浩东",
           "node_level": "业务代表",
@@ -9695,6 +10007,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "襄阳城市公司",
           "node_level": "城市分公司",
@@ -9708,6 +10021,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "襄阳城市公司",
           "node_level": "城市分公司",
@@ -9721,6 +10035,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "西北分公司",
           "node_level": "分公司",
@@ -9734,6 +10049,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "西北分公司",
           "node_level": "分公司",
@@ -9747,6 +10063,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "西安城市公司",
           "node_level": "城市分公司",
@@ -9760,6 +10077,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "西安城市公司",
           "node_level": "城市分公司",
@@ -9773,6 +10091,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "西部分公司",
           "node_level": "分公司",
@@ -9786,6 +10105,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "西部分公司",
           "node_level": "分公司",
@@ -9799,6 +10119,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "覃义",
           "node_level": "业务代表",
@@ -9812,6 +10133,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "许薇",
           "node_level": "业务代表",
@@ -9825,6 +10147,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "许锵",
           "node_level": "业务代表",
@@ -9838,6 +10161,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "谢均伟",
           "node_level": "承接人",
@@ -9851,6 +10175,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "豫晋分公司",
           "node_level": "分公司",
@@ -9864,6 +10189,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "豫晋分公司",
           "node_level": "分公司",
@@ -9877,6 +10203,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "贵阳城市公司",
           "node_level": "城市分公司",
@@ -9890,6 +10217,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "贵阳城市公司",
           "node_level": "城市分公司",
@@ -9903,6 +10231,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "贾希",
           "node_level": "业务代表",
@@ -9916,6 +10245,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "赣州城市公司",
           "node_level": "城市分公司",
@@ -9929,6 +10259,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "赣州城市公司",
           "node_level": "城市分公司",
@@ -9942,6 +10273,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "赣闽分公司",
           "node_level": "分公司",
@@ -9955,6 +10287,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "赣闽分公司",
           "node_level": "分公司",
@@ -9968,6 +10301,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "赵标",
           "node_level": "业务代表",
@@ -9981,6 +10315,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "跨境业务部",
           "node_level": "业务部",
@@ -9994,6 +10329,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "跨境业务部",
           "node_level": "业务部",
@@ -10007,6 +10343,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "辽宁代表处",
           "node_level": "代表处",
@@ -10020,6 +10357,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "辽宁代表处",
           "node_level": "代表处",
@@ -10033,6 +10371,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "达播",
           "node_level": "业务承接角色",
@@ -10046,6 +10385,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "迟昊",
           "node_level": "业务代表",
@@ -10059,6 +10399,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "遵义城市公司",
           "node_level": "城市分公司",
@@ -10072,6 +10413,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "遵义城市公司",
           "node_level": "城市分公司",
@@ -10085,6 +10427,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "邓梦竹",
           "node_level": "承接人",
@@ -10098,6 +10441,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "邵阳城市公司",
           "node_level": "城市分公司",
@@ -10111,6 +10455,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "邵阳城市公司",
           "node_level": "城市分公司",
@@ -10124,6 +10469,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "邹品德",
           "node_level": "业务代表",
@@ -10137,6 +10483,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "郑坚锐",
           "node_level": "业务代表",
@@ -10150,6 +10497,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "郑州城市公司",
           "node_level": "城市分公司",
@@ -10163,6 +10511,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "郑州城市公司",
           "node_level": "城市分公司",
@@ -10176,6 +10525,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "郑燕美",
           "node_level": "承接人",
@@ -10189,6 +10539,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "郝鹏波",
           "node_level": "业务代表",
@@ -10202,6 +10553,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "鄂尔多斯城市公司",
           "node_level": "城市分公司",
@@ -10215,6 +10567,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "鄂尔多斯城市公司",
           "node_level": "城市分公司",
@@ -10228,6 +10581,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "鄂皖分公司",
           "node_level": "分公司",
@@ -10241,6 +10595,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "鄂皖分公司",
           "node_level": "分公司",
@@ -10254,6 +10609,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "重庆城市公司",
           "node_level": "城市分公司",
@@ -10262,6 +10618,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "重庆代表处",
           "node_level": "代表处",
@@ -10275,6 +10632,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "重庆代表处",
           "node_level": "代表处",
@@ -10288,6 +10646,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "重庆城市公司",
           "node_level": "城市分公司",
@@ -10301,6 +10660,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "钟小华",
           "node_level": "业务代表",
@@ -10314,6 +10674,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "长春城市公司",
           "node_level": "城市分公司",
@@ -10327,6 +10688,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "长春城市公司",
           "node_level": "城市分公司",
@@ -10340,6 +10702,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "长沙城市公司",
           "node_level": "城市分公司",
@@ -10353,6 +10716,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "长沙城市公司",
           "node_level": "城市分公司",
@@ -10366,6 +10730,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陈东保",
           "node_level": "业务代表",
@@ -10379,6 +10744,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陈亮亮",
           "node_level": "业务代表",
@@ -10392,6 +10758,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "陈小斌",
           "node_level": "承接人",
@@ -10405,6 +10772,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陈小林",
           "node_level": "业务代表",
@@ -10418,6 +10786,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陈振华",
           "node_level": "业务代表",
@@ -10431,6 +10800,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陈林",
           "node_level": "业务代表",
@@ -10444,6 +10814,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陕西代表处",
           "node_level": "代表处",
@@ -10457,6 +10828,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "陕西代表处",
           "node_level": "代表处",
@@ -10470,6 +10842,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "青岛城市公司",
           "node_level": "城市分公司",
@@ -10483,6 +10856,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "青岛城市公司",
           "node_level": "城市分公司",
@@ -10496,6 +10870,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "靳锋",
           "node_level": "业务代表",
@@ -10509,6 +10884,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "韩晓娇",
           "node_level": "业务代表",
@@ -10522,6 +10898,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "餐饮业务部",
           "node_level": "业务部",
@@ -10530,6 +10907,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "餐饮",
           "node_level": "代表处",
@@ -10538,6 +10916,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "餐饮业务部",
           "node_level": "分公司",
@@ -10551,6 +10930,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "餐饮业务部",
           "node_level": "业务部",
@@ -10559,6 +10939,7 @@
         },
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "餐饮业务部",
           "node_level": "分公司",
@@ -10572,6 +10953,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "饮水业务",
           "node_level": "业务承接角色",
@@ -10585,6 +10967,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "马传朋",
           "node_level": "业务代表",
@@ -10598,6 +10981,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "马雄聪",
           "node_level": "业务代表",
@@ -10611,6 +10995,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "驻马店城市公司",
           "node_level": "城市分公司",
@@ -10624,6 +11009,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "驻马店城市公司",
           "node_level": "城市分公司",
@@ -10637,6 +11023,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "魏小锋",
           "node_level": "业务代表",
@@ -10650,6 +11037,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "黄石城市公司",
           "node_level": "城市分公司",
@@ -10663,6 +11051,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "黄石城市公司",
           "node_level": "城市分公司",
@@ -10676,6 +11065,7 @@
       "matches": [
         {
           "dataset_id": 62,
+          "dataset_code": "feishu_tbldianshang",
           "dataset_name": "电商事业部开单金额",
           "node_name": "黄超",
           "node_level": "承接人",
@@ -10689,6 +11079,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "黑吉辽分公司",
           "node_level": "分公司",
@@ -10702,6 +11093,7 @@
       "matches": [
         {
           "dataset_id": 2,
+          "dataset_code": "consumer_business_standard_v1",
           "dataset_name": "消费者事业部任务达成分析（标准版）",
           "node_name": "黑吉辽分公司",
           "node_level": "分公司",
@@ -10715,6 +11107,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "黑龙江代表处",
           "node_level": "代表处",
@@ -10728,6 +11121,7 @@
       "matches": [
         {
           "dataset_id": 3,
+          "dataset_code": "angel_business_2026_phase1",
           "dataset_name": "商用事业部开单金额",
           "node_name": "黑龙江代表处",
           "node_level": "代表处",
