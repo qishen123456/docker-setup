@@ -714,6 +714,14 @@ const amountUnitConfig = computed(() => {
 const intentName = computed(() => reportConfig.value?.queryIntent?.intent || props.route?.intent || '')
 const isFilterResult = computed(() => intentName.value === 'filter')
 const isRankingResult = computed(() => intentName.value === 'ranking')
+const isLevelOnlyOverview = computed(() => (
+  primaryAnswerMode.value === 'filter'
+  && primaryAnswerSummary.value?._level_only === true
+))
+const isMultiParentOverview = computed(() => (
+  primaryAnswerMode.value === 'filter'
+  && primaryAnswerSummary.value?._multi_parent === true
+))
 const resultVerb = computed(() => {
   if (isFilterResult.value) return '筛选出'
   if (isRankingResult.value) return '排名'
@@ -929,6 +937,8 @@ const resolveFocusDrillRows = (items = []) => {
 }
 
 const primaryKpiCards = computed(() => {
+  // 多父节点 overview 直接展示父节点及其下级，不需要集合型 KPI 卡片
+  if (isMultiParentOverview.value) return []
   if (showComparisonChart.value) {
     return comparisonChartRows.value.map((row, index) => ({
       key: `compare-${row.name}-${index}`,
@@ -972,13 +982,19 @@ const primaryKpiCards = computed(() => {
       return acc
     }, {})
     const hasMixedLevels = Object.keys(levelCounts).length > 1
-    const countLabel = primaryAnswerMode.value === 'filter' ? '命中数量' : '结果数量'
+    const countLabel = isLevelOnlyOverview.value
+      ? '筛选数量'
+      : (primaryAnswerMode.value === 'filter' ? '命中数量' : '结果数量')
     const countValue = hasMixedLevels
       ? Object.entries(levelCounts).map(([level, count]) => `${level}${count}个`).join(' / ')
       : `${collectionRows.length}个`
     const countHint = hasMixedLevels
       ? '按层级拆分的结果集合'
-      : `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`
+      : (
+        isLevelOnlyOverview.value
+          ? `${primaryAnswerSummary.value?.targetLevel || '对象'}结果集合`
+          : `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`
+      )
     // 单点“哪个最高/最低”只展示答案和下属明细，不混入末位排名
     if (isSingleBestQuestion.value && leader) {
       const childRows = collectionRows.filter(r => r.name !== leader.name && r.level !== leader.level)
@@ -1008,6 +1024,12 @@ const primaryKpiCards = computed(() => {
     }
 
     const isRankingMulti = primaryAnswerMode.value === 'ranking' && !isSingleBestQuestion.value && collectionRows.length > 1
+    const leaderLabel = isRankingMulti
+      ? '第1名'
+      : (primaryAnswerMode.value === 'ranking' ? '榜首结果' : (isLevelOnlyOverview.value ? '达成率最高' : '最高结果'))
+    const tailLabel = isRankingMulti
+      ? `第${collectionRows.length}名`
+      : (primaryAnswerMode.value === 'ranking' ? '末位结果' : (isLevelOnlyOverview.value ? '达成率最低' : '边界结果'))
     return [
       {
         key: 'collection-count',
@@ -1018,14 +1040,14 @@ const primaryKpiCards = computed(() => {
       },
       leader ? {
         key: 'collection-leader',
-        label: isRankingMulti ? '第1名' : (primaryAnswerMode.value === 'ranking' ? '榜首结果' : '最高结果'),
+        label: leaderLabel,
         value: leader.name,
         hint: `${metricLabel} ${leaderMetric}`,
         tone: 'good',
       } : null,
       tail ? {
         key: 'collection-tail',
-        label: isRankingMulti ? `第${collectionRows.length}名` : (primaryAnswerMode.value === 'ranking' ? '末位结果' : '边界结果'),
+        label: tailLabel,
         value: tail.name,
         hint: `${metricLabel} ${tailMetric}`,
         tone: primaryAnswerMode.value === 'ranking' ? 'warn' : 'neutral',
@@ -1179,6 +1201,10 @@ const twoSidedRankRows = (items = []) => {
 }
 
 const rankedCollectionRows = computed(() => {
+  // level_only 筛选结果应和后端 chart 保持一致，避免多父节点时 managementLayerRows 只取单焦点子集
+  if (isLevelOnlyOverview.value && filterRateChartRows.value.length) {
+    return filterRateChartRows.value
+  }
   // filter 类问题优先使用和核心结论一致的数据源，避免数量口径不一致。
   if (isFilterComparisonQuestion.value && filterComparisonRows.value.length) {
     return filterComparisonRows.value
@@ -1256,9 +1282,18 @@ const levelSummary = computed(() => {
 })
 
 const riskRows = computed(() => {
+  let baseRows = normalizedRows.value
+  if (isMultiParentOverview.value) {
+    const parentNames = resolvedMemberNames.value
+    baseRows = normalizedRows.value.filter(item => (
+      item.parent && parentNames.some(parent => sameOrgName(item.parent, parent))
+    ))
+  } else if (isLevelOnlyOverview.value) {
+    baseRows = rankedCollectionRows.value
+  }
   const scopedRows = digestCompareLevel.value
-    ? normalizedRows.value.filter(item => rowMatchesLevel(item, digestCompareLevel.value))
-    : normalizedRows.value
+    ? baseRows.filter(item => rowMatchesLevel(item, digestCompareLevel.value))
+    : baseRows
   return scopedRows.filter(item => item.rate !== null && item.rate < riskThreshold.value)
 })
 
@@ -1607,6 +1642,7 @@ const shouldUseComparisonTemplate = computed(() => (
 const showComparisonChart = computed(() => shouldUseComparisonTemplate.value)
 
 const comparisonChartTitle = computed(() => {
+  if (isLevelOnlyOverview.value) return `${comparisonLevelLabel.value || '对象'}筛选结果`
   if (isFilterResult.value) return `${comparisonLevelLabel.value || '对象'}筛选结果`
   if (isRankingResult.value) return `${comparisonLevelLabel.value || '对象'}排名`
   return `${comparisonLevelLabel.value || '对象'}对比`
@@ -1881,6 +1917,16 @@ const secondaryDrillAllRows = computed(() => {
 })
 
 const secondaryDrillRows = computed(() => {
+  // 多父节点 overview：直接把各父节点的下级汇总起来，按父节点分组展示
+  if (isMultiParentOverview.value) {
+    const parentNames = resolvedMemberNames.value
+    return normalizedRows.value.filter(item => (
+      item.rate !== null &&
+      item.parent &&
+      parentNames.some(parent => sameOrgName(item.parent, parent)) &&
+      !parentNames.some(parent => sameOrgName(item.name, parent))
+    ))
+  }
   const rows = isRankingQuestion.value && managementLayerRows.value.length
     ? managementLayerRows.value
     : secondaryDrillAllRows.value

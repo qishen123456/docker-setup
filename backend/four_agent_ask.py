@@ -911,8 +911,14 @@ LIMIT 10000
             target_level = "业务代表"
         overview_tokens = ["业绩", "表现", "情况", "咋样", "怎样", "如何"]
         has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
+        # 过滤掉数据集根节点别名，避免把“商用事业部”本身也当成查询对象
+        dataset = self._safe_dict(context.get("dataset"))
+        filtered_specific_names = [
+            n for n in specific_names
+            if n and not FourAgentAskService._is_dataset_root_name(n, dataset)
+        ]
         if (
-            len(specific_names) >= 2
+            len(filtered_specific_names) >= 2
             and target_level
             and not filter_problem
             and not drilldown_problem
@@ -921,17 +927,35 @@ LIMIT 10000
             and any(token in text for token in overview_tokens)
             and intent.get("intent") == "unknown"
         ):
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": "level_only",
-                "filter_metric_column": "",
-                "filter_operator": "",
-                "filter_value": None,
-                "direction": "desc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["multi_entity_level_overview"],
-            })
+            person_levels = {"业务代表", "业务员", "承接人", "负责人", "个人"}
+            is_person_overview = target_level in person_levels
+            if is_person_overview:
+                intent.update({
+                    "intent": "filter",
+                    "target_level": target_level,
+                    "filter_metric_key": "level_only",
+                    "filter_metric_column": "",
+                    "filter_operator": "",
+                    "filter_value": None,
+                    "_multi_parent_names": filtered_specific_names,
+                    "direction": "desc",
+                    "output_mode": "matched_nodes_first",
+                    "matched_triggers": ["multi_entity_level_overview"],
+                })
+            else:
+                intent.update({
+                    "intent": "filter",
+                    "target_level": target_level,
+                    "filter_metric_key": "level_only",
+                    "filter_metric_column": "",
+                    "filter_operator": "",
+                    "filter_value": None,
+                    "_multi_parent": True,
+                    "_multi_parent_names": filtered_specific_names,
+                    "direction": "desc",
+                    "output_mode": "children_first",
+                    "matched_triggers": ["multi_parent_level_overview"],
+                })
             return intent
 
         # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）识别为下钻
@@ -1812,8 +1836,33 @@ LIMIT 10000
 
         op_text_map = {">": "大于", ">=": "大于等于", "<": "小于", "<=": "小于等于", "=": "等于", "between": "在"}
 
+        def _level_filter_title(names: List[str], level: str) -> str:
+            if not names:
+                suffix = f"{level}筛选结果" if level else "筛选结果"
+                return f"{domain}{suffix}" if domain else suffix
+            shown = names[:3]
+            joined = "、".join(shown)
+            if len(names) > 3:
+                joined = f"{joined}等"
+            return f"{domain}{joined}的筛选结果" if domain else f"{joined}的筛选结果"
+
         if intent == "filter":
             metric_key = str(query_intent.get("filter_metric_key") or "")
+            # 纯层级/点名 filter，没有附带数值阈值
+            if metric_key == "level_only":
+                resolved_names = FourAgentAskService._resolved_entity_names(dataset_result)
+                if query_intent.get("_multi_parent"):
+                    dataset_hint = {"dataset_name": dataset_result.get("dataset_name") or ""}
+                    parent_names = [
+                        n for n in (query_intent.get("_multi_parent_names") or resolved_names)
+                        if not FourAgentAskService._is_dataset_root_name(n, dataset_hint)
+                    ]
+                    shown = parent_names[:3]
+                    joined = "、".join(shown)
+                    if len(parent_names) > 3:
+                        joined = f"{joined}等"
+                    return f"{domain}{joined}的业绩" if domain else f"{joined}的业绩"
+                return _level_filter_title(resolved_names, target_level)
             metric_column = str(query_intent.get("filter_metric_column") or "")
             operator = str(query_intent.get("filter_operator") or "")
             value = query_intent.get("filter_value")
@@ -3885,6 +3934,37 @@ ranking_params 说明：
         return names
 
     @staticmethod
+    def _dataset_root_name(dataset: Dict[str, Any]) -> str:
+        """从数据集名称中提取可能的根节点名（如'商用事业部'），用于过滤默认带入的根节点别名。"""
+        name = str(dataset.get("dataset_name") or "").strip()
+        if not name:
+            return ""
+        name = re.sub(r"（[^）]+）", "", name)
+        name = re.sub(r"\s+", "", name)
+        name = re.sub(r"^(飞书|安吉|cloud|公共)", "", name, flags=re.I)
+        name = re.sub(
+            r"(测试数据集|数据集|数据|业绩|报告|分析|经营预算|预算|升级版|阶段一|阶段二|阶段[一二三四五六七八九十]+)$",
+            "",
+            name,
+            flags=re.I,
+        )
+        # 只要能匹配到“...事业部”，就取到事业部为止，避免残留“经营”等词
+        match = re.search(r".*?事业部", name)
+        if match:
+            return match.group(0)
+        return name
+
+    @staticmethod
+    def _is_dataset_root_name(name: str, dataset: Dict[str, Any]) -> bool:
+        root = FourAgentAskService._dataset_root_name(dataset)
+        if not root or not name:
+            return False
+        # 保守策略：只过滤名称明确为“XX事业部”的根节点别名，避免误伤普通业务词
+        if not root.endswith("事业部"):
+            return False
+        return name == root
+
+    @staticmethod
     def _looks_like_ranking_question(question: str) -> bool:
         text = str(question or "").lower()
         return bool(re.search(
@@ -5637,26 +5717,31 @@ ranking_params 说明：
 
         # 纯层级/条线过滤，不附带数值阈值
         if intent_is_filter and query_intent.get("filter_metric_key") == "level_only":
+            is_multi_parent = query_intent.get("_multi_parent") is True
             where_parts = []
-            if intent_target_level:
+            # 多父节点 overview 需要同时返回父节点本身和直接下级，不能限制单一层级
+            if intent_target_level and not is_multi_parent:
                 where_parts.append(f"层级 = '{intent_target_level}'")
-            elif "业务部" in normalized_question:
+            elif not is_multi_parent and "业务部" in normalized_question:
                 where_parts.append("层级 = '业务部'")
-            elif "代表处" in normalized_question:
+            elif not is_multi_parent and "代表处" in normalized_question:
                 where_parts.append("层级 = '代表处'")
-            elif "分公司" in normalized_question:
+            elif not is_multi_parent and "分公司" in normalized_question:
                 where_parts.append("层级 IN ('分公司', '业务部')")
             if "行业条线" in normalized_question:
                 where_parts.append("条线 = '行业条线'")
             elif "区域条线" in normalized_question:
                 where_parts.append("条线 = '区域条线'")
             # 若明确点名了多个具体对象，再按对象过滤，避免误走末端个人 KPI
-            entity_names = self._resolved_entity_names(context) or self._question_subject_names(normalized_question, context, include_resolved=False)
+            if is_multi_parent:
+                entity_names = query_intent.get("_multi_parent_names") or []
+            else:
+                entity_names = self._resolved_entity_names(context) or self._question_subject_names(normalized_question, context, include_resolved=False)
             if entity_names:
                 specific_names = [n for n in entity_names if n and n not in generic_level_terms]
                 if specific_names:
                     quoted_names = ",".join("'" + n.replace("'", "''") + "'" for n in specific_names)
-                    if intent_target_level == "业务代表":
+                    if intent_target_level == "业务代表" and not is_multi_parent:
                         where_parts.append(f"业务代表 IN ({quoted_names})")
                     else:
                         where_parts.append(f"节点名称 IN ({quoted_names}) OR 上级名称 IN ({quoted_names})")

@@ -186,6 +186,28 @@ class EcommerceFilterIntentTest(unittest.TestCase):
             service._looks_like_org_subject_question("国内业务部的业绩如何")
         )
 
+    def test_level_only_display_title_uses_entity_names(self):
+        """level_only 过滤标题应按 filter 语义展示，不再拼 raw metric key"""
+        service = self._service()
+        dataset_result = {
+            "dataset_name": "飞书商用事业部经营预算",
+            "resolved_entities": {
+                "all_members": ["靳锋", "赵标"],
+                "entities": [{"members": ["靳锋", "赵标"]}],
+            },
+            "query_intent": {
+                "intent": "filter",
+                "target_level": "业务代表",
+                "filter_metric_key": "level_only",
+                "filter_metric_column": "",
+                "filter_operator": "",
+                "filter_value": None,
+            },
+            "rows": [{"层级": "业务代表"}],
+        }
+        title = service._build_display_title("看下靳锋、赵标的业绩情况", dataset_result)
+        self.assertEqual(title, "商用事业部靳锋、赵标的筛选结果")
+
 
 if __name__ == "__main__":
     unittest.main()

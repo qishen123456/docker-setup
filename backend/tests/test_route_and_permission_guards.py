@@ -265,6 +265,58 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         self.assertIn("层级 = '业务代表'", sql)
         self.assertNotIn("WITH RECURSIVE", sql)
 
+    def test_multi_parent_display_title_uses_performance_suffix(self):
+        """multi_parent 标题应使用'的业绩'，且不应包含数据集根节点别名"""
+        service = object.__new__(FourAgentAskService)
+        dataset_result = {
+            "dataset_name": "飞书商用事业部经营预算",
+            "resolved_entities": {
+                # 根节点别名可能混入解析结果
+                "all_members": ["商用事业部", "东部分公司", "西部分公司"],
+                "entities": [{"members": ["商用事业部", "东部分公司", "西部分公司"]}],
+            },
+            "query_intent": {
+                "intent": "filter",
+                "target_level": "分公司",
+                "filter_metric_key": "level_only",
+                "_multi_parent": True,
+                "_multi_parent_names": ["东部分公司", "西部分公司"],
+            },
+            "rows": [{"层级": "分公司"}],
+        }
+        title = service._build_display_title("看下东部分公司、西部分公司业绩", dataset_result)
+        self.assertEqual(title, "商用事业部东部分公司、西部分公司的业绩")
+
+    def test_multi_branch_parent_overview_goes_multi_parent(self):
+        """多个非叶子节点（分公司）的 overview 应走 multi_parent，并过滤掉数据集根节点别名"""
+        service = object.__new__(FourAgentAskService)
+        context = {
+            "dataset": {"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            "report_config": report_config_store.get_default_config(),
+            "resolved_entities": {
+                # 模拟 entity resolver 把数据集根节点别名也带进来的情况
+                "all_members": ["商用事业部", "东部分公司", "西部分公司"],
+                "entities": [{"members": ["商用事业部", "东部分公司", "西部分公司"]}],
+            },
+            "data_dictionary": [{"jsonb_key": "业务部"}],
+        }
+
+        intent = service._resolve_query_intent("看下东部分公司、西部分公司业绩", context)
+        self.assertEqual(intent["intent"], "filter")
+        self.assertEqual(intent["target_level"], "分公司")
+        self.assertTrue(intent.get("_multi_parent"))
+        self.assertEqual(intent.get("_multi_parent_names"), ["东部分公司", "西部分公司"])
+
+        context["query_intent"] = intent
+        sql = service._build_rule_based_sql("看下东部分公司、西部分公司业绩", intent, context)
+        # 多父节点 overview 外层 WHERE 应以对象过滤开头，不应以层级过滤开头
+        self.assertIn("\nWHERE 节点名称 IN ('东部分公司','西部分公司') OR 上级名称 IN ('东部分公司','西部分公司')\n", sql)
+        # 根节点别名只出现在 CASE 的默认父节点兜底里，不能出现在 WHERE 过滤条件中
+        self.assertNotIn("节点名称 IN ('商用事业部'", sql)
+        self.assertNotIn("上级名称 IN ('商用事业部'", sql)
+        self.assertNotIn("WHERE 层级 = '分公司'", sql)
+        self.assertNotIn("WITH RECURSIVE", sql)
+
     def test_question_subject_names_can_ignore_resolved_root_alias(self):
         service = object.__new__(FourAgentAskService)
         context = {
@@ -402,6 +454,161 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         )
 
         self.assertEqual(spec.get("scope", {}).get("focusNode"), "赵标")
+
+    def test_level_only_filter_summary_uses_entity_names(self):
+        """level_only 过滤的报告摘要不应 fallback 到 rate_metric 和默认阈值"""
+        rows = [
+            {
+                "节点名称": "靳锋",
+                "上级名称": "华东分公司",
+                "层级": "业务代表",
+                "年度开单金额": 1000000,
+                "总任务金额": 2000000,
+                "达成率": 50.0,
+                "剩余任务金额": 1000000,
+            },
+            {
+                "节点名称": "赵标",
+                "上级名称": "华北分公司",
+                "层级": "业务代表",
+                "年度开单金额": 1200000,
+                "总任务金额": 2000000,
+                "达成率": 60.0,
+                "剩余任务金额": 800000,
+            },
+        ]
+        config = {
+            "queryIntent": {
+                "intent": "filter",
+                "target_level": "业务代表",
+                "filter_metric_key": "level_only",
+                "filter_metric_column": "",
+                "filter_operator": "",
+                "filter_value": None,
+            },
+            "nameColumn": "节点名称",
+            "parentColumn": "上级名称",
+            "levelColumn": "层级",
+            "trackColumn": "条线",
+            "metrics": [
+                {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
+                {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
+                {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+                {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount"},
+            ],
+            "levels": [
+                {"name": "业务部", "values": ["业务部"]},
+                {"name": "业务代表", "values": ["业务代表"]},
+            ],
+        }
+
+        spec = build_report_spec(
+            question="看下靳锋、赵标的业绩情况",
+            rows=rows,
+            columns=list(rows[0].keys()),
+            report_config=config,
+            sql="",
+            dataset={"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            resolved_entities={"all_members": ["靳锋", "赵标"], "entities": [{"members": ["靳锋", "赵标"]}]},
+        )
+
+        summary = spec.get("answerSummary") or {}
+        self.assertEqual(summary.get("title"), "筛选结果")
+        self.assertEqual(summary.get("text"), "筛选出 2 个业务代表")
+        self.assertEqual(summary.get("metricLabel"), "")
+        self.assertEqual(summary.get("operator"), "")
+        self.assertIsNone(summary.get("value"))
+        self.assertEqual(summary.get("matchedCount"), 2)
+        self.assertEqual(len(spec.get("matchedNodes") or []), 2)
+
+    def test_multi_parent_spec_uses_parent_nodes_as_comparison_nodes(self):
+        """multi_parent overview 的 matchedNodes 应为父节点，摘要携带 _multi_parent 标记"""
+        rows = [
+            {
+                "节点名称": "东部分公司",
+                "上级名称": "商用事业部",
+                "层级": "分公司",
+                "年度开单金额": 5000000,
+                "总任务金额": 10000000,
+                "达成率": 50.0,
+                "剩余任务金额": 5000000,
+            },
+            {
+                "节点名称": "西部分公司",
+                "上级名称": "商用事业部",
+                "层级": "分公司",
+                "年度开单金额": 6000000,
+                "总任务金额": 12000000,
+                "达成率": 50.0,
+                "剩余任务金额": 6000000,
+            },
+            {
+                "节点名称": "山东代表处",
+                "上级名称": "东部分公司",
+                "层级": "代表处",
+                "年度开单金额": 1000000,
+                "总任务金额": 2000000,
+                "达成率": 50.0,
+                "剩余任务金额": 1000000,
+            },
+            {
+                "节点名称": "陕西代表处",
+                "上级名称": "西部分公司",
+                "层级": "代表处",
+                "年度开单金额": 1200000,
+                "总任务金额": 2400000,
+                "达成率": 50.0,
+                "剩余任务金额": 1200000,
+            },
+        ]
+        config = {
+            "queryIntent": {
+                "intent": "filter",
+                "target_level": "分公司",
+                "filter_metric_key": "level_only",
+                "filter_metric_column": "",
+                "filter_operator": "",
+                "filter_value": None,
+                "_multi_parent": True,
+                "_multi_parent_names": ["东部分公司", "西部分公司"],
+            },
+            "nameColumn": "节点名称",
+            "parentColumn": "上级名称",
+            "levelColumn": "层级",
+            "trackColumn": "条线",
+            "metrics": [
+                {"key": "task", "label": "总任务金额", "column": "总任务金额", "format": "amount"},
+                {"key": "actual", "label": "年度开单金额", "column": "年度开单金额", "format": "amount"},
+                {"key": "rate", "label": "达成率", "column": "达成率", "format": "percent"},
+                {"key": "remain", "label": "剩余任务金额", "column": "剩余任务金额", "format": "amount"},
+            ],
+            "levels": [
+                {"name": "分公司", "values": ["分公司"]},
+                {"name": "代表处", "values": ["代表处"]},
+            ],
+        }
+
+        spec = build_report_spec(
+            question="看下东部分公司、西部分公司业绩",
+            rows=rows,
+            columns=list(rows[0].keys()),
+            report_config=config,
+            sql="",
+            dataset={"dataset_code": "angel_business_2026_phase1", "dataset_name": "商用事业部（阶段一升级版）"},
+            resolved_entities={
+                # 模拟根节点别名被一起解析出来
+                "all_members": ["商用事业部", "东部分公司", "西部分公司"],
+                "entities": [{"members": ["商用事业部", "东部分公司", "西部分公司"]}],
+            },
+        )
+
+        summary = spec.get("answerSummary") or {}
+        self.assertEqual(summary.get("title"), "多对象业绩")
+        self.assertEqual(summary.get("text"), "东部分公司、西部分公司及其下级")
+        self.assertTrue(summary.get("_multi_parent"))
+        self.assertEqual(summary.get("matchedCount"), 2)
+        matched_names = [node.get("name") for node in spec.get("matchedNodes") or []]
+        self.assertEqual(sorted(matched_names), ["东部分公司", "西部分公司"])
 
 
 if __name__ == "__main__":

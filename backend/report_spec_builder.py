@@ -49,6 +49,55 @@ def _column_uses_wan_unit(column: str) -> bool:
     return "_万元" in text or "转换万" in text or text.endswith("万")
 
 
+def _resolved_member_names(resolved_entities: Optional[Dict[str, Any]]) -> List[str]:
+    """从 entity resolution 结果中提取已解析的具体对象名（保持顺序）。"""
+    if not isinstance(resolved_entities, dict):
+        return []
+    names: List[str] = []
+    for name in resolved_entities.get("all_members") or []:
+        value = str(name or "").strip()
+        if value and value not in names:
+            names.append(value)
+    for entity in resolved_entities.get("entities") or []:
+        if not isinstance(entity, dict):
+            continue
+        for name in entity.get("members") or []:
+            value = str(name or "").strip()
+            if value and value not in names:
+                names.append(value)
+    return names
+
+def _dataset_root_name(dataset: Dict[str, Any]) -> str:
+    """从数据集名称中提取可能的根节点名，用于过滤默认带入的根节点别名。"""
+    name = str(dataset.get("dataset_name") or "").strip()
+    if not name:
+        return ""
+    name = re.sub(r"（[^）]+）", "", name)
+    name = re.sub(r"\s+", "", name)
+    name = re.sub(r"^(飞书|安吉|cloud|公共)", "", name, flags=re.I)
+    name = re.sub(
+        r"(测试数据集|数据集|数据|业绩|报告|分析|经营预算|预算|升级版|阶段一|阶段二|阶段[一二三四五六七八九十]+)$",
+        "",
+        name,
+        flags=re.I,
+    )
+    # 只要能匹配到“...事业部”，就取到事业部为止，避免残留“经营”等词
+    match = re.search(r".*?事业部", name)
+    if match:
+        return match.group(0)
+    return name
+
+
+def _is_dataset_root_name(name: str, dataset: Dict[str, Any]) -> bool:
+    root = _dataset_root_name(dataset)
+    if not root or not name:
+        return False
+    # 保守策略：只过滤名称明确为“XX事业部”的根节点别名，避免误伤普通业务词
+    if not root.endswith("事业部"):
+        return False
+    return name == root
+
+
 def _format_amount(value: float, metric: Optional[Dict[str, Any]] = None) -> str:
     unit = ""
     scale = 1.0
@@ -665,6 +714,10 @@ def build_report_spec(
     if not resolved_names:
         if profile:
             resolved_names = _resolved_member_names(resolve_member_mentions(question or "", profile))
+    # 多父节点 overview 过滤掉数据集根节点别名，避免把根节点当成查询对象
+    is_multi_parent = query_intent.get("_multi_parent") is True
+    if is_multi_parent:
+        resolved_names = [n for n in resolved_names if not _is_dataset_root_name(n, dataset)]
     explicit_single_focus_name = ""
     if len(resolved_names) == 1 and any((node.get("name") or "") == resolved_names[0] for node in nodes):
         explicit_single_focus_name = resolved_names[0]
@@ -767,6 +820,11 @@ def build_report_spec(
                 focus_node = level_nodes[0]
             elif query_intent.get("intent") == "filter":
                 focus_node = None
+    # 多父节点 overview：comparison_nodes 应该是被点名的父节点本身，而不是某个父节点的子节点
+    if is_multi_parent and matched_nodes:
+        comparison_nodes = matched_nodes
+        focus_node = None
+
     low_first = (
         str(query_intent.get("direction") or "").lower() == "asc"
         if query_intent.get("intent") == "ranking"
@@ -1245,89 +1303,164 @@ def build_report_spec(
     answer_summary: Dict[str, Any] = {}
     if answer_mode == "filter":
         filter_metric_key = str(query_intent.get("filter_metric_key") or "")
-        filter_metric_column = str(query_intent.get("filter_metric_column") or "")
-        filter_metric = next(
-            (
-                metric for metric in metrics
-                if (
-                    filter_metric_key and str(metric.get("key") or "") == filter_metric_key
-                ) or (
-                    filter_metric_column and filter_metric_column in {
-                        str(metric.get("column") or ""),
-                        str(metric.get("label") or ""),
-                        str(metric.get("key") or ""),
-                    }
+        target_level = str(query_intent.get("target_level") or "").strip() or compare_label
+
+        # 纯层级/点名 overview，没有附带数值阈值，不要 fallback 到 rate_metric 和默认风险阈值
+        if filter_metric_key == "level_only":
+            # 复用外层已过滤的 resolved_names，避免 inner scope 把根节点别名又带回来
+            level_resolved_names = resolved_names or _resolved_member_names(resolved_entities)
+            matched_source_nodes = list(comparison_nodes)
+            if rate_metric:
+                matched_source_nodes = sorted(
+                    matched_source_nodes,
+                    key=lambda item: _to_float(_row_value(item.get("raw") or {}, rate_metric)) or -float("inf"),
+                    reverse=True,
                 )
-            ),
-            None,
-        ) or rate_metric or sort_metric
-        filter_operator = str(query_intent.get("filter_operator") or "<")
-        try:
-            filter_value = float(query_intent.get("filter_value"))
-        except (TypeError, ValueError):
-            filter_value = thresholds.get("officeRisk") if filter_operator in {"<", "<="} else None
-        # intent 层保留原始数值，report spec 阶段根据问题中的单位换算，与 SQL 层口径一致
-        is_rate_metric = (
-            (filter_metric or {}).get("format") == "percent"
-            or "率" in str((filter_metric or {}).get("label") or "")
-        )
-        if not is_rate_metric and filter_value is not None:
-            if "亿" in question and filter_value < 10000:
-                filter_value = filter_value * 100000000
-            elif "万" in question and filter_value < 10000:
-                filter_value = filter_value * 10000
+            matched_filter_nodes = [
+                {
+                    "id": node.get("id"),
+                    "name": node.get("name"),
+                    "parentName": node.get("parentName"),
+                    "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
+                    "tag": comparison_tag_by_name.get(node.get("name")) or "",
+                    "kpis": [
+                        kpi_payload(metric, node.get("raw") or {})
+                        for metric in [task_metric, actual_metric, rate_metric, remain_metric]
+                        if metric
+                    ],
+                    "metric": (
+                        {
+                            "label": rate_metric.get("label") or rate_metric.get("column") or rate_metric.get("key"),
+                            "value": _format_value(_row_value(node.get("raw") or {}, rate_metric), rate_metric),
+                            "rawValue": _row_value(node.get("raw") or {}, rate_metric),
+                        }
+                        if rate_metric
+                        else None
+                    ),
+                }
+                for node in matched_source_nodes
+            ]
+            count = len(matched_filter_nodes)
+            is_multi_parent = query_intent.get("_multi_parent") is True
+            if is_multi_parent:
+                parent_names = resolved_names or _resolved_member_names(resolved_entities)
+                shown = "、".join(parent_names[:3]) if parent_names else ""
+                suffix = "等" if len(parent_names) > 3 else ""
+                actual_level = target_level or compare_label or "对象"
+                text = f"{shown}{suffix}及其下级" if shown else f"共 {count} 个{actual_level}"
+                answer_summary = {
+                    "mode": "filter",
+                    "title": "多对象业绩",
+                    "targetLevel": actual_level,
+                    "matchedCount": count,
+                    "metricLabel": "",
+                    "operator": "",
+                    "value": None,
+                    "text": text,
+                    "_level_only": True,
+                    "_multi_parent": True,
+                }
+            else:
+                actual_level = compare_label or target_level or "对象"
+                answer_summary = {
+                    "mode": "filter",
+                    "title": "筛选结果",
+                    "targetLevel": actual_level,
+                    "matchedCount": count,
+                    "metricLabel": "",
+                    "operator": "",
+                    "value": None,
+                    "text": (
+                        f"筛选出 {count} 个{actual_level}"
+                        if count
+                        else f"未筛选出符合条件的{actual_level}"
+                    ),
+                    "_level_only": True,
+                }
+        else:
+            filter_metric_column = str(query_intent.get("filter_metric_column") or "")
+            filter_metric = next(
+                (
+                    metric for metric in metrics
+                    if (
+                        filter_metric_key and str(metric.get("key") or "") == filter_metric_key
+                    ) or (
+                        filter_metric_column and filter_metric_column in {
+                            str(metric.get("column") or ""),
+                            str(metric.get("label") or ""),
+                            str(metric.get("key") or ""),
+                        }
+                    )
+                ),
+                None,
+            ) or rate_metric or sort_metric
+            filter_operator = str(query_intent.get("filter_operator") or "<")
+            try:
+                filter_value = float(query_intent.get("filter_value"))
+            except (TypeError, ValueError):
+                filter_value = thresholds.get("officeRisk") if filter_operator in {"<", "<="} else None
+            # intent 层保留原始数值，report spec 阶段根据问题中的单位换算，与 SQL 层口径一致
+            is_rate_metric = (
+                (filter_metric or {}).get("format") == "percent"
+                or "率" in str((filter_metric or {}).get("label") or "")
+            )
+            if not is_rate_metric and filter_value is not None:
+                if "亿" in question and filter_value < 10000:
+                    filter_value = filter_value * 100000000
+                elif "万" in question and filter_value < 10000:
+                    filter_value = filter_value * 10000
 
-        def filter_matches(node: Dict[str, Any]) -> bool:
-            value = _row_value(node.get("raw") or {}, filter_metric)
-            if value is None:
-                return False
-            if filter_value is None:
-                return True
-            if filter_operator in {"<", "<="}:
-                return value <= filter_value if filter_operator == "<=" else value < filter_value
-            if filter_operator in {">", ">="}:
-                return value >= filter_value if filter_operator == ">=" else value > filter_value
-            return value == filter_value
+            def filter_matches(node: Dict[str, Any]) -> bool:
+                value = _row_value(node.get("raw") or {}, filter_metric)
+                if value is None:
+                    return False
+                if filter_value is None:
+                    return True
+                if filter_operator in {"<", "<="}:
+                    return value <= filter_value if filter_operator == "<=" else value < filter_value
+                if filter_operator in {">", ">="}:
+                    return value >= filter_value if filter_operator == ">=" else value > filter_value
+                return value == filter_value
 
-        matched_source_nodes = sorted(
-            [node for node in comparison_nodes if filter_matches(node)],
-            key=lambda item: _row_sort_value(item.get("raw") or {}, filter_metric),
-            reverse=filter_operator in {">", ">="},
-        )
-        matched_filter_nodes = [
-            {
-                "id": node.get("id"),
-                "name": node.get("name"),
-                "parentName": node.get("parentName"),
-                "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
-                "tag": comparison_tag_by_name.get(node.get("name")) or "",
-                "kpis": [
-                    kpi_payload(metric, node.get("raw") or {})
-                    for metric in [task_metric, actual_metric, rate_metric, remain_metric]
-                    if metric
-                ],
-                "metric": {
-                    "label": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
-                    "value": _format_value(_row_value(node.get("raw") or {}, filter_metric), filter_metric),
-                    "rawValue": _row_value(node.get("raw") or {}, filter_metric),
-                },
+            matched_source_nodes = sorted(
+                [node for node in comparison_nodes if filter_matches(node)],
+                key=lambda item: _row_sort_value(item.get("raw") or {}, filter_metric),
+                reverse=filter_operator in {">", ">="},
+            )
+            matched_filter_nodes = [
+                {
+                    "id": node.get("id"),
+                    "name": node.get("name"),
+                    "parentName": node.get("parentName"),
+                    "levelLabel": node.get("levelValue") or node.get("levelName") or compare_label,
+                    "tag": comparison_tag_by_name.get(node.get("name")) or "",
+                    "kpis": [
+                        kpi_payload(metric, node.get("raw") or {})
+                        for metric in [task_metric, actual_metric, rate_metric, remain_metric]
+                        if metric
+                    ],
+                    "metric": {
+                        "label": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
+                        "value": _format_value(_row_value(node.get("raw") or {}, filter_metric), filter_metric),
+                        "rawValue": _row_value(node.get("raw") or {}, filter_metric),
+                    },
+                }
+                for node in matched_source_nodes
+            ]
+            answer_summary = {
+                "mode": "filter",
+                "title": "命中结果",
+                "targetLevel": compare_label,
+                "matchedCount": len(matched_filter_nodes),
+                "metricLabel": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
+                "operator": filter_operator,
+                "value": filter_value,
+                "text": (
+                    f"命中 {len(matched_filter_nodes)} 个{compare_label}"
+                    if matched_filter_nodes
+                    else f"未命中符合条件的{compare_label}"
+                ),
             }
-            for node in matched_source_nodes
-        ]
-        answer_summary = {
-            "mode": "filter",
-            "title": "命中结果",
-            "targetLevel": compare_label,
-            "matchedCount": len(matched_filter_nodes),
-            "metricLabel": filter_metric.get("label") or filter_metric.get("column") or filter_metric.get("key"),
-            "operator": filter_operator,
-            "value": filter_value,
-            "text": (
-                f"命中 {len(matched_filter_nodes)} 个{compare_label}"
-                if matched_filter_nodes
-                else f"未命中符合条件的{compare_label}"
-            ),
-        }
 
     if answer_mode == "ranking" and not answer_summary:
         rank_sides = str(query_intent.get("rank_sides") or "")
