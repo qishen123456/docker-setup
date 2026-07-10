@@ -240,6 +240,19 @@ class AdvancedAskService:
         return None
 
     def _dataset_metric(self, dataset: Dict[str, Any], tokens: List[str]) -> float | None:
+        overview = dataset.get("cross_dataset_subject_overview") if isinstance(dataset.get("cross_dataset_subject_overview"), dict) else {}
+        overview_map = {
+            "task": ["总任务", "任务金额", "目标", "task"],
+            "actual": ["年度开单", "开单金额", "开单", "完成", "实际", "actual"],
+            "rate": ["达成率", "完成率", "rate", "percent"],
+            "remain": ["剩余", "缺口", "差额", "remain", "gap"],
+        }
+        for key, aliases in overview_map.items():
+            if any(token in aliases for token in tokens):
+                value = self._number_value(overview.get(key))
+                if value is not None:
+                    return value
+                break
         return self._number_value(self._kpi_value(dataset, tokens) or self._row_value(dataset, tokens))
 
     @staticmethod
@@ -280,6 +293,109 @@ class AdvancedAskService:
             "rate": rate,
             "remain": remain,
         }
+
+    @staticmethod
+    def _infer_subject_level(name: str) -> str:
+        text = str(name or "").strip()
+        if "事业部" in text:
+            return "事业部"
+        if "分公司" in text:
+            return "分公司"
+        if "业务部" in text:
+            return "业务部"
+        if "代表处" in text:
+            return "代表处"
+        if "业务代表" in text or "业务员" in text:
+            return "业务代表"
+        return "对象"
+
+    def _build_subject_overview_from_rows(
+        self,
+        dataset: Dict[str, Any],
+        subject_name: str,
+        subject_level: str,
+    ) -> Dict[str, Any]:
+        rows = dataset.get("rows") if isinstance(dataset.get("rows"), list) else []
+        if not rows or not subject_name:
+            return {}
+
+        normalized_level = str(subject_level or "").strip()
+        candidates = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            node_name = str(row.get("节点名称") or "").strip()
+            if node_name != subject_name:
+                continue
+            level = str(row.get("层级") or row.get("层级级别") or "").strip()
+            track = str(row.get("条线") or "").strip()
+            score = 0
+            if normalized_level and level == normalized_level:
+                score += 6
+            if row.get("上级名称") in {None, ""}:
+                score += 4
+            if normalized_level and normalized_level in track:
+                score += 3
+            if "总体" in level or "总体" in track:
+                score += 2
+            candidates.append((score, row))
+
+        if not candidates:
+            return {}
+
+        # 同一主体可能因为条线/汇总视图出现多行，同名根节点优先按层级和空上级打分，
+        # 再用任务/实际金额排序，尽量选中最完整的主体总览行。
+        best_row = sorted(
+            candidates,
+            key=lambda item: (
+                item[0],
+                self._number_value(item[1].get("总任务金额")) or -1,
+                self._number_value(item[1].get("年度开单金额")) or -1,
+                self._number_value(item[1].get("达成率")) or -1,
+            ),
+            reverse=True,
+        )[0][1]
+
+        task = self._number_value(best_row.get("总任务金额"))
+        actual = self._number_value(best_row.get("年度开单金额"))
+        rate = self._number_value(best_row.get("达成率"))
+        remain = self._number_value(best_row.get("剩余任务金额"))
+        if rate is None and task:
+            rate = (actual or 0) / task * 100
+        if remain is None and task is not None and actual is not None:
+            remain = task - actual
+
+        return {
+            "name": subject_name,
+            "level": normalized_level or self._infer_subject_level(subject_name),
+            "task": task,
+            "actual": actual,
+            "rate": rate,
+            "remain": remain,
+            "row": best_row,
+        }
+
+    def _enrich_cross_dataset_subject_overviews(self, result: Dict[str, Any], route_guard: Dict[str, Any] | None = None) -> None:
+        datasets = result.get("dataset_results") if isinstance(result, dict) else []
+        if not isinstance(datasets, list) or len(datasets) < 2:
+            return
+        subject_map = self._dataset_subject_map(route_guard)
+        for dataset in datasets:
+            if not isinstance(dataset, dict):
+                continue
+            try:
+                dataset_id = int(dataset.get("dataset_id") or dataset.get("id") or 0)
+            except Exception:
+                dataset_id = 0
+            subject_name = str(subject_map.get(dataset_id) or dataset.get("comparison_subject_name") or "").strip()
+            if not subject_name:
+                continue
+            subject_level = str(dataset.get("comparison_subject_level") or self._infer_subject_level(subject_name)).strip()
+            dataset["comparison_subject_name"] = subject_name
+            dataset["comparison_subject_level"] = subject_level
+            overview = self._build_subject_overview_from_rows(dataset, subject_name, subject_level)
+            if overview:
+                dataset["cross_dataset_subject_overview"] = overview
 
     def _build_cross_dataset_conclusion(self, result: Dict[str, Any], route_guard: Dict[str, Any] | None = None) -> Dict[str, Any]:
         datasets = result.get("dataset_results") if isinstance(result, dict) else []
@@ -1130,6 +1246,7 @@ class AdvancedAskService:
             if route_guard.get("action") == "cross_dataset_compare":
                 result["question"] = question
                 result["advanced_execution_question"] = fallback_kwargs.get("question")
+                self._enrich_cross_dataset_subject_overviews(result, route_guard)
             try:
                 result_diagnostics = self._run_result_trace(
                     question=question,

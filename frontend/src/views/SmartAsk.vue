@@ -1425,19 +1425,24 @@ const inferSubjectLevel = (name) => {
 
 const buildDatasetComparisonRow = (dataset) => {
   const subjectName = dataset?.comparison_subject_name || dataset?.dataset_name || `数据集 ${dataset?.dataset_id || ''}`.trim()
-  const task = findDatasetKpiNumber(dataset, /总任务|任务金额|目标|task/i)
+  const overview = dataset?.cross_dataset_subject_overview || {}
+  const task = parseMetricNumber(overview?.task)
+    ?? findDatasetKpiNumber(dataset, /总任务|任务金额|目标|task/i)
     ?? findDatasetRowNumber(dataset, /总任务|任务金额|目标/i)
-  const actual = findDatasetKpiNumber(dataset, /年度开单|开单金额|开单|完成|实际|actual/i)
+  const actual = parseMetricNumber(overview?.actual)
+    ?? findDatasetKpiNumber(dataset, /年度开单|开单金额|开单|完成|实际|actual/i)
     ?? findDatasetRowNumber(dataset, /年度开单|开单金额|开单|完成|实际/i)
-  const rate = findDatasetKpiNumber(dataset, /达成率|完成率|rate|percent/i)
+  const rate = parseMetricNumber(overview?.rate)
+    ?? findDatasetKpiNumber(dataset, /达成率|完成率|rate|percent/i)
     ?? findDatasetRowNumber(dataset, /达成率|完成率/i)
     ?? (task ? (Number(actual || 0) / task) * 100 : null)
-  const remain = findDatasetKpiNumber(dataset, /剩余|缺口|差额|remain|gap/i)
+  const remain = parseMetricNumber(overview?.remain)
+    ?? findDatasetKpiNumber(dataset, /剩余|缺口|差额|remain|gap/i)
     ?? findDatasetRowNumber(dataset, /剩余|缺口|差额/i)
     ?? (task !== null && actual !== null ? task - actual : null)
   return {
     节点名称: subjectName,
-    层级: dataset?.comparison_subject_level || inferSubjectLevel(subjectName),
+    层级: overview?.level || dataset?.comparison_subject_level || inferSubjectLevel(subjectName),
     总任务金额: task,
     年度开单金额: actual,
     达成率: rate,

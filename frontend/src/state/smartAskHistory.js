@@ -309,12 +309,40 @@ const mergeHistoryItems = (localItems = [], remoteItems = []) => {
 }
 
 const pushHistoryToServer = async (item) => {
-  if (!item?.id || typeof window === 'undefined') return
+  if (!item?.id || typeof window === 'undefined') return { ok: false, stale: false }
   try {
     await saveSmartAskReportHistory(item)
-  } catch {
-    // Local history remains available if the backend is offline.
+    return { ok: true, stale: false }
+  } catch (error) {
+    const stale = error?.response?.data?.code === 'stale_history_snapshot'
+    return { ok: false, stale }
   }
+}
+
+const pushLocalOnlyHistoryItems = async (localItems = [], remoteItems = []) => {
+  const remoteIds = new Set(remoteItems.map(item => item?.id).filter(Boolean))
+  const localOnlyItems = localItems.filter(item => item?.id && !remoteIds.has(item.id))
+  if (!localOnlyItems.length) return new Set()
+
+  const rejectedIds = new Set()
+  await Promise.all(localOnlyItems.map(async (item) => {
+    const result = await pushHistoryToServer(item)
+    if (result.stale) rejectedIds.add(item.id)
+  }))
+  return rejectedIds
+}
+
+const removeServerRejectedLocalHistory = (items = [], rejectedIds = new Set()) => {
+  if (!rejectedIds.size) return items
+  return items.filter(item => !rejectedIds.has(item?.id))
+}
+
+const saveHistoryItemInBackground = (item) => {
+  pushHistoryToServer(item).then((result) => {
+    if (!result.stale) return
+    historySessions.value = historySessions.value.filter(entry => entry.id !== item.id)
+    persistSmartAskHistory()
+  })
 }
 
 export const syncSmartAskHistoryFromServer = async () => {
@@ -350,14 +378,10 @@ export const syncSmartAskHistoryFromServer = async () => {
   const localItems = clone(historySessions.value)
   const remoteItems = Array.isArray(response?.history) ? response.history : []
   console.warn('[smartAskHistory] sync merge', { localLen: localItems.length, remoteLen: remoteItems.length })
-  historySessions.value = mergeHistoryItems(localItems, remoteItems)
+  const rejectedLocalIds = await pushLocalOnlyHistoryItems(localItems, remoteItems)
+  const safeLocalItems = removeServerRejectedLocalHistory(localItems, rejectedLocalIds)
+  historySessions.value = mergeHistoryItems(safeLocalItems, remoteItems)
   persistSmartAskHistory()
-
-  // 清空后不应再把旧记录推回服务端；通过 startClearGeneration 保证。
-  const remoteIds = new Set(remoteItems.map(item => item?.id).filter(Boolean))
-  localItems
-    .filter(item => item?.id && !remoteIds.has(item.id))
-    .forEach(item => { pushHistoryToServer(item) })
   console.warn('[smartAskHistory] sync done', { len: historySessions.value.length })
   return historySessions.value
 }
@@ -367,7 +391,7 @@ export const upsertSmartAskHistory = (payload) => {
   if (isClearing) return ''
   const nextItem = normalizeHistoryItem(payload)
   if (!nextItem) return ''
-  pushHistoryToServer(nextItem)
+  saveHistoryItemInBackground(nextItem)
   historySessions.value = [
     nextItem,
     ...historySessions.value.filter(item => item.id !== nextItem.id),

@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import unittest
@@ -9,18 +8,22 @@ from four_agent_ask import FourAgentAskService
 import dataset_report_config as report_config_store
 
 
+ECOMMERCE_PROFILE = {
+    "levels": [
+        {"dimension_name": "事业部", "aliases": ["事业部"], "members": ["电商事业部"], "groups": []},
+        {"dimension_name": "业务部", "aliases": ["业务部"], "members": ["国内业务部", "跨境业务部", "直营零售部"], "groups": []},
+        {"dimension_name": "业务承接角色", "aliases": ["业务承接角色", "承接角色"], "members": ["京东直营", "亚马逊"], "groups": []},
+        {"dimension_name": "承接人", "aliases": ["承接人", "业务承接人", "负责人"], "members": ["张三", "李四"], "groups": []},
+    ]
+}
+
+
 class EcommerceFilterIntentTest(unittest.TestCase):
     def _service(self):
         return object.__new__(FourAgentAskService)
 
     def _profile(self):
-        path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "data",
-            "dataset_dimension_profiles.json",
-        )
-        with open(path, encoding="utf-8") as f:
-            return json.load(f).get("feishu_tbldianshang", {})
+        return ECOMMERCE_PROFILE
 
     def _context(self):
         return {
@@ -140,6 +143,19 @@ class EcommerceFilterIntentTest(unittest.TestCase):
         }
         title = service._build_display_title("看下前三的业务承接人", dataset_result)
         self.assertEqual(title, "排名前3的承接人")
+
+    def test_ecommerce_root_performance_drills_to_business_departments(self):
+        service = self._service()
+        context = self._context()
+        question = "电商事业部的业绩"
+        intent = service._resolve_query_intent(question, context)
+
+        context["query_intent"] = intent
+        context["original_question"] = question
+        sql = service._build_rule_based_sql(question, {}, context)
+
+        self.assertIn("层级级别 = '业务部'", sql)
+        self.assertNotIn("WHERE 当前年 = '2026' AND 层级级别 = '事业部'", sql)
 
     def test_bearer_level_not_overridden_by_rewritten_business_department_query(self):
         """模拟 confirm_by_boss 把 resolved_subject 改写成业务部后，意图仍解析为承接人"""

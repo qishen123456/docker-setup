@@ -1093,6 +1093,9 @@ const ORG_LEVEL_TERMS = ['分公司', '城市分公司', '城市公司', '业务
 const ORG_GENERIC_TERMS = [
   '看下', '看一下', '查下', '查一下', '问下', '问一下', '业绩', '排名', '排行', '情况',
   '怎么样', '如何', '达成率', '完成率', '完成情况', '表现', '数据', '呢', '吗', '呀', '吧',
+  '垫底', '倒数', '落后', '最低', '最差', '最高', '最好', '前', '后', '第', 'top',
+  '低于', '高于', '超过', '大于', '小于', '不少于', '不低于', '不高于', '以上', '以下',
+  '几个', '几家', '个', '家', '名', '位',
 ]
 
 const shouldReuseConfirmedDatasetForQuestion = (question, selectedDatasetId) => {
@@ -1110,6 +1113,7 @@ const shouldReuseConfirmedDatasetForQuestion = (question, selectedDatasetId) => 
     normalized = normalized.split(term).join('')
   })
   normalized = normalized.replace(/[，。！？、,.!?\-_:：；"“”'‘’()（）【】\[\]0-9]/g, '')
+  normalized = normalized.replace(/[一二两三四五六七八九十百千万]/g, '')
 
   return normalized.length >= 2
 }

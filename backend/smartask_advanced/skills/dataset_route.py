@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 from typing import Any, Dict, List
 
@@ -56,15 +58,69 @@ class DatasetRouteSkill:
         return supported
 
     @staticmethod
+    def _node_index_supported_levels(dataset: Dict[str, Any]) -> set[str]:
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+            "config",
+            "dataset_node_index.json",
+        )
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                node_index = json.load(fh)
+        except Exception:
+            return set()
+        try:
+            dataset_id = int(dataset.get("id") or 0)
+        except Exception:
+            dataset_id = 0
+        dataset_code = DatasetRouteSkill._compact(dataset.get("dataset_code") or "")
+        dataset_name = DatasetRouteSkill._compact(dataset.get("dataset_name") or "")
+        supported = set()
+        for item in node_index.get("datasets") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                item_id = int(item.get("dataset_id") or 0)
+            except Exception:
+                item_id = 0
+            item_code = DatasetRouteSkill._compact(item.get("dataset_code") or "")
+            item_name = DatasetRouteSkill._compact(item.get("dataset_name") or "")
+            code_matches = bool(
+                dataset_code
+                and (
+                    item_code == dataset_code
+                    or item_code.startswith(f"{dataset_code}_")
+                    or dataset_code.startswith(f"{item_code}_")
+                )
+            )
+            name_matches = bool(
+                dataset_name
+                and (
+                    item_name == dataset_name
+                    or dataset_name in item_name
+                    or item_name in dataset_name
+                )
+            )
+            if not ((dataset_id and item_id == dataset_id) or code_matches or name_matches):
+                continue
+            for node in item.get("nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                level = DatasetRouteSkill._compact(node.get("node_level") or "")
+                if level in DatasetRouteSkill.SPECIFIC_LEVELS:
+                    supported.add(level)
+        return supported
+
+    @staticmethod
     def _profile_level_score(question: str, dataset: Dict[str, Any]) -> int:
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-        if not profile:
-            return 0
         text = str(question or "").replace(" ", "").lower()
         asked = {item for item in DatasetRouteSkill.SPECIFIC_LEVELS if item in text}
         if not asked:
             return 0
-        supported = DatasetRouteSkill._profile_supported_levels(profile)
+        supported = DatasetRouteSkill._profile_supported_levels(profile) if profile else set()
+        if not supported:
+            supported = DatasetRouteSkill._node_index_supported_levels(dataset)
         score = 0
         if asked.intersection(supported):
             score = 55

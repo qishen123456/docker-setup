@@ -22,6 +22,7 @@ from data_permission_store import allowed_dataset_ids_for_user
 from feature_flags import feature_available
 from system_log_store import log_event, request_snapshot
 from smartask_report_history_store import (
+    StaleHistorySnapshotError,
     clear_history as clear_report_history,
     list_history as list_report_history,
     remove_history as remove_report_history,
@@ -61,6 +62,8 @@ def save_report_history():
     try:
         saved = upsert_report_history(user, item)
         return jsonify({"success": True, "item": saved})
+    except StaleHistorySnapshotError as exc:
+        return jsonify({"error": str(exc), "code": exc.code}), 409
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -1055,4 +1058,3 @@ def confirm_by_boss_stream():
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     return response
-

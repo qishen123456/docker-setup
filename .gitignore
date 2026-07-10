@@ -36,7 +36,7 @@ Thumbs.db
 # Docker bind-mount runtime data (DO NOT delete these directories; they are mounted into containers)
 # - logs/          : feishu sync logs + fallback system logs
 # - backend/logs/  : backend fallback system logs
-# - backend/data/  : agent_registry.json + dataset_dimension_profiles.json
+# - backend/data/  : agent_registry.json + optional legacy dataset_dimension_profiles.json
 # - config/        : runtime JSON configs (already protected below)
 # - backups/       : runtime backups
 # - backend/imports/: import bundles

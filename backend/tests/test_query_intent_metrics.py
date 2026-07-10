@@ -50,7 +50,7 @@ class QueryIntentMetricTest(unittest.TestCase):
         self.assertEqual(intent["top_n"], 3)
         self.assertEqual(intent["direction"], "asc")
 
-    def test_llm_ranking_params_fills_missing_top_n_for_colloquial_bottom(self):
+    def test_colloquial_bottom_numeric_count_uses_rule_before_llm(self):
         service = self._service()
         context = {
             "report_config": report_config_store.get_default_config(),
@@ -64,12 +64,105 @@ class QueryIntentMetricTest(unittest.TestCase):
             },
         }
 
-        # "垫底"被规则识别为 bottom 方向，但数量解析不到，应由 LLM 补充
+        # 明确数量必须由规则层保住；LLM 即使参与，也不能把数量覆盖丢。
         intent = service._resolve_query_intent("消费者事业部，业绩排名垫底的 3 家分公司", context)
 
         self.assertEqual(intent["intent"], "ranking")
         self.assertEqual(intent["target_level"], "分公司")
         self.assertEqual(intent["top_n"], 3)
+        self.assertEqual(intent["direction"], "asc")
+        self.assertEqual(intent["rank_sides"], "bottom")
+
+    def test_colloquial_bottom_explicit_count_uses_rule_number(self):
+        service = self._service()
+        context = {
+            "report_config": report_config_store.get_default_config(),
+            "data_dictionary": [{"jsonb_key": "分公司"}, {"jsonb_key": "城市分公司"}],
+        }
+
+        cases = [
+            ("垫底的三个分公司", "分公司", 3),
+            ("垫底的3个分公司", "分公司", 3),
+            ("消费者事业部垫底的5个城市分公司", "城市分公司", 5),
+        ]
+        for question, target_level, expected_top_n in cases:
+            with self.subTest(question=question):
+                intent = service._resolve_query_intent(question, context)
+                self.assertEqual(intent["intent"], "ranking")
+                self.assertEqual(intent["target_level"], target_level)
+                self.assertEqual(intent["top_n"], expected_top_n)
+                self.assertEqual(intent["direction"], "asc")
+                self.assertEqual(intent["rank_sides"], "bottom")
+
+    def test_node_index_llm_ranking_params_work_without_dimension_profile(self):
+        service = self._service()
+        service._dataset_node_index = {
+            "datasets": [
+                {
+                    "dataset_id": 2,
+                    "dataset_code": "consumer_business_standard_v1",
+                    "dataset_name": "消费者事业部任务达成分析（标准版）",
+                    "nodes": [
+                        {
+                            "node_name": "上海城市公司",
+                            "node_level": "城市分公司",
+                            "parent_name": "江浙沪分公司",
+                            "aliases": ["上海", "上海城市公司"],
+                        },
+                        {
+                            "node_name": "洛阳城市公司",
+                            "node_level": "城市分公司",
+                            "parent_name": "豫陕分公司",
+                            "aliases": ["洛阳", "洛阳城市公司"],
+                        },
+                    ],
+                }
+            ]
+        }
+
+        def fake_chat_json(system_prompt, user_prompt, fallback, **kwargs):
+            self.assertIn("当前数据集事实索引", user_prompt)
+            self.assertIn("城市分公司", user_prompt)
+            return {
+                "intent": "ranking",
+                "scope_mode": "ranking",
+                "entities": [],
+                "ranking_params": {
+                    "top_n": 5,
+                    "rank_sides": "bottom",
+                    "direction": "asc",
+                    "metric_hint": None,
+                },
+                "has_specific_node": False,
+                "confidence": 0.92,
+            }
+
+        service._chat_json = fake_chat_json
+        context = {
+            "dataset": {
+                "id": 2,
+                "dataset_code": "consumer_business_standard_v1",
+                "dataset_name": "消费者事业部任务达成分析（标准版）",
+            },
+            "report_config": report_config_store.get_default_config(),
+            "data_dictionary": [{"jsonb_key": "城市分公司"}],
+        }
+
+        resolved = service._resolve_question_entities("消费者事业部垫底的5个城市分公司", context)
+
+        self.assertEqual(resolved["source"], "llm_node_index_semantic")
+        self.assertEqual(resolved["scope_mode"], "ranking")
+        self.assertFalse(resolved["has_specific_node"])
+        self.assertEqual(resolved["ranking_params"]["top_n"], 5)
+        self.assertEqual(resolved["ranking_params"]["rank_sides"], "bottom")
+
+        intent_context = dict(context)
+        intent_context["resolved_entities"] = resolved
+        intent = service._resolve_query_intent("消费者事业部垫底的5个城市分公司", intent_context)
+
+        self.assertEqual(intent["intent"], "ranking")
+        self.assertEqual(intent["target_level"], "城市分公司")
+        self.assertEqual(intent["top_n"], 5)
         self.assertEqual(intent["direction"], "asc")
         self.assertEqual(intent["rank_sides"], "bottom")
 

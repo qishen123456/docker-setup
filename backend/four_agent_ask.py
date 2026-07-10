@@ -442,14 +442,14 @@ class FourAgentAskService:
         pattern = r"(\d+|[一二两三四五六七八九十]+)"
         return (
             re.search(rf"(?:Top|TOP|top|前|后|倒数)\s*{pattern}", text or "")
-            or re.search(rf"(?:最高|最低|最好|最差)(?:的)?\s*{pattern}\s*(?:个|名|位)?", text or "")
+            or re.search(rf"(?:最高|最低|最好|最差|垫底|落后)(?:的)?\s*{pattern}\s*(?:个|名|位|家)?", text or "")
             or re.search(rf"第\s*{pattern}\s*(?:名|位)?", text or "")
         )
 
     def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
         text = str(text or "")
         top_match = re.search(r"(?:Top|TOP|top|前)\s*(\d+|[一二两三四五六七八九十]+)", text)
-        bottom_match = re.search(r"(?:后|倒数)\s*(\d+|[一二两三四五六七八九十]+)", text)
+        bottom_match = re.search(r"(?:后|倒数|垫底|落后)(?:的)?\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|名|位|家)?", text)
         generic_match = self._rank_limit_match(text)
 
         top_limit = self._parse_cn_int(top_match.group(1), 0) if top_match else 0
@@ -2993,6 +2993,163 @@ LIMIT 10000
             return flag
         return True
 
+    def _current_dataset_ids_for_node_index(self, context: Dict[str, Any]) -> List[int]:
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_ids: List[int] = []
+        try:
+            dataset_id = int(dataset.get("id") or 0)
+        except Exception:
+            dataset_id = 0
+        if dataset_id:
+            dataset_ids.append(dataset_id)
+        dataset_code = str(dataset.get("dataset_code") or "").strip()
+        dataset_name = str(dataset.get("dataset_name") or "").strip()
+        normalized_code = self._normalize_compact_text(dataset_code)
+        normalized_name = self._normalize_compact_text(dataset_name)
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+            self._dataset_node_index = node_index
+        for item in node_index.get("datasets") or []:
+            if not isinstance(item, dict):
+                continue
+            item_code = str(item.get("dataset_code") or "").strip()
+            item_name = str(item.get("dataset_name") or "").strip()
+            normalized_item_code = self._normalize_compact_text(item_code)
+            normalized_item_name = self._normalize_compact_text(item_name)
+            code_matches = bool(
+                normalized_code
+                and (
+                    normalized_item_code == normalized_code
+                    or normalized_item_code.startswith(f"{normalized_code}_")
+                    or normalized_code.startswith(f"{normalized_item_code}_")
+                )
+            )
+            name_matches = bool(
+                normalized_name
+                and (
+                    normalized_item_name == normalized_name
+                    or normalized_name in normalized_item_name
+                    or normalized_item_name in normalized_name
+                )
+            )
+            if code_matches or name_matches:
+                try:
+                    matched_id = int(item.get("dataset_id") or 0)
+                except Exception:
+                    matched_id = 0
+                if matched_id and matched_id not in dataset_ids:
+                    dataset_ids.append(matched_id)
+        return dataset_ids
+
+    def _node_index_members_by_level(self, context: Dict[str, Any], levels: set[str]) -> set[str]:
+        dataset_ids = self._current_dataset_ids_for_node_index(context)
+        if not dataset_ids:
+            return set()
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+            self._dataset_node_index = node_index
+        allowed_ids = {int(item) for item in dataset_ids}
+        members: set[str] = set()
+        for dataset_item in node_index.get("datasets") or []:
+            if not isinstance(dataset_item, dict):
+                continue
+            try:
+                item_dataset_id = int(dataset_item.get("dataset_id") or 0)
+            except Exception:
+                item_dataset_id = 0
+            if item_dataset_id not in allowed_ids:
+                continue
+            for node in dataset_item.get("nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                if str(node.get("node_level") or "").strip() not in levels:
+                    continue
+                node_name = str(node.get("node_name") or "").strip()
+                if node_name:
+                    members.add(node_name)
+        return members
+
+    def _node_index_member_level_map(self, context: Dict[str, Any]) -> Dict[str, str]:
+        dataset_ids = self._current_dataset_ids_for_node_index(context)
+        if not dataset_ids:
+            return {}
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+            self._dataset_node_index = node_index
+        allowed_ids = {int(item) for item in dataset_ids}
+        level_map: Dict[str, str] = {}
+        for dataset_item in node_index.get("datasets") or []:
+            if not isinstance(dataset_item, dict):
+                continue
+            try:
+                item_dataset_id = int(dataset_item.get("dataset_id") or 0)
+            except Exception:
+                item_dataset_id = 0
+            if item_dataset_id not in allowed_ids:
+                continue
+            for node in dataset_item.get("nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                node_name = str(node.get("node_name") or "").strip()
+                node_level = str(node.get("node_level") or "").strip()
+                if node_name and node_level:
+                    level_map[node_name] = node_level
+        return level_map
+
+    def _node_index_subject_names_from_question(self, question: str, context: Dict[str, Any]) -> List[str]:
+        text = str(question or "").replace("\n", " ").strip()
+        if not text:
+            return []
+        dataset_ids = self._current_dataset_ids_for_node_index(context)
+        if not dataset_ids:
+            return []
+        generic_level_aliases = {
+            "事业部", "分公司", "代表处", "业务部", "城市分公司", "城市公司",
+            "业务代表", "业务员", "承接人", "业务承接人", "业务承接角色",
+        }
+        expanded_text = text
+        compound_aliases = {
+            "东西部": "东部 西部",
+            "东部西部": "东部 西部",
+            "南北部": "南部 北部",
+            "南部北部": "南部 北部",
+        }
+        for raw, expanded in compound_aliases.items():
+            expanded_text = expanded_text.replace(raw, expanded)
+        candidates: List[Tuple[int, int, str]] = []
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+            self._dataset_node_index = node_index
+        allowed_ids = {int(item) for item in dataset_ids}
+        for alias_item in node_index.get("flat_alias_index") or []:
+            alias = str(alias_item.get("alias") or "").strip()
+            if len(alias) < 2 or alias in generic_level_aliases:
+                continue
+            pos = expanded_text.find(alias)
+            if pos < 0:
+                continue
+            for match in alias_item.get("matches") or []:
+                try:
+                    match_dataset_id = int(match.get("dataset_id") or 0)
+                except Exception:
+                    match_dataset_id = 0
+                if match_dataset_id not in allowed_ids:
+                    continue
+                node_name = str(match.get("node_name") or "").strip()
+                node_level = str(match.get("node_level") or "").strip()
+                if not node_name or node_name in generic_level_aliases or node_level in {"事业部"}:
+                    continue
+                candidates.append((pos, -len(alias), node_name))
+        result: List[str] = []
+        for _, _, node_name in sorted(candidates):
+            if node_name not in result:
+                result.append(node_name)
+        return result
+
     def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
         names = self._resolved_entity_names(context) if include_resolved else []
         if not self._has_specific_node(context):
@@ -3025,6 +3182,13 @@ LIMIT 10000
                     names.append(value)
             if names:
                 return names
+
+        node_index_names = self._node_index_subject_names_from_question(text, context)
+        if node_index_names:
+            for name in node_index_names:
+                if name not in names:
+                    names.append(name)
+            return names
 
         for candidate in self._role_person_subject_names(text):
             if candidate not in names:
@@ -3266,6 +3430,37 @@ LIMIT 10000
         if len(matches) == 1:
             return matches[0]
         return None
+
+    @staticmethod
+    def _node_index_match_key(item: Dict[str, Any]) -> Tuple[int, str, str, str, str]:
+        return (
+            int(item.get("dataset_id") or 0),
+            str(item.get("node_name") or "").strip(),
+            str(item.get("node_level") or "").strip(),
+            str(item.get("parent_name") or "").strip(),
+            str(item.get("track") or "").strip(),
+        )
+
+    def _dedupe_node_index_matches(
+        self,
+        matches: List[Dict[str, Any]],
+        dataset_ids: Optional[set[int]] = None,
+    ) -> List[Dict[str, Any]]:
+        deduped: List[Dict[str, Any]] = []
+        seen: set = set()
+        for item in matches or []:
+            try:
+                dataset_id = int(item.get("dataset_id") or 0)
+            except Exception:
+                continue
+            if dataset_ids is not None and dataset_id not in dataset_ids:
+                continue
+            key = self._node_index_match_key(item)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
 
     @staticmethod
     def _extract_subject_from_confirmation_label(label: str) -> str:
@@ -3679,6 +3874,30 @@ LIMIT 10000
         return member_map
 
     @staticmethod
+    def _normalize_llm_ranking_params(raw_ranking: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw_ranking, dict):
+            return None
+        try:
+            llm_top_n = int(raw_ranking.get("top_n")) if raw_ranking.get("top_n") is not None else None
+        except Exception:
+            llm_top_n = None
+        llm_sides = str(raw_ranking.get("rank_sides") or "").strip().lower()
+        if llm_sides not in {"top", "bottom", "both"}:
+            llm_sides = ""
+        llm_direction = str(raw_ranking.get("direction") or "").strip().lower()
+        if llm_direction not in {"asc", "desc"}:
+            llm_direction = ""
+        llm_metric = str(raw_ranking.get("metric_hint") or "").strip() or None
+        if llm_top_n is None and not llm_sides and not llm_direction and not llm_metric:
+            return None
+        return {
+            "top_n": llm_top_n,
+            "rank_sides": llm_sides,
+            "direction": llm_direction,
+            "metric_hint": llm_metric,
+        }
+
+    @staticmethod
     def _normalize_entity_resolution(
         raw: Dict[str, Any],
         fallback: Dict[str, Any],
@@ -3765,27 +3984,7 @@ LIMIT 10000
             confidence_value = 0
 
         # 解析并校验 LLM 输出的 ranking_params
-        ranking_params = None
-        raw_ranking = raw.get("ranking_params")
-        if isinstance(raw_ranking, dict):
-            try:
-                llm_top_n = int(raw_ranking.get("top_n")) if raw_ranking.get("top_n") is not None else None
-            except Exception:
-                llm_top_n = None
-            llm_sides = str(raw_ranking.get("rank_sides") or "").strip().lower()
-            if llm_sides not in {"top", "bottom", "both"}:
-                llm_sides = ""
-            llm_direction = str(raw_ranking.get("direction") or "").strip().lower()
-            if llm_direction not in {"asc", "desc"}:
-                llm_direction = ""
-            llm_metric = str(raw_ranking.get("metric_hint") or "").strip() or None
-            if llm_top_n is not None or llm_sides or llm_direction or llm_metric:
-                ranking_params = {
-                    "top_n": llm_top_n,
-                    "rank_sides": llm_sides,
-                    "direction": llm_direction,
-                    "metric_hint": llm_metric,
-                }
+        ranking_params = FourAgentAskService._normalize_llm_ranking_params(raw.get("ranking_params"))
 
         has_specific_node = raw.get("has_specific_node")
         if not isinstance(has_specific_node, bool):
@@ -3821,6 +4020,256 @@ LIMIT 10000
             return True
         return False
 
+    def _ranking_semantic_hint(self, question: str, context: Dict[str, Any]) -> bool:
+        text = self._normalize_chinese_numbers(str(question or "").replace("\n", " "))
+        if not text.strip():
+            return False
+        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
+        ranking_policy = self._safe_dict(self._safe_dict(config.get("intentPolicies")).get("ranking"))
+        triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]
+        semantic_tokens = [
+            "排名", "排行", "排序", "名次", "榜", "最高", "最低", "最好", "最差",
+            "最多", "最少", "最大", "最小", "垫底", "倒数", "落后", "领先",
+            "从高到低", "从低到高",
+        ]
+        if any(token in text for token in semantic_tokens):
+            return True
+        for trigger in triggers:
+            if trigger in {"前", "后"}:
+                if re.search(rf"{re.escape(trigger)}\s*(?:\d+|[一二两三四五六七八九十]+)", text):
+                    return True
+            elif trigger.lower() == "top":
+                if re.search(r"\btop\s*(?:\d+|[一二两三四五六七八九十]+)?", text, flags=re.I):
+                    return True
+            elif trigger.lower() in text.lower():
+                return True
+        return False
+
+    def _node_index_resolution_catalog(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        dataset = self._safe_dict(context.get("dataset"))
+        dataset_id = self._safe_int(dataset.get("id"), 0)
+        dataset_code = str(dataset.get("dataset_code") or "").strip()
+        dataset_name = str(dataset.get("dataset_name") or "").strip()
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+
+        matched_dataset: Dict[str, Any] = {}
+        for item in node_index.get("datasets") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                item_id = int(item.get("dataset_id") or 0)
+            except Exception:
+                item_id = 0
+            item_code = str(item.get("dataset_code") or "").strip()
+            item_name = str(item.get("dataset_name") or "").strip()
+            if (
+                (dataset_id and item_id == dataset_id)
+                or (dataset_code and item_code == dataset_code)
+                or (dataset_name and item_name == dataset_name)
+            ):
+                matched_dataset = item
+                break
+
+        levels: Dict[str, Dict[str, Any]] = {}
+        for node in matched_dataset.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            level_name = str(node.get("node_level") or "").strip()
+            node_name = str(node.get("node_name") or "").strip()
+            if not level_name or not node_name:
+                continue
+            bucket = levels.setdefault(level_name, {"dimension_name": level_name, "members": [], "aliases": []})
+            if node_name not in bucket["members"]:
+                bucket["members"].append(node_name)
+            for alias in node.get("aliases") or []:
+                alias_text = str(alias or "").strip()
+                if alias_text and alias_text not in bucket["aliases"]:
+                    bucket["aliases"].append(alias_text)
+
+        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
+        ranking_policy = self._safe_dict(self._safe_dict(config.get("intentPolicies")).get("ranking"))
+        for level_name, aliases in self._safe_dict(ranking_policy.get("targetLevelAliases")).items():
+            name = str(level_name or "").strip()
+            if not name:
+                continue
+            bucket = levels.setdefault(name, {"dimension_name": name, "members": [], "aliases": []})
+            for alias in aliases or []:
+                alias_text = str(alias or "").strip()
+                if alias_text and alias_text not in bucket["aliases"]:
+                    bucket["aliases"].append(alias_text)
+
+        known_levels = {
+            "事业部", "分公司", "业务部", "代表处", "业务代表", "业务员",
+            "城市分公司", "城市公司", "承接人", "业务承接角色",
+        }
+        for item in context.get("data_dictionary") or []:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("jsonb_key") or item.get("semantic_name") or item.get("column_name") or "").strip()
+            if key and key in known_levels:
+                levels.setdefault(key, {"dimension_name": key, "members": [], "aliases": [key]})
+
+        return {
+            "dataset": {
+                "dataset_id": dataset_id or matched_dataset.get("dataset_id"),
+                "dataset_code": dataset_code or matched_dataset.get("dataset_code"),
+                "dataset_name": dataset_name or matched_dataset.get("dataset_name"),
+            },
+            "levels": [
+                {
+                    "dimension_name": level.get("dimension_name"),
+                    "aliases": level.get("aliases", [])[:20],
+                    "members": level.get("members", [])[:60],
+                }
+                for level in levels.values()
+            ],
+        }
+
+    def _normalize_node_index_entity_resolution(
+        self,
+        raw: Dict[str, Any],
+        fallback: Dict[str, Any],
+        catalog: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        level_names = {
+            str(item.get("dimension_name") or "").strip()
+            for item in catalog.get("levels") or []
+            if isinstance(item, dict)
+        }
+        member_to_level: Dict[str, str] = {}
+        for level in catalog.get("levels") or []:
+            if not isinstance(level, dict):
+                continue
+            level_name = str(level.get("dimension_name") or "").strip()
+            for member in level.get("members") or []:
+                member_name = str(member or "").strip()
+                if member_name:
+                    member_to_level[member_name] = level_name
+
+        ordered_members: List[str] = []
+        entities_by_dimension: Dict[str, Dict[str, Any]] = {}
+        for entity in raw.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            dimension_name = str(entity.get("dimension_name") or "").strip()
+            if dimension_name and dimension_name not in level_names:
+                continue
+            for member in entity.get("members") or []:
+                member_name = str(member or "").strip()
+                if not member_name or (member_to_level and member_name not in member_to_level):
+                    continue
+                resolved_dimension = dimension_name or member_to_level.get(member_name) or ""
+                if member_name not in ordered_members:
+                    ordered_members.append(member_name)
+                bucket = entities_by_dimension.setdefault(
+                    resolved_dimension,
+                    {
+                        "dimension_name": resolved_dimension,
+                        "members": [],
+                        "matched_phrase": str(entity.get("matched_phrase") or entity.get("matched_alias") or "").strip(),
+                        "source": "llm_node_index_semantic",
+                    },
+                )
+                if member_name not in bucket["members"]:
+                    bucket["members"].append(member_name)
+
+        scope_mode = str(raw.get("scope_mode") or raw.get("intent") or fallback.get("scope_mode") or "").lower()
+        if len(ordered_members) > 1:
+            scope_mode = "compare"
+        elif len(ordered_members) == 1 and scope_mode not in {"aggregate", "ranking"}:
+            scope_mode = "single"
+        elif not ordered_members and scope_mode not in {"ranking", "aggregate"}:
+            scope_mode = "unknown"
+
+        confidence = raw.get("confidence", fallback.get("confidence", 0))
+        try:
+            confidence_value = float(confidence)
+        except Exception:
+            confidence_value = 0
+
+        has_specific_node = raw.get("has_specific_node")
+        if not isinstance(has_specific_node, bool):
+            has_specific_node = bool(ordered_members)
+
+        return {
+            "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else str(raw.get("intent") or fallback.get("intent") or "unknown")),
+            "scope_mode": scope_mode,
+            "entities": list(entities_by_dimension.values()),
+            "all_members": ordered_members,
+            "confidence": confidence_value,
+            "source": "llm_node_index_semantic" if raw else fallback.get("source", "no_profile"),
+            "ranking_params": self._normalize_llm_ranking_params(raw.get("ranking_params")),
+            "has_specific_node": has_specific_node,
+        }
+
+    def _resolve_question_entities_with_node_index(
+        self,
+        question: str,
+        context: Dict[str, Any],
+        fallback: Dict[str, Any],
+        trace: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        catalog = self._node_index_resolution_catalog(context)
+        system_prompt = (
+            "你是 SmartAsk 语义结构化拆解器。你的任务不是生成 SQL，而是把用户问题拆成稳定的结构化意图，"
+            "并用给定的真实节点索引和字段层级做事实校验。不要编造节点；没有点名具体节点时 entities 留空。"
+        )
+        user_prompt = f"""
+用户问题：
+{question}
+
+当前数据集事实索引：
+{json.dumps(catalog, ensure_ascii=False, indent=2)}
+
+请输出 JSON：
+{{
+  "intent": "compare|single|aggregate|ranking|unknown",
+  "scope_mode": "compare|single|aggregate|ranking|unknown",
+  "entities": [
+    {{
+      "dimension_name": "候选层级名",
+      "members": ["候选节点名"],
+      "matched_phrase": "用户原话中触发的短语",
+      "reason": "一句话说明"
+    }}
+  ],
+  "ranking_params": {{
+    "top_n": null,
+    "rank_sides": null,
+    "direction": null,
+    "metric_hint": null
+  }},
+  "has_specific_node": false,
+  "confidence": 0.0
+}}
+
+约束：
+1. 排名/TopN/前几/后几/倒数/垫底/最好/最差等问题，scope_mode=ranking，并填写 ranking_params。
+2. top_n 只填写用户明确要求的数量；未明确数量填 null。
+3. rank_sides 只能是 top、bottom、both；direction 只能是 desc 或 asc。
+4. 只提到层级或集合口径（如“分公司”“城市分公司”“垫底的5个城市分公司”）时，has_specific_node=false，entities 留空。
+5. 点名真实节点（如“上海城市公司”“东部分公司”“赵标”）时，才从候选 members 中选择 entities。
+"""
+        raw = self._chat_json(
+            system_prompt,
+            user_prompt,
+            fallback,
+            trace=trace,
+            stage="agent1.node_index_entity_resolution",
+            agent_name="Agent1.5",
+        )
+        resolved = self._normalize_node_index_entity_resolution(raw, fallback, catalog)
+        self._append_trace(
+            trace,
+            "pipeline.node_index_entity_resolution",
+            "info",
+            dataset=catalog.get("dataset"),
+            resolved_entities=resolved,
+        )
+        return resolved
+
     def _resolve_question_entities(
         self,
         question: str,
@@ -3830,7 +4279,7 @@ LIMIT 10000
         dataset = self._safe_dict(context.get("dataset"))
         profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         if not profile:
-            return {
+            fallback = {
                 "intent": "unknown",
                 "scope_mode": "unknown",
                 "entities": [],
@@ -3838,6 +4287,9 @@ LIMIT 10000
                 "confidence": 0,
                 "source": "no_profile",
             }
+            if self._ranking_semantic_hint(question, context):
+                return self._resolve_question_entities_with_node_index(question, context, fallback, trace=trace)
+            return fallback
 
         fallback = resolve_member_mentions(question, profile)
         if not self._profile_scope_hint(question, profile, fallback):
@@ -4028,11 +4480,14 @@ ranking_params 说明：
         generic_words = {
             "分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "条线",
             "业绩", "排名", "排行", "排序", "达成", "开单", "任务", "表现", "情况", "如何", "怎么样",
-            "所有", "哪些", "各个", "各", "的", "和", "与", "或",
+            "垫底", "倒数", "落后", "最低", "最差", "最高", "最好", "前", "后", "top", "第",
+            "低于", "高于", "超过", "大于", "小于", "不少于", "不低于", "不高于", "以上", "以下",
+            "所有", "哪些", "几个", "几家", "各个", "各", "个", "家", "名", "位", "的", "和", "与", "或",
         }
         remaining = compact
         for word in sorted(generic_words, key=len, reverse=True):
             remaining = remaining.replace(word, "")
+        remaining = re.sub(r"[0-9一二两三四五六七八九十百千万]+", "", remaining)
         # 如果去掉通用词后还有实质内容（>=2字），认为用户可能给了具体标识，不强制确认
         if len(remaining) >= 2:
             return False
@@ -4042,6 +4497,67 @@ ranking_params 说明：
             if self._dataset_alias_match_score(question, ds) >= 90:
                 return False
         return True
+
+    @staticmethod
+    def _matched_org_level_terms(question: str) -> List[str]:
+        text = str(question or "")
+        ordered_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "条线"]
+        matched: List[str] = []
+        for term in ordered_terms:
+            if term not in text:
+                continue
+            if term == "分公司" and "城市分公司" in matched:
+                continue
+            matched.append(term)
+        return matched
+
+    def _build_dataset_level_confirmation_route(
+        self,
+        question: str,
+        matched_levels: List[str],
+        supported_candidates: List[Tuple[Dict[str, Any], int]],
+        candidate_dataset_ids: Optional[List[int]] = None,
+        match_score: int = 100,
+        reason: str = "generic_level_requires_confirmation",
+    ) -> Dict[str, Any]:
+        options = []
+        seen_ids: set[int] = set()
+        for dataset, _score in supported_candidates:
+            dataset_id = int(dataset.get("id") or 0)
+            if dataset_id <= 0 or dataset_id in seen_ids:
+                continue
+            seen_ids.add(dataset_id)
+            dataset_name = dataset.get("dataset_name") or f"数据集 {dataset_id}"
+            options.append(
+                self._build_confirmation_option(
+                    option_id=f"dataset_scope_{dataset_id}",
+                    label=dataset_name,
+                    description=f"按 {dataset_name} 的“{'/'.join(matched_levels)}”口径继续。",
+                    dataset_ids=[dataset_id],
+                    option_type="dataset_disambiguation",
+                    extra={
+                        "confirmation_type": "dataset_disambiguation",
+                        "resolved_dataset_name": dataset_name,
+                        "scope_mode": "aggregate",
+                    },
+                )
+            )
+        dataset_ids = [int(item.get("id") or 0) for item, _score in supported_candidates if int(item.get("id") or 0) > 0]
+        dataset_ids = list(dict.fromkeys(dataset_ids))
+        return {
+            "dataset_ids": dataset_ids,
+            "intent": "confirm",
+            "refined_query": question,
+            "requires_confirmation": True,
+            "decision": "wait_boss_confirm",
+            "match_score": match_score,
+            "confirmation_role": "boss",
+            "confirmation_type": "dataset_disambiguation",
+            "confirmation_question": f"问题中的“{'/'.join(matched_levels)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
+            "confirmation_options": options,
+            "candidate_dataset_ids": candidate_dataset_ids or dataset_ids,
+            "arbiter_reason": f"{reason}:{','.join(matched_levels)}",
+        }
 
     @staticmethod
     def _normalize_known_sql_alias_typos(sql_text: str) -> str:
@@ -4159,6 +4675,69 @@ ranking_params 说明：
         )
         if profile:
             return cls._profile_supports_level(profile, target_level)
+        return False
+
+    @classmethod
+    def _dataset_alias_supports_level(cls, dataset: Dict[str, Any], target_level: str) -> bool:
+        normalized_target = cls._normalize_compact_text(target_level)
+        if not normalized_target:
+            return False
+        aliases = [
+            str(dataset.get("dataset_name") or ""),
+            str(dataset.get("business_domain") or ""),
+            *[str(item or "") for item in (dataset.get("synonyms") or [])],
+        ]
+        for alias in aliases:
+            if normalized_target and normalized_target in cls._normalize_compact_text(alias):
+                return True
+        return False
+
+    def _dataset_node_index_supports_level(self, dataset: Dict[str, Any], target_level: str) -> bool:
+        normalized_target = self._normalize_compact_text(target_level)
+        if not normalized_target:
+            return False
+        try:
+            dataset_id = int(dataset.get("id") or 0)
+        except Exception:
+            dataset_id = 0
+        dataset_code = self._normalize_compact_text(dataset.get("dataset_code") or "")
+        dataset_name = self._normalize_compact_text(dataset.get("dataset_name") or "")
+        node_index = getattr(self, "_dataset_node_index", None)
+        if not isinstance(node_index, dict):
+            node_index = self._load_dataset_node_index()
+            self._dataset_node_index = node_index
+        for item in node_index.get("datasets") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                item_id = int(item.get("dataset_id") or 0)
+            except Exception:
+                item_id = 0
+            item_code = self._normalize_compact_text(item.get("dataset_code") or "")
+            item_name = self._normalize_compact_text(item.get("dataset_name") or "")
+            code_matches = bool(
+                dataset_code
+                and (
+                    item_code == dataset_code
+                    or item_code.startswith(f"{dataset_code}_")
+                    or dataset_code.startswith(f"{item_code}_")
+                )
+            )
+            name_matches = bool(
+                dataset_name
+                and (
+                    item_name == dataset_name
+                    or dataset_name in item_name
+                    or item_name in dataset_name
+                )
+            )
+            if not ((dataset_id and item_id == dataset_id) or code_matches or name_matches):
+                continue
+            for node in item.get("nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                if self._normalize_compact_text(node.get("node_level") or "") == normalized_target:
+                    return True
         return False
 
     @classmethod
@@ -4598,9 +5177,7 @@ ranking_params 说明：
         if not ranked_candidates:
             return None
 
-        candidate_ids = [item[0]["id"] for item in ranked_candidates[:3]]
-        candidate_names = [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked_candidates[:3]]
-        compact_question = re.sub(r"\s+", "", str(question or ""))
+        candidate_ids = [item[0]["id"] for item in ranked_candidates]
         alias_scores = [
             (item[0], self._dataset_alias_match_score(question, item[0]))
             for item in ranked_candidates[:3]
@@ -4611,14 +5188,18 @@ ranking_params 说明：
         if best_alias_score >= 90 and best_alias_score > second_alias_score:
             return None
 
-        # 通用层级口径歧义消解：根据问题里提到的真实层级，只保留profile支持该层级的候选数据集
-        level_terms = ["分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "条线"]
-        matched_levels = [term for term in level_terms if term in question]
+        # 通用层级口径歧义消解：根据问题里提到的真实层级，只保留真实支持该层级的候选数据集
+        matched_levels = self._matched_org_level_terms(question)
         if matched_levels and len(ranked_candidates) >= 2:
             supported_candidates = []
-            for dataset, score in ranked_candidates[:3]:
+            for dataset, score in ranked_candidates:
                 profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-                if any(self._profile_supports_level(profile, term) for term in matched_levels):
+                if any(
+                    self._profile_supports_level(profile, term)
+                    or self._dataset_node_index_supports_level(dataset, term)
+                    or self._dataset_alias_supports_level(dataset, term)
+                    for term in matched_levels
+                ):
                     supported_candidates.append((dataset, score))
 
             if len(supported_candidates) == 1:
@@ -4626,73 +5207,14 @@ ranking_params 说明：
                 return None
 
             if len(supported_candidates) >= 2:
-                options = []
-                for dataset, _score in supported_candidates:
-                    dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
-                    options.append(
-                        self._build_confirmation_option(
-                            option_id=f"dataset_scope_{dataset['id']}",
-                            label=dataset_name,
-                            description=f"按 {dataset_name} 的“{'/'.join(matched_levels)}”口径继续。",
-                            dataset_ids=[dataset["id"]],
-                            option_type="dataset_disambiguation",
-                            extra={
-                                "confirmation_type": "dataset_disambiguation",
-                                "resolved_dataset_name": dataset_name,
-                                "scope_mode": "aggregate",
-                            },
-                        )
-                    )
-                return {
-                    "requires_confirmation": True,
-                    "confirmation_role": "boss",
-                    "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": f"问题中的“{'/'.join(matched_levels)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
-                    "confirmation_options": options,
-                    "candidate_dataset_ids": candidate_ids,
-                }
-
-        # 如果用户只提到“分公司”且同时命中商用/消费者两个数据集，按数据集口径确认
-        branch_only_cross_bu = (
-            "分公司" in compact_question
-            and not any(token in compact_question for token in ["商用", "商用事业部", "消费者", "消费者事业部", "城市分公司", "城市公司", "代表处", "业务部", "业务员", "业务代表"])
-            and any("商用事业部" in name for name in candidate_names)
-            and any("消费者" in name for name in candidate_names)
-        )
-        if branch_only_cross_bu:
-            options = []
-            for dataset, _score in ranked_candidates[:3]:
-                dataset_name = dataset.get("dataset_name") or f"数据集 {dataset['id']}"
-                profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-                # 只保留真实支持“分公司/城市分公司”口径的数据集，避免把无关数据集列进来
-                if not (
-                    self._profile_supports_level(profile, "分公司")
-                    or self._profile_supports_level(profile, "城市分公司")
-                ):
-                    continue
-                options.append(
-                    self._build_confirmation_option(
-                        option_id=f"dataset_scope_{dataset['id']}",
-                        label=dataset_name,
-                        description=f"按 {dataset_name} 的分公司口径继续。",
-                        dataset_ids=[dataset["id"]],
-                        option_type="dataset_disambiguation",
-                        extra={
-                            "confirmation_type": "dataset_disambiguation",
-                            "resolved_dataset_name": dataset_name,
-                            "scope_mode": "aggregate",
-                        },
-                    )
+                return self._build_dataset_level_confirmation_route(
+                    question,
+                    matched_levels,
+                    supported_candidates,
+                    candidate_dataset_ids=candidate_ids,
+                    match_score=supported_candidates[0][1],
+                    reason="generic_level_requires_confirmation",
                 )
-            if len(options) >= 2:
-                return {
-                    "requires_confirmation": True,
-                    "confirmation_role": "boss",
-                    "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": "检测到“分公司”同时可能指向多个数据集，请确认要使用哪个数据集口径：",
-                    "confirmation_options": options,
-                    "candidate_dataset_ids": candidate_ids,
-                }
 
         # 分数接近时，按真实数据集名称确认，不再使用无意义的“分公司层级”文案
         org_ambiguity_terms = ["分公司", "城市分公司", "城市公司", "代表处", "业务部", "业务代表", "业务员", "条线", "区域", "团队", "组织"]
@@ -4958,15 +5480,11 @@ ranking_params 说明：
             if subject_name:
                 index_matches = self._node_index_matches(subject_name)
                 available_ids = {int(ds.get("id") or 0) for ds in catalog}
-                matched_dataset_ids = sorted(
-                    {
-                        int(item.get("dataset_id") or 0)
-                        for item in index_matches
-                        if int(item.get("dataset_id") or 0) in available_ids
-                    }
-                )
-                if len(matched_dataset_ids) == 1:
-                    only_id = matched_dataset_ids[0]
+                distinct_matches = self._dedupe_node_index_matches(index_matches, dataset_ids=available_ids)
+                matched_dataset_ids = sorted({int(item.get("dataset_id") or 0) for item in distinct_matches})
+                if len(distinct_matches) == 1:
+                    only_match = distinct_matches[0]
+                    only_id = int(only_match.get("dataset_id") or 0)
                     rewritten_question = str(resolved_subject.get("rewritten_question") or question).strip() or question
                     return {
                         "dataset_ids": [only_id],
@@ -4978,15 +5496,15 @@ ranking_params 说明：
                         "route_margin": 100,
                         "candidate_dataset_ids": matched_dataset_ids,
                         "arbiter_reason": "node_index_dataset_unique",
-                        "resolved_subject_name": subject_name,
-                        "resolved_subject_level": str(resolved_subject.get("subject_level") or "").strip(),
+                        "resolved_subject_name": str(only_match.get("node_name") or subject_name).strip(),
+                        "resolved_subject_level": str(only_match.get("node_level") or resolved_subject.get("subject_level") or "").strip(),
                         "split_queries": [
                             {"dataset_id": only_id, "sub_query": rewritten_question}
                         ],
                     }
-                if len(matched_dataset_ids) >= 2:
+                if len(distinct_matches) >= 2:
                     confirmation_options = []
-                    for item in index_matches:
+                    for idx, item in enumerate(distinct_matches):
                         dataset_id = int(item.get("dataset_id") or 0)
                         if dataset_id not in matched_dataset_ids:
                             continue
@@ -4995,12 +5513,12 @@ ranking_params 说明：
                         node_level = str(item.get("node_level") or "").strip()
                         confirmation_options.append(
                             {
-                                "id": f"node_index_{dataset_id}",
+                                "id": f"node_index_{dataset_id}_{idx + 1}",
                                 "label": f"{dataset_name} - {node_name}",
                                 "description": f"{node_level}层级",
                                 "dataset_ids": [dataset_id],
                                 "option_type": "dataset_disambiguation",
-                                "option_id": f"node_index_{dataset_id}",
+                                "option_id": f"node_index_{dataset_id}_{idx + 1}",
                                 "confirmation_type": "dataset_disambiguation",
                                 "resolved_subject_name": node_name,
                                 "resolved_subject_level": node_level,
@@ -5110,7 +5628,12 @@ ranking_params 说明：
             supported_candidates = []
             for dataset, context, score in candidate_contexts[:3]:
                 profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
-                if self._profile_supports_level(profile, target_level_hint) or self._context_supports_level(context, target_level_hint):
+                if (
+                    self._profile_supports_level(profile, target_level_hint)
+                    or self._context_supports_level(context, target_level_hint)
+                    or self._dataset_node_index_supports_level(dataset, target_level_hint)
+                    or self._dataset_alias_supports_level(dataset, target_level_hint)
+                ):
                     supported_candidates.append((dataset, score))
             if len(supported_candidates) == 1:
                 selected_dataset, selected_score = supported_candidates[0]
@@ -5222,16 +5745,18 @@ ranking_params 说明：
             }
 
         # 层级口径快速消解：问题提到具体层级/维度时，
-        # 只保留 profile 或字段字典里真正支持该口径的候选数据集，避免把无关数据集摆出来。
-        level_terms = ["分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "条线"]
-        matched_levels = [term for term in level_terms if term in question]
+        # 只保留 profile、字段字典或节点索引里真正支持该口径的候选数据集。
+        matched_levels = self._matched_org_level_terms(question)
         supported_candidates = []
         supported_dataset_ids = set()
         if matched_levels and len(candidate_contexts) >= 2:
-            for dataset, context, score in candidate_contexts[:3]:
+            for dataset, context, score in candidate_contexts:
                 profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
                 if any(
-                    self._profile_supports_level(profile, term) or self._context_supports_level(context, term)
+                    self._profile_supports_level(profile, term)
+                    or self._context_supports_level(context, term)
+                    or self._dataset_node_index_supports_level(dataset, term)
+                    or self._dataset_alias_supports_level(dataset, term)
                     for term in matched_levels
                 ):
                     supported_candidates.append((dataset, score))
@@ -5251,6 +5776,16 @@ ranking_params 说明：
                     "arbiter_reason": f"target_level_unique:{matched_levels[0]}",
                     "split_queries": [{"dataset_id": selected_dataset["id"], "sub_query": question}],
                 }
+
+            if len(supported_candidates) >= 2:
+                return self._build_dataset_level_confirmation_route(
+                    question,
+                    matched_levels,
+                    supported_candidates,
+                    candidate_dataset_ids=[item[0]["id"] for item in ranked],
+                    match_score=best_score,
+                    reason="generic_level_requires_confirmation",
+                )
 
         # 对“明确组织层级 + 多数据集都支持该层级”的问题，优先让 Agent1 的 LLM 参与一次判定，
         # 避免被前置规则过早截流，保留现有规则作为兜底。
@@ -5299,14 +5834,6 @@ ranking_params 说明：
                 [item[0]["id"] for item in ranked[:3]],
                 [item[0].get("dataset_name") or f"数据集 {item[0]['id']}" for item in ranked[:3]],
             )
-            force_generic_level_confirm = self._is_pure_generic_level_question(question, matched_levels)
-            if (
-                "分公司" in matched_levels
-                and not re.search(r"商用|商用事业部|消费者|消费者事业部|电商|城市分公司|城市公司|代表处|业务部|业务员|业务代表", self._normalize_compact_text(question))
-                and any("商用事业部" in (item[0].get("dataset_name") or "") for item in supported_candidates)
-                and any("消费者" in (item[0].get("dataset_name") or "") for item in supported_candidates)
-            ):
-                force_generic_level_confirm = True
             # 若问题包含具体层级，过滤掉不支持该层级的候选；跨数据集选项在单一层级口径下也不适合自动命中
             if matched_levels and supported_dataset_ids:
                 filtered_options = [
@@ -5332,31 +5859,6 @@ ranking_params 说明：
                         "arbiter_reason": f"target_level_unique:{matched_levels[0]}",
                         "split_queries": [{"dataset_id": selected_id, "sub_query": question}],
                     }
-                # 修复：通用层级歧义但各选项得分有差距时，直接命中得分最高的选项，避免过度弹确认。
-                if len(filtered_options) >= 2 and not force_generic_level_confirm:
-                    sorted_options = sorted(filtered_options, key=lambda o: o.get("score", 0) or 0, reverse=True)
-                    best_opt = sorted_options[0]
-                    runner_opt = sorted_options[1]
-                    best_opt_score = best_opt.get("score", 0) or 0
-                    runner_opt_score = runner_opt.get("score", 0) or 0
-                    if best_opt_score > runner_opt_score:
-                        runner_ds_id = int(runner_opt.get("dataset_ids", [0])[0])
-                        runner_ds = next((ctx[0] for ctx in candidate_contexts if int(ctx[0]["id"]) == runner_ds_id), None)
-                        runner_alias = self._dataset_scope_alias_score(question, runner_ds) if runner_ds else 0
-                        if runner_alias < 90:
-                            selected_id = int(best_opt.get("dataset_ids", [0])[0])
-                            return {
-                                "dataset_ids": [selected_id],
-                                "intent": "detail",
-                                "refined_query": question,
-                                "requires_confirmation": False,
-                                "decision": "generate_sql",
-                                "match_score": best_opt_score,
-                                "route_margin": route_margin,
-                                "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
-                                "arbiter_reason": f"level_ambiguity_resolved_by_option_score:{','.join(matched_levels)}",
-                                "split_queries": [{"dataset_id": selected_id, "sub_query": question}],
-                            }
                 if filtered_options:
                     options = filtered_options
 
@@ -6399,6 +6901,7 @@ LIMIT 10000
                 for level in terminal_profile.get("levels") or []:
                     if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
                         terminal_person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+            terminal_person_members.update(self._node_index_members_by_level(context, {"业务员", "业务代表"}))
             terminal_person_names = [e for e in drilldown_entities if e in terminal_person_members]
             is_terminal_node = (
                 target_level_hint in {"业务代表", "业务员"}
@@ -6416,6 +6919,7 @@ LIMIT 10000
                     for level in profile.get("levels") or []:
                         if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
                             person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
+                person_members.update(self._node_index_members_by_level(context, {"业务员", "业务代表"}))
                 person_names = [e for e in drilldown_entities if e in person_members]
                 org_names = [e for e in drilldown_entities if e not in person_names]
                 where_parts = []
@@ -6688,10 +7192,24 @@ LIMIT 10000
         intent = str(query_intent.get("intent") or "").strip()
         intent_target_level = str(query_intent.get("target_level") or "").strip()
 
-        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+        profile = self._safe_dict(context.get("dimension_profile")) or get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
         resolved = resolve_member_mentions(q, profile or {})
         entities = resolved.get("entities") or []
         all_members = resolved.get("all_members") or []
+        if not all_members:
+            node_members = self._node_index_subject_names_from_question(q, context)
+            if node_members:
+                node_level_map = self._node_index_member_level_map(context)
+                all_members = node_members
+                grouped_entities: Dict[str, Dict[str, Any]] = {}
+                for member in node_members:
+                    dimension_name = node_level_map.get(member, "")
+                    bucket = grouped_entities.setdefault(
+                        dimension_name,
+                        {"dimension_name": dimension_name, "members": [], "source": "node_index"},
+                    )
+                    bucket["members"].append(member)
+                entities = list(grouped_entities.values())
         is_comparison = bool(
             intent == "comparison"
             or resolved.get("intent") == "compare"
@@ -6819,6 +7337,15 @@ LIMIT 10000
                     "细分业务": "承接人",
                     "业务经理": "承接人",
                 }.get(focus_dimension, "业务承接角色")
+            # 根节点问法（如“电商事业部的业绩”）默认展示直接下级业务部，
+            # 避免只返回事业部汇总单行导致左侧卡片没有下级列表。
+            if (
+                intent_target_level == "事业部"
+                and ("电商事业部" in q or "电商" in q)
+                and intent not in {"ranking", "filter", "comparison"}
+                and not any(t in q for t in ["整体", "总体", "总览", "汇总", "全部"])
+            ):
+                return "业务部"
             if intent_target_level:
                 return intent_target_level
             if focus_dimension and focus_dimension != "事业部":
@@ -6836,6 +7363,8 @@ LIMIT 10000
             if "业务承接角色" in q or "细分业务" in q or "业务线" in q:
                 return "业务承接角色"
             if "业务部" in q:
+                return "业务部"
+            if ("电商事业部" in q or "电商" in q) and not any(t in q for t in ["整体", "总体", "总览", "汇总", "全部"]):
                 return "业务部"
             if "事业部" in q or "整体" in q or "全部" in q:
                 return "事业部"
@@ -7027,6 +7556,8 @@ LIMIT 10000
         elif focus_member:
             if focus_dimension == "事业部":
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%')}")
+                if user_level == "业务部":
+                    where_parts.append("层级级别 = '业务部'")
             elif focus_dimension == "业务部":
                 where_parts.append(f"(组织路径 LIKE {quote('电商事业部;' + focus_member + '%')} OR (业务部 = {quote(focus_member)} AND 层级级别 = '业务部'))")
             elif focus_dimension in {"业务承接角色", "细分业务", "业务线"}:
@@ -9777,6 +10308,37 @@ Agent3 复核结果：
                     )
                     preferred_dataset_ids = []
 
+            if preferred_dataset_ids and not explicit_dataset_ids:
+                matched_levels_for_preferred = self._matched_org_level_terms(question)
+                if self._is_pure_generic_level_question(question, matched_levels_for_preferred):
+                    catalog_for_preferred = self.repository.get_agent1_catalog()
+                    if allowed_set is not None:
+                        catalog_for_preferred = [
+                            item for item in catalog_for_preferred
+                            if int(item.get("id") or 0) in allowed_set
+                        ]
+                    supported_preferred_level_ids = set()
+                    for dataset in catalog_for_preferred:
+                        profile = get_dataset_profile(dataset.get("dataset_code"), dataset.get("dataset_name"))
+                        if any(
+                            self._profile_supports_level(profile, term)
+                            or self._dataset_node_index_supports_level(dataset, term)
+                            or self._dataset_alias_supports_level(dataset, term)
+                            for term in matched_levels_for_preferred
+                        ):
+                            supported_preferred_level_ids.add(int(dataset.get("id") or 0))
+                    if len(supported_preferred_level_ids) >= 2:
+                        self._append_trace(
+                            trace,
+                            "agent1.preferred_dataset_released",
+                            "info",
+                            reason="generic_level_ambiguous",
+                            matched_levels=matched_levels_for_preferred,
+                            candidate_dataset_ids=sorted(supported_preferred_level_ids),
+                            preferred_dataset_ids=preferred_dataset_ids or [],
+                        )
+                        preferred_dataset_ids = []
+
             if preferred_dataset_ids and self._looks_like_org_subject_question(question):
                 resolved_subject = self._agent1_resolve_org_subject(
                     question,
@@ -9786,19 +10348,14 @@ Agent3 复核结果：
                 subject_name = str(resolved_subject.get("subject_name") or "").strip()
                 if subject_name:
                     index_matches = self._node_index_matches(subject_name)
-                    candidate_dataset_ids = sorted(
-                        {
-                            int(item.get("dataset_id") or 0)
-                            for item in index_matches
-                            if int(item.get("dataset_id") or 0) > 0
-                        }
-                    )
-                    if len(candidate_dataset_ids) >= 2:
+                    distinct_matches = self._dedupe_node_index_matches(index_matches)
+                    candidate_dataset_ids = sorted({int(item.get("dataset_id") or 0) for item in distinct_matches if int(item.get("dataset_id") or 0) > 0})
+                    if len(distinct_matches) >= 2:
                         self._append_trace(
                             trace,
                             "agent1.preferred_dataset_released",
                             "info",
-                            reason="node_index_dataset_ambiguous",
+                            reason="node_index_node_ambiguous",
                             subject_name=subject_name,
                             candidate_dataset_ids=candidate_dataset_ids,
                             preferred_dataset_ids=preferred_dataset_ids or [],

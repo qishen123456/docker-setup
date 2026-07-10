@@ -105,6 +105,7 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 代表问题：
 - `城市分公司的业绩`
 - `业务部的业绩情况`
+- `电商事业部的业绩`
 
 预期：
 - `intent=ranking`，`top_n=0`
@@ -114,6 +115,11 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 - 检查 `_resolve_query_intent` 是否先命中了 filter 条件（如数值阈值、范围）
 - 检查是否被 drilldown 规则（`具体节点 + 目标子层级`）提前拦截
 - 检查 `_looks_like_org_subject_question` 是否把问题重写成普通详情
+
+电商根节点特殊口径：
+- `电商事业部的业绩` 普通问法应返回直接下级 `业务部`，不是 `事业部` 汇总单行；只有明确 `整体/总体/总览/汇总/全部` 才按事业部整体汇总理解。
+- 若左侧卡片没有下级，先用后端直接调用确认 `row_count` 是否为 3、SQL 是否含 `层级级别 = '业务部'`、`report_spec.scope.focusNodeIsLeaf` 是否为 `false`。
+- 若后端正常但页面不展示，优先查前端卡片 `ResultDigestCard.vue` 的 `secondaryDrillRows` 分支、浏览器缓存或历史会话旧响应。
 
 注意：
 - 当问题同时包含层级词（如 `业务代表`）和 Overview 词（如 `业绩/情况/咋样`）时，即使带了具体人名（如 `业务代表靳锋 的业绩情况`），也会按层级 Overview 走 `ranking/top_n=0`，不会提取单个人名做过滤。这是当前已确认行为。
@@ -150,23 +156,40 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 
 代表问题：
 - `消费者事业部，业绩排名垫底的 3 家分公司`
+- `消费者事业部垫底的5个城市分公司`
 - `倒数前三的分公司`
+- `垫底的三个分公司`
 
 预期：
 - `intent=ranking`，`rank_sides=bottom`，`top_n=3`
 - SQL 应按达成率升序并 `LIMIT 3`
+- `垫底/落后 + 的 + 数字/中文数字 + 个/家/名/位` 必须按明确数量解析，例如 `垫底的三个分公司` -> `top_n=3`，不能走“垫底无数量默认 1”
+- 若问题没有明确事业部/数据集限定，且多个数据集都通过 `dataset_node_index.json` 支持目标层级，应先返回数据集确认，不得让 LLM 或同义词评分自动选一个
+- 后续新增服务商等数据集时，只要节点索引显示它也支持该层级，确认候选应自动扩展，不需要写死商用/消费者
 
 排查：
-- Agent1.5 的 prompt 是否已要求输出 `ranking_params`
+- 大模型语义拆解是否输出 `ranking_params`
 - `_normalize_entity_resolution` 是否正确解析并校验 LLM 返回的 `ranking_params`
 - `_run_pipeline` 是否把 LLM 的 `ranking_params` 合并进 `context["resolved_entities"]`
 - `_resolve_query_intent` 是否在规则未提取到 `top_n` 时读取 LLM 的 `ranking_params.top_n`
+- `config/dataset_node_index.json` 是否存在并包含目标数据集的真实层级/节点；它是事实校验底座
+- `route_with_agent1("垫底的三个分公司")` 是否返回 `requires_confirmation=true`、`arbiter_reason=generic_level_requires_confirmation:分公司`，且 `dataset_ids` 覆盖当前所有支持“分公司”的候选数据集
+- `ask(question="垫底的三个分公司", preferred_dataset_ids=[...])` 也应释放旧数据集选择并返回确认，不能进入 `agent1.preferred_dataset_bypass`
+- `route_with_agent1("上海的情况")` 应在 `上海城市公司`、`上海代表处`、未来的 `上海服务商` 等真实节点之间确认；同一 dataset_id 内多个不同节点也不能视为唯一
 - 最终 `top_n` 是否经过 `0-20` 范围校验
 
-若返回全部：
+若返回全部或只返回 1 条：
 - 检查 `_rank_request_spec` 是否把「垫底」仅识别为方向词，没有提取后面的数字
-- 检查 `_rank_limit_match` 是否只支持 `前/后/倒数/最高/最低/第` + 数字，未覆盖 `垫底/落后`
-- 修复方向：规则优先，LLM 补漏；或在正则中把 `垫底/落后` 作为 `后N` 同义表达处理
+- 检查 `_rank_limit_match` 是否覆盖 `垫底/落后` + 可选 `的` + 数字/中文数字 + `个/家/名/位`
+- 检查是否因为 `backend/data/dataset_dimension_profiles.json` 缺失导致旧 Agent1.5 画像链路返回 `source=no_profile`，从而没有 LLM `ranking_params`
+- 修复方向不是恢复旧画像当事实源，而是让大模型稳定输出结构化意图，再用 `dataset_node_index.json` 和规则做校验
+- 规则可以保留少量业务约定，例如「垫底/最差/最低」无数量时默认 1；但明确数量如「垫底的5个」必须优先保留数量
+- 如果新问已经正确但历史记录仍只返回 1 条，检查 `config/smartask_report_history.json`：旧快照可能保存了 `query_intent.top_n=1`。这类过期历史应由 `backend/smartask_report_history_store.py` 拒收/剔除，前端同步时也要清掉 localStorage 中被后端判定为 `stale_history_snapshot` 的本地独有记录。
+
+若后端直接调用会确认，但页面没有确认：
+- 检查前端请求是否携带 `selected_dataset_ids` 或会话态 `selectedDatasetId`
+- `frontend/src/state/smartAskSession.js` 会在部分连续追问中复用已确认数据集；纯通用层级排名/筛选问题不应复用
+- 通用跨数据集层级问题不应被误当作“已确认数据集内的追问”，否则会掩盖真实口径歧义
 
 ### 10. 末端个人节点展示错误？
 
@@ -210,6 +233,21 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
    ```
 4. 用上面的复现脚本验证效果
 5. 更新 `config/confirmed_behaviors_baseline.md` 记录新约束
+
+## 架构口径：模型拆解 + 节点索引校验
+
+排名、TopN、层级 Overview 和下钻类问题的长期方向：
+
+- 大模型负责自然语言拆解，输出结构化意图：`intent`、`target_level`、`top_n`、`rank_sides`、`direction`、`metric_hint`、候选节点。
+- `config/dataset_node_index.json` 是真实节点、层级、别名、叶子节点的事实底座；飞书同步成功后按受影响数据集重建。
+- 规则负责校验而不是主理解：schema、范围、权限、SQL 安全、节点/层级是否存在、冲突裁判。
+- `backend/data/dataset_dimension_profiles.json` 是旧语义画像增强；可以辅助别名或集合口径，但不能覆盖节点索引，也不能成为 TopN 数量识别的必要条件。
+
+已落地的关键函数：
+- `four_agent_ask.py::_resolve_question_entities_with_node_index`：旧画像缺失时，基于节点索引/字段层级让 LLM 输出结构化 `ranking_params`。
+- `four_agent_ask.py::_node_index_subject_names_from_question`：用节点索引识别真实主体，覆盖“东西部”“东部西部分公司”等旧画像依赖场景。
+- `four_agent_ask.py::_node_index_members_by_level`：用节点索引判断业务代表/业务员等末端成员，避免叶子节点误下钻。
+- `smartask_advanced/skills/dataset_route.py::_node_index_supported_levels`：路由评分缺少旧画像时，从节点索引判断数据集是否支持代表处/城市分公司等层级。
 
 ## 参考
 

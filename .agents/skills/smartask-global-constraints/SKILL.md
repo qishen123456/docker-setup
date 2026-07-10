@@ -118,6 +118,59 @@ description: >
 - `smartask/frontend/src/state/smartAskHistory.js`
 - `smartask/frontend/src/composables/useSmartAskReportHistory.js`
 
+### 5.2.1 历史恢复后同一问题显示旧口径
+
+**现象**：实时新问结果已经正确，但点击历史分析恢复后，左侧卡片仍显示旧口径。例如 `电商事业部业绩` 新问返回 3 个业务部，历史恢复却显示成旧的单行事业部或旧摘要。
+
+**根因**：历史快照里同时存在 `reportSnapshot.result` 和 `reportSnapshot.messages[].data`；`result` 是该条历史的权威结果，但恢复消息时若优先使用 `messages[].data`，浏览器本地旧缓存/压缩快照会覆盖完整结果。
+
+**修复要点**：
+- `restoreSnapshotMessages` 恢复最后一条 AI 消息时，必须优先用 `reportSnapshot.result` 重建。
+- 只有历史中的早期 AI 消息才保留自身 `messages[].data`。
+- 排查时同时检查 `reportSnapshot.result.dataset_results[0]` 与最后一条 `messages[].data.dataset_results[0]` 是否一致。
+
+**相关文件**：
+- `smartask/frontend/src/composables/useSmartAskReportHistory.js`
+
+### 5.2.2 历史快照本身已经是旧错口径
+
+**现象**：新问已经正确，但点击更早的历史记录仍错。例如 `电商事业部的业绩` 旧历史的 `reportSnapshot.result` 本身就是 1 行事业部；`消费者事业部垫底的5个城市分公司` 旧历史里 `query_intent.top_n=1`，只返回 1 个城市分公司。
+
+**根因**：
+- 历史快照是运行态持久化数据，代码修复后不会自动重算旧快照。
+- `frontend/src/state/smartAskHistory.js` 会合并 localStorage 与服务端历史；若只清服务端，浏览器本地旧记录可能再次 `pushHistoryToServer` 回灌。
+
+**修复要点**：
+- `backend/smartask_report_history_store.py` 读取/保存历史时校验过期快照：
+  - `report_spec.scope.focusNodeIsLeaf=true`，但 `config/dataset_node_index.json` 中该节点有下级，且问题没有 `整体/总体/汇总/全部` 等汇总词，则剔除/拒收。
+  - ranking 历史中 `query_intent.top_n` 小于用户原话明确数量（如 `垫底的5个` 却保存为 `top_n=1`），则剔除/拒收。
+- `frontend/src/state/smartAskHistory.js` 同步本地独有记录时，若后端返回 `stale_history_snapshot`，必须从本地历史中移除，避免刷新后旧记录复活。
+
+**相关文件**：
+- `smartask/backend/smartask_report_history_store.py`
+- `smartask/backend/controllers/smart_chat.py`
+- `smartask/frontend/src/state/smartAskHistory.js`
+- `smartask/config/dataset_node_index.json`
+
+### 5.2.3 跨数据集对比误用了单数据集内部对比 KPI
+
+**现象**：例如 `消费者和商用的对比` 已进入跨数据集对比，但页面显示的 `45.36% vs 47.51%` 实际分别来自“消费者 13 个分公司累计达成率”和“商用 10 个分公司/业务部混合集合累计达成率”，不是两个事业部主体本身。
+
+**根因**：
+- `frontend/src/views/SmartAsk.vue` 的跨集对比卡片默认优先读取 `report_spec.kpis`。
+- `backend/smartask_advanced/service.py::_dataset_overview()` 的跨集结论也优先读取相同 KPI。
+- 这些 KPI 在 `backend/report_spec_builder.py` 是按单数据集 `comparison_nodes` 生成的，用于单数据集内部对比，不等于跨数据集主体总览。
+
+**修复要点**：
+- 在 `backend/smartask_advanced/service.py` 的 `cross_dataset_compare` 路径中，依据 `route.organization_mentions` 为每个 dataset_result 注入 `comparison_subject_name / comparison_subject_level / cross_dataset_subject_overview`。
+- `cross_dataset_subject_overview` 必须从真实主体节点行抽取；若同名主体出现多行，优先选主体层级、空上级、任务/开单更完整的那条。
+- 前端跨集卡片和后端跨集结论优先读取 `cross_dataset_subject_overview`，只有缺失时才回退到旧 KPI。
+
+**相关文件**：
+- `smartask/backend/smartask_advanced/service.py`
+- `smartask/frontend/src/views/SmartAsk.vue`
+- `smartask/backend/tests/test_advanced_cross_dataset.py`
+
 ### 5.3 飞书数据同步更换链接后仍同步旧表
 
 **现象**：在「飞书数据同步」页面修改了飞书链接并保存，但同步任务实际执行的仍是旧链接对应的表。
@@ -157,7 +210,7 @@ description: >
 | `config/` | 运行态 JSON 配置（AI 模型、数据源、飞书同步、权限、功能开关等） | 所有配置丢失 |
 | `logs/` | 飞书同步日志 `feishu_sync_*.log`、系统日志 fallback | 飞书同步历史日志消失 |
 | `backend/logs/` | 后端系统日志 fallback | 系统日志 fallback 丢失 |
-| `backend/data/` | `agent_registry.json`、`dataset_dimension_profiles.json` | 智能体配置/维度画像丢失或回退到默认 |
+| `backend/data/` | `agent_registry.json`、可选旧画像 `dataset_dimension_profiles.json` | 智能体配置丢失；旧画像若存在可能影响语义增强 |
 | `backups/` | 运行态备份包 | 备份丢失 |
 | `backend/imports/` | 首次导入的元数据/业务数据 bundle | 新环境首次部署无法自动导入 |
 
@@ -196,6 +249,27 @@ description: >
 - `smartask/.gitignore`
 - `smartask/backend/feishu_sync_logger.py`
 - `smartask/backend/system_log_store.py`
+
+### 6.5 踩坑记录：旧维度画像与自动节点索引口径混用
+
+**现象**：同一句排名或下钻问题，在不同环境表现不一致。例如 `消费者事业部垫底的5个城市分公司` 在某环境只返回 1 条，或因为旧 `dataset_dimension_profiles.json` 存在/缺失导致 Agent1.5 是否参与不同。
+
+**根因**：
+- `backend/data/dataset_dimension_profiles.json` 是早期手工维护的语义画像增强，不是当前真实节点事实源。
+- `config/dataset_node_index.json` 才是由真实数据生成的节点、层级、别名、叶子节点索引。
+- 若把旧画像当事实源，或让 TopN 数量识别依赖旧画像是否存在，迁移到其他服务器时容易出现口径漂移。
+
+**处理原则**：
+- 大模型负责自然语言拆解；`dataset_node_index.json` 负责事实校验；规则只做 schema、范围、安全和冲突裁判。
+- 不要为了恢复旧效果而随意恢复 `dataset_dimension_profiles.json` 并让它覆盖节点索引。
+- 若必须维护 `dataset_dimension_profiles.json`，只能作为别名/集合口径增强，不能覆盖自动节点索引中的真实节点关系。
+- 迁移新服务器时，优先确保飞书数据、书架数据和 `config/dataset_node_index.json` 的生成链路一致，而不是依赖旧画像文件。
+
+**相关文件**：
+- `smartask/config/dataset_node_index.json`
+- `smartask/backend/build_dataset_node_index.py`
+- `smartask/backend/dataset_dimension_profiles.py`
+- `smartask/backend/four_agent_ask.py`
 
 ## 7. 本项目已封装的技能索引
 

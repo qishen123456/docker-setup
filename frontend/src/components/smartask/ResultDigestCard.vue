@@ -15,39 +15,7 @@
     <div class="sa-core-section">
       <div class="sa-section-label">一、核心结论</div>
       <div class="sa-core-body">
-        <div v-if="showComparisonDigest" class="sa-comparison-digest">
-          <div class="sa-comparison-verdict">{{ comparisonVerdict }}</div>
-          <div
-            v-if="!showComparisonChart"
-            class="sa-comparison-card-grid"
-            :class="comparisonGridClass"
-            :style="comparisonGridStyle"
-          >
-            <article
-              v-for="row in visibleComparisonDigestRows"
-              :key="row.name"
-              class="sa-comparison-card"
-              :class="{ 'is-leader': row.name === comparisonLeader?.name }"
-            >
-              <div class="sa-comparison-card-head">
-                <span>{{ row.name }}</span>
-                <strong>{{ row.rateText || '-' }}</strong>
-              </div>
-              <div class="sa-comparison-metrics">
-                <span>开单 {{ row.actualText || '-' }}</span>
-                <span>任务 {{ row.taskText || '-' }}</span>
-                <span>缺口 {{ row.remainText || '-' }}</span>
-              </div>
-            </article>
-          </div>
-          <div v-if="comparisonGapItems.length" class="sa-comparison-gap-list">
-            <span v-for="item in comparisonGapItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
-          </div>
-          <div v-if="isComparisonDigestLimited" class="sa-comparison-more-hint">
-            数据较多，仅展示达成率 Top {{ COMPARISON_TOP_N }}，还有 {{ comparisonTopRemainingCount }} 个{{ comparisonLevelLabel }}未展示，点击「查看详情」看完整结果。
-          </div>
-        </div>
-        <p v-else class="sa-boss-answer-conclusion">{{ directAnswer }}</p>
+        <p class="sa-boss-answer-conclusion">{{ coreConclusionText }}</p>
       </div>
     </div>
 
@@ -1892,7 +1860,7 @@ const expectedDetailLevel = computed(() => {
 
 const secondaryDrillAllRows = computed(() => {
   // ranking 模式统一走管理层层级列表，不要误入对比作用域
-  const isComparisonScope = comparisonDigestRows.value.length >= 2 && !isRankingAnswerMode.value
+  const isComparisonScope = isComparisonDigest.value && !isRankingAnswerMode.value
   if (isComparisonScope && !comparisonDrillRows.value.length && !isRankingQuestion.value) return []
   if (!isComparisonScope && isLeafFocus.value && !focusDrillRows.value.length) return []
   const source = isComparisonScope && comparisonDrillRows.value.length
@@ -2374,6 +2342,108 @@ const directAnswer = computed(() => {
   return usefulReportLines.value[0] || props.title || ''
 })
 
+const compactSentence = (text = '') => {
+  const source = cleanText(text).replace(/\s+/g, ' ')
+  if (!source) return ''
+  const [first] = source.split(/[。；;]/).map(item => item.trim()).filter(Boolean)
+  if (!first) return source
+  return first.length > 72 ? `${first.slice(0, 72)}...` : first
+}
+
+const rowMetricHint = (row, preferRankingMetric = false) => {
+  if (!row) return ''
+  if (preferRankingMetric) {
+    const metric = rankingMetricText(row)
+    if (metric) return `${rankingMetricMeta.value.label}${metric}`
+  }
+  return row.rateText ? `达成率${row.rateText}` : ''
+}
+
+const coreDigest = computed(() => {
+  const fallback = compactSentence(directAnswer.value || props.title || questionLabel.value)
+  const base = {
+    headline: fallback,
+  }
+
+  if (isLeafFocus.value) {
+    const focus = singleFocusRow.value || resolveFocusRow(normalizedRows.value)
+    if (!focus) return base
+    return {
+      headline: `已定位到 ${focus.name || questionLabel.value}，当前展示其个人/末端业绩。`,
+    }
+  }
+
+  if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
+    const rows = rankedCollectionRows.value
+    const leader = answerSummaryLeaderRow.value || rows[0]
+    const tail = rows[rows.length - 1]
+    if (rankSides.value === 'both') {
+      const counts = twoSidedRankDisplayCounts(rows)
+      const topRows = rows.filter(item => item.rankGroup?.includes('前')).length
+        ? rows.filter(item => item.rankGroup?.includes('前'))
+        : sortRankingRows(rows, 'desc').slice(0, counts.top)
+      const bottomRows = rows.filter(item => item.rankGroup?.includes('后')).length
+        ? rows.filter(item => item.rankGroup?.includes('后'))
+        : sortRankingRows(rows, 'asc').slice(0, counts.bottom)
+      const topNames = topRows.map(item => item.name).filter(Boolean).slice(0, 3).join('、')
+      const bottomNames = bottomRows.map(item => item.name).filter(Boolean).slice(0, 3).join('、')
+      return {
+        headline: `已按${rankingMetricMeta.value.label}生成${rankingLevelLabel.value}前${counts.top}和后${counts.bottom}，前列为${topNames || '见明细'}，后列为${bottomNames || '见明细'}。`,
+      }
+    }
+    const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
+    const metricText = leader ? rowMetricHint(leader, true) : ''
+    return {
+      headline: `${rankingLevelLabel.value}${rankingMetricMeta.value.label}${directionText}的是 ${leader?.name || '当前对象'}${metricText ? `，${metricText}` : ''}${tail && tail.name !== leader?.name ? `；末位为${tail.name}` : ''}。`,
+    }
+  }
+
+  if (primaryAnswerMode.value === 'filter' && rankedCollectionRows.value.length) {
+    const rows = rankedCollectionRows.value
+    const best = sortRankingRows(rows, 'desc')[0]
+    const worst = sortRankingRows(rows, 'asc')[0]
+    const riskCount = rows.filter(item => item.rate !== null && item.rate < riskThreshold.value).length
+    return {
+      headline: `本轮命中 ${rows.length} 个${secondaryLevelLabel.value || rankingLevelLabel.value || '对象'}，最高为${best?.name || '见明细'}，最低为${worst?.name || '见明细'}${riskCount ? `，其中${riskCount}个低于${riskThreshold.value}%风险线` : ''}。`,
+    }
+  }
+
+  if (managementLayerRows.value.length >= 2) {
+    const rows = managementLayerRows.value
+    const best = topManagementRows.value[0]
+    const worst = bottomManagementRows.value[0]
+    const level = rows[0]?.level || secondaryLevelLabel.value || '下级节点'
+    const parentNames = [...new Set(rows.map(item => cleanText(item.parent)).filter(Boolean))]
+    const scopeName = parentNames.length === 1 ? parentNames[0] : (reportSpec.value?.scope?.focusNode || '')
+    const gap = rateGapText.value
+    return {
+      headline: `${scopeName || '当前口径'}覆盖 ${rows.length} 个${level}，${best?.name || '领先节点'}当前领先，${worst?.name || '压力节点'}承压${gap ? `，头尾达成率差 ${gap}` : ''}。`,
+    }
+  }
+
+  if (singleOrgConclusion.value) {
+    const focus = singleFocusRow.value || resolveFocusRow(normalizedRows.value)
+    return {
+      headline: compactSentence(singleOrgConclusion.value),
+    }
+  }
+
+  if (bestRow.value || worstRow.value) {
+    return {
+      ...base,
+      headline: `${bestRow.value?.name || '当前对象'}表现最好${bestRow.value?.rateText ? `（${bestRow.value.rateText}）` : ''}${worstRow.value && worstRow.value.name !== bestRow.value?.name ? `，${worstRow.value.name}压力最大${worstRow.value.rateText ? `（${worstRow.value.rateText}）` : ''}` : ''}。`,
+    }
+  }
+
+  return base
+})
+
+const coreConclusionText = computed(() => (
+  showComparisonDigest.value
+    ? comparisonVerdict.value
+    : (coreDigest.value?.headline || directAnswer.value || props.title || '')
+))
+
 const supportLines = computed(() => {
   if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {
     const detailRows = normalizedRows.value.filter(item => item.parent && comparisonDigestRows.value.some(row => row.name === item.parent))
@@ -2634,20 +2704,16 @@ const actionItems = computed(() => {
 }
 
 .sa-core-body {
-  margin-top: 8px;
-  padding: 12px 13px;
-  border-radius: 12px;
-  border: 1px solid rgba(230, 31, 36, 0.1);
-  background: #F8F9FA;
+  margin-top: 6px;
 }
 
 .sa-boss-answer-conclusion {
   margin: 0;
   min-width: 0;
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 1.65;
   color: #111827;
-  font-weight: 700;
+  font-weight: 850;
 }
 
 .sa-kpi-grid {

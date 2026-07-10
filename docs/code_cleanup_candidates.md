@@ -172,7 +172,7 @@
 | `backend/**/__pycache__/` | 缓存 | Gitignored。 | safe | 从工作区删除 |
 | `logs/` | 日志 | Gitignored；**飞书同步日志和系统日志 fallback 写入此处，属于运行时持久化数据**。 | verify | 保留目录，仅删除过期单日志文件 |
 | `backend/logs/` | 日志 | Gitignored；**后端系统日志 fallback 写入此处**。 | verify | 保留目录 |
-| `backend/data/` | 运行时数据 | `agent_registry.json`、`dataset_dimension_profiles.json` 写入此处。 | verify | 保留目录及文件 |
+| `backend/data/` | 运行时数据 | `agent_registry.json` 写入此处；`dataset_dimension_profiles.json` 若存在仅作为旧语义画像增强。 | verify | 保留目录；不要用旧画像覆盖 `config/dataset_node_index.json` |
 | `backups/` | 备份 | Gitignored；可保留近期备份。 | verify | 制定保留策略后清理旧备份 |
 
 ---
@@ -183,7 +183,7 @@
 
 | 路径 | 使用位置 | 说明 |
 |---|---|---|
-| `backend/dataset_dimension_profiles.py` | `four_agent_ask.py`、`disambiguation/llm_arbiter.py`、`report_spec_builder.py`、`smartask_advanced/skills/dataset_route.py` | 维度画像核心逻辑，仍在使用。 |
+| `backend/dataset_dimension_profiles.py` | `four_agent_ask.py`、`disambiguation/llm_arbiter.py`、`report_spec_builder.py`、`smartask_advanced/skills/dataset_route.py` | 旧维度画像读取逻辑仍在使用；画像只能做别名/集合口径增强，真实节点事实以 `config/dataset_node_index.json` 为准。 |
 | `backend/verify_deployment.py` | `scripts/verify_deployment.py`、`deploy.sh`、`update.sh` | 部署自检脚本，通过 shim 调用。 |
 | `backend/create_consumer_standard_dataset.py` | `bootstrap.py` | 内置消费者标准数据集同步。 |
 | `backend/import_runtime_config.py` / `import_bookshelf_bundle.py` / `import_angel_group_data.py` | `bootstrap.py` | 启动时导入 bundle。 |

@@ -145,6 +145,19 @@ docker compose up -d --build backend
 
 处理：修改相关代码，让运行时通过 ID/文件名重新读取；或重启后端容器。
 
+### 7.4 新环境问数节点口径与旧环境不一致
+
+原因：
+- `runtime_config_bundle.json` 不包含 `config/dataset_node_index.json`。
+- `dataset_node_index.json` 是真实节点、层级、别名、叶子节点事实索引，通常由飞书同步成功后按受影响数据集重建，或通过 `backend/build_dataset_node_index.py` 生成。
+- `backend/data/dataset_dimension_profiles.json` 是旧语义画像增强，不应作为迁移后的事实源；恢复旧画像可能让问数口径与最新节点索引冲突。
+
+处理：
+- 新环境导入书架与飞书数据后，触发一次对应飞书同步，确认日志出现 `已重建 dataset_node_index.json`。
+- 如果不触发飞书同步，需要在新环境运行节点索引重建脚本，或随版本带上确认过的 `config/dataset_node_index.json`。
+- 不要通过恢复旧 `backend/data/dataset_dimension_profiles.json` 来修复节点缺失；它只能作为别名/集合口径增强，不能覆盖节点索引。
+- 迁移验收至少验证一个排名问题、一个裸节点问题、一个叶子节点问题，确认返回行数和节点名称与旧环境一致。
+
 ## 8. 建议的变更流程
 
 1. 改动 `config/*.json` 或相关代码。
@@ -162,3 +175,8 @@ python scripts/export_runtime_config.py --output backend/imports/runtime_config_
 ```
 
 4. 提交 `config/*.json` 和 `backend/imports/runtime_config_bundle.json`。
+
+如果改动涉及节点口径或飞书数据：
+
+- 确认 `config/dataset_node_index.json` 已按最新数据重建。
+- 在新服务器首次部署后，先导入/同步数据，再验证节点索引，不要依赖旧 `dataset_dimension_profiles.json`。

@@ -106,6 +106,137 @@ class AdvancedCrossDatasetTest(unittest.TestCase):
         self.assertIn("消费者事业部达成率26.5%", result["analysis"])
         self.assertNotIn("消费者测试数据集达成率", result["analysis"])
 
+    def test_cross_dataset_subject_overview_prefers_explicit_subject_row(self):
+        service = AdvancedAskService(fallback_service=object())
+        result = {
+            "dataset_results": [
+                {
+                    "dataset_id": 2,
+                    "dataset_name": "消费者事业部任务达成分析（标准版）",
+                    "rows": [
+                        {
+                            "层级": "消费者事业部总体",
+                            "节点名称": "消费者事业部",
+                            "上级名称": None,
+                            "总任务金额": 1789710000,
+                            "年度开单金额": 925702951.55,
+                            "达成率": 51.72,
+                            "剩余任务金额": 864007048.45,
+                        }
+                    ],
+                },
+                {
+                    "dataset_id": 3,
+                    "dataset_name": "商用事业部开单金额",
+                    "rows": [
+                        {
+                            "条线": "事业部层级",
+                            "层级": "事业部",
+                            "节点名称": "商用事业部",
+                            "上级名称": None,
+                            "总任务金额": 455000000,
+                            "年度开单金额": 188711870.60,
+                            "达成率": 41.48,
+                            "剩余任务金额": 266288129.4,
+                        },
+                        {
+                            "条线": "事业部层级",
+                            "层级": "事业部",
+                            "节点名称": "商用事业部",
+                            "上级名称": None,
+                            "总任务金额": 455000000,
+                            "年度开单金额": 199707006.72,
+                            "达成率": 43.89,
+                            "剩余任务金额": 255292993.28,
+                        },
+                        {
+                            "层级": "分公司",
+                            "节点名称": "东部分公司",
+                            "上级名称": "商用事业部",
+                            "总任务金额": 95000000,
+                            "年度开单金额": 36450428.47,
+                            "达成率": 38.37,
+                            "剩余任务金额": 58549571.53,
+                        },
+                    ],
+                },
+            ],
+        }
+        route_guard = {
+            "organization_route": {
+                "organization_mentions": [
+                    {"node_name": "消费者事业部", "dataset_ids": [2]},
+                    {"node_name": "商用事业部", "dataset_ids": [3]},
+                ]
+            }
+        }
+
+        service._enrich_cross_dataset_subject_overviews(result, route_guard)
+
+        left = result["dataset_results"][0]["cross_dataset_subject_overview"]
+        right = result["dataset_results"][1]["cross_dataset_subject_overview"]
+        self.assertEqual(left["name"], "消费者事业部")
+        self.assertAlmostEqual(left["rate"], 51.72, places=2)
+        self.assertEqual(right["name"], "商用事业部")
+        self.assertAlmostEqual(right["actual"], 199707006.72, places=2)
+        self.assertAlmostEqual(right["rate"], 43.89, places=2)
+
+    def test_cross_dataset_conclusion_prefers_subject_overview_over_internal_comparison_kpis(self):
+        service = AdvancedAskService(fallback_service=object())
+        result = {
+            "analysis": "",
+            "dataset_results": [
+                {
+                    "dataset_id": 2,
+                    "dataset_name": "消费者事业部任务达成分析（标准版）",
+                    "comparison_subject_name": "消费者事业部",
+                    "cross_dataset_subject_overview": {
+                        "name": "消费者事业部",
+                        "level": "事业部",
+                        "task": 1789710000,
+                        "actual": 925702951.55,
+                        "rate": 51.72,
+                        "remain": 864007048.45,
+                    },
+                    "report_spec": {
+                        "kpis": [
+                            {"label": "累计总任务金额", "value": 1789710000},
+                            {"label": "累计年度开单金额", "value": 811895205.01},
+                            {"label": "整体达成率", "value": 45.36},
+                        ]
+                    },
+                },
+                {
+                    "dataset_id": 3,
+                    "dataset_name": "商用事业部开单金额",
+                    "comparison_subject_name": "商用事业部",
+                    "cross_dataset_subject_overview": {
+                        "name": "商用事业部",
+                        "level": "事业部",
+                        "task": 455000000,
+                        "actual": 199707006.72,
+                        "rate": 43.89,
+                        "remain": 255292993.28,
+                    },
+                    "report_spec": {
+                        "kpis": [
+                            {"label": "累计总任务金额", "value": 600000000},
+                            {"label": "累计年度开单金额", "value": 285063805.27},
+                            {"label": "整体达成率", "value": 47.51},
+                        ]
+                    },
+                },
+            ],
+        }
+
+        payload = service._apply_cross_dataset_conclusion(result)
+
+        self.assertTrue(payload["applied"])
+        self.assertIn("消费者事业部达成率51.72%", result["analysis"])
+        self.assertIn("高于商用事业部7.83个百分点", result["analysis"])
+        self.assertNotIn("45.36%", result["analysis"])
+        self.assertNotIn("47.51%", result["analysis"])
+
 
 if __name__ == "__main__":
     unittest.main()

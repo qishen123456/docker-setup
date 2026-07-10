@@ -111,9 +111,11 @@ export const useSmartAskReportHistory = ({
   }
 
   const restoreSnapshotMessages = (snapshotMessages = [], fallbackQuestion, fallbackResult) => {
-    const restoredMessages = Array.isArray(snapshotMessages)
-      ? snapshotMessages
-          .map((item) => {
+    const sourceMessages = Array.isArray(snapshotMessages) ? snapshotMessages : []
+    const lastAiIndex = sourceMessages.map(item => item?.role).lastIndexOf('ai')
+    const restoredMessages = sourceMessages.length
+      ? sourceMessages
+          .map((item, index) => {
             if (item?.role === 'user') {
               return {
                 id: createMessageId(),
@@ -122,14 +124,16 @@ export const useSmartAskReportHistory = ({
               }
             }
             if (item?.role === 'ai') {
-              let data = item.data && typeof item.data === 'object'
-                ? filterResultDatasets(clone(item.data))
-                : null
-              // 兜底：本地 compact 或旧数据导致 AI 消息 data 缺失时，
-              // 用报告快照的完整 result 重建，保证回答卡片能正常渲染。
-              if (!data && fallbackResult && typeof fallbackResult === 'object') {
-                data = filterResultDatasets(clone(fallbackResult))
-              }
+              // 历史记录的权威结果是 reportSnapshot.result；messages[].data 可能来自
+              // 本地旧缓存/压缩快照。最后一条 AI 消息必须用完整结果重建，避免恢复后显示旧口径。
+              const shouldUseFallback = index === lastAiIndex && fallbackResult && typeof fallbackResult === 'object'
+              const data = shouldUseFallback
+                ? filterResultDatasets(clone(fallbackResult))
+                : (
+                    item.data && typeof item.data === 'object'
+                      ? filterResultDatasets(clone(item.data))
+                      : (fallbackResult && typeof fallbackResult === 'object' ? filterResultDatasets(clone(fallbackResult)) : null)
+                  )
               return {
                 id: createMessageId(),
                 role: 'ai',
