@@ -80,6 +80,31 @@
 - `frontend/src/views/SmartAsk.vue`
 - `backend/tests/test_advanced_cross_dataset.py`
 
+### 1.2.2 跨数据集对比执行必须拆成逐数据集主体查询
+
+代表问题：
+- `商用和电商的对比`
+- `电商和商用的业绩对比`
+
+已确认行为：
+- 当问题明确命中多个数据集主体并进入跨数据集对比时，执行阶段必须把原问题拆成“每个数据集各自的主体查询”，例如：
+  - `商用事业部` 数据集执行 `商用事业部的业绩`
+  - `电商事业部` 数据集执行 `电商事业部的业绩`
+- 不允许把整句 `商用和电商的对比` 原样塞回任一单数据集执行，否则单数据集会把另一个事业部名称误当成内部成员、筛选项或无效条件
+- `public` 模式数据集只要能被 `dataset_node_index.json` 命中真实组织节点，也应参与这类跨数据集对比，不要求强制切成 `org_tree`
+- 最终顶层 `route.intent` 仍应保持 `comparison`，并保留 `advanced_execution_question.queries` 作为可追踪的逐数据集执行明细
+
+不允许行为：
+- 进阶流程虽然识别出跨数据集对比，但执行时又退回 `preferred_dataset_override` 的单数据集 ask
+- 电商数据集收到 `商用和电商的对比` 这类整句问题后，错误返回 0 行或“未查询到匹配数据”
+- 只有商用结果出来，电商结果为空，导致页面看起来像“还是没问出来”
+
+当前修复点：
+- `backend/smartask_advanced/service.py`
+- `backend/organization_route_resolver.py`
+- `backend/tests/test_advanced_cross_dataset.py`
+- `backend/tests/test_route_and_permission_guards.py`
+
 ### 1.3 具体节点 + 目标子层级走 drilldown
 
 代表问题：

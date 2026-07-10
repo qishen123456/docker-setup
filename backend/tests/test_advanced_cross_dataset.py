@@ -13,6 +13,32 @@ class FakeRepo:
         return []
 
 
+class FakeFallback:
+    def __init__(self):
+        self.repository = FakeRepo()
+        self.calls = []
+
+    def ask(self, **kwargs):
+        question = str(kwargs.get("question") or "")
+        dataset_id = int((kwargs.get("preferred_dataset_ids") or [0])[0] or 0)
+        self.calls.append({"question": question, "preferred_dataset_ids": kwargs.get("preferred_dataset_ids")})
+        return {
+            "question": question,
+            "analysis": f"{question}分析",
+            "final_answer": "",
+            "dataset_results": [
+                {
+                    "dataset_id": dataset_id,
+                    "dataset_name": f"数据集{dataset_id}",
+                    "analysis": f"{question}分析",
+                    "rows": [{"节点名称": question.replace("的业绩", "")}],
+                    "row_count": 1,
+                    "report_spec": {"kpis": []},
+                }
+            ],
+        }
+
+
 class AdvancedCrossDatasetTest(unittest.TestCase):
     def test_manual_single_selection_is_overridden_by_explicit_cross_dataset_compare(self):
         guard = RouteGuardSkill(FakeRepo())
@@ -236,6 +262,48 @@ class AdvancedCrossDatasetTest(unittest.TestCase):
         self.assertIn("高于商用事业部7.83个百分点", result["analysis"])
         self.assertNotIn("45.36%", result["analysis"])
         self.assertNotIn("47.51%", result["analysis"])
+
+    def test_cross_dataset_compare_executes_split_subject_queries_per_dataset(self):
+        fallback = FakeFallback()
+        service = AdvancedAskService(fallback_service=fallback)
+        service._run_advanced_trace = lambda *args, **kwargs: {
+            "trace_id": "trace-1",
+            "route_guard": {
+                "action": "cross_dataset_compare",
+                "apply_dataset_ids": [3, 62],
+                "organization_route": {
+                    "organization_mentions": [
+                        {"node_name": "商用事业部", "dataset_ids": [3], "dataset_names": ["商用事业部"]},
+                        {"node_name": "电商事业部", "dataset_ids": [62], "dataset_names": ["电商事业部"]},
+                    ]
+                },
+            },
+            "effective_preferred_dataset_ids": [3, 62],
+            "assets": [],
+            "skills": [],
+            "intent": {},
+            "golden_sql": {},
+        }
+        service._run_result_trace = lambda **kwargs: {}
+
+        result = service.ask(question="商用和电商的业绩对比", allowed_dataset_ids=[3, 62])
+
+        self.assertEqual(
+            fallback.calls,
+            [
+                {"question": "商用事业部的业绩", "preferred_dataset_ids": [3]},
+                {"question": "电商事业部的业绩", "preferred_dataset_ids": [62]},
+            ],
+        )
+        self.assertEqual(len(result["dataset_results"]), 2)
+        self.assertEqual(result["route"]["intent"], "comparison")
+        self.assertEqual(
+            result["advanced_execution_question"]["queries"],
+            [
+                {"dataset_id": 3, "subject_name": "商用事业部", "query": "商用事业部的业绩"},
+                {"dataset_id": 62, "subject_name": "电商事业部", "query": "电商事业部的业绩"},
+            ],
+        )
 
 
 if __name__ == "__main__":

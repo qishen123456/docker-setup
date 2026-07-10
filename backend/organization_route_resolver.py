@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 from typing import Any, Dict, List, Optional
 
@@ -93,10 +95,22 @@ class OrganizationRouteResolver:
 
     def __init__(self):
         self._tree_cache: Optional[Dict[str, Any]] = None
+        self._node_index_cache: Optional[Dict[str, Any]] = None
 
     def _load_tree(self) -> Dict[str, Any]:
         self._tree_cache = load_organization_trees()
         return self._tree_cache
+
+    def _load_dataset_node_index(self) -> Dict[str, Any]:
+        if self._node_index_cache is not None:
+            return self._node_index_cache
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "dataset_node_index.json")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                self._node_index_cache = json.load(fh) or {}
+        except Exception:
+            self._node_index_cache = {}
+        return self._node_index_cache
 
     @staticmethod
     def _dataset_ids_for_node(node: Dict[str, Any], permissions: Dict[str, Any]) -> List[int]:
@@ -170,12 +184,68 @@ class OrganizationRouteResolver:
                 }
             )
 
+        node_index = self._load_dataset_node_index()
+        for dataset in (node_index.get("datasets") or []):
+            if not isinstance(dataset, dict):
+                continue
+            try:
+                dataset_id = int(dataset.get("dataset_id") or 0)
+            except Exception:
+                continue
+            if dataset_id <= 0:
+                continue
+            if allowed is not None and dataset_id not in allowed:
+                continue
+            permission_rule = (permissions.get("rules") or {}).get(str(dataset_id)) or {}
+            if _text(permission_rule.get("mode")) == "org_tree":
+                continue
+            for node in dataset.get("nodes") or []:
+                if not isinstance(node, dict):
+                    continue
+                node_name = _text(node.get("node_name"))
+                if len(node_name) < 2:
+                    continue
+                aliases = [
+                    _compact(alias)
+                    for alias in ([node_name] + list(node.get("aliases") or []))
+                    if _text(alias)
+                ]
+                matched_aliases = [
+                    alias
+                    for alias in _unique(aliases)
+                    if _alias_matches_question(alias, node_name, normalized_question)
+                ]
+                if not matched_aliases:
+                    continue
+                parent_name = _text(node.get("parent_name"))
+                path_label = " / ".join([item for item in [parent_name, node_name] if item]) or node_name
+                mentions.append(
+                    {
+                        "node_id": f"dataset_node_index:{dataset_id}:{node_name}",
+                        "node_name": node_name,
+                        "matched_alias": max(matched_aliases, key=len),
+                        "level": 0,
+                        "tree_type_id": "",
+                        "path_names": [item for item in [parent_name, node_name] if item],
+                        "path_label": path_label,
+                        "dataset_ids": [dataset_id],
+                        "dataset_names": [_dataset_name(dataset_id, catalog_by_id)],
+                    }
+                )
+
         mentions.sort(key=lambda item: (len(item.get("matched_alias") or ""), item.get("level") or 0), reverse=True)
         deduped: List[Dict[str, Any]] = []
         covered_aliases = set()
         for item in mentions:
             key = item["node_id"]
             if any(existing["node_id"] == key for existing in deduped):
+                continue
+            same_dataset_and_name = any(
+                existing.get("node_name") == item.get("node_name")
+                and _unique(existing.get("dataset_ids") or []) == _unique(item.get("dataset_ids") or [])
+                for existing in deduped
+            )
+            if same_dataset_and_name:
                 continue
             alias = item.get("matched_alias") or ""
             if alias in covered_aliases and len(alias) < len(_compact(item.get("node_name"))):

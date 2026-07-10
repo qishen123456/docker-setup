@@ -178,11 +178,37 @@ def _is_explicit_aggregate_question(question: str) -> bool:
     return bool(re.search(r"(整体|总体|总览|汇总|全部|总计|合计)", str(question or "")))
 
 
+def _has_self_parent_anomaly(dataset_result: Dict[str, Any]) -> bool:
+    """检测报告结果中是否存在「子节点名称与上级名称相同」的数据异常。
+
+    这种异常通常由数据源污染导致，例如飞书多维表中「城市分公司」字段被错误填充为
+    所属「分公司」名称， resulting in rows like:
+        层级=城市分公司, 节点名称=山东分公司, 上级名称=山东分公司
+    该类快照不应被恢复，否则会出现「每个分公司下都挂着一个同名城市分公司」的误导展示。
+    """
+    rows = dataset_result.get("rows")
+    if not isinstance(rows, list):
+        return False
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("节点名称") or row.get("name") or "").strip()
+        parent = str(row.get("上级名称") or row.get("parent") or "").strip()
+        level = str(row.get("层级") or row.get("level") or "").strip()
+        if name and parent and name == parent and level not in {"", "消费者事业部总体"}:
+            return True
+    return False
+
+
 def _is_stale_history_snapshot(item: Dict[str, Any]) -> bool:
     """Detect old snapshots that would restore a known-invalid interpretation."""
     dataset_result = _dataset_result_from_item(item)
     if not dataset_result:
         return False
+
+    # 数据异常：子节点名称与上级名称同名，属于脏数据快照，不应恢复
+    if _has_self_parent_anomaly(dataset_result):
+        return True
 
     question = _question_from_item(item, dataset_result)
     query_intent = dataset_result.get("query_intent") if isinstance(dataset_result.get("query_intent"), dict) else {}

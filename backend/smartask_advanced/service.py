@@ -176,6 +176,166 @@ class AdvancedAskService:
         return f"{question}\n{instruction}".strip()
 
     @staticmethod
+    def _cross_dataset_metric_suffix(question: str) -> str:
+        text = re.sub(r"\s+", "", str(question or ""))
+        if not text:
+            return "业绩"
+        for pattern in [
+            r"(目标达成(?:情况|进度|表现)?)",
+            r"(达成率|完成率)",
+            r"(开单金额|开单)",
+            r"(任务金额|总任务|任务)",
+            r"(业绩(?:情况|表现|进度)?)",
+            r"(进度|表现|情况)",
+        ]:
+            match = re.search(pattern, text)
+            if match:
+                return str(match.group(1) or "").strip() or "业绩"
+        return "业绩"
+
+    def _cross_dataset_subject_queries(self, question: str, route_guard: Dict[str, Any]) -> List[Dict[str, Any]]:
+        route = (route_guard or {}).get("organization_route") or {}
+        suffix = self._cross_dataset_metric_suffix(question)
+        subject_queries: List[Dict[str, Any]] = []
+        seen_pairs = set()
+        for item in route.get("organization_mentions") or []:
+            if not isinstance(item, dict):
+                continue
+            subject_name = str(item.get("node_name") or "").strip()
+            if not subject_name:
+                continue
+            query_text = f"{subject_name}的{suffix}" if suffix else f"{subject_name}的业绩"
+            for dataset_id in item.get("dataset_ids") or []:
+                try:
+                    current_dataset_id = int(dataset_id)
+                except Exception:
+                    continue
+                pair = (current_dataset_id, subject_name)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                subject_queries.append(
+                    {
+                        "dataset_id": current_dataset_id,
+                        "subject_name": subject_name,
+                        "query": query_text,
+                    }
+                )
+        return subject_queries
+
+    @staticmethod
+    def _pick_cross_dataset_payload(result: Dict[str, Any], dataset_id: int, subject_name: str, sub_query: str) -> Dict[str, Any]:
+        payload = None
+        dataset_results = result.get("dataset_results") if isinstance(result, dict) else []
+        if isinstance(dataset_results, list):
+            for item in dataset_results:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    current_dataset_id = int(item.get("dataset_id") or item.get("id") or 0)
+                except Exception:
+                    current_dataset_id = 0
+                if current_dataset_id == dataset_id:
+                    payload = dict(item)
+                    break
+            if payload is None and dataset_results and isinstance(dataset_results[0], dict):
+                payload = dict(dataset_results[0])
+        if payload is None:
+            payload = {
+                "dataset_id": dataset_id,
+                "dataset_name": "",
+                "analysis": str((result or {}).get("analysis") or "").strip(),
+                "columns": (result or {}).get("columns") or [],
+                "rows": (result or {}).get("rows") or [],
+                "row_count": (result or {}).get("row_count") or 0,
+                "sql": (result or {}).get("sql") or "",
+                "report_spec": (result or {}).get("report_spec") or {},
+            }
+        payload["dataset_id"] = payload.get("dataset_id") or dataset_id
+        payload["comparison_subject_name"] = str(payload.get("comparison_subject_name") or subject_name).strip()
+        payload["advanced_subject_query"] = sub_query
+        return payload
+
+    def _execute_cross_dataset_compare(
+        self,
+        question: str,
+        fallback_kwargs: Dict[str, Any],
+        route_guard: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        subject_queries = self._cross_dataset_subject_queries(question, route_guard)
+        if not subject_queries:
+            fallback_kwargs["question"] = self._cross_dataset_execution_question(question, route_guard)
+            return self.fallback_service.ask(**fallback_kwargs)
+
+        merged_dataset_results: List[Dict[str, Any]] = []
+        merged_analyses: List[str] = []
+        errors: List[str] = []
+        first_result: Dict[str, Any] | None = None
+        for item in subject_queries:
+            dataset_id = int(item["dataset_id"])
+            subject_name = str(item.get("subject_name") or "").strip()
+            sub_query = str(item.get("query") or question)
+            sub_kwargs = dict(fallback_kwargs)
+            sub_kwargs["question"] = sub_query
+            sub_kwargs["preferred_dataset_ids"] = [dataset_id]
+            result = self.fallback_service.ask(**sub_kwargs)
+            if first_result is None and isinstance(result, dict):
+                first_result = result
+            if not isinstance(result, dict):
+                errors.append(f"dataset_{dataset_id}: empty_result")
+                continue
+            analysis = str(result.get("analysis") or "").strip()
+            if analysis and analysis not in merged_analyses:
+                merged_analyses.append(analysis)
+            if result.get("error"):
+                errors.append(f"dataset_{dataset_id}: {result.get('error')}")
+            merged_dataset_results.append(self._pick_cross_dataset_payload(result, dataset_id, subject_name, sub_query))
+
+        merged: Dict[str, Any] = dict(first_result or {})
+        merged["question"] = question
+        merged["route"] = {
+            "intent": "comparison",
+            "dataset_ids": [int(item["dataset_id"]) for item in subject_queries],
+            "organization_mentions": ((route_guard or {}).get("organization_route") or {}).get("organization_mentions") or [],
+            "preferred_dataset_override": False,
+        }
+        merged["dataset_results"] = merged_dataset_results
+        merged["analysis"] = "\n\n".join(merged_analyses).strip()
+        merged["advanced_execution_question"] = {
+            "mode": "cross_dataset_split",
+            "queries": [
+                {
+                    "dataset_id": int(item["dataset_id"]),
+                    "subject_name": item.get("subject_name"),
+                    "query": item.get("query"),
+                }
+                for item in subject_queries
+            ],
+        }
+        merged["requires_confirmation"] = False
+        if merged_dataset_results:
+            merged.pop("error", None)
+        elif errors:
+            merged["error"] = "；".join(errors)
+        merged.setdefault("diagnostics", {})
+        if isinstance(merged.get("diagnostics"), dict):
+            merged["diagnostics"]["cross_dataset_execution"] = {
+                "mode": "split_subject_queries",
+                "queries": [
+                    {
+                        "dataset_id": int(item["dataset_id"]),
+                        "subject_name": item.get("subject_name"),
+                        "query": item.get("query"),
+                    }
+                    for item in subject_queries
+                ],
+                "errors": errors,
+            }
+        if not str(merged.get("final_answer") or "").strip():
+            merged["final_answer"] = merged.get("analysis") or ""
+        return merged
+
+    @staticmethod
     def _number_value(value: Any) -> float | None:
         if value is None:
             return None
@@ -1239,13 +1399,13 @@ class AdvancedAskService:
         if effective_dataset_ids and not preferred_dataset_ids:
             fallback_kwargs["preferred_dataset_ids"] = effective_dataset_ids
         if route_guard.get("action") == "cross_dataset_compare":
-            fallback_kwargs["question"] = self._cross_dataset_execution_question(question, route_guard)
-        result = self.fallback_service.ask(**fallback_kwargs)
+            result = self._execute_cross_dataset_compare(question, fallback_kwargs, route_guard)
+        else:
+            result = self.fallback_service.ask(**fallback_kwargs)
         result_diagnostics: Dict[str, Any] = {}
         if isinstance(result, dict):
             if route_guard.get("action") == "cross_dataset_compare":
                 result["question"] = question
-                result["advanced_execution_question"] = fallback_kwargs.get("question")
                 self._enrich_cross_dataset_subject_overviews(result, route_guard)
             try:
                 result_diagnostics = self._run_result_trace(

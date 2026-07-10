@@ -103,6 +103,43 @@ class RouteAndPermissionGuardsTest(unittest.TestCase):
         self.assertEqual(route["dataset_ids"], [3])
         self.assertEqual(route["resolved_members"], ["湖南代表处"])
 
+    def test_public_dataset_node_index_can_merge_with_org_tree_mentions(self):
+        resolver = OrganizationRouteResolver()
+        permissions = {
+            "rules": {
+                **PERMISSIONS["rules"],
+                "62": {
+                    "mode": "public",
+                    "tree_type_id": "",
+                    "organization_node_ids": [],
+                },
+            }
+        }
+        node_index = {
+            "datasets": [
+                {
+                    "dataset_id": 62,
+                    "dataset_name": "电商事业部开单金额",
+                    "nodes": [
+                        {"node_name": "电商事业部", "node_level": "事业部", "parent_name": None, "aliases": ["电商事业部", "电商"]},
+                    ],
+                }
+            ]
+        }
+
+        with patch("organization_route_resolver.load_organization_trees", return_value=BASE_TREE), patch(
+            "organization_route_resolver.load_data_permissions", return_value=permissions
+        ), patch.object(resolver, "_load_dataset_node_index", return_value=node_index):
+            route = resolver.resolve(
+                "商用和电商的业绩对比",
+                CATALOG + [{"id": 62, "dataset_name": "电商事业部开单金额", "dataset_code": "feishu_tbldianshang"}],
+            )
+
+        self.assertIsNotNone(route)
+        self.assertEqual(route["dataset_ids"], [3, 62])
+        self.assertEqual(route["intent"], "comparison")
+        self.assertEqual(route["resolved_members"], ["商用事业部", "电商事业部"])
+
     def test_row_level_filter_allows_descendant_rows_by_path_columns(self):
         permissions = {
             "rules": {
