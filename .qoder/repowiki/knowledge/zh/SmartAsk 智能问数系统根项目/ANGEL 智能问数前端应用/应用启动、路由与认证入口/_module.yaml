@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: frontend/auth_and_layout
+title: 应用启动、路由与认证入口
+scope:
+    - frontend/src/auth/AuthLogin.vue
+    - frontend/src/views/AuthCallback.vue
+    - frontend/src/App.vue
+    - frontend/src/main.js
+    - frontend/src/router/index.js
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/auth_and_rbac

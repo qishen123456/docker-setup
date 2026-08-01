@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: backend/ask_flow_smart_chat/disambiguation_scoring
+title: 数据集消歧与仲裁模块
+scope:
+    - backend/disambiguation/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/ask_flow_smart_chat/smart_chat_orchestration
+    - path: backend/bookshelf_datasets
+    - path: backend/tests

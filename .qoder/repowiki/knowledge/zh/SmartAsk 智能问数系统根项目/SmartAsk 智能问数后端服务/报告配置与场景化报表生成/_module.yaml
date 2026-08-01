@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: backend/reporting
+title: 报告配置与场景化报表生成
+scope:
+    - backend/controllers/report_config.py
+    - backend/report_contract_health.py
+    - backend/report_scene_registry.py
+    - backend/report_spec_builder.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/ask_flow_smart_chat

@@ -253,6 +253,7 @@ const state = reactive({
   updatedAt: '',
   currentSessionId: '',
   conversationSessionId: '',
+  isHistoricalSnapshot: false,
 })
 
 let phaseTimer = null
@@ -275,6 +276,7 @@ const snapshot = () => ({
   updatedAt: state.updatedAt,
   currentSessionId: state.currentSessionId,
   conversationSessionId: state.conversationSessionId,
+  isHistoricalSnapshot: false,
 })
 
 const persist = () => {
@@ -2128,6 +2130,10 @@ export const smartAskSession = state
 export const useSmartAskSession = () => {
   const latestLog = computed(() => state.logs[state.logs.length - 1] || null)
   const activeDatasetIds = computed(() => state.result?.route?.dataset_ids || [])
+  // 是否有真实进行中的问数（activeAbortController 非空）。
+  // 用于区分"页面重开后的残留 running 状态"（无 activeAbortController，可清理）
+  // 与"本页正在执行的问数"（有 activeAbortController，绝不能清）。
+  const hasActiveAsk = () => Boolean(activeAbortController)
 
   return {
     state,
@@ -2138,5 +2144,7 @@ export const useSmartAskSession = () => {
     submitBossConfirmation,
     clearRecoveredSessionResult,
     resetSession,
+    persist,
+    hasActiveAsk,
   }
 }

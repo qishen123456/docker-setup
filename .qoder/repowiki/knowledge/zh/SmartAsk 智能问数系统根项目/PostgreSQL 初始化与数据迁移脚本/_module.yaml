@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: infra_postgres_init
+title: PostgreSQL 初始化与数据迁移脚本
+scope:
+    - docker/postgres/init/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/core_app
+    - path: docs_and_deliverables

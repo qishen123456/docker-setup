@@ -22,7 +22,8 @@ def make_history_item(question, dataset_result):
 
 
 class SmartAskReportHistoryStoreTest(unittest.TestCase):
-    def test_non_leaf_node_snapshot_marked_stale_against_node_index(self):
+    def test_non_leaf_node_snapshot_not_marked_stale_under_full_retention(self):
+        # 完全保留快照策略：即使节点索引更新，历史记录也不应被删除
         item = make_history_item(
             "电商事业部的业绩",
             {
@@ -50,7 +51,7 @@ class SmartAskReportHistoryStoreTest(unittest.TestCase):
         }
 
         with patch.object(history_store, "read_json", return_value=node_index):
-            self.assertTrue(history_store._is_stale_history_snapshot(item))
+            self.assertFalse(history_store._is_stale_history_snapshot(item))
 
     def test_explicit_aggregate_single_node_snapshot_not_marked_stale(self):
         item = make_history_item(

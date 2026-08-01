@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: backend/ask_flow_smart_chat
+title: 智能问数编排与路由层
+scope:
+    - backend/controllers/ask_flow.py
+    - backend/controllers/smart_chat.py
+    - backend/ask_flow/
+    - backend/memory/
+    - backend/disambiguation/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/reporting
+    - path: frontend/smartask_chat

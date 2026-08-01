@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: backend/advanced_capabilities/smartask_advanced/orchestration_skills
+title: 智能问答编排技能（路由守卫、数据集路由与意图规划）
+scope:
+    - backend/smartask_advanced/skills/planner.py
+    - backend/smartask_advanced/skills/route_guard.py
+    - backend/smartask_advanced/skills/dataset_route.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/advanced_capabilities/smartask_advanced/core_service
+    - path: backend/advanced_capabilities/smartask_advanced/domain_skills

@@ -99,15 +99,9 @@ const compactRows = (rows = []) => (
 const compactDatasetResult = (dataset = {}) => {
   if (!dataset || typeof dataset !== 'object') return dataset
   const next = { ...dataset }
-  if (Array.isArray(next.rows)) next.rows = compactRows(next.rows)
-  if (Array.isArray(next.tableRows)) next.tableRows = compactRows(next.tableRows)
-  if (Array.isArray(next.preview_rows)) next.preview_rows = compactRows(next.preview_rows)
-  if (Array.isArray(next.sample_rows)) next.sample_rows = compactRows(next.sample_rows)
+  // 完全保留快照：不再裁剪 rows/tableRows/report_spec，只截断极长字符串
   if (typeof next.report === 'string') next.report = compactString(next.report)
   if (typeof next.markdown === 'string') next.markdown = compactString(next.markdown)
-  if (next.report_spec && typeof next.report_spec === 'object') {
-    next.report_spec = compactNestedValue(next.report_spec, 0)
-  }
   return next
 }
 
@@ -115,8 +109,8 @@ const compactNestedValue = (value, depth = 0, key = '') => {
   if (typeof value === 'string') return compactString(value, depth > 3 ? 4000 : MAX_LOCAL_STRING_LENGTH)
   if (!value || typeof value !== 'object') return value
   if (Array.isArray(value)) {
-    const limit = /rows|table|samples|messages/i.test(key) ? MAX_LOCAL_ROWS : 120
-    return value.slice(0, limit).map(item => compactNestedValue(item, depth + 1, key))
+    // 完全保留快照：不再裁剪数组长度
+    return value.map(item => compactNestedValue(item, depth + 1, key))
   }
   const next = {}
   Object.entries(value).forEach(([childKey, childValue]) => {
@@ -153,20 +147,49 @@ const compactHistoryItemForLocal = (item = {}) => {
   if (typeof result.report === 'string') result.report = compactString(result.report)
   if (typeof result.answer === 'string') result.answer = compactString(result.answer)
   if (Array.isArray(snapshot.messages)) {
-    snapshot.messages = snapshot.messages
-      .slice(-MAX_LOCAL_MESSAGES)
-      .map((message) => {
-        const normalized = {
-          id: message?.id,
-          role: message?.role,
-          content: compactString(message?.content || '', 3000),
-          loading: false,
-        }
-        if (message?.data && typeof message.data === 'object') {
-          normalized.data = compactNestedValue(clone(message.data), 0, 'data')
-        }
-        return normalized
-      })
+    // 完全保留快照：不再限制 messages 数量，保留全部对话轮次
+    snapshot.messages = snapshot.messages.map((message) => {
+      const normalized = {
+        id: message?.id,
+        role: message?.role,
+        content: compactString(message?.content || '', 3000),
+        loading: false,
+      }
+      if (message?.data && typeof message.data === 'object') {
+        normalized.data = compactNestedValue(clone(message.data), 0, 'data')
+      }
+      return normalized
+    })
+  }
+  next.reportSnapshot = {
+    ...snapshot,
+    result,
+    localCompacted: true,
+  }
+  return next
+}
+
+const compactHistoryItemForLocalAggressive = (item = {}) => {
+  // 强压缩兜底：仅在 localStorage 容量不足时使用
+  const next = clone(item)
+  const snapshot = next.reportSnapshot || {}
+  const result = snapshot.result || {}
+  if (Array.isArray(result.dataset_results)) {
+    result.dataset_results = result.dataset_results.map((dataset) => {
+      if (!dataset || typeof dataset !== 'object') return dataset
+      const ds = { ...dataset }
+      if (Array.isArray(ds.rows)) ds.rows = ds.rows.slice(0, MAX_LOCAL_ROWS)
+      if (Array.isArray(ds.tableRows)) ds.tableRows = ds.tableRows.slice(0, MAX_LOCAL_ROWS)
+      if (Array.isArray(ds.preview_rows)) ds.preview_rows = ds.preview_rows.slice(0, MAX_LOCAL_ROWS)
+      if (Array.isArray(ds.sample_rows)) ds.sample_rows = ds.sample_rows.slice(0, MAX_LOCAL_ROWS)
+      if (ds.report_spec && typeof ds.report_spec === 'object') {
+        ds.report_spec = compactNestedValue(ds.report_spec, 0)
+      }
+      return ds
+    })
+  }
+  if (Array.isArray(snapshot.messages)) {
+    snapshot.messages = snapshot.messages.slice(-MAX_LOCAL_MESSAGES)
   }
   next.reportSnapshot = {
     ...snapshot,
@@ -182,6 +205,7 @@ const persistLocalItems = (items) => {
 
 const persistSmartAskHistory = () => {
   if (typeof window === 'undefined') return
+  // 完全保留快照：先尝试完整保存
   let items = historySessions.value.slice(0, MAX_LOCAL_HISTORY_ITEMS).map(compactHistoryItemForLocal)
 
   // 即使 items 为空（例如清空历史），也必须写入 localStorage，
@@ -195,6 +219,19 @@ const persistSmartAskHistory = () => {
     return
   }
 
+  try {
+    persistLocalItems(items)
+    return
+  } catch (error) {
+    if (!isQuotaExceededError(error)) {
+      console.warn('[smartAskHistory] failed to persist local history', error)
+      return
+    }
+    console.warn('[smartAskHistory] localStorage quota exceeded, fallback to aggressive compaction')
+  }
+
+  // 容量不足时回退到强压缩
+  items = historySessions.value.slice(0, MAX_LOCAL_HISTORY_ITEMS).map(compactHistoryItemForLocalAggressive)
   while (items.length > 0) {
     try {
       persistLocalItems(items)
@@ -288,8 +325,8 @@ const normalizeHistoryItem = (item = {}) => {
 
 const mergeHistoryItems = (localItems = [], remoteItems = []) => {
   const byId = new Map()
-  // 服务端完整版优先写入；本地 compact 版只有时间严格更晚时才覆盖，
-  // 避免同时间戳下本地裁剪数据覆盖服务端完整数据。
+  // 服务端完整版始终优先：本地 compact 版只在服务端没有同 ID 记录时才补充，
+  // 彻底解决本地压缩数据覆盖服务端完整快照导致恢复后层级/列表错乱的问题。
   remoteItems.forEach((item) => {
     const normalized = normalizeHistoryItem(item)
     if (!normalized?.id) return
@@ -298,8 +335,7 @@ const mergeHistoryItems = (localItems = [], remoteItems = []) => {
   localItems.forEach((item) => {
     const normalized = normalizeHistoryItem(item)
     if (!normalized?.id) return
-    const existing = byId.get(normalized.id)
-    if (!existing || itemTime(normalized) > itemTime(existing)) {
+    if (!byId.has(normalized.id)) {
       byId.set(normalized.id, normalized)
     }
   })

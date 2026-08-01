@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: backend/advanced_capabilities/smartask_advanced/domain_skills
+title: SmartAsk 高级技能：资产打包、结论建议与证据投票
+scope:
+    - backend/smartask_advanced/skills/asset_pack.py
+    - backend/smartask_advanced/skills/conclusion_advice.py
+    - backend/smartask_advanced/skills/evidence_vote.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/advanced_capabilities/smartask_advanced/core_service
+    - path: backend/advanced_capabilities/smartask_advanced/orchestration_skills

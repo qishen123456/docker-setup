@@ -335,7 +335,14 @@ const inferAmountSourceUnit = (hint = '', rawValue = '') => {
 
 const findColumn = (row, matchers = []) => {
   const keys = Object.keys(row || {})
-  return keys.find(key => matchers.some(matcher => matcher.test(key))) || ''
+  // 必须按 matcher 优先级找列，而不是按键序：
+  // 后端 jsonify 或 JSON 序列化可能重排键序（如「上级名称」排到「节点名称」前），
+  // 按键序遍历会让 /名称/ 先命中「上级名称」，恢复历史后节点名显示成上级组织名。
+  for (const matcher of matchers) {
+    const hit = keys.find(key => matcher.test(key))
+    if (hit) return hit
+  }
+  return ''
 }
 
 const rateText = (row) => {
@@ -1356,10 +1363,12 @@ const insightCards = computed(() => {
       tone: 'info',
     })
   } else if (totalRows) {
+    // 单聚焦钻取：聚焦节点是上下文，不要把它计入"数据覆盖"。
+    const useDrillView = Boolean(singleFocusName.value) && !isLeafFocus.value
     cards.push({
       label: '数据覆盖',
-      value: `${totalRows} 行`,
-      desc: levelSummary.value || '已返回可分析数据',
+      value: `${useDrillView ? drillRowCount.value : totalRows} 行`,
+      desc: (useDrillView ? drillLevelSummary.value : levelSummary.value) || '已返回可分析数据',
       tone: 'info',
     })
   }
@@ -1805,6 +1814,26 @@ const singleFocusName = computed(() => (
   || ''
 ))
 
+// 单聚焦钻取场景：聚焦节点本身是"上下文/标题"，不应计入"数据覆盖"。
+// KPI 卡片和"二级拆解"表格都应只展示下一级实际被分析的节点，
+// 否则会出现"分公司 1 个、城市分公司 6 个"这种把聚焦节点当数据点的错觉。
+const drillRowCount = computed(() => {
+  const focus = singleFocusName.value
+  if (!focus) return normalizedRows.value.filter(item => item?.name).length
+  return normalizedRows.value.filter(item => item?.name && item.name !== focus).length
+})
+const drillLevelSummary = computed(() => {
+  const focus = singleFocusName.value
+  const counts = new Map()
+  normalizedRows.value.forEach((item) => {
+    if (!item?.name) return
+    if (focus && item.name === focus) return
+    const key = item.level || '明细'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  })
+  return Array.from(counts.entries()).map(([level, count]) => `${level}${count}个`).join('、')
+})
+
 const singleRateText = computed(() => (
   getPrimaryKpiText(/达成率|完成率|rate|percent/i) || singleFocusRow.value?.rateText || ''
 ))
@@ -1895,6 +1924,11 @@ const secondaryDrillRows = computed(() => {
       !parentNames.some(parent => sameOrgName(item.name, parent))
     ))
   }
+  // filter 问题（末层命中，如"达成率小于10%的城市分公司"）：结果分布条形图
+  // （showFilterRateChart）已完整呈现命中节点，且城市分公司已是最后一层、无可再下钻，
+  // 不再用"二级拆解"重复展示同一批节点，避免与排序表双重渲染。
+  // 返回空后 drill 区 v-if 不渲染，adviceStartIndex 依赖 length 自动续号（重点发现→四、建议动作→五），不断号。
+  if (showFilterRateChart.value) return []
   const rows = isRankingQuestion.value && managementLayerRows.value.length
     ? managementLayerRows.value
     : secondaryDrillAllRows.value
@@ -1965,7 +1999,11 @@ const secondaryDrillGroups = computed(() => {
   }
   const parents = [...new Set(rows.map(item => item.parent).filter(Boolean))]
   // 排名问题不按 parent 分组，保持全局排名顺序；其他场景有明确父级再分组
-  const shouldGroup = parents.length >= 1 && !isRankingQuestion.value
+  // 单聚焦钻取：聚焦节点已经作为"上下文/标题"出现，不应在"二级拆解"表格里再以分组头
+  // 形式出现（否则会被误读成"分公司本身也是被分析的数据行"）。
+  const shouldGroup = parents.length >= 1
+    && !isRankingQuestion.value
+    && !(singleFocusName.value && primaryAnswerMode.value === 'drilldown')
   if (!shouldGroup) return [{ key: 'all', title: '', rows }]
 
   const parentOrder = comparisonParentNames.value

@@ -24,6 +24,7 @@ from system_log_store import log_event, request_snapshot
 from smartask_report_history_store import (
     StaleHistorySnapshotError,
     clear_history as clear_report_history,
+    filter_history_dataset_results,
     list_history as list_report_history,
     remove_history as remove_report_history,
     upsert_history as upsert_report_history,
@@ -49,7 +50,15 @@ def _require_any_feature(user: dict, keys: list[str]):
 def get_report_history():
     user = get_current_user()
     limit = _safe_int(request.args.get("limit"), 50)
-    return jsonify({"history": list_report_history(user, limit=limit)})
+    history = list_report_history(user, limit=limit)
+    # A-05 后端最小权限校验：按当前账号的数据集权限裁剪历史快照中的 dataset_results
+    try:
+        allowed_ids = _allowed_dataset_ids(user or {})
+    except Exception:
+        # 权限系统异常时，降级为不返回任何数据集结果（保留元信息）
+        allowed_ids = []
+    history = filter_history_dataset_results(history, allowed_ids)
+    return jsonify({"history": history})
 
 
 @smart_chat_bp.route("/api/smart-chat/report-history", methods=["POST"])

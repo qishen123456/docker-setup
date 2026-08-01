@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: backend/advanced_capabilities/smartask_advanced/core_service
+title: 进阶问数核心服务与能力编排
+scope:
+    - backend/smartask_advanced/service.py
+    - backend/smartask_advanced/registry.py
+    - backend/smartask_advanced/config_store.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/advanced_capabilities/smartask_advanced/data_analysis_skills
+    - path: backend/advanced_capabilities/smartask_advanced/domain_skills
+    - path: backend/advanced_capabilities/smartask_advanced/orchestration_skills
+    - path: backend/advanced_capabilities/smartask_advanced/policy_validation_skills

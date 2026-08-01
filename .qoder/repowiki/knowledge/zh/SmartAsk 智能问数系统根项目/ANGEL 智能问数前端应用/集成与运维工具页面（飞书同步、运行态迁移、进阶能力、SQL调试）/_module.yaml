@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: frontend/integrations_and_tools
+title: 集成与运维工具页面（飞书同步、运行态迁移、进阶能力、SQL调试）
+scope:
+    - frontend/src/views/FeishuSync.vue
+    - frontend/src/views/RuntimeMigration.vue
+    - frontend/src/views/AdvancedCapabilities.vue
+    - frontend/src/views/SqlDebug.vue
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/advanced_capabilities
+    - path: backend/feishu_sync
+    - path: backend/runtime_migration

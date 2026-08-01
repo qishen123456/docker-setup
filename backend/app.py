@@ -67,6 +67,11 @@ BACKEND_PORT = int(APP_CONFIG.get("port") or os.getenv("SMARTASK_BACKEND_PORT", 
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
+# 历史快照 rows 等 dict 必须保持原始列序返回：
+# jsonify 默认按字母序重排键，会把「上级名称」排到「节点名称」前，
+# 导致前端按键序找名称列时恢复历史后显示上级组织名而不是节点名。
+app.json.sort_keys = False
+app.json.ensure_ascii = False
 app.secret_key = str(APP_CONFIG.get("secret_key") or decrypt_secret_value(os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026")))
 
 CORS_ORIGINS = [

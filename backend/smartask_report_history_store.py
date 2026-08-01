@@ -19,7 +19,7 @@ from config_manager import read_json, write_json
 
 
 HISTORY_FILE = "smartask_report_history.json"
-MAX_ITEMS_PER_SCOPE = 200
+MAX_ITEMS_PER_SCOPE = 30
 _LOCK = threading.RLock()
 
 
@@ -178,37 +178,15 @@ def _is_explicit_aggregate_question(question: str) -> bool:
     return bool(re.search(r"(整体|总体|总览|汇总|全部|总计|合计)", str(question or "")))
 
 
-def _has_self_parent_anomaly(dataset_result: Dict[str, Any]) -> bool:
-    """检测报告结果中是否存在「子节点名称与上级名称相同」的数据异常。
-
-    这种异常通常由数据源污染导致，例如飞书多维表中「城市分公司」字段被错误填充为
-    所属「分公司」名称， resulting in rows like:
-        层级=城市分公司, 节点名称=山东分公司, 上级名称=山东分公司
-    该类快照不应被恢复，否则会出现「每个分公司下都挂着一个同名城市分公司」的误导展示。
-    """
-    rows = dataset_result.get("rows")
-    if not isinstance(rows, list):
-        return False
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        name = str(row.get("节点名称") or row.get("name") or "").strip()
-        parent = str(row.get("上级名称") or row.get("parent") or "").strip()
-        level = str(row.get("层级") or row.get("level") or "").strip()
-        if name and parent and name == parent and level not in {"", "消费者事业部总体"}:
-            return True
-    return False
-
-
 def _is_stale_history_snapshot(item: Dict[str, Any]) -> bool:
-    """Detect old snapshots that would restore a known-invalid interpretation."""
+    """Detect old snapshots that would restore a known-invalid interpretation.
+
+    完全保留快照策略：只清理 ranking 数量明显不匹配的快照，不再因数据层级变化
+    （focusNode leaf 冲突、自环异常等）删除历史记录，避免用户刷新后历史丢失。
+    """
     dataset_result = _dataset_result_from_item(item)
     if not dataset_result:
         return False
-
-    # 数据异常：子节点名称与上级名称同名，属于脏数据快照，不应恢复
-    if _has_self_parent_anomaly(dataset_result):
-        return True
 
     question = _question_from_item(item, dataset_result)
     query_intent = dataset_result.get("query_intent") if isinstance(dataset_result.get("query_intent"), dict) else {}
@@ -222,17 +200,8 @@ def _is_stale_history_snapshot(item: Dict[str, Any]) -> bool:
     ):
         return True
 
-    report_spec = dataset_result.get("report_spec") if isinstance(dataset_result.get("report_spec"), dict) else {}
-    scope = report_spec.get("scope") if isinstance(report_spec.get("scope"), dict) else {}
-    focus_node = str(scope.get("focusNode") or "").strip()
-    if (
-        focus_node
-        and scope.get("focusNodeIsLeaf") is True
-        and not _is_explicit_aggregate_question(question)
-        and _node_index_has_children(dataset_result.get("dataset_id"), focus_node)
-    ):
-        return True
-
+    # 完全保留快照：不再因节点索引更新导致 focusNode leaf 冲突而删除历史记录
+    # 这类变化属于数据/口径演进，不应让用户的历史对话消失。
     return False
 
 
@@ -353,3 +322,58 @@ def clear_history(user: Dict[str, Any] | None) -> None:
         store = _read_store()
         store.setdefault("history_by_scope", {})[scope] = []
         _write_store(store)
+
+
+def filter_history_dataset_results(
+    history_items: List[Dict[str, Any]],
+    allowed_dataset_ids: List[int] | set[int] | None,
+) -> List[Dict[str, Any]]:
+    """按数据集权限裁剪历史快照的 dataset_results。
+
+    最小权限原则：历史 GET 返回前，把不在 allowed_dataset_ids 中的数据集结果移除。
+    - 部分有权限：仅保留有权限的 dataset_results
+    - 全部无权限：清空 dataset_results，并记录权限隔离错误（保留快照元信息，方便用户定位已丢失的历史条目）
+    - allowed_dataset_ids 为 None：视为未启用权限系统，不做裁剪
+
+    不修改传入的 history_items，返回全新 deepcopy 后的列表。
+    """
+    if allowed_dataset_ids is None:
+        return deepcopy(history_items)
+
+    allowed = {_to_int(x) for x in allowed_dataset_ids}
+    allowed.discard(None)
+
+    safe_items: List[Dict[str, Any]] = []
+    for raw in history_items:
+        item = deepcopy(raw or {})
+        snapshot = item.get("reportSnapshot")
+        if not isinstance(snapshot, dict):
+            safe_items.append(item)
+            continue
+        result = snapshot.get("result")
+        if not isinstance(result, dict):
+            safe_items.append(item)
+            continue
+        dataset_results = result.get("dataset_results")
+        if not isinstance(dataset_results, list) or not dataset_results:
+            safe_items.append(item)
+            continue
+
+        filtered = [
+            ds for ds in dataset_results
+            if isinstance(ds, dict) and _to_int(ds.get("dataset_id")) in allowed
+        ]
+        if len(filtered) == len(dataset_results):
+            # 全部在权限内，不改动
+            safe_items.append(item)
+            continue
+
+        result["dataset_results"] = filtered
+        if not filtered:
+            result["error"] = result.get("error") or "权限不足，历史报告数据已按当前账号权限隔离。"
+        snapshot["result"] = result
+        item["reportSnapshot"] = snapshot
+        safe_items.append(item)
+
+    return safe_items
+

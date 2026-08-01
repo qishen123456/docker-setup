@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: backend/ask_flow_smart_chat/ask_flow_engine
+title: 问数流程智能路由控制器
+scope:
+    - backend/ask_flow/
+    - backend/controllers/ask_flow.py
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/advanced_capabilities/smartask_advanced
+    - path: backend/tests

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: backend/advanced_capabilities/smartask_advanced
+title: SmartAsk 进阶问数能力中心
+scope:
+    - backend/smartask_advanced/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/ask_flow_smart_chat/ask_flow_engine

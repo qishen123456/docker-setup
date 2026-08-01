@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: frontend/data_management
+title: 数据源与数据集管理视图
+scope:
+    - frontend/src/views/Databases.vue
+    - frontend/src/views/DatasetManagement.vue
+    - frontend/src/views/DatasetReportConfig.vue
+    - frontend/src/views/Bookshelves.vue
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/bookshelf_datasets

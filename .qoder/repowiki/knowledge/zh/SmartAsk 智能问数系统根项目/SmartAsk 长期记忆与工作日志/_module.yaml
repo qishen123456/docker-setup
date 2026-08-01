@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: workbuddy_memory
+title: SmartAsk 长期记忆与工作日志
+scope:
+    - .workbuddy/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/core_app

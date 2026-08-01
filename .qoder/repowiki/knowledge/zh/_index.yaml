@@ -1,0 +1,521 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: docker-setup
+nodes_managed: true
+exported_at: "2026-07-31T14:51:11Z"
+modules:
+    "":
+        dir_name: SmartAsk 智能问数系统根项目
+        title: SmartAsk 智能问数系统根项目
+        scope:
+            - README.md
+            - .dockerignore
+            - docker-compose.yml
+            - deploy.sh
+            - backup.sh
+            - scripts/
+            - tools/
+            - .gitattributes
+            - .gitignore
+            - DEPLOY.md
+            - GIT_GUIDE.md
+            - PPT大纲_NotebookLM适配.md
+            - README_WINDOWS.md
+            - backup.ps1
+            - batch_test_questions.b64
+            - check-release.sh
+            - consumer_single_test.b64
+            - conversion_analysis_flow.html
+            - conversion_analysis_flow.mmd
+            - deploy.bat
+            - deploy.ps1
+            - doctor.ps1
+            - doctor.sh
+            - nl2sql_improvement_plan.md
+            - reset.ps1
+            - restore.sh
+            - single_test.b64
+            - start_all.bat
+            - start_backend.bat
+            - start_feishu_sync.bat
+            - start_frontend.bat
+            - stop_all.bat
+            - update.bat
+            - update.ps1
+            - update.sh
+            - 启动说明.md
+            - 培训演讲稿与常见问题预演.md
+            - 改造计划_AIModels_ReportConfig.md
+            - 项目说明书.md
+        source_files: []
+        children:
+            - agents_skills
+            - backend
+            - config_and_data
+            - docs_and_deliverables
+            - frontend
+            - infra_postgres_init
+            - workbuddy_memory
+        depends_on: []
+        related_to: []
+    agents_skills:
+        dir_name: SmartAsk AI 技能（SKILL）知识库
+        title: SmartAsk AI 技能（SKILL）知识库
+        scope:
+            - .agents/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/feishu_sync
+            - path: backend/runtime_migration
+    backend:
+        dir_name: SmartAsk 智能问数后端服务
+        title: SmartAsk 智能问数后端服务
+        scope:
+            - backend/
+        source_files: []
+        children:
+            - backend/advanced_capabilities
+            - backend/ask_flow_smart_chat
+            - backend/auth_and_rbac
+            - backend/batch_tools
+            - backend/bookshelf_datasets
+            - backend/core_app
+            - backend/feishu_sync
+            - backend/reporting
+            - backend/runtime_migration
+            - backend/system_admin
+            - backend/tests
+        depends_on: []
+        related_to: []
+    backend/advanced_capabilities:
+        dir_name: 进阶问数能力管理模块
+        title: 进阶问数能力管理模块
+        scope:
+            - backend/controllers/advanced_capabilities.py
+            - backend/smartask_advanced/
+            - backend/smartask_basic/
+        source_files: []
+        children:
+            - backend/advanced_capabilities/smartask_advanced
+        depends_on: []
+        related_to:
+            - path: frontend/integrations_and_tools
+    backend/advanced_capabilities/smartask_advanced:
+        dir_name: SmartAsk 进阶问数能力中心
+        title: SmartAsk 进阶问数能力中心
+        scope:
+            - backend/smartask_advanced/
+        source_files: []
+        children:
+            - backend/advanced_capabilities/smartask_advanced/core_service
+            - backend/advanced_capabilities/smartask_advanced/data_analysis_skills
+            - backend/advanced_capabilities/smartask_advanced/domain_skills
+            - backend/advanced_capabilities/smartask_advanced/orchestration_skills
+            - backend/advanced_capabilities/smartask_advanced/policy_validation_skills
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat/ask_flow_engine
+    backend/advanced_capabilities/smartask_advanced/core_service:
+        dir_name: 进阶问数核心服务与能力编排
+        title: 进阶问数核心服务与能力编排
+        scope:
+            - backend/smartask_advanced/service.py
+            - backend/smartask_advanced/registry.py
+            - backend/smartask_advanced/config_store.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced/data_analysis_skills
+            - path: backend/advanced_capabilities/smartask_advanced/domain_skills
+            - path: backend/advanced_capabilities/smartask_advanced/orchestration_skills
+            - path: backend/advanced_capabilities/smartask_advanced/policy_validation_skills
+    backend/advanced_capabilities/smartask_advanced/data_analysis_skills:
+        dir_name: 数据分析与 SQL 质量技能
+        title: 数据分析与 SQL 质量技能
+        scope:
+            - backend/smartask_advanced/skills/pandas_analyze.py
+            - backend/smartask_advanced/skills/golden_sql.py
+            - backend/smartask_advanced/skills/sql_quality.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced/core_service
+            - path: backend/advanced_capabilities/smartask_advanced/policy_validation_skills
+    backend/advanced_capabilities/smartask_advanced/domain_skills:
+        dir_name: SmartAsk 高级技能：资产打包、结论建议与证据投票
+        title: SmartAsk 高级技能：资产打包、结论建议与证据投票
+        scope:
+            - backend/smartask_advanced/skills/asset_pack.py
+            - backend/smartask_advanced/skills/conclusion_advice.py
+            - backend/smartask_advanced/skills/evidence_vote.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced/core_service
+            - path: backend/advanced_capabilities/smartask_advanced/orchestration_skills
+    backend/advanced_capabilities/smartask_advanced/orchestration_skills:
+        dir_name: 智能问答编排技能（路由守卫、数据集路由与意图规划）
+        title: 智能问答编排技能（路由守卫、数据集路由与意图规划）
+        scope:
+            - backend/smartask_advanced/skills/planner.py
+            - backend/smartask_advanced/skills/route_guard.py
+            - backend/smartask_advanced/skills/dataset_route.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced/core_service
+            - path: backend/advanced_capabilities/smartask_advanced/domain_skills
+    backend/advanced_capabilities/smartask_advanced/policy_validation_skills:
+        dir_name: 智能问答策略校验技能集
+        title: 智能问答策略校验技能集
+        scope:
+            - backend/smartask_advanced/skills/answer_contract.py
+            - backend/smartask_advanced/skills/self_check.py
+            - backend/smartask_advanced/skills/template_policy.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced/core_service
+            - path: backend/advanced_capabilities/smartask_advanced/data_analysis_skills
+    backend/ask_flow_smart_chat:
+        dir_name: 智能问数编排与路由层
+        title: 智能问数编排与路由层
+        scope:
+            - backend/controllers/ask_flow.py
+            - backend/controllers/smart_chat.py
+            - backend/ask_flow/
+            - backend/memory/
+            - backend/disambiguation/
+        source_files: []
+        children:
+            - backend/ask_flow_smart_chat/ask_flow_engine
+            - backend/ask_flow_smart_chat/disambiguation_scoring
+            - backend/ask_flow_smart_chat/smart_chat_orchestration
+        depends_on: []
+        related_to:
+            - path: backend/reporting
+            - path: frontend/smartask_chat
+    backend/ask_flow_smart_chat/ask_flow_engine:
+        dir_name: 问数流程智能路由控制器
+        title: 问数流程智能路由控制器
+        scope:
+            - backend/ask_flow/
+            - backend/controllers/ask_flow.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities/smartask_advanced
+            - path: backend/tests
+    backend/ask_flow_smart_chat/disambiguation_scoring:
+        dir_name: 数据集消歧与仲裁模块
+        title: 数据集消歧与仲裁模块
+        scope:
+            - backend/disambiguation/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat/smart_chat_orchestration
+            - path: backend/bookshelf_datasets
+            - path: backend/tests
+    backend/ask_flow_smart_chat/smart_chat_orchestration:
+        dir_name: 智能问数编排控制器与短期记忆存储
+        title: 智能问数编排控制器与短期记忆存储
+        scope:
+            - backend/controllers/smart_chat.py
+            - backend/memory/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat/disambiguation_scoring
+    backend/auth_and_rbac:
+        dir_name: 认证授权与RBAC权限管理
+        title: 认证授权与RBAC权限管理
+        scope:
+            - backend/controllers/auth.py
+            - backend/controllers/rbac.py
+            - backend/controllers/data_permissions.py
+            - backend/controllers/organization_trees.py
+            - backend/auth_store.py
+            - backend/rbac_store.py
+            - backend/data_permission_store.py
+            - backend/organization_tree_store.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: frontend/auth_and_layout
+    backend/batch_tools:
+        dir_name: 后端运维与测试工具集
+        title: 后端运维与测试工具集
+        scope:
+            - backend/batch_test_consumer_questions.py
+            - backend/batch_test_ecommerce_questions.py
+            - backend/batch_test_questions.py
+            - backend/consumer_single_test.py
+            - backend/single_test.py
+            - backend/regenerate_dataset_from_doc.py
+            - backend/export_bookshelf_bundle.py
+            - backend/import_bookshelf_bundle.py
+            - backend/export_runtime_config.py
+            - backend/import_runtime_config.py
+            - backend/update_syyb_profile_members.py
+            - backend/verify_deployment.py
+            - backend/encrypt_env_secrets.py
+            - backend/analyze_batch_results.py
+            - backend/create_consumer_standard_dataset.py
+            - backend/export_angel_group_data.py
+            - backend/import_angel_group_data.py
+            - backend/agent_registry.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/bookshelf_datasets
+            - path: backend/runtime_migration
+    backend/bookshelf_datasets:
+        dir_name: 数据集书架与报告配置（Bookshelf Datasets）
+        title: 数据集书架与报告配置（Bookshelf Datasets）
+        scope:
+            - backend/controllers/bookshelf.py
+            - backend/dataset_transform_service.py
+            - backend/dataset_report_config.py
+            - backend/dataset_dimension_profiles.py
+            - backend/build_dataset_node_index.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat/disambiguation_scoring
+            - path: backend/batch_tools
+            - path: frontend/data_management
+    backend/core_app:
+        dir_name: 后端应用启动与配置管理核心
+        title: 后端应用启动与配置管理核心
+        scope:
+            - backend/app.py
+            - backend/bootstrap.py
+            - backend/config_manager.py
+            - backend/secret_codec.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: config_and_data
+            - path: infra_postgres_init
+            - path: workbuddy_memory
+    backend/feishu_sync:
+        dir_name: 飞书多维表格同步模块
+        title: 飞书多维表格同步模块
+        scope:
+            - backend/controllers/feishu_sync.py
+            - backend/feishu_sync_manager.py
+            - backend/feishu_sync_service.py
+            - backend/feishu_sync_logger.py
+            - backend/feishu_url_parser.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agents_skills
+            - path: frontend/integrations_and_tools
+    backend/reporting:
+        dir_name: 报告配置与场景化报表生成
+        title: 报告配置与场景化报表生成
+        scope:
+            - backend/controllers/report_config.py
+            - backend/report_contract_health.py
+            - backend/report_scene_registry.py
+            - backend/report_spec_builder.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat
+    backend/runtime_migration:
+        dir_name: 运行态配置与数据迁移服务
+        title: 运行态配置与数据迁移服务
+        scope:
+            - backend/controllers/runtime_migration.py
+            - backend/runtime_migration.py
+            - backend/migrations/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agents_skills
+            - path: backend/batch_tools
+            - path: frontend/integrations_and_tools
+    backend/system_admin:
+        dir_name: 系统日志与功能开关管理
+        title: 系统日志与功能开关管理
+        scope:
+            - backend/controllers/system_logs.py
+            - backend/system_log_store.py
+            - backend/controllers/feature_flags.py
+            - backend/feature_flags.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: frontend/admin_console
+    backend/tests:
+        dir_name: SmartAsk 后端单元测试套件
+        title: SmartAsk 后端单元测试套件
+        scope:
+            - backend/tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat/ask_flow_engine
+            - path: backend/ask_flow_smart_chat/disambiguation_scoring
+    config_and_data:
+        dir_name: 应用配置与运行时数据文件
+        title: 应用配置与运行时数据文件
+        scope:
+            - config/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/core_app
+    docs_and_deliverables:
+        dir_name: SmartAsk 项目文档与交付物归档
+        title: SmartAsk 项目文档与交付物归档
+        scope:
+            - docs/
+            - deliverables/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: infra_postgres_init
+    frontend:
+        dir_name: ANGEL 智能问数前端应用
+        title: ANGEL 智能问数前端应用
+        scope:
+            - frontend/
+        source_files: []
+        children:
+            - frontend/admin_console
+            - frontend/auth_and_layout
+            - frontend/data_management
+            - frontend/integrations_and_tools
+            - frontend/shared_components
+            - frontend/smartask_chat
+        depends_on: []
+        related_to: []
+    frontend/admin_console:
+        dir_name: 管理控制台与权限治理视图
+        title: 管理控制台与权限治理视图
+        scope:
+            - frontend/src/views/AdminConsole.vue
+            - frontend/src/views/AIModels.vue
+            - frontend/src/views/AgentManagement.vue
+            - frontend/src/views/EmployeePermissions.vue
+            - frontend/src/views/OrganizationTrees.vue
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/system_admin
+    frontend/auth_and_layout:
+        dir_name: 应用启动、路由与认证入口
+        title: 应用启动、路由与认证入口
+        scope:
+            - frontend/src/auth/AuthLogin.vue
+            - frontend/src/views/AuthCallback.vue
+            - frontend/src/App.vue
+            - frontend/src/main.js
+            - frontend/src/router/index.js
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/auth_and_rbac
+    frontend/data_management:
+        dir_name: 数据源与数据集管理视图
+        title: 数据源与数据集管理视图
+        scope:
+            - frontend/src/views/Databases.vue
+            - frontend/src/views/DatasetManagement.vue
+            - frontend/src/views/DatasetReportConfig.vue
+            - frontend/src/views/Bookshelves.vue
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/bookshelf_datasets
+    frontend/integrations_and_tools:
+        dir_name: 集成与运维工具页面（飞书同步、运行态迁移、进阶能力、SQL调试）
+        title: 集成与运维工具页面（飞书同步、运行态迁移、进阶能力、SQL调试）
+        scope:
+            - frontend/src/views/FeishuSync.vue
+            - frontend/src/views/RuntimeMigration.vue
+            - frontend/src/views/AdvancedCapabilities.vue
+            - frontend/src/views/SqlDebug.vue
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/advanced_capabilities
+            - path: backend/feishu_sync
+            - path: backend/runtime_migration
+    frontend/shared_components:
+        dir_name: SmartAsk 共享组件与工具集
+        title: SmartAsk 共享组件与工具集
+        scope:
+            - frontend/src/components/
+            - frontend/src/composables/
+            - frontend/src/utils/
+            - frontend/src/styles/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    frontend/smartask_chat:
+        dir_name: SmartAsk 智能问数对话与报告视图
+        title: SmartAsk 智能问数对话与报告视图
+        scope:
+            - frontend/src/views/SmartAsk.vue
+            - frontend/src/components/smartask/
+            - frontend/src/composables/useSmartAskReportHistory.js
+            - frontend/src/state/smartAskHistory.js
+            - frontend/src/state/smartAskSession.js
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/ask_flow_smart_chat
+    infra_postgres_init:
+        dir_name: PostgreSQL 初始化与数据迁移脚本
+        title: PostgreSQL 初始化与数据迁移脚本
+        scope:
+            - docker/postgres/init/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/core_app
+            - path: docs_and_deliverables
+    workbuddy_memory:
+        dir_name: SmartAsk 长期记忆与工作日志
+        title: SmartAsk 长期记忆与工作日志
+        scope:
+            - .workbuddy/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend/core_app

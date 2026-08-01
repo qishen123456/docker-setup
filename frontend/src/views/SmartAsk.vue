@@ -1281,6 +1281,24 @@ const datasetId = ref(null)
 const modelId = ref(null)
 const datasets = ref([])
 const aiModels = ref([])
+// 数据集就绪信号：登录后 getBookshelfDatasets 为异步，历史恢复的权限过滤必须等它就绪，
+// 否则 datasets.value 仍为空会被 isDatasetVisible 全部误判为无权限（首次点历史误报）。
+const datasetsLoaded = ref(false)
+let datasetsLoadedResolve = null
+const ensureDatasetsReady = () => {
+  if (datasetsLoaded.value) return Promise.resolve()
+  return new Promise((resolve) => {
+    datasetsLoadedResolve = resolve
+    // 兜底超时放行：后端 GET 已做权限过滤，前端仅为二次校验，超时不再阻塞恢复。
+    setTimeout(() => {
+      if (datasetsLoadedResolve) { datasetsLoadedResolve(); datasetsLoadedResolve = null }
+    }, 2500)
+  })
+}
+const markDatasetsLoaded = () => {
+  datasetsLoaded.value = true
+  if (datasetsLoadedResolve) { datasetsLoadedResolve(); datasetsLoadedResolve = null }
+}
 const commonQuestions = ref([])
 const commonQuestionsLoading = ref(false)
 const messages = reactive([])
@@ -3216,9 +3234,22 @@ const reportSourceDatasets = computed(() => (
   reportViewerVisible.value ? reportViewerDatasets.value : latestDatasets.value
 ))
 
-const findBusinessDrillReport = (datasets = []) => (
-  (datasets || []).map(buildBusinessDrillReport).find(Boolean) || null
-)
+const findBusinessDrillReport = (datasets = []) => {
+  const reports = (datasets || [])
+    .map(buildBusinessDrillReport)
+    .filter(Boolean)
+  if (!reports.length) return null
+  // 修 4（渲染侧优先级）：优先使用有明确 answerMode 的报告。
+  // 用户问 ranking/TopN 问题时，ranking 报告的 offices 是业务代表层级；
+  // 若无优先级，dataset_results[0] 若为 Overview 报告（业务部层级）会被误取，
+  // 导致 offices 全是业务部/代表处节点而不是业务代表。
+  const INTENT_MODES = ['ranking', 'filter', 'drilldown', 'comparison']
+  const intentful = reports.find(r => INTENT_MODES.includes(String(r.answerMode || '').trim()))
+  if (intentful) return intentful
+  const withOffices = reports.find(r => Array.isArray(r.offices) && r.offices.length > 0)
+  if (withOffices) return withOffices
+  return reports[0]
+}
 
 const businessDrillReport = computed(() => (
   findBusinessDrillReport(latestDatasets.value)
@@ -3824,6 +3855,8 @@ const scrollPanelToReportTop = () => nextTick(() => {
 const clearExecutionPanelState = () => {
   detailReportResult.value = null
   Object.keys(logOpen).forEach(k => delete logOpen[k])
+  // S1 信号重置：开始新一轮执行即脱离"历史快照恢复"状态
+  if (session?.state) session.state.isHistoricalSnapshot = false
   timelineVersion.value += 1
   nextTick(() => {
     if (panelRef.value) panelRef.value.scrollTop = 0
@@ -3982,6 +4015,7 @@ const getThinkingSteps = (msg) => {
 
 const isCurrentSessionMessage = (msg) => {
   return Boolean(
+    !session.state.isHistoricalSnapshot &&
     msg?.data?.question &&
     session.state.question &&
     msg.data.question === session.state.question &&
@@ -4442,7 +4476,18 @@ const handleStop = () => {
 }
 
 const resetForNewChat = () => {
-  saveCurrentToHistory()
+  // 修 1（reset 保存 guard）：只有完整、正确的结果才保存，避免把 requires_confirmation 中间态
+  // （业务部 Overview 层级）当成正式历史保存；也避免旧会话残留的脏 result 被保存。
+  const cur = session.state.result || null
+  const isCompleteResult = Boolean(
+    cur &&
+    typeof cur === 'object' &&
+    !cur.requires_confirmation &&
+    !cur.error &&
+    Array.isArray(cur.dataset_results) &&
+    cur.dataset_results.length > 0
+  )
+  if (isCompleteResult) saveCurrentToHistory(cur)
   messages.splice(0, messages.length)
   activeRequestAiMessageId.value = null
   query.value = ''
@@ -4833,6 +4878,7 @@ const {
   datasets,
   isRunning,
   isDatasetVisible,
+  ensureDatasetsReady,
   loadHistory,
   upsertHistory,
   setActiveHistory,
@@ -5437,7 +5483,7 @@ watch(() => messages.length, () => {
   scheduleChatScroll(24, 'smooth')
 }, { flush: 'post' })
 
-watch(() => pendingRestoreId.value, (historyId) => {
+watch(() => pendingRestoreId.value, async (historyId) => {
   if (!historyId) return
   const item = findHistoryById(historyId)
   if (!item) {
@@ -5445,7 +5491,7 @@ watch(() => pendingRestoreId.value, (historyId) => {
     clearRestoreRequest()
     return
   }
-  restoreHistory(item)
+  await restoreHistory(item)
   datasetId.value = null
   isDatasetManuallySelected.value = false
   clearRestoreRequest()
@@ -5476,6 +5522,7 @@ onMounted(async () => {
   try {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
+    markDatasetsLoaded()
     sanitizeDatasetSelection()
     await loadQuestions()
   } catch {}
@@ -5490,7 +5537,12 @@ onMounted(async () => {
   }
 
   // 页面重新打开时不自动回灌旧结果；历史恢复仍通过显式操作触发。
-  if (session.state.result || session.state.question || session.state.logs?.length) {
+  // 注意：必须排除"本页正在执行的问数"。onMounted 的 async 体在 await 数据集期间
+  // 会让出执行权，用户可能已发问（startAsk 已写入 state.question/status），
+  // 若此时仍按"有残留状态"清理会误杀正在进行的问数（runToken 失效→结果帧被忽略→显示已取消）。
+  // hasActiveAsk 精确区分"本页活跃问数"（true，绝不清）与"刷新残留 running"（false，可清）。
+  const hasStaleRecovered = session.state.result || session.state.question || session.state.logs?.length
+  if (hasStaleRecovered && !session.hasActiveAsk?.()) {
     session.clearRecoveredSessionResult()
   }
 })
@@ -5500,6 +5552,7 @@ onActivated(async () => {
   try {
     const res = await getBookshelfDatasets()
     datasets.value = res.datasets || []
+    markDatasetsLoaded()
     sanitizeDatasetSelection()
   } catch {}
   try {

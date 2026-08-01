@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: agents_skills
+title: SmartAsk AI 技能（SKILL）知识库
+scope:
+    - .agents/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/feishu_sync
+    - path: backend/runtime_migration

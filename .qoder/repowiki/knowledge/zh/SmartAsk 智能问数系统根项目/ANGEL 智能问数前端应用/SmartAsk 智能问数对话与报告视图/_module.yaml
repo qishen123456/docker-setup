@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: frontend/smartask_chat
+title: SmartAsk 智能问数对话与报告视图
+scope:
+    - frontend/src/views/SmartAsk.vue
+    - frontend/src/components/smartask/
+    - frontend/src/composables/useSmartAskReportHistory.js
+    - frontend/src/state/smartAskHistory.js
+    - frontend/src/state/smartAskSession.js
+source_files: []
+depends_on: []
+related_to:
+    - path: backend/ask_flow_smart_chat

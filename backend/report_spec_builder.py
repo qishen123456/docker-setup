@@ -3,6 +3,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from dataset_dimension_profiles import get_dataset_profile, resolve_member_mentions
+from organization_tree_store import load_organization_trees
 from report_contract_health import validate_report_contract
 from report_scene_registry import detect_report_scene, layout_for_scene
 
@@ -249,7 +250,7 @@ def _infer_metric_from_columns(columns: List[str], key: str, label: str, tokens:
 def _row_value(row: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> Optional[float]:
     if not metric:
         return None
-    return _to_float(row.get(metric.get("column")))
+    return _to_float((row or {}).get(metric.get("column")))
 
 
 def _row_sort_value(row: Dict[str, Any], metric: Optional[Dict[str, Any]]) -> float:
@@ -377,6 +378,123 @@ def _canonical_level_value(value: Any) -> str:
         "城市公司": "城市分公司",
     }
     return alias_map.get(text, text)
+
+
+# 末端个人节点（业务代表/个人）：这类节点才展示“个人业绩”，分公司/城市分公司/事业部一律不是末端
+_PERSON_LEVEL_VALUES = {
+    "业务代表",
+    "业务员",
+    "个人",
+    "员工",
+    "销售员",
+    "导购",
+    "销售代表",
+    "客户经理",
+}
+
+
+def _is_person_level(node: Optional[Dict[str, Any]]) -> bool:
+    """只有业务代表/个人等人员层级才算末端个人节点；分公司/城市分公司/事业部不算。"""
+    if not node:
+        return False
+    level = _canonical_level_value(node.get("levelValue") or node.get("levelName"))
+    if level in _PERSON_LEVEL_VALUES:
+        return True
+    name = str(node.get("name") or "")
+    if re.search(r"(业务代表|业务员|销售员|个人)$", name):
+        return True
+    return False
+
+
+def _infer_level_value_from_name(name: str, org_level: Any) -> str:
+    text = str(name or "")
+    if "城市分公司" in text or "城市公司" in text:
+        return "城市分公司"
+    if "分公司" in text:
+        return "分公司"
+    if "事业部" in text:
+        return "事业部"
+    if re.search(r"(业务代表|业务员|销售员|个人)$", text):
+        return "业务代表"
+    return str(org_level or "下级节点")
+
+
+def _build_org_name_to_children() -> Dict[str, List[Dict[str, Any]]]:
+    """从组织树构建 节点名 -> 直接子节点 的映射，用于回填管理节点的真实下级。"""
+    mapping: Dict[str, List[Dict[str, Any]]] = {}
+    try:
+        data = load_organization_trees()
+    except Exception:
+        return mapping
+    nodes = data.get("nodes") or []
+    node_by_id = {item.get("id"): item for item in nodes}
+    for item in nodes:
+        parent_id = item.get("parent_id") or ""
+        if not parent_id:
+            continue
+        parent = node_by_id.get(parent_id)
+        if not parent:
+            continue
+        mapping.setdefault(parent.get("name"), []).append({
+            "name": item.get("name"),
+            "level": item.get("level"),
+        })
+    return mapping
+
+
+def _enrich_focus_with_children(
+    focus_node: Dict[str, Any],
+    nodes_by_name: Dict[str, Dict[str, Any]],
+    all_nodes: List[Dict[str, Any]],
+) -> None:
+    """为管理类聚焦节点补全“直接下级”，消除“随 SQL 行而变”的非确定性。
+
+    子节点来源优先级：
+    1) 数据驱动：结果集中 parentName == focus.name 的节点（数据集自身的组织层级，
+       消费者数据集的 分公司→城市分公司 链路就在这里）；
+    2) 组织树兜底：organization_trees.json 中记录的子节点（适用于层级存于组织树的数据集）。
+
+    已存在于结果行中的子节点直接复用（带指标），组织树有但结果里没有的则补占位节点。
+    仅回填一级、不递归；人员层级（业务代表/个人）不参与。
+    """
+    if not focus_node or _is_person_level(focus_node):
+        return
+    if focus_node.get("children"):
+        return
+    focus_name = focus_node.get("name")
+    # 1) 数据驱动：结果集里 parentName 指向本节点的下级
+    data_children = [
+        n for n in all_nodes
+        if n is not focus_node and n.get("parentName") == focus_name and n.get("name")
+    ]
+    # 2) 组织树兜底
+    org_children = _build_org_name_to_children().get(focus_name) or []
+    org_names = {c.get("name") for c in data_children}
+    attached: List[Dict[str, Any]] = []
+    seen: set = set()
+    for child in data_children + [c for c in org_children if c.get("name") not in org_names]:
+        cname = child.get("name")
+        if not cname or cname in seen:
+            continue
+        seen.add(cname)
+        existing = nodes_by_name.get(cname)
+        if existing:
+            attached.append(existing)
+        else:
+            attached.append({
+                "id": f"org::{cname}",
+                "name": cname,
+                "parentName": focus_name,
+                "levelName": _infer_level_value_from_name(cname, child.get("level")),
+                "levelValue": _infer_level_value_from_name(cname, child.get("level")),
+                "trackName": "",
+                "depth": (focus_node.get("depth", 0) + 1),
+                "children": [],
+                "raw": {},
+                "_noData": True,
+            })
+    if attached:
+        focus_node["children"] = attached
 
 
 def _negative_ranking_requested(question: str) -> bool:
@@ -824,6 +942,17 @@ def build_report_spec(
     if is_multi_parent and matched_nodes:
         comparison_nodes = matched_nodes
         focus_node = None
+
+    # 末端判定改为按层级；并为管理类聚焦节点从组织树回填真实子节点，
+    # 消除“随本次 SQL 是否返回下级行而变”的非确定性（如豫晋分公司被误判为末端个人节点）
+    if focus_node and not _is_person_level(focus_node):
+        _enrich_focus_with_children(
+            focus_node, {n.get("name"): n for n in nodes if n.get("name")}, nodes
+        )
+    if focus_node and is_single_focus_question:
+        children = focus_node.get("children") or []
+        if children:
+            comparison_nodes = [n for n in children if n.get("name")]
 
     low_first = (
         str(query_intent.get("direction") or "").lower() == "asc"
@@ -1521,7 +1650,7 @@ def build_report_spec(
     elif answer_mode == "drilldown" and not answer_summary:
         focus_name = focus_node.get("name") if focus_node else ""
         child_count = len(comparison_nodes)
-        is_leaf_focus = bool(focus_node) and not bool(focus_node.get("children"))
+        is_leaf_focus = _is_person_level(focus_node)
         if is_leaf_focus:
             answer_text = f"已定位到 {focus_name}，当前展示其个人业绩指标"
         elif focus_node and comparison_nodes:
@@ -1586,7 +1715,7 @@ def build_report_spec(
         },
         "scope": {
             "focusNode": focus_node.get("name") if focus_node else None,
-            "focusNodeIsLeaf": bool(focus_node) and not bool(focus_node.get("children")),
+            "focusNodeIsLeaf": _is_person_level(focus_node),
             "compareLevelLabel": compare_label,
             "detailLevelLabel": detail_label,
         },
