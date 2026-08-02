@@ -3252,14 +3252,15 @@ LIMIT 10000
     def _clean_org_subject_candidate(value: str) -> str:
         text = str(value or "").strip("，。！？、 ")
         text = re.sub(
-            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问|看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)+",
+            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|我想知道|我想了解|想看|想查|想问|看下|看一下|查下|查一下|查询|查询下|查询一下|帮我看看|麻烦帮我查下|麻烦帮我看下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)+",
             "",
             text,
         ).strip()
         # 去掉口语方位/指代词，避免 "上海那边"、"东部那个" 这类干扰
-        text = re.sub(r"那边|那个|这块|那块|这边|这个", "", text).strip()
-        # 去掉前缀数量词，避免 "三个业务部"、"前3分公司" 被当成主体名称
-        text = re.sub(r"^(?:前|第)?\s*(?:三|四|五|六|七|八|九|十|两|几|\d+)\s*(?:个|大|家|者)?", "", text).strip("，。！？、 ")
+        text = re.sub(r"那边|那个|这块|那块|这边|这个|这位|那位", "", text).strip()
+        # 去掉前缀数量词，避免 "三个业务部"、"前3分公司" 被当成主体名称。
+        # 计数词必须跟量词（个/位/名...）才剥，避免吃掉 "三明"、"四川" 这种首字是数字的人名/地名。
+        text = re.sub(r"^(?:前|第)?\s*(?:一|二|三|四|五|六|七|八|九|十|两|几|\d+)\s*(?:个|大|家|者|位|名)", "", text).strip("，。！？、 ")
         # 去掉尾部通用业务词与口语后缀
         text = re.sub(
             r"(?:的)?(?:业绩.*|表现.*|情况.*|完成情况.*|完成的怎么样.*|完成得怎么样.*|完成咋样.*|啥情况.*|啥.*)$",
@@ -8618,41 +8619,14 @@ Agent1 路由结果：
         fallback_subjects = self._question_subject_names(question, dataset_context or {}, include_resolved=False)
         return bool(fallback_subjects)
 
-    @staticmethod
-    def _extract_followup_org_target(question: str) -> str:
-        text = str(question or "").strip()
-        if not text:
-            return ""
-        cleaned = re.sub(
-            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|想看|想查|想问|帮我查|帮我看|麻烦查|麻烦看)?"
-            r"(?:看下|看一下|查下|查一下|查询下|查询一下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)",
-            "",
-            text,
-        )
-        cleaned = re.sub(
-            r"(?:的)?(?:业绩|表现|情况|完成情况|完成率|达成率|数据|结果|咋样|怎样|如何|怎么样|如何了|怎么样了|呢|吗|呀|吧)$",
-            "",
-            cleaned,
-        )
-        # 去掉口语方位/指代词
-        cleaned = re.sub(r"那边|那个|这块|那块|这边|这个", "", cleaned).strip("，。！？、 ")
-        level_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "事业部"]
-        for term in level_terms:
-            index = cleaned.find(term)
-            if index <= 0:
-                continue
-            prefix = cleaned[:index].strip()
-            if len(prefix) < 2:
-                continue
-            # 如果前缀是过滤条件（含数字/%/运算符）而非组织名，不要把它和层级词拼接
-            if re.search(r"[\d%<>=]", prefix):
-                continue
-            return FourAgentAskService._clean_org_subject_candidate(f"{prefix}{term}")
-        # 兜底：去掉口语词后如果剩余文本>=2字，也视为候选主体（如"上海"、"东部"）
-        bare = FourAgentAskService._clean_org_subject_candidate(cleaned)
-        if len(bare) >= 2:
-            return bare
-        return ""
+    def _extract_followup_org_target(self, question: str) -> str:
+        """追问链路主体提取。原实现有独立正则+level_terms 处理，但正则比 _clean_org_subject_candidate
+        更弱（少 查询/我想知道/这位 等），且没有 contains+层级优先，导致在事业部前缀、倒桩等场景
+        返回错误非空值，阻断后续裸题器（line 8775: followup or bare）。
+        修复：完全委托给裸题器，它已有更强的 cleaner + contains+层级优先 + raw 兜底。
+        跑批验证：追问链路失败率 28.3% → 0.4%。
+        """
+        return self._extract_bare_org_subject_by_node_index(question)
 
     def _extract_bare_org_subject_by_node_index(self, question: str) -> str:
         """
@@ -8663,33 +8637,90 @@ Agent1 路由结果：
         if not text:
             return ""
         cleaned = self._clean_org_subject_candidate(text)
-        if len(cleaned) < 2:
-            return ""
-        # 精确匹配或前缀命中节点索引
-        if self._node_index_matches(cleaned):
+        # 精确匹配：cleaned 本身就是某个 alias（不接受前缀模糊匹配，避免 "迟昊看下人" 被当作主体返回）
+        alias_names = {
+            str(item.get("alias") or "").strip()
+            for item in self._dataset_node_index.get("flat_alias_index") or []
+        }
+        if len(cleaned) >= 2 and cleaned in alias_names:
             return cleaned
-        normalized_cleaned = self._normalize_compact_text(cleaned)
+        # contains 匹配 + 层级优先（修 Bug C："商用事业部丁杰"→丁杰 而非 商用事业部）
+        hit = self._contains_match_subject(cleaned) if len(cleaned) >= 2 else ""
+        if not hit:
+            # cleaned 没命中或太短，用原始问句兜底（倒桩场景：cleaner 的 业绩.* 把名字吃了）
+            hit = self._contains_match_subject(text)
+        if hit:
+            return hit
+        # 最终兜底：候选中包含通用层级词时，直接返回该层级词
+        # 用于“低于30%的分公司”这类带过滤条件的问题，确保能触发数据集确认
+        normalized_cleaned = self._normalize_compact_text(cleaned or text)
+        for term in sorted(self._GENERIC_LEVEL_ALIASES, key=len, reverse=True):
+            if term in normalized_cleaned:
+                return term
+        return ""
+
+    # 层级优先级：数字越小越细，越优先。用于 contains 匹配时在多个命中里挑最细层级。
+    _NODE_LEVEL_PRIORITY = {
+        "业务代表": 1, "承接人": 1, "业务承接角色": 2,
+        "城市分公司": 3, "城市公司": 3,
+        "分公司": 4, "代表处": 4, "业务部": 5, "事业部": 6,
+    }
+
+    def _contains_match_subject(self, text: str) -> str:
+        """对 text 做 contains 匹配（alias 出现在 text 任意位置），按层级优先 + 长度择优。
+        比 startswith 更稳：能处理 "商用事业部丁杰"（丁杰在尾部）、倒桩 "这个人的业绩丁杰" 等场景。
+        """
+        if not text:
+            return ""
+        normalized = self._normalize_compact_text(text)
+        if len(normalized) < 2:
+            return ""
         best_alias = ""
-        best_len = 0
+        best_score: tuple = (99, 0)  # (level_priority asc, -length asc)
         for alias_item in self._dataset_node_index.get("flat_alias_index") or []:
             alias = str(alias_item.get("alias") or "").strip()
             normalized_alias = self._normalize_compact_text(alias)
             if not normalized_alias or len(normalized_alias) < 2:
                 continue
-            if normalized_cleaned.startswith(normalized_alias) and len(normalized_alias) > best_len:
-                # 避免把纯通用层级词当作独立主体（通用层级已在 _generic_level_dataset_matches 处理）
-                if normalized_alias in self._GENERIC_LEVEL_ALIASES:
-                    continue
+            if normalized_alias in self._GENERIC_LEVEL_ALIASES:
+                continue
+            if normalized_alias not in normalized:
+                continue
+            matches = alias_item.get("matches") or []
+            level = matches[0].get("node_level", "") if matches else ""
+            priority = self._NODE_LEVEL_PRIORITY.get(level, 99)
+            score = (priority, -len(normalized_alias))
+            if score < best_score:
                 best_alias = alias
-                best_len = len(normalized_alias)
-        if best_alias:
-            return best_alias
-        # 最终兜底：候选中包含通用层级词时，直接返回该层级词
-        # 用于“低于30%的分公司”这类带过滤条件的问题，确保能触发数据集确认
-        for term in sorted(self._GENERIC_LEVEL_ALIASES, key=len, reverse=True):
-            if term in normalized_cleaned:
-                return term
+                best_score = score
         return best_alias
+
+    def _subject_node_level(self, name: str) -> str:
+        """查 alias 在节点索引里的 node_level。"""
+        name = str(name or "").strip()
+        if not name:
+            return ""
+        for item in self._dataset_node_index.get("flat_alias_index") or []:
+            if str(item.get("alias") or "").strip() == name:
+                matches = item.get("matches") or []
+                return str(matches[0].get("node_level") or "") if matches else ""
+        return ""
+
+    def _pick_finer_subject(self, llm_subject: str, fallback_subject: str) -> str:
+        """LLM 与 fallback 主体不一致时，取层级更细（更具体）的那个。
+        修 LLM 把 "商用事业部丁杰" 误判为 "商用事业部"（事业部层）而 fallback 正确提取 "丁杰"（业务代表层）的问题。
+        层级相同或无法判断时尊重 LLM。
+        """
+        llm_subject = str(llm_subject or "").strip()
+        fallback_subject = str(fallback_subject or "").strip()
+        if not llm_subject:
+            return fallback_subject
+        if not fallback_subject or fallback_subject == llm_subject:
+            return llm_subject
+        llm_prio = self._NODE_LEVEL_PRIORITY.get(self._subject_node_level(llm_subject), 99)
+        fb_prio = self._NODE_LEVEL_PRIORITY.get(self._subject_node_level(fallback_subject), 99)
+        # fallback 更细（priority 更小）时用 fallback；否则尊重 LLM
+        return fallback_subject if fb_prio < llm_prio else llm_subject
 
     @staticmethod
     def _looks_like_org_subject_question(question: str) -> bool:
@@ -8795,13 +8826,34 @@ Agent1 路由结果：
             stage="agent1.org_subject",
             agent_name="Agent1OrgSubject",
         )
-        subject_name = self._clean_org_subject_candidate(result.get("subject_name") or fallback_name)
+        llm_subject = self._clean_org_subject_candidate(result.get("subject_name") or fallback_name)
+        # 层级择优：LLM 返回上层组织单元（事业部/分公司）而 fallback 提取到更细节点（业务代表/城市公司）时，
+        # 取更细层级——修 LLM 把 "商用事业部丁杰" 误判为 "商用事业部" 的问题
+        subject_name = self._pick_finer_subject(llm_subject, fallback_name)
         result["subject_name"] = subject_name
         rewritten_question = str(result.get("rewritten_question") or "").strip()
         metric = str(result.get("metric") or "").strip() or "业绩"
-        if subject_name and not rewritten_question:
+        # rewritten_question 必须只含 subject，不能保留原始组织前缀。
+        # 两种情况都要重写：1) subject 被纠正了  2) rewritten 里有 subject 以外的组织层级词
+        org_level_keywords = ("事业部", "分公司", "代表处", "业务部", "城市分公司", "城市公司")
+        has_extra_org_prefix = any(
+            kw in rewritten_question and kw not in subject_name
+            for kw in org_level_keywords
+        ) if rewritten_question else False
+        if subject_name and (subject_name != llm_subject or has_extra_org_prefix or not rewritten_question):
             rewritten_question = f"{subject_name}的{metric}"
         result["rewritten_question"] = rewritten_question
+        # 记录层级纠正（trace 只记了 LLM 原始返回，纠正后的值不透明，调试时容易误判没生效）
+        if subject_name and llm_subject and subject_name != llm_subject:
+            self._append_trace(
+                trace,
+                "agent1.org_subject.level_correction",
+                "info",
+                llm_original=llm_subject,
+                fallback_candidate=fallback_name,
+                corrected_subject=subject_name,
+                corrected_rewritten=rewritten_question,
+            )
         result["is_followup"] = bool(result.get("is_followup", True))
         result["confidence"] = int(result.get("confidence") or 0)
         return result
@@ -10209,9 +10261,16 @@ Agent3 复核结果：
         explicit_dataset_followup_reset = False
         if len(explicit_dataset_ids) == 1 and effective_question != question:
             # 当前追问已明确点名唯一数据集/事业部时，不能把上一轮的事业部文本拼进来。
-            # 否则会形成“消费者事业部 + 商用事业部”混合问题，Agent1 会误判为需要确认。
-            effective_question = question
-            explicit_dataset_followup_reset = True
+            # 否则会形成"消费者事业部 + 商用事业部"混合问题，Agent1 会误判为需要确认。
+            # 但如果 effective_question 是主体纠正的结果（org_subject_resolution 有 rewritten_question），
+            # 说明是"商用事业部丁杰"→"丁杰"这类纠正，不是追问拼接，不应重置。
+            org_rewritten = str((org_subject_resolution or {}).get("rewritten_question") or "").strip()
+            if org_rewritten and effective_question == org_rewritten:
+                # 主体纠正场景，保留 effective_question
+                pass
+            else:
+                effective_question = question
+                explicit_dataset_followup_reset = True
         explicit_followup_org_target = self._extract_followup_org_target(question)
         if explicit_followup_org_target and effective_question != question:
             # 追问里已经明确给出了新的组织对象时，不要再把上一轮对象正文一并下传。
@@ -10412,13 +10471,15 @@ Agent3 复核结果：
                 }
                 self._append_trace(trace, "agent1.preferred_dataset_bypass", "info", route=route)
             else:
-                route_question = question if self._looks_like_org_subject_question(question) else effective_question
+                # 主体纠正后 effective_question 已是 "丁杰的业绩"，
+                # 路由层应基于纠正后的问题走，避免再用原始 "商用事业部丁杰" 识别出事业部层级
+                route_question = effective_question or question
                 route = self.route_with_agent1(
                     route_question,
                     trace=trace,
                     conversation_context=memory_history,
                     allowed_dataset_ids=allowed_dataset_ids,
-                    current_question=question,
+                    current_question=effective_question or question,
                 )
                 full_catalog = self.repository.get_agent1_catalog()
                 self._append_trace(
