@@ -111,10 +111,10 @@
 
 | 路径 | 类别 | 删除理由 | 风险 | 建议操作 |
 |---|---|---|---|---|
-| `backend/analyze_batch_results.py` | 脚本 | 独立批量结果分析器。 | verify | 归档 / 确认是否再用 |
-| `backend/batch_test_questions.py` | 脚本 | 手动批量测试运行器。 | verify | 归档 |
-| `backend/batch_test_consumer_questions.py` | 脚本 | 消费者数据集批量测试。 | verify | 归档 |
-| `backend/batch_test_ecommerce_questions.py` | 脚本 | 电商数据集批量测试。 | verify | 归档 |
+| `scripts/tests/analyze_batch_results.py` | 脚本 | 独立批量结果分析器。 | 已迁移 | 保留在统一测试脚本目录 |
+| `scripts/tests/batch_test_questions.py` | 脚本 | 手动批量测试运行器。 | 已迁移 | 保留在统一测试脚本目录 |
+| `scripts/tests/batch_test_consumer_questions.py` | 脚本 | 消费者数据集批量测试。 | 已迁移 | 保留在统一测试脚本目录 |
+| `scripts/tests/batch_test_ecommerce_questions.py` | 脚本 | 电商数据集批量测试。 | 已迁移 | 保留在统一测试脚本目录 |
 | `backend/build_dataset_node_index.py` | 脚本 | 生成 `config/dataset_node_index.json`，目前手动运行。 | verify | 保留工具脚本 / 或归档 |
 | `backend/check_all_dbs.py` | 脚本 | 数据库连通性诊断。 | verify | 归档 |
 | `backend/check_angel_structure.py` | 脚本 | 结构诊断。 | verify | 归档 |
@@ -184,7 +184,7 @@
 | 路径 | 使用位置 | 说明 |
 |---|---|---|
 | `backend/dataset_dimension_profiles.py` | `four_agent_ask.py`、`disambiguation/llm_arbiter.py`、`report_spec_builder.py`、`smartask_advanced/skills/dataset_route.py` | 旧维度画像读取逻辑仍在使用；画像只能做别名/集合口径增强，真实节点事实以 `config/dataset_node_index.json` 为准。 |
-| `backend/verify_deployment.py` | `scripts/verify_deployment.py`、`deploy.sh`、`update.sh` | 部署自检脚本，通过 shim 调用。 |
+| `scripts/deploy/verify_deployment.py` | `scripts/verify_deployment.py`、`deploy.sh`、`update.sh` | 部署自检脚本已迁移到统一部署脚本目录，兼容 shim 继续可用。 |
 | `backend/create_consumer_standard_dataset.py` | `bootstrap.py` | 内置消费者标准数据集同步。 |
 | `backend/import_runtime_config.py` / `import_bookshelf_bundle.py` / `import_angel_group_data.py` | `bootstrap.py` | 启动时导入 bundle。 |
 | `backend/export_bookshelf_bundle.py` / `export_angel_group_data.py` | `scripts/backup_all.py` | 备份脚本使用。 |
@@ -199,7 +199,7 @@
 
 1. **先删 safe 项**：根目录 legacy 脚本、旧 React 目录、未使用组件/资源、未注册控制器、死路由、生成产物。
 2. **更新 `.gitignore`**：
-   - 移除仍在使用的项：`backend/dataset_dimension_profiles.py`、`backend/verify_deployment.py`。
+   - 移除仍在使用的项：`backend/dataset_dimension_profiles.py`、`scripts/deploy/verify_deployment.py`。
    - 加入生成产物：`config/smartask_test_results_*.json`、`config/smartask_test_report_*.md`、`backend/dataset_copilot/output/*.json`。
 3. **处理 verify 项**：将诊断/批量测试脚本统一移到 `tools/` 或 `scripts/archive/`，不要散落在 `backend/` 根目录。
 4. **文档合并**：决定 `docs/` 与 `config/` 中重复文档的权威版本。

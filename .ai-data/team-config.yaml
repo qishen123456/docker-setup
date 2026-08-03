@@ -1,0 +1,327 @@
+# ===========================================================================
+# 数据分析与研究洞察专家团 - 框架无关的项目级配置
+# ===========================================================================
+# 本文件是数据分析/研究/金融专家团在 SmartAsk 仓库内的机器可读
+# 单一事实来源。任何 AI 工具或后端代码均可读取本文件，加载角色 prompt、
+# 工作流编排与路由表，无需依赖 WorkBuddy 平台运行时。
+#
+# 与 .ai-team/（代码开发团队）的关系：
+#   .ai-team/ = 开发态工具，消费者是"人+IDE"，帮 SmartAsk 写代码（9 角色）
+#   .ai-data/ = 生产态组件，消费者是"SmartAsk 系统"，做数据分析/研究/金融（10 角色）
+#   两团队 Agent ID 各带前缀（fullstack-dev-* / data-team-*），防止集成时冲突。
+# ===========================================================================
+
+version: 2
+team:
+  name: smartask-data-team
+  display_name: 数据分析与研究洞察专家团
+  lead: data-team-lead
+  size: 10
+  source: 从 WorkBuddy 平台 12 个专家包（70 角色）整合萃取
+
+# ---------------------------------------------------------------------------
+# 成员注册表
+# ---------------------------------------------------------------------------
+# Agent ID 统一使用 data-team- 前缀，与 .ai-team/ 的 fullstack-dev- 前缀隔离
+members:
+  - id: data-team-lead
+    name: 数据洞察总监
+    profession: 主理人
+    role: lead
+    prompt_file: agents/team-lead.md
+    capabilities: [编排与裁决, 工作流路由, 上下文中转, 交付汇编]
+    typical_asks: ["分析这份数据", "从多个视角看这组数字"]
+
+  - id: data-team-data-engineer
+    name: 江汇川
+    profession: 数据工程师
+    role: member
+    prompt_file: agents/data-engineer.md
+    capabilities: [数据采集, 清洗标准化, 存储建模, 数据质量把关]
+    typical_asks: ["数据从哪来", "字段太乱怎么统一", "怎么存"]
+
+  - id: data-team-trend-analyst
+    name: 时序洞察
+    profession: 趋势分析师
+    role: member
+    prompt_file: agents/trend-analyst.md
+    capabilities: [趋势识别, 拐点检测, 季节性, 同比环比, 行业趋势研判, 弱信号检测]
+    typical_asks: ["趋势怎么样", "有没有拐点", "和行业对比如何"]
+
+  - id: data-team-structure-analyst
+    name: 构成拆解
+    profession: 结构分析师
+    role: member
+    prompt_file: agents/structure-analyst.md
+    capabilities: [占比分解, 维度交叉, 帕累托分析, 因子贡献度, 集中度风险, 指标体系]
+    typical_asks: ["结构怎么样", "占比多少", "哪个贡献最大"]
+
+  - id: data-team-anomaly-analyst
+    name: 异常侦察员
+    profession: 离群点扫描与风险标记
+    role: member
+    prompt_file: agents/anomaly-analyst.md
+    capabilities: [3σ/IQR/Z-Score离群检测, 突变检测, 数据质量扫描, 风险分级CRITICAL/WARN/INFO]
+    typical_asks: ["有没有异常", "哪里不对劲", "数据质量怎么样"]
+
+  - id: data-team-ml-engineer
+    name: 岳择优
+    profession: 算法工程师
+    role: member
+    prompt_file: agents/ml-engineer.md
+    capabilities: [回归预测, 分类模型, 聚类分群, 推荐算法, 特征工程, 模型评估]
+    typical_asks: ["能预测下个月吗", "怎么分群", "怎么做推荐"]
+
+  - id: data-team-industry-researcher
+    name: 文见微
+    profession: 行业研究员
+    role: member
+    prompt_file: agents/industry-researcher.md
+    capabilities: [行业趋势, 竞品情报, 市场规模测算, 政策解读, AI资讯, 产品策略, 行动方案]
+    typical_asks: ["行业怎么样", "竞品在做什么", "市场有多大"]
+
+  - id: data-team-deep-researcher
+    name: 深度研究员
+    profession: 5阶段研究流水线
+    role: member
+    prompt_file: agents/deep-researcher.md
+    capabilities: [研究规划, 选题搜集, 逐章撰写, 审核修订, 发布格式化, Web搜索]
+    typical_asks: ["帮我做一份深度研究报告", "深入研究这个主题"]
+
+  - id: data-team-financial-analyst
+    name: 建模模
+    profession: 金融分析师
+    role: member
+    prompt_file: agents/financial-analyst.md
+    capabilities: [DCF估值, LBO, 三大表, 可比公司, A股分析, 投资大师视角, 交易辩论BUY/SELL/HOLD]
+    typical_asks: ["帮我估值", "这只股票值不值得买", "做投资决策"]
+
+  - id: data-team-viz-designer
+    name: 秦一览
+    profession: 可视化设计师
+    role: member
+    prompt_file: agents/viz-designer.md
+    capabilities: [看板架构, 图表选型, 视觉规范, 交互设计, 前端实现(ECharts/Vue)]
+    typical_asks: ["看板怎么排", "用什么图", "做出来"]
+
+# ---------------------------------------------------------------------------
+# 工作流
+# ---------------------------------------------------------------------------
+workflows:
+  - id: single-point
+    name: 单点直调
+    when: 只问一个维度的问题
+    route: 直接调对应成员（见 routing_table）
+
+  - id: three-perspective
+    name: 三视角并行
+    when: 一份数据要全视角分析
+    route: "TeamCreate -> [trend ∥ structure ∥ anomaly] -> 合成"
+    note: 默认主流程
+
+  - id: full-pipeline
+    name: 全链路 SOP
+    when: 从数据到看板的完整项目
+    route: "Phase0(data-team-lead澄清) -> Phase1(data-team-data-engineer) -> Phase2(data-team-trend-analyst∥data-team-structure-analyst∥data-team-anomaly-analyst∥data-team-industry-researcher) -> Phase3(data-team-ml-engineer) -> Phase4(data-team-viz-designer) -> Phase5(data-team-lead汇编)"
+
+  - id: cross-domain
+    name: 跨域协作
+    when: 需要外部研究支撑
+    route: "分析域 ∥ 研究域 -> 主理人合成"
+    modes: [并行, 串行, 辩论]
+
+  - id: finance-sop
+    name: 金融分析 SOP
+    when: 金融投资决策
+    route: "data-team-financial-analyst(估值) -> data-team-anomaly-analyst(风险) -> data-team-lead(BUY/SELL/HOLD)"
+
+# 单点直调路由表
+routing_table:
+  数据源/采集/清洗/存储: data-team-data-engineer
+  时间趋势/拐点/季节性/行业趋势: data-team-trend-analyst
+  占比/结构/帕累托/集中度: data-team-structure-analyst
+  异常/离群/突变/数据质量: data-team-anomaly-analyst
+  预测/推荐/聚类/特征工程: data-team-ml-engineer
+  行业/竞品/市场/政策/AI资讯: data-team-industry-researcher
+  深度研究/报告/调研: data-team-deep-researcher
+  估值/DCF/A股/投资决策: data-team-financial-analyst
+  看板/图表/可视化/前端: data-team-viz-designer
+
+# ---------------------------------------------------------------------------
+# 上下文三级传递规则（阶段间信息下发）
+# ---------------------------------------------------------------------------
+# 与 .ai-team/ 共享同样的三级结构，但 L1 内容面向数据分析场景
+context_rules:
+  L1_full_text:
+    - 数据字典（字段名/类型/含义/约束）
+    - 分析口径定义（指标计算公式/统计窗口/对比基准）
+    - 数据质量报告
+    - 验收标准
+  L2_structured_summary:
+    - 各视角分析产出（保留结论+关键指标+未决问题，去掉推导过程）
+    - 上一轮分析报告
+    - 模型评估结果摘要
+  L3_on_demand:
+    - 更早阶段的原始数据
+    - 被否决的分析假设
+  mnemonic: 下游要照着做的→L1；下游要知道结果的→L2；下游可能想追溯的→L3
+
+# ---------------------------------------------------------------------------
+# 质量门禁（面向"分析结论质量"，非"代码交付质量"）
+# ---------------------------------------------------------------------------
+# 与 .ai-team/ 的 7 道门禁并行，但内容按数据场景设计
+quality_gates:
+  - name: 数据完整性
+    phase: 1
+    check: 数据源盘点完成，字段映射无缺漏，数据质量报告已产出
+    fail_action: 退回数据工程师补齐
+  - name: 分析方法严谨性
+    phase: 2
+    check: 各视角分析使用的方法有明确标注（如3σ/IQR/Z-Score），统计窗口和对比基准一致
+    fail_action: 退回对应分析师补充方法说明
+  - name: 多视角交叉验证
+    phase: 2
+    check: 趋势/结构/异常三视角结论交叉印证，矛盾点已标注并由主理人裁决
+    fail_action: 主理人介入裁决，矛盾未解决不进入下一阶段
+  - name: 模型可解释性
+    phase: 3
+    check: 预测模型有特征重要性说明，聚类有轮廓系数，分类有混淆矩阵
+    fail_action: 退回算法工程师补充
+  - name: 可视化规范
+    phase: 4
+    check: 图表选型符合数据类型（时序用折线/占比用饼图/对比用柱状），交互状态完整
+    fail_action: 退回可视化设计师修正
+  - name: 结论可溯源
+    phase: 5
+    check: 每条结论可追溯到具体数据源和分析步骤，无"凭空结论"
+    fail_action: 退回对应分析师补溯源链
+
+# ---------------------------------------------------------------------------
+# 冲突仲裁
+# ---------------------------------------------------------------------------
+arbitration:
+  趋势vs结构结论矛盾: 主理人裁决（优先保数据支撑更充分的一方，标注另一方为"需进一步验证"）
+  分析vs研究结论矛盾: 主理人裁决（分析域基于数据，研究域基于外部信息，标注差异原因）
+  金融分析风险vs估值矛盾: 以金融分析师为准（估值为主，风险为约束条件）
+  可视化vs分析结论矛盾: 以分析结论为准（可视化服务于分析，不改变结论）
+
+# ---------------------------------------------------------------------------
+# 阻塞上报格式（与 .ai-team/ 统一）
+# ---------------------------------------------------------------------------
+blocked_format: |
+  BLOCKED
+  - 卡在哪：<具体问题>
+  - 需要谁决断：<用户/主理人/某角色>
+  - 我需要什么才能继续：<明确输入或决定>
+  - 临时兜底方案：<有则写，无则写"无">
+
+# ---------------------------------------------------------------------------
+# 跨团队交接协议（与 .ai-team/ 的交接路径）
+# ---------------------------------------------------------------------------
+cross_team:
+  # 数据团队产出 -> 代码团队实现
+  - trigger: 数据团队产出看板/前端设计方案，需要代码团队实现
+    from: data-team-viz-designer
+    to: fullstack-dev-frontend
+    handoff: |
+      viz-designer 产出: 看板信息架构 + 图表选型 + 视觉规范 + 交互设计
+      frontend 接收为: Vue 组件实现输入（ECharts 配置 + Element Plus 布局）
+      交接物: design-spec.md（含图表清单/布局/交互状态/数据绑定字段）
+  - trigger: 数据团队的分析结论需要嵌入到 SmartAsk 的 Agent4 输出中
+    from: data-team-lead
+    to: fullstack-dev-backend
+    handoff: |
+      data-team-lead 产出: 三视角分析 prompt 模板（趋势/结构/异常）
+      backend 接收为: Agent4 增强方案（集成到 four_agent_ask.py 的 Agent4 调用链）
+      交接物: integration-spec.md（含 prompt 模板/调用时机/输入输出格式）
+  # 代码团队 -> 数据团队（反向交接）
+  - trigger: 代码团队改动了 Agent4 的接口或数据结构，影响数据团队集成
+    from: fullstack-dev-backend
+    to: data-team-lead
+    handoff: |
+      backend 产出: 变更说明（改了什么/影响什么/新接口格式）
+      data-team-lead 接收为: 集成方案调整依据
+      交接物: change-notice.md
+
+# ---------------------------------------------------------------------------
+# 检查点机制（与 .ai-team/ 对齐，路径在本目录下）
+# ---------------------------------------------------------------------------
+checkpoints:
+  dir: .ai-data/checkpoints/
+  save_after_phase: true
+  format: |
+    === 检查点 ===
+    日期：<ISO 日期>
+    项目：<项目名>
+    当前 Phase：<Phase 号与名称>
+    已完成阶段：<已完成阶段列表>
+    当前状态：<正在做什么>
+    分析结论摘要：<关键发现>
+    剩余工作：
+    - [ ] <任务>（优先级：高/中/低）
+    下一步：<恢复后第一件事>
+
+# ---------------------------------------------------------------------------
+# 知识沉淀机制（与 .ai-team/ 对齐）
+# ---------------------------------------------------------------------------
+knowledge_base:
+  dir: .ai-data/knowledge-base/
+  files:
+    - name: pitfalls.md
+      desc: 数据分析踩坑记录（非显然的统计陷阱/数据质量问题根因）
+    - name: decisions.md
+      desc: 分析方法决策记录（有取舍的方法选择/被否方案/影响范围）
+    - name: patterns.md
+      desc: 重复有效的分析模式（项目特定的最佳实践）
+  checklists:
+    - name: data-quality-check.md
+      desc: 数据质量校验清单（完整性/一致性/时效性/准确性）
+    - name: viz-spec-check.md
+      desc: 可视化规范校验清单（图表选型/配色/交互状态/无障碍）
+    - name: analysis-rigor-check.md
+      desc: 分析严谨性校验清单（方法标注/统计窗口/对比基准/可溯源）
+
+# ---------------------------------------------------------------------------
+# 与 SmartAsk 系统的关系
+# ---------------------------------------------------------------------------
+smartask_integration:
+  status: not_started
+  target: Agent4
+  approach: TBD
+  constraint: 当前阶段不修改任何代码，仅把专家 prompt 存入项目作为知识储备
+  # 集成后 Agent ID 映射（data-team-* ID 在系统中的调用方式）
+  id_mapping_note: |
+    集成到 SmartAsk 系统时，data-team-* 的 ID 用于 prompt 加载和路由。
+    系统代码通过 team-config.yaml 的 routing_table 查找对应 prompt_file，
+    加载为 LLM system prompt 调用。Agent ID 不需要与 SmartAsk 的 Agent1-4 概念对齐，
+    而是作为 Agent4 的增强能力池被调用。
+
+# ---------------------------------------------------------------------------
+# 源头溯源（整合自哪些专家包）
+# ---------------------------------------------------------------------------
+source_packs:
+  - huashu-data-pro (4 角色 -> 融入 trend/structure/anomaly/team-lead)
+  - data-analytics-team (8 角色 -> 融入 data-engineer/trend/structure/anomaly/ml-engineer/viz-designer)
+  - gpt-researcher-team (7 角色 -> 融入 deep-researcher)
+  - trend-researcher (1 角色 -> 融入 trend-analyst)
+  - fbsir-industry-researcher (1 角色 -> 融入 industry-researcher)
+  - product-strategy-team (6 角色 -> 融入 industry-researcher)
+  - aihot (1 角色 -> 融入 industry-researcher)
+  - deep-research (1 角色 -> 融入 deep-researcher)
+  - financial-analysis (1 角色 -> 融入 financial-analyst)
+  - a-share-analysis (7 角色 -> 融入 financial-analyst)
+  - ai-hedge-fund (21 角色 -> 融入 financial-analyst)
+  - trading-agent (12 角色 -> 融入 financial-analyst)
+
+# ---------------------------------------------------------------------------
+# 同步说明（.ai-data/ 无自动同步脚本，需手动维护）
+# ---------------------------------------------------------------------------
+sync_note: |
+  .ai-data/ 从 12 个源头专家包整合而来，无自动同步脚本。
+  源头专家包更新时，需手动比对并更新对应 agents/*.md。
+  source_packs 字段记录了每个角色的源头，便于追溯。
+  更新流程：
+    1. 确认源头专家包有变更（版本号/内容对比）
+    2. 手动更新对应 agents/*.md（去 frontmatter）
+    3. 更新 team-config.yaml（如有角色增减/能力变化）
+    4. git diff 检查变更

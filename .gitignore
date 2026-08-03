@@ -228,3 +228,9 @@ backend/controllers/analysis_thinking.py
 backend/controllers/chat.py
 backend/controllers/sql_prompt.py
 backend/controllers/training.py
+
+# AI collaboration assets
+# .ai-team/, .trae/, .agents/, .github/, AGENTS.md are shared team assets — track in git
+# .workbuddy/ is per-user AI workspace data (memory, sessions) — do not commit
+.workbuddy/
+.ai-team/checkpoints/

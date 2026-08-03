@@ -147,6 +147,7 @@ class OrganizationRouteResolver:
             return []
         allowed = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
         catalog_by_id = {int(item.get("id")): item for item in catalog if item.get("id") is not None}
+        catalog_dataset_ids = set(catalog_by_id)
         permissions = load_data_permissions()
         nodes = [
             node for node in (self._load_tree().get("nodes") or [])
@@ -164,7 +165,10 @@ class OrganizationRouteResolver:
             ]
             if not aliases:
                 continue
-            dataset_ids = self._dataset_ids_for_node(node, permissions)
+            dataset_ids = [
+                item for item in self._dataset_ids_for_node(node, permissions)
+                if item in catalog_dataset_ids
+            ]
             if allowed is not None:
                 dataset_ids = [item for item in dataset_ids if item in allowed]
             if not dataset_ids:
@@ -192,7 +196,7 @@ class OrganizationRouteResolver:
                 dataset_id = int(dataset.get("dataset_id") or 0)
             except Exception:
                 continue
-            if dataset_id <= 0:
+            if dataset_id <= 0 or dataset_id not in catalog_dataset_ids:
                 continue
             if allowed is not None and dataset_id not in allowed:
                 continue

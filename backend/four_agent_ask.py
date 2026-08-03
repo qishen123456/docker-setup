@@ -18,6 +18,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
 from agent_registry import get_agent
+import ask_engine_utils
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
 from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
@@ -29,6 +30,9 @@ import dataset_report_config as report_config_store
 from report_spec_builder import build_report_spec
 from memory import ShortTermMemoryStore
 from organization_route_resolver import OrganizationRouteResolver
+from trace_logger import TraceLogger
+from llm_client import LLMClient
+from smartask_engine.intent import IntentResolver, IntentPorts
 
 
 def _extract_json_block(text: str) -> str:
@@ -48,9 +52,6 @@ def _extract_json_block(text: str) -> str:
 class FourAgentAskService:
     def __init__(self):
         self.repository = BookshelfRepository()
-        self._llm_client: Optional[OpenAI] = None
-        self._llm_model: Optional[str] = None
-        self._preferred_model_id: Optional[int] = None
         self._pending_confirmations: Dict[str, Dict[str, Any]] = {}
         self._pending_ttl_seconds = 30 * 60
         self.short_term_memory = ShortTermMemoryStore(max_rounds=8)
@@ -58,8 +59,27 @@ class FourAgentAskService:
         self.organization_route_resolver = OrganizationRouteResolver()
         self._dataset_node_index = self._load_dataset_node_index()
         self._trace_file_path = os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl")
+        self.trace_logger = TraceLogger(self._trace_file_path)
         self._trace_logger = self._build_trace_logger()
+        self.llm_client = self._build_llm_component()
         self._load_llm()
+        self._intent_resolver = self._build_intent_resolver()
+
+    def _build_intent_resolver(self) -> IntentResolver:
+        ports = IntentPorts(
+            safe_dict=self._safe_dict,
+            safe_int=self._safe_int,
+            normalize_chinese_numbers=self._normalize_chinese_numbers,
+            rank_limit_match=self._rank_limit_match,
+            parse_cn_int=self._parse_cn_int,
+            resolved_entity_names=self._resolved_entity_names,
+            question_subject_names=self._question_subject_names,
+            is_dataset_root_name=FourAgentAskService._is_dataset_root_name,
+            rank_request_spec=self._rank_request_spec,
+            default_report_config=report_config_store.get_default_config,
+            dataset_profile=get_dataset_profile,
+        )
+        return IntentResolver(ports)
 
     def _load_dataset_node_index(self) -> Dict[str, Any]:
         path = os.path.join(CURRENT_DIR, "..", "config", "dataset_node_index.json")
@@ -71,6 +91,62 @@ class FourAgentAskService:
         except Exception:
             pass
         return {"datasets": [], "flat_alias_index": []}
+
+    def _trace_component(self) -> TraceLogger:
+        component = getattr(self, "trace_logger", None)
+        if component is None:
+            file_path = getattr(
+                self,
+                "_trace_file_path",
+                os.path.join(CURRENT_DIR, "logs", "smartask_trace.jsonl"),
+            )
+            component = TraceLogger(file_path)
+            self.trace_logger = component
+        return component
+
+    def _build_llm_component(self) -> LLMClient:
+        return LLMClient(
+            openai_factory=OpenAI,
+            get_default_config=get_default_ai_model,
+            get_configs=get_ai_models,
+            decode_secret=decode_secret,
+            should_retry=ask_engine_utils._should_retry_with_another_model,
+            append_trace=self._append_trace,
+            append_llm_delta=self._append_llm_delta,
+            extract_json_block=_extract_json_block,
+            truncate_text=self._truncate_text,
+        )
+
+    def _llm_component(self) -> LLMClient:
+        component = self.__dict__.get("llm_client")
+        if component is None:
+            component = self._build_llm_component()
+            self.llm_client = component
+        return component
+
+    @property
+    def _llm_client(self):
+        return self._llm_component()._llm_client
+
+    @_llm_client.setter
+    def _llm_client(self, value) -> None:
+        self._llm_component()._llm_client = value
+
+    @property
+    def _llm_model(self) -> Optional[str]:
+        return self._llm_component()._llm_model
+
+    @_llm_model.setter
+    def _llm_model(self, value: Optional[str]) -> None:
+        self._llm_component()._llm_model = value
+
+    @property
+    def _preferred_model_id(self) -> Optional[int]:
+        return self._llm_component()._preferred_model_id
+
+    @_preferred_model_id.setter
+    def _preferred_model_id(self, value: Optional[int]) -> None:
+        self._llm_component()._preferred_model_id = value
 
     def _build_trace_logger(self) -> logging.Logger:
         logger = logging.getLogger("smartask.trace")
@@ -87,24 +163,15 @@ class FourAgentAskService:
 
     @staticmethod
     def _mask_secret(value: str) -> str:
-        text = str(value or "")
-        if len(text) <= 8:
-            return "***" if text else ""
-        return f"{text[:4]}***{text[-4:]}"
+        return ask_engine_utils._mask_secret(value)
 
     @staticmethod
     def _truncate_text(value: Any, limit: int = 4000) -> str:
-        text = str(value or "")
-        if len(text) <= limit:
-            return text
-        return text[:limit] + f"\n...[truncated {len(text) - limit} chars]"
+        return ask_engine_utils._truncate_text(value, limit)
 
     @staticmethod
     def _stream_preview(value: Any, limit: int = 1400) -> str:
-        text = str(value or "").strip()
-        if len(text) <= limit:
-            return text
-        return "..." + text[-limit:]
+        return ask_engine_utils._stream_preview(value, limit)
 
     def _new_trace(
         self,
@@ -112,119 +179,30 @@ class FourAgentAskService:
         entry: str,
         live_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
-        return {
-            "trace_id": str(uuid4()),
-            "entry": entry,
-            "question": question,
-            "started_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-            "model": self._llm_model or "",
-            "base_url": getattr(self._llm_client, "base_url", "") if self._llm_client else "",
-            "events": [],
-            "_live_callback": live_callback,
-        }
+        return self._trace_component()._new_trace(
+            question,
+            entry,
+            live_callback,
+            model=self._llm_model or "",
+            base_url=getattr(self._llm_client, "base_url", "") if self._llm_client else "",
+        )
 
     def _write_trace_line(self, payload: Dict[str, Any]) -> None:
-        try:
-            os.makedirs(os.path.dirname(self._trace_file_path), exist_ok=True)
-            with open(self._trace_file_path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+        return self._trace_component()._write_trace_line(payload)
 
     @staticmethod
     def _build_trace_snapshot(trace: Dict[str, Any], include_result: bool = False) -> Dict[str, Any]:
-        snapshot = {
-            key: value
-            for key, value in trace.items()
-            if not str(key).startswith("_") and (include_result or key != "result")
-        }
-        if not include_result:
-            snapshot.pop("result", None)
-        return snapshot
+        return ask_engine_utils._build_trace_snapshot(trace, include_result)
 
     def _emit_live_trace(self, trace: Optional[Dict[str, Any]], payload: Dict[str, Any]) -> None:
-        if not trace:
-            return
-        callback = trace.get("_live_callback")
-        if not callback:
-            return
-        try:
-            callback(payload)
-        except Exception:
-            pass
+        return self._trace_component()._emit_live_trace(trace, payload)
 
     @staticmethod
     def _build_route_thought(route: Dict[str, Any], question: str, catalog: List[Dict[str, Any]]) -> str:
-        if not isinstance(route, dict):
-            return ""
-        catalog_by_id = {int(item.get("id") or 0): item for item in catalog if item.get("id") is not None}
-        dataset_ids = [int(item) for item in (route.get("dataset_ids") or route.get("candidate_dataset_ids") or []) if item is not None]
-        dataset_name = ""
-        if dataset_ids:
-            dataset_name = catalog_by_id.get(dataset_ids[0], {}).get("dataset_name") or f"数据集 {dataset_ids[0]}"
-
-        if route.get("requires_confirmation"):
-            return "问题提到的口径在当前多个候选数据集中都可能成立，系统无法自动锁定唯一数据源，需要先确认本次分析范围。"
-
-        reason = str(route.get("arbiter_reason") or "")
-        if reason == "organization_tree_name_resolved":
-            members = route.get("resolved_members") or []
-            member_text = "、".join(str(item) for item in members[:2]) if members else "目标组织"
-            return f"已从组织树识别到「{member_text}」，对应数据集「{dataset_name}」，系统已直接锁定数据范围。"
-
-        if reason.startswith("explicit_dataset_"):
-            return f"问题明确提到数据集/业务域关键词，匹配到「{dataset_name}」，系统自动锁定数据源。"
-
-        if reason == "entity_mention_unique":
-            return f"问题中提到的对象在多个候选数据集中只有「{dataset_name}」能解析，系统已锁定该数据源。"
-
-        if reason.startswith("target_level_unique:"):
-            level = reason.split(":", 1)[1] or "目标层级"
-            return f"问题提到的「{level}」口径只有「{dataset_name}」支持，系统已直接锁定。"
-
-        if reason == "single_allowed_dataset":
-            return f"当前只有一个可用数据集「{dataset_name}」，系统已默认采用。"
-
-        if reason == "profile_scope_resolved":
-            return f"问题中的简称/合称已映射为「{dataset_name}」的明确成员范围，系统已锁定数据源。"
-
-        if dataset_name:
-            return f"根据问题关键词与数据集语义匹配，系统优先选择「{dataset_name}」作为数据源。"
-        return "已完成问题理解，正在准备进入后续分析。"
+        return ask_engine_utils._build_route_thought(route, question, catalog)
 
     def _append_trace(self, trace: Optional[Dict[str, Any]], stage: str, status: str = "info", **payload: Any) -> None:
-        if not trace:
-            return
-        event = {
-            "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-            "stage": stage,
-            "status": status,
-        }
-        event.update(payload)
-        trace.setdefault("events", []).append(event)
-        self._write_trace_line(
-            {
-                "type": "event",
-                "trace_id": trace.get("trace_id"),
-                "entry": trace.get("entry"),
-                "question": trace.get("question"),
-                "model": trace.get("model"),
-                "base_url": trace.get("base_url"),
-                "event": event,
-            }
-        )
-        self._emit_live_trace(
-            trace,
-            {
-                "type": "trace",
-                "trace_id": trace.get("trace_id"),
-                "entry": trace.get("entry"),
-                "question": trace.get("question"),
-                "model": trace.get("model"),
-                "base_url": trace.get("base_url"),
-                "event": event,
-            },
-        )
+        return self._trace_component()._append_trace(trace, stage, status, **payload)
 
     def _append_llm_delta(
         self,
@@ -238,176 +216,43 @@ class FourAgentAskService:
         reasoning_text: str = "",
         delta_kind: str = "content",
     ) -> None:
-        if not trace or (not delta_text and not reasoning_delta):
-            return
-        event = {
-            "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-            "stage": stage or "llm.call",
-            "status": "delta",
-            "agent": agent_name,
-            "duration_seconds": round(time.time() - started, 2),
-            "delta_kind": delta_kind or "content",
-        }
-        if delta_text:
-            event["delta_text"] = self._truncate_text(delta_text, 800)
-            event["stream_text"] = self._stream_preview(stream_text or delta_text)
-        if reasoning_delta:
-            event["reasoning_delta"] = self._truncate_text(reasoning_delta, 800)
-            event["reasoning_text"] = self._stream_preview(reasoning_text or reasoning_delta)
-        trace.setdefault("events", []).append(event)
-        self._emit_live_trace(
+        return self._trace_component()._append_llm_delta(
             trace,
-            {
-                "type": "trace",
-                "trace_id": trace.get("trace_id"),
-                "entry": trace.get("entry"),
-                "question": trace.get("question"),
-                "model": trace.get("model"),
-                "base_url": trace.get("base_url"),
-                "event": event,
-            },
+            stage,
+            agent_name,
+            delta_text,
+            stream_text,
+            started,
+            reasoning_delta,
+            reasoning_text,
+            delta_kind,
         )
 
     def _stream_delta_value_to_text(self, value: Any) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, str):
-            return value
-        if isinstance(value, list):
-            parts: List[str] = []
-            for item in value:
-                if isinstance(item, dict):
-                    parts.append(str(item.get("text") or item.get("content") or ""))
-                else:
-                    parts.append(str(item))
-            return "".join(parts)
-        if isinstance(value, dict):
-            return str(value.get("text") or value.get("content") or "")
-        return str(value)
+        return self._llm_component()._stream_delta_value_to_text(value)
 
     def _extract_stream_delta(self, delta_obj: Any) -> Tuple[str, str]:
-        content_delta = self._stream_delta_value_to_text(getattr(delta_obj, "content", ""))
-        reasoning_delta = ""
-        reasoning_keys = ("reasoning_content", "reasoning", "reasoning_text")
-
-        for key in reasoning_keys:
-            reasoning_delta = self._stream_delta_value_to_text(getattr(delta_obj, key, ""))
-            if reasoning_delta:
-                break
-
-        if not reasoning_delta:
-            dict_sources: List[Dict[str, Any]] = []
-            extra = getattr(delta_obj, "model_extra", None)
-            if isinstance(extra, dict):
-                dict_sources.append(extra)
-            additional = getattr(delta_obj, "additional_kwargs", None)
-            if isinstance(additional, dict):
-                dict_sources.append(additional)
-            try:
-                dumped = delta_obj.model_dump()
-                if isinstance(dumped, dict):
-                    dict_sources.append(dumped)
-            except Exception:
-                pass
-
-            for source in dict_sources:
-                for key in reasoning_keys:
-                    reasoning_delta = self._stream_delta_value_to_text(source.get(key))
-                    if reasoning_delta:
-                        break
-                if reasoning_delta:
-                    break
-
-        return content_delta, reasoning_delta
+        return self._llm_component()._extract_stream_delta(delta_obj)
 
     def _flush_trace(self, trace: Optional[Dict[str, Any]], result: Optional[Dict[str, Any]] = None) -> None:
-        if not trace:
-            return
-        if result is not None:
-            trace["result"] = result
-        summary_payload = {"type": "summary", **self._build_trace_snapshot(trace, include_result=True)}
-        self._write_trace_line(summary_payload)
-        self._emit_live_trace(trace, summary_payload)
+        return self._trace_component()._flush_trace(trace, result)
 
     def _load_llm(self):
-        config = get_default_ai_model()
-        if not config:
-            self._llm_client = None
-            self._llm_model = None
-            return
-        self._activate_llm(config)
+        return self._llm_component()._load_llm()
 
     def _activate_llm(self, config: Dict[str, Any]) -> None:
-        self._llm_model = config.get("model")
-        self._llm_client = OpenAI(
-            api_key=config.get("api_key", ""),
-            base_url=config.get("base_url", "https://api.openai.com/v1"),
-        )
+        return self._llm_component()._activate_llm(config)
 
     def _candidate_llm_configs(self, preferred_model_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Build ordered candidate list. If preferred_model_id is given, put that model first."""
-        candidates: List[Dict[str, Any]] = []
-        seen = set()
-
-        # If a specific model is requested, put it first
-        if preferred_model_id is not None:
-            for item in get_ai_models():
-                if item.get("id") == preferred_model_id and item.get("is_active"):
-                    config = dict(item)
-                    config["api_key"] = decode_secret(config.pop("api_key_b64", ""))
-                    signature = (
-                        str(config.get("model") or ""),
-                        str(config.get("base_url") or ""),
-                        str(config.get("api_key") or ""),
-                    )
-                    seen.add(signature)
-                    candidates.append(config)
-                    break
-
-        # Then add default model
-        default_config = get_default_ai_model()
-        if default_config:
-            signature = (
-                str(default_config.get("model") or ""),
-                str(default_config.get("base_url") or ""),
-                str(default_config.get("api_key") or ""),
-            )
-            if signature not in seen:
-                seen.add(signature)
-                candidates.append(default_config)
-
-        # Then add remaining active models
-        for item in get_ai_models():
-            if not item.get("is_active"):
-                continue
-            config = dict(item)
-            config["api_key"] = decode_secret(config.pop("api_key_b64", ""))
-            signature = (
-                str(config.get("model") or ""),
-                str(config.get("base_url") or ""),
-                str(config.get("api_key") or ""),
-            )
-            if signature in seen:
-                continue
-            seen.add(signature)
-            candidates.append(config)
-
-        return candidates
+        return self._llm_component()._candidate_llm_configs(preferred_model_id)
 
     @staticmethod
     def _should_retry_with_another_model(exc: Exception) -> bool:
-        return exc.__class__.__name__ in {
-            "AuthenticationError",
-            "PermissionDeniedError",
-            "APITimeoutError",
-            "APIConnectionError",
-            "InternalServerError",
-            "RateLimitError",
-        }
+        return ask_engine_utils._should_retry_with_another_model(exc)
 
     @staticmethod
     def _safe_dict(value: Any) -> Dict[str, Any]:
-        return value if isinstance(value, dict) else {}
+        return ask_engine_utils._safe_dict(value)
 
     def _get_lld_content(self, context: Dict[str, Any]) -> str:
         lld_document = self._safe_dict(context.get("lld_document"))
@@ -415,36 +260,15 @@ class FourAgentAskService:
 
     @staticmethod
     def _safe_int(value: Any, default: int = 0) -> int:
-        try:
-            return int(value)
-        except Exception:
-            return default
+        return ask_engine_utils._safe_int(value, default)
 
     @staticmethod
     def _parse_cn_int(value: Any, default: int = 0) -> int:
-        text = str(value or "").strip()
-        if not text:
-            return default
-        if text.isdigit():
-            return int(text)
-        digits = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-        if text == "十":
-            return 10
-        if "十" in text:
-            left, _, right = text.partition("十")
-            tens = digits.get(left, 1 if not left else 0)
-            ones = digits.get(right, 0)
-            return tens * 10 + ones if tens else default
-        return digits.get(text, default)
+        return ask_engine_utils._parse_cn_int(value, default)
 
     @staticmethod
     def _rank_limit_match(text: str):
-        pattern = r"(\d+|[一二两三四五六七八九十]+)"
-        return (
-            re.search(rf"(?:Top|TOP|top|前|后|倒数)\s*{pattern}", text or "")
-            or re.search(rf"(?:最高|最低|最好|最差|垫底|落后)(?:的)?\s*{pattern}\s*(?:个|名|位|家)?", text or "")
-            or re.search(rf"第\s*{pattern}\s*(?:名|位)?", text or "")
-        )
+        return ask_engine_utils._rank_limit_match(text)
 
     def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
         text = str(text or "")
@@ -497,962 +321,38 @@ class FourAgentAskService:
         bottom_rank_limit: int = 0,
         tie_breaker: str = "剩余任务金额 DESC, 节点名称",
     ) -> str:
-        direction = "ASC" if str(direction).upper() == "ASC" else "DESC"
-        rank_limit = int(rank_limit or 0)
-        top_limit = int(top_rank_limit or rank_limit or 0)
-        bottom_limit = int(bottom_rank_limit or rank_limit or 0)
-        if rank_sides == "both":
-            if top_limit > 0 or bottom_limit > 0:
-                return f"""
-{source_cte},
-{output_cte} AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} DESC, {tie_breaker}
-        ) AS 前排名,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} ASC, {tie_breaker}
-        ) AS 后排名
-    FROM {source_name}
-    WHERE {where_clause}
-),
-双向排名结果 AS (
-    SELECT *, CASE WHEN 前排名 <= {top_limit} THEN '前{top_limit}' ELSE '后{bottom_limit}' END AS 排名分组
-    FROM {output_cte}
-    WHERE 前排名 <= {top_limit} OR 后排名 <= {bottom_limit}
-)
-SELECT *
-FROM 双向排名结果
-ORDER BY CASE 排名分组 WHEN '前{top_limit}' THEN 1 ELSE 2 END,
-         CASE WHEN 排名分组 = '前{top_limit}' THEN 前排名 ELSE 后排名 END,
-         节点名称
-LIMIT {top_limit + bottom_limit}
-""".strip()
-            return f"""
-{source_cte},
-{output_cte} AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} DESC, {tie_breaker}
-        ) AS 前排名,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} ASC, {tie_breaker}
-        ) AS 后排名
-    FROM {source_name}
-    WHERE {where_clause}
-)
-SELECT *
-FROM {output_cte}
-ORDER BY CASE WHEN 前排名 <= 后排名 THEN 1 ELSE 2 END,
-         CASE WHEN 前排名 <= 后排名 THEN 前排名 ELSE 后排名 END,
-         节点名称
-LIMIT 10000
-""".strip()
-        if rank_limit > 0:
-            return f"""
-{source_cte},
-{output_cte} AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} {direction}, {tie_breaker}
-        ) AS 全局排名
-    FROM {source_name}
-    WHERE {where_clause}
-)
-SELECT *
-FROM {output_cte}
-WHERE 全局排名 <= {rank_limit}
-ORDER BY 全局排名, {metric_column} {direction}, {tie_breaker}
-LIMIT {rank_limit}
-""".strip()
-        return f"""
-{source_cte},
-{output_cte} AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            ORDER BY {metric_column} {direction}, {tie_breaker}
-        ) AS 全局排名
-    FROM {source_name}
-    WHERE {where_clause}
-)
-SELECT *
-FROM {output_cte}
-ORDER BY 全局排名, {metric_column} {direction}, {tie_breaker}
-LIMIT 10000
-""".strip()
+        return ask_engine_utils._build_ranked_select_sql(
+            source_cte=source_cte,
+            source_name=source_name,
+            output_cte=output_cte,
+            where_clause=where_clause,
+            metric_column=metric_column,
+            direction=direction,
+            rank_limit=rank_limit,
+            rank_sides=rank_sides,
+            top_rank_limit=top_rank_limit,
+            bottom_rank_limit=bottom_rank_limit,
+            tie_breaker=tie_breaker,
+        )
 
     @staticmethod
     def _normalize_chinese_numbers(text: str) -> str:
-        """把常见中文数字（如一亿、两千万）归一化为阿拉伯数字+单位，便于阈值正则匹配。"""
-        chinese_digit = {
-            "零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
-            "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-        }
-        unit_multipliers = {"十": 10, "百": 100, "千": 1000, "万": 10000, "亿": 100000000}
-
-        def _parse_integer(s: str) -> float:
-            s = s.replace("个", "")
-            total = 0.0
-            section = 0.0
-            current = 0.0
-            for ch in s:
-                if ch in chinese_digit:
-                    current = chinese_digit[ch]
-                elif ch == "十":
-                    if current == 0:
-                        current = 1
-                    section += current * 10
-                    current = 0
-                elif ch == "百":
-                    section += current * 100
-                    current = 0
-                elif ch == "千":
-                    section += current * 1000
-                    current = 0
-                elif ch == "万":
-                    section += current
-                    total += section * 10000
-                    section = 0
-                    current = 0
-                elif ch == "亿":
-                    section += current
-                    total += section * 100000000
-                    section = 0
-                    current = 0
-            section += current
-            total += section
-            return total
-
-        def _parse(s: str) -> float:
-            s = s.replace("个", "")
-            if "点" in s:
-                integer_part, decimal_part = s.split("点", 1)
-                integer_value = _parse_integer(integer_part) if integer_part else 0
-                decimal_str = "".join(
-                    str(chinese_digit.get(c, c)) for c in decimal_part
-                    if c in chinese_digit or c.isdigit()
-                )
-                decimal_value = float("0." + decimal_str) if decimal_str else 0.0
-                return integer_value + decimal_value
-            return _parse_integer(s)
-
-        def _repl(m: re.Match) -> str:
-            num_str = m.group(1)
-            unit = m.group(2)
-            try:
-                value = _parse(num_str)
-            except Exception:
-                return m.group(0)
-            if value == int(value):
-                return f"{int(value)}{unit}"
-            return f"{value}{unit}"
-
-        return re.sub(
-            r"([一二两三四五六七八九十百千万亿点零]+)(?:个)?(万|亿)",
-            _repl,
-            text,
-        )
+        return ask_engine_utils._normalize_chinese_numbers(text)
 
     def _resolve_query_intent(self, question: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        config = self._safe_dict(context.get("report_config")) or report_config_store.get_default_config()
-        policies = self._safe_dict(config.get("intentPolicies"))
-        ranking_policy = self._safe_dict(policies.get("ranking"))
-        text = str(question or "").replace("\n", " ").strip()
-        text = self._normalize_chinese_numbers(text)
-        dataset = self._safe_dict(context.get("dataset"))
-        dataset_code = str(dataset.get("dataset_code") or "")
-        dataset_name = str(dataset.get("dataset_name") or "")
-        is_ecommerce_dataset = dataset_code == "feishu_tbldianshang" or "电商事业部" in dataset_name
-        intent = {
-            "intent": "unknown",
-            "source": "report_config.intentPolicies",
-            "target_level": "",
-            "top_n": None,
-            "sort_metric_key": "",
-            "sort_metric_column": "",
-            "direction": "",
-            "rank_sides": "",
-            "output_mode": "",
-            "matched_triggers": [],
-        }
-        if not text:
-            return intent
-
-        # 根层级通常是 analysisDimensions 中每条 path 的第一个节点（如 电商事业部/消费者事业部）。
-        # 识别 target_level 时，如果问题里同时提到根节点别名和更细层级别名，应优先取更细层级。
-        root_level_values = {
-            str(dimension.get("path")[0]).strip()
-            for dimension in (config.get("analysisDimensions") or [])
-            if isinstance(dimension.get("path") or [], list) and (dimension.get("path") or [])
-        }
-
-        def resolve_target_level_from_text() -> str:
-            # 优先识别"节点 + 的 + 子层级"结构，避免"江浙沪分公司的城市分公司"被解析成 target_level="分公司"
-            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-            level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
-            child_level_match = re.search(rf"(?:的|之下|下面|下属)\s*({level_pattern})\b", text)
-            if child_level_match:
-                return child_level_match.group(1)
-
-            aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
-            matches = []
-            for level, level_aliases in aliases.items():
-                candidates = [str(level)] + [str(item) for item in (level_aliases or [])]
-                if str(level) == "城市分公司":
-                    candidates.append("城市分公司")
-                for candidate in candidates:
-                    if not candidate:
-                        continue
-                    pos = text.rfind(candidate)
-                    if pos != -1:
-                        matches.append({"candidate": candidate, "level": str(level), "pos": pos, "is_root": str(level) in root_level_values})
-            if "城市分公司" in text and "城市分公司" not in {m["candidate"] for m in matches}:
-                matches.append({"candidate": "城市分公司", "level": "城市分公司", "pos": text.rfind("城市分公司"), "is_root": False})
-            for dimension in config.get("analysisDimensions") or []:
-                for level in dimension.get("path") or []:
-                    if level and str(level) in text:
-                        matches.append({"candidate": str(level), "level": str(level), "pos": text.rfind(str(level)), "is_root": str(level) in root_level_values})
-            if not matches:
-                return ""
-            non_root = [m for m in matches if not m["is_root"]]
-            pool = non_root if non_root else matches
-            # 精确匹配优先：如果用户原话中某个候选词是独立出现的（不被更长的候选词包含），优先选它
-            # 例如：用户说"分公司前3"而不是"城市分公司前3"，应选"分公司"
-            exact_matches = []
-            for m in pool:
-                candidate = m["candidate"]
-                is_substring_of_longer = any(
-                    other["candidate"] != candidate
-                    and candidate in other["candidate"]
-                    and other["pos"] is not None
-                    and m["pos"] is not None
-                    and abs(other["pos"] - m["pos"]) < len(other["candidate"])
-                    for other in pool
-                )
-                if not is_substring_of_longer:
-                    exact_matches.append(m)
-            if exact_matches:
-                pool = exact_matches
-            best = max(pool, key=lambda m: (m["pos"], len(m["candidate"])))
-            return best["level"]
-
-        # 口语化：“开单金额完成超过500万” -> “开单金额超过500万”，便于模式匹配
-        text = re.sub(
-            r"(年度开单金额|开单金额|总任务金额|任务金额|剩余任务金额|完成金额|年度目标营收|目标营收)\s*完成\s*(超过|大于|高于|小于|低于|不少于|不超过|等于|>=|<=|>|<)",
-            r"\1\2",
-            text,
-        )
-
-        filter_operator = ""
-        if re.search(r"低于|不足|小于|低过|少于", text):
-            filter_operator = "<"
-        elif re.search(r"高于|超过|不少于|不低于|达到|达成率高|大于等于", text):
-            filter_operator = ">="
-        elif re.search(r"大于", text):
-            filter_operator = ">"
-        filter_value_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", text)
-        filter_value = float(filter_value_match.group(1)) if filter_value_match else None
-        level_only_filter = bool(
-            re.search(r'''属于['""“”](?:业务部|代表处|分公司|城市分公司|业务代表|城市公司|区域条线|行业条线)['""“”](?:层级|层|节点|数据)?''', text)
-            or re.search(r"(?:哪些|哪个|哪家|哪几个|找出|筛选出).*(?:区域条线|行业条线)", text)
-        )
-        explicit_filter_question = bool(
-            re.search(r"(?:哪些|哪个|哪家|哪几个).*(?:低于|不足|小于|少于|高于|超过|大于).*\d+(?:\.\d+)?\s*%?", text)
-            or level_only_filter
-            or re.search(r"(?:筛选出|找出).*(?:大于|小于|高于|低于|超过|不少于|不超过|等于|大于等于|小于等于)\s*0(?:\D|$)", text)
-            or re.search(r"(?:达成率|完成率).*在\s*\d+(?:\.\d+)?\s*%?\s*到\s*\d+(?:\.\d+)?\s*%?\s*之间", text)
-        )
-        threshold_filter_question = bool(
-            re.search(r"(?:低于|不足|小于|低过|少于|高于|超过|大于)", text)
-            and re.search(r"\d+(?:\.\d+)?\s*%?", text)
-            and re.search(r"(?:城市分公司|城市公司|分公司|代表处|业务部|业务员|业务代表|业务经理|细分业务)", text)
-        )
-
-        # 解析可能的多个数值过滤条件
-        filter_conditions = []
-        _metric_op_map = {
-            "大于": ">", "大于等于": ">=", "高于": ">", "超过": ">", "不少于": ">=",
-            "小于": "<", "小于等于": "<=", "低于": "<", "不超过": "<=", "少于": "<",
-            "等于": "=", ">=": ">=", "<=": "<=", ">": ">", "<": "<", "=": "=",
-        }
-        _metric_name_map = {
-            "年度开单金额": "年度开单金额",
-            "年度开单": "年度开单金额",
-            "开单金额": "年度开单金额",
-            "开单": "年度开单金额",
-            "完成金额": "年度开单金额",
-            "完成": "年度开单金额",
-            "总任务金额": "总任务金额",
-            "总任务": "总任务金额",
-            "任务金额": "总任务金额",
-            "任务": "总任务金额",
-            "达成率": "达成率",
-            "完成率": "达成率",
-            "剩余任务金额": "剩余任务金额",
-            "剩余任务": "剩余任务金额",
-            "缺口": "剩余任务金额",
-        }
-        _metric_pattern = re.compile(
-            r"(年度开单金额|年度开单|开单金额|开单|完成金额|完成|总任务金额|总任务|任务金额|任务|达成率|完成率|剩余任务金额|剩余任务|缺口)"
-            r"\s*(大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|等于|>=|<=|>|<|=)"
-            r"\s*(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?"
-        )
-        for m in _metric_pattern.finditer(text):
-            col = _metric_name_map.get(m.group(1), "")
-            op = _metric_op_map.get(m.group(2), ">=" if any(t in m.group(2) for t in ["大", "高", "超"]) else "<=")
-            if col:
-                # intent 层保留用户输入的原始数值，单位换算推迟到 SQL 构建阶段，
-                # 保持 intent 测试与 SQL 测试的数值口径一致。
-                raw_value = float(m.group(3))
-                unit = m.group(4) or ""
-                filter_conditions.append({"column": col, "operator": op, "value": raw_value, "unit": unit})
-        # 达成率范围也作为 between 条件加入
-        for m in re.finditer(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text):
-            filter_conditions.append({"column": "达成率", "operator": "between", "value": float(m.group(1)), "value2": float(m.group(2))})
-
-        explicit_metric_filter = bool(filter_conditions)
-        filter_problem = (
-            explicit_filter_question
-            or threshold_filter_question
-            or explicit_metric_filter
-            or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
-            or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
-        )
-        target_level = resolve_target_level_from_text()
-        # 电商数据集中，口语“业务承接人/负责人”统一收敛到标准层级“承接人”。
-        # 优先级高于 resolve_target_level_from_text 对中间层级（如业务部）的命中，
-        # 避免 confirm_by_boss 重写 refined_query 后引入“业务部”把承接人层级覆盖掉。
-        if is_ecommerce_dataset and any(t in text for t in ["业务承接人", "承接人", "负责人", "任务承接人"]):
-            target_level = "承接人"
-        elif not target_level and "人" in text and not any(token in text for token in ["城市分公司", "城市公司", "分公司", "代表处", "业务部"]):
-            target_level = "业务代表"
-
-        drilldown_problem = bool(re.search(r"下面|下属|下级|展开看看|展开|明细|往下看|继续下钻|下钻|下有哪些|有哪些下属|下都", text))
-        # “国内业务部的业务经理有哪些”这类“有哪些”列表问法，如果没有数值过滤，也视为下钻取子节点
-        list_children_question = bool(
-            target_level
-            and not explicit_filter_question
-            and not threshold_filter_question
-            and re.search(r"(?:有哪些|有什么|包含哪些|名单|列表)", text)
-            and re.search(r"(?:业务经理|负责人|细分业务|业务线|业务部)", text)
-        )
-        if drilldown_problem or list_children_question:
-            intent.update({
-                "intent": "drilldown",
-                "target_level": target_level,
-                "output_mode": "children_first",
-                "matched_triggers": ["drilldown"],
-            })
-            return intent
-
-        # "A 比 B 重/大/高" 应优先于聚合意图
-        bi_compare = re.search(r"(.+?)比(.+?)(重|大|高|多|低|小|少)$", text)
-        if bi_compare and not re.search(r"\d+(?:\.\d+)?\s*%?", text):
-            intent.update({
-                "intent": "comparison",
-                "target_level": target_level,
-                "comparison_left": bi_compare.group(1).strip(),
-                "comparison_right": bi_compare.group(2).strip(),
-                "comparison_operator": "<" if bi_compare.group(3) in {"低", "小", "少"} else ">",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["comparison_bi"],
-            })
-            return intent
-
-        # Aggregate intent: grouping + aggregation keywords without numeric threshold
-        aggregate_tokens = ["每个", "各", "分别", "按.*汇总", "按.*统计", "按.*分组", "汇总", "统计每个", "统计各", "按.*算", "按.*计算"]
-        aggregate_metric_tokens = ["平均", "总和", "总额", "总量", "总数", "数量", "个数", "合计", "统计"]
-        has_aggregate_structure = any(re.search(token, text) for token in aggregate_tokens)
-        has_aggregate_metric = any(token in text for token in aggregate_metric_tokens)
-        asks_count = any(token in text for token in ["多少", "几个", "数量", "个数", "一共有", "总共有"])
-        asks_total = (
-            any(token in text for token in ["总和", "一共", "总共", "总计", "合计"])
-            or bool(re.search(r"总[^的\s]*(?:金额|业绩|任务|开单|指标).*?(?:是多少|多少|怎么样|如何)", text))
-        )
-        asks_aggregate = has_aggregate_structure or has_aggregate_metric or asks_count or asks_total
-        if asks_aggregate and not re.search(r"\d+(?:\.\d+)?\s*%?", text):
-            resolved_names = self._resolved_entity_names(context)
-            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-            org_suffixes = ["分公司", "代表处", "业务部", "事业部", "城市分公司", "城市公司", "业务代表"]
-            # 仅当 resolved 的是具体组织/人名实体时才跳过聚合；指标、动作类 token 仍走聚合
-            non_level_resolved = [
-                n for n in resolved_names
-                if n and n not in level_like_values
-                and any(n.endswith(suffix) for suffix in org_suffixes)
-            ]
-            if non_level_resolved:
-                pass
-            else:
-                intent.update({
-                    "intent": "aggregate",
-                    "target_level": target_level,
-                    "output_mode": "aggregation",
-                    "matched_triggers": ["aggregate"],
-                })
-                return intent
-
-        # 多具体对象 + 层级 Overview 词，按 filter/list 返回，避免误走末端个人 KPI
-        level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-        org_suffixes = ["分公司", "代表处", "业务部", "事业部", "城市分公司", "城市公司"]
-        resolved_names = self._resolved_entity_names(context)
-        if not resolved_names:
-            resolved_names = self._question_subject_names(text, context, include_resolved=False)
-        specific_names = [n for n in resolved_names if n and n not in level_like_values]
-        # 没命中层级词，但提取到多个看起来像人名的对象时，兜底到业务代表层级
-        if (
-            not target_level
-            and len(specific_names) >= 2
-            and all(len(n) <= 4 and not any(n.endswith(s) for s in org_suffixes) for n in specific_names)
-        ):
-            target_level = "业务代表"
-        overview_tokens = ["业绩", "表现", "情况", "咋样", "怎样", "如何"]
-        has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
-        # 过滤掉数据集根节点别名，避免把“商用事业部”本身也当成查询对象
-        dataset = self._safe_dict(context.get("dataset"))
-        filtered_specific_names = [
-            n for n in specific_names
-            if n and not FourAgentAskService._is_dataset_root_name(n, dataset)
-        ]
-        if (
-            len(filtered_specific_names) >= 2
-            and target_level
-            and not filter_problem
-            and not drilldown_problem
-            and not asks_aggregate
-            and not has_ranking_token
-            and any(token in text for token in overview_tokens)
-            and intent.get("intent") == "unknown"
-        ):
-            person_levels = {"业务代表", "业务员", "承接人", "负责人", "个人"}
-            is_person_overview = target_level in person_levels
-            if is_person_overview:
-                intent.update({
-                    "intent": "filter",
-                    "target_level": target_level,
-                    "filter_metric_key": "level_only",
-                    "filter_metric_column": "",
-                    "filter_operator": "",
-                    "filter_value": None,
-                    "_multi_parent_names": filtered_specific_names,
-                    "direction": "desc",
-                    "output_mode": "matched_nodes_first",
-                    "matched_triggers": ["multi_entity_level_overview"],
-                })
-            else:
-                intent.update({
-                    "intent": "filter",
-                    "target_level": target_level,
-                    "filter_metric_key": "level_only",
-                    "filter_metric_column": "",
-                    "filter_operator": "",
-                    "filter_value": None,
-                    "_multi_parent": True,
-                    "_multi_parent_names": filtered_specific_names,
-                    "direction": "desc",
-                    "output_mode": "children_first",
-                    "matched_triggers": ["multi_parent_level_overview"],
-                })
-            return intent
-
-        # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）识别为下钻
-        resolved_names = self._resolved_entity_names(context)
-        if (
-            resolved_names
-            and not filter_problem
-            and not has_ranking_token
-            and intent.get("intent") == "unknown"
-        ):
-            level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-            aliases = self._safe_dict(ranking_policy.get("targetLevelAliases"))
-            target_aliases = {target_level} | set(str(item) for item in (aliases.get(target_level) or []) if item) if target_level else set()
-            for name in resolved_names:
-                if not name or name in level_like_values:
-                    continue
-                # 节点名本身已经是目标层级实例的（如"业务代表靳锋"中的"靳锋"若 endswith 业务代表），不应视为下钻
-                if target_aliases and any(name.endswith(alias) for alias in target_aliases):
-                    continue
-                # 只有当问题文本中明确出现"节点名 + 目标子层级"结构时才下钻
-                # 例："江浙沪分公司的城市分公司" -> 节点名"江浙沪分公司" + "城市分公司"
-                # 直接从文本中匹配节点名后的层级词，不依赖 resolve_target_level_from_text 的结果
-                level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
-                match = re.search(rf"{re.escape(name)}(?:的|之下|下面|下属)?\s*({level_pattern})", text)
-                if match:
-                    intent.update({
-                        "intent": "drilldown",
-                        "target_level": match.group(1),
-                        "output_mode": "children_first",
-                        "matched_triggers": ["entity_with_target_level"],
-                    })
-                    return intent
-
-        # Comparison intent: A 超过/大于/小于/等于 B (B is not a pure number)
-        # 如果整体满足 filter 条件（如“看下大于一个亿的分公司”），优先走 filter 逻辑，不要误判为对比
-        if filter_problem:
-            symbol_match = None
-            comparison_match = None
-            vs_match = None
-        else:
-            # 1) Symbol comparison (e.g. A > B, A >= B)
-            symbol_match = re.search(r"(.+?)\s*([><=≥≤]+)\s*(.+)", text)
-        if symbol_match:
-            left_text = symbol_match.group(1).strip()
-            right_text = symbol_match.group(3).strip()
-            if not re.match(r"^\d+(?:\.\d+)?\s*%?", right_text):
-                symbol_op_map = {">": ">", "<": "<", "=": "=", "≥": ">=", "<=": "<=", ">=": ">=", "<=": "<="}
-                matched_op = symbol_match.group(2).strip()
-                if matched_op in symbol_op_map:
-                    intent.update({
-                        "intent": "comparison",
-                        "target_level": target_level,
-                        "comparison_left": left_text,
-                        "comparison_right": right_text,
-                        "comparison_operator": symbol_op_map[matched_op],
-                        "output_mode": "matched_nodes_first",
-                        "matched_triggers": ["comparison_symbol"],
-                    })
-                    return intent
-
-        # 2) Chinese comparison (e.g. A 大于 B)
-        if not filter_problem:
-            comparison_match = re.search(r"(.+?)(超过|大于|高于|多于|不小于|小于|低于|少于|等于)(.+)", text)
-        else:
-            comparison_match = None
-        if comparison_match:
-            left_text = comparison_match.group(1).strip()
-            right_text = comparison_match.group(3).strip()
-            # Exclude numeric comparisons handled by filter intent
-            if not re.match(r"^\d+(?:\.\d+)?\s*%?", right_text):
-                operator_map = {
-                    "超过": ">", "大于": ">", "高于": ">", "多于": ">", "不小于": ">=",
-                    "小于": "<", "低于": "<", "少于": "<",
-                    "等于": "=",
-                }
-                matched_op = comparison_match.group(2)
-                intent.update({
-                    "intent": "comparison",
-                    "target_level": target_level,
-                    "comparison_left": left_text,
-                    "comparison_right": right_text,
-                    "comparison_operator": operator_map.get(matched_op, ">"),
-                    "output_mode": "matched_nodes_first",
-                    "matched_triggers": ["comparison_chinese"],
-                })
-                return intent
-
-        # 3) "A 和 B 比/比较" structure
-        vs_match = re.search(r"(.+?)(?:和|与|跟|同)(.+?)(?:相比|比较|比|哪个|谁更)", text)
-        if vs_match:
-            left_text = re.sub(r"[的对比]+$", "", vs_match.group(1)).strip()
-            right_text = re.sub(r"[的对比]+$", "", vs_match.group(2)).strip()
-            if left_text and right_text:
-                intent.update({
-                    "intent": "comparison",
-                    "target_level": target_level,
-                    "comparison_left": left_text,
-                    "comparison_right": right_text,
-                    "comparison_operator": ">",
-                    "output_mode": "matched_nodes_first",
-                    "matched_triggers": ["comparison_vs"],
-                })
-                return intent
-
-        # 口语化意图映射
-        zero_actual_tokens = ["没有开张", "未开张", "零开单", "没开单", "无开单", "未开单", "没业绩", "零业绩", "无业绩", "未业绩"]
-        if any(token in text for token in zero_actual_tokens):
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": "actual",
-                "filter_metric_column": "年度开单金额",
-                "filter_operator": "=",
-                "filter_value": 0,
-                "direction": "asc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["spoken_zero_actual"],
-            })
-            return intent
-
-        lagging_tokens = ["拖后腿", "严重落后", "完成不好", "完成得不好", "承压", "风险大"]
-        if any(token in text for token in lagging_tokens):
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": "rate",
-                "filter_metric_column": "达成率",
-                "filter_operator": "<",
-                "filter_value": 10.0,
-                "direction": "asc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["spoken_lagging"],
-            })
-            return intent
-
-        # 提前/超额完成 → 达成率 >= 100%
-        completion_tokens = ["提前完成", "超额完成", "完成全年", "完成指标", "已经超额", "已超额"]
-        if any(token in text for token in completion_tokens):
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": "rate",
-                "filter_metric_column": "达成率",
-                "filter_operator": ">=",
-                "filter_value": 100.0,
-                "direction": "desc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["spoken_completion"],
-            })
-            return intent
-
-        # 达成率在 X% 到 Y% 之间
-        rate_range_match = re.search(r"(?:达成率|完成率).*?(\d+(?:\.\d+)?)\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*%?\s*之间", text)
-        if rate_range_match:
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": "rate",
-                "filter_metric_column": "达成率",
-                "filter_operator": "between",
-                "filter_value": float(rate_range_match.group(1)),
-                "filter_value2": float(rate_range_match.group(2)),
-                "direction": "asc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["filter_range"],
-            })
-            return intent
-
-        # 金额类指标在 X 到 Y 之间
-        amount_range_match = re.search(
-            r"(年度开单金额|开单金额|总任务金额|年度目标营收|任务金额|剩余任务金额).*?(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?\s*到\s*(\d+(?:\.\d+)?)\s*(万|亿)?\s*%?\s*之间",
-            text,
-        )
-        if amount_range_match:
-            metric_name = amount_range_match.group(1)
-            key_map = {
-                "年度开单金额": "actual", "开单金额": "actual",
-                "总任务金额": "task", "年度目标营收": "task", "任务金额": "task",
-                "剩余任务金额": "remain",
-            }
-            # intent 层保留原始数值，单位换算推迟到 SQL 构建阶段
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": key_map.get(metric_name, "actual"),
-                "filter_metric_column": metric_name,
-                "filter_operator": "between",
-                "filter_value": float(amount_range_match.group(2)),
-                "filter_value2": float(amount_range_match.group(5)),
-                "direction": "asc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["filter_amount_range"],
-            })
-            return intent
-
-        if filter_problem:
-            if filter_conditions:
-                primary = filter_conditions[0]
-                intent.update({
-                    "intent": "filter",
-                    "target_level": target_level,
-                    "filter_metric_key": primary["column"],
-                    "filter_metric_column": primary["column"],
-                    "filter_operator": primary["operator"],
-                    "filter_value": primary["value"],
-                    "filter_value2": primary.get("value2"),
-                    "direction": "asc" if primary["operator"] in {"<", "<="} else "desc",
-                    "output_mode": "matched_nodes_first",
-                    "matched_triggers": ["filter"],
-                })
-                if len(filter_conditions) > 1:
-                    intent["filter_conditions"] = filter_conditions
-                return intent
-
-            # 纯层级/条线过滤，没有附带数值阈值，不要把题干里的数字当成阈值
-            if level_only_filter:
-                intent.update({
-                    "intent": "filter",
-                    "target_level": target_level,
-                    "filter_metric_key": "level_only",
-                    "filter_metric_column": "",
-                    "filter_operator": "",
-                    "filter_value": None,
-                    "output_mode": "matched_nodes_first",
-                    "matched_triggers": ["level_only_filter"],
-                })
-                return intent
-
-            metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
-            text_lower = text.lower()
-            metric_scores = []
-            for m in metrics:
-                key = str(m.get("key") or "").lower()
-                label = str(m.get("label") or "").lower()
-                col = str(m.get("column") or "").lower()
-                score = 0
-                if label and label in text_lower:
-                    score += 100
-                if col and col in text_lower:
-                    score += 100
-                if key == "rate" and any(t in text_lower for t in ["达成率", "完成率"]):
-                    score += 80
-                if key == "actual" and (
-                    any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"])
-                    or ("完成" in text_lower and "完成率" not in text_lower)
-                ):
-                    # 关键修复：如果问题中已经包含完成率、达成率，actual 就不加分，优先让 rate 胜出
-                    if "完成率" not in text_lower and "达成率" not in text_lower:
-                        score += 80
-                if key == "task" and any(t in text_lower for t in ["任务", "目标"]):
-                    score += 80
-                if key == "remain" and any(t in text_lower for t in ["剩余", "缺口", "差额", "待完成"]):
-                    score += 80
-                if score > 0:
-                    metric_scores.append((score, m))
-            metric = max(metric_scores, key=lambda x: x[0])[1] if metric_scores else {}
-            if not metric:
-                # 未命中任何指标时，根据阈值单位/量级做兜底推断
-                text_lower = text.lower()
-                has_rate_keyword = any(t in text_lower for t in ["达成率", "完成率", "进度", "比例", "%"])
-                has_amount_unit = "万" in text or "亿" in text
-                amount_like = (
-                    not has_rate_keyword
-                    and (
-                        has_amount_unit
-                        or (filter_value is not None and filter_value >= 100)
-                        or ("完成" in text_lower and "完成率" not in text_lower)
-                        or any(t in text_lower for t in ["开单", "实际", "销售", "完成金额"])
-                    )
-                )
-                if amount_like:
-                    metric = next((m for m in metrics if str(m.get("key") or "") == "actual"), {})
-                    if not metric:
-                        metric = next((m for m in metrics if "年度开单" in str(m.get("label") or "")), {})
-                if not metric:
-                    metric = next((m for m in metrics if str(m.get("key") or "") == "rate"), {})
-            if not filter_operator:
-                filter_operator = "<"
-            if filter_value is None and filter_operator == "<":
-                filter_value = 60.0
-            intent.update({
-                "intent": "filter",
-                "target_level": target_level,
-                "filter_metric_key": metric.get("key") or "rate",
-                "filter_metric_column": metric.get("column") or metric.get("label") or "达成率",
-                "filter_operator": filter_operator,
-                "filter_value": filter_value,
-                "direction": "asc" if filter_operator == "<" else "desc",
-                "output_mode": "matched_nodes_first",
-                "matched_triggers": ["filter"],
-            })
-            return intent
-
-        if ranking_policy.get("enabled") is False:
-            return intent
-
-        triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]
-
-        def metric_match_score(metric_item: Dict[str, Any]) -> int:
-            score = 0
-            metric_key = str(metric_item.get("key") or "")
-            metric_label = str(metric_item.get("label") or "")
-            metric_column = str(metric_item.get("column") or "")
-            metric_text = " ".join([metric_key, metric_label, metric_column])
-            amount_tokens = ["销售金额", "销售额", "开单金额", "开单额", "年度开单金额", "年度开单", "开单", "实际金额", "实际", "完成金额", "业绩金额", "金额", "销售"]
-            task_tokens = ["任务金额", "任务额", "目标金额", "目标", "任务"]
-            remain_tokens = ["剩余任务", "剩余金额", "缺口", "差额", "待完成"]
-            rate_tokens = ["达成率", "完成率", "进度", "比例", "rate", "percent"]
-            text_lower = text.lower()
-            has_rate_keyword = any(token in text_lower for token in ["达成率", "完成率"])
-
-            if not has_rate_keyword and any(token in text for token in amount_tokens):
-                if metric_key == "actual":
-                    score += 60
-                if any(token in metric_text for token in ["年度开单", "开单金额", "开单", "实际", "销售"]):
-                    score += 40
-            if any(token in text for token in task_tokens):
-                if metric_key == "task":
-                    score += 60
-                if any(token in metric_text for token in ["任务", "目标"]):
-                    score += 40
-            if any(token in text for token in remain_tokens):
-                if metric_key == "remain":
-                    score += 60
-                if any(token in metric_text for token in ["剩余", "缺口", "差额", "待完成"]):
-                    score += 40
-            if has_rate_keyword:
-                if metric_key == "rate":
-                    score += 100  # 修复：优先让率胜出
-                if any(token in metric_text.lower() for token in [item.lower() for item in rate_tokens]):
-                    score += 60
-
-            if metric_key and metric_key in text:
-                score += 30
-            if metric_label and metric_label in text:
-                score += 30
-            if metric_column and metric_column in text:
-                score += 30
-            return score
-
-        def trigger_matched(item: str) -> bool:
-            if item in {"前", "后"}:
-                return bool(re.search(rf"{re.escape(item)}\s*(?:\d+|[一二两三四五六七八九十]+)", text))
-            if item.lower() == "top":
-                return bool(re.search(r"\btop\s*(?:\d+|[一二两三四五六七八九十]+)?", text, flags=re.I))
-            return item.lower() in text.lower()
-
-        matched_triggers = [item for item in triggers if item and trigger_matched(item)]
-        extra_ranking_tokens = ["排序", "从高到低", "从低到高", "最多", "最少", "最大", "最小", "缺口最大", "最好", "最差", "最高", "最低", "垫底"]
-        if any(token in text for token in extra_ranking_tokens):
-            matched_triggers.append("extra_sort")
-        if not matched_triggers:
-            # 层级 Overview：X层级 + 业绩/情况，无数值/对比/排名/聚合关键词 → 按 ranking/top_n=0 返回全部
-            is_level_overview = (
-                target_level
-                and re.search(r"(?:业绩|表现|情况|咋样|怎样|如何)", text)
-                and not filter_problem
-                and not drilldown_problem
-                and not asks_aggregate
-            )
-            # 如果 resolved 了具体节点，且 target_level 只是该节点名的一部分（如"江浙沪分公司业绩"），
-            # 则不把它当作纯层级 Overview，继续后续规则处理。
-            if is_level_overview:
-                resolved_names = self._resolved_entity_names(context)
-                if resolved_names:
-                    level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-                    target_aliases = {target_level} | set(str(item) for item in (ranking_policy.get("targetLevelAliases", {}).get(target_level) or []) if item)
-                    if any(
-                        name and name not in level_like_values
-                        and any(name.endswith(alias) for alias in target_aliases)
-                        for name in resolved_names
-                    ):
-                        is_level_overview = False
-                    # 如果 resolved 的是具体业务员成员，也不按层级概览处理，而是按单点查询
-                    if is_level_overview:
-                        overview_profile = get_dataset_profile(dataset_code, dataset_name)
-                        if overview_profile:
-                            overview_person_members: set = set()
-                            for level in overview_profile.get("levels") or []:
-                                if str(level.get("dimension_name") or "").strip() in {"业务员", "业务代表"}:
-                                    overview_person_members.update(str(m).strip() for m in level.get("members") or [] if str(m).strip())
-                            if any(name in overview_person_members for name in resolved_names):
-                                is_level_overview = False
-
-            if is_level_overview:
-                config_metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
-                default_metric = next(
-                    (item for item in config_metrics if str(item.get("key") or "") == "rate"),
-                    None,
-                ) or {}
-                intent.update({
-                    "intent": "ranking",
-                    "target_level": target_level,
-                    "top_n": 0,
-                    "sort_metric_key": default_metric.get("key") or "rate",
-                    "sort_metric_column": default_metric.get("column") or default_metric.get("label") or "达成率",
-                    "direction": "desc",
-                    "rank_sides": "",
-                    "output_mode": ranking_policy.get("outputMode") or "topn_only",
-                    "matched_triggers": ["level_overview"],
-                    "_level_overview": True,
-                })
-                return intent
-            if target_level:
-                intent["target_level"] = target_level
-            return intent
-
-        max_top_n = self._safe_int(ranking_policy.get("maxTopN"), 20)
-        rank_spec = self._rank_request_spec(text, default_limit=0, max_limit=max_top_n)
-        top_n = rank_spec.get("limit") if rank_spec.get("limit") is not None else None
-        if top_n is not None:
-            top_n = max(0, min(max_top_n, top_n))
-
-        # 规则未提取到数量时，尝试读取 Agent1.5/LLM 解析的 ranking_params 作为补充
-        # 规则优先，LLM 仅补漏，避免影响现有明确问法
-        llm_ranking_params = (context.get("resolved_entities") or {}).get("ranking_params") if isinstance(context, dict) else None
-        llm_filled_top_n = False
-        if (top_n == 0 or top_n is None) and isinstance(llm_ranking_params, dict):
-            llm_top_n = llm_ranking_params.get("top_n")
-            if isinstance(llm_top_n, int) and llm_top_n > 0:
-                top_n = max(0, min(max_top_n, llm_top_n))
-                intent["_llm_top_n_fallback"] = True
-                llm_filled_top_n = True
-
-        # 单点最高/最低问法（“哪个最高/最低”或“最低的分公司”）默认只取 1 个，避免和“排名前 N”混淆
-        # 只要没有显式数量（如“最低的三个”），且不是“最高和最低”同时问，就按单点处理
-        # "垫底"也视为明确的倒数第一方向；若 LLM 已补漏数量，则不再覆盖。
-        if (
-            (top_n == 0 or top_n is None)
-            and not llm_filled_top_n
-            and rank_spec.get("sides") != "both"
-            and any(t in text for t in ["最高", "最低", "最好", "最差", "垫底"])
-            and not self._rank_limit_match(text)
-        ):
-            top_n = 1
-
-        negative_triggers = [str(item) for item in (ranking_policy.get("negativeTriggers") or []) if str(item).strip()]
-        for nt in ["最少", "最小"]:
-            if nt not in negative_triggers:
-                negative_triggers.append(nt)
-        direction = (
-            "desc"
-            if rank_spec.get("sides") == "both"
-            else "asc" if any(item in text for item in negative_triggers)
-            else str(ranking_policy.get("defaultDirection") or "desc")
-        )
-        if direction not in {"asc", "desc"}:
-            direction = "desc"
-
-        metrics = [item for item in (config.get("metrics") or []) if isinstance(item, dict)]
-        scored_metrics = sorted(
-            (
-                (metric_match_score(item), item)
-                for item in metrics
-            ),
-            key=lambda pair: pair[0],
-            reverse=True,
-        )
-        metric = scored_metrics[0][1] if scored_metrics and scored_metrics[0][0] > 0 else None
-        if not metric:
-            default_metric_key = str(ranking_policy.get("defaultMetricKey") or "")
-            metric = next((item for item in metrics if str(item.get("key") or "") == default_metric_key), None)
-        metric = metric or {}
-
-        intent.update({
-            "intent": "ranking",
-            "target_level": target_level,
-            "top_n": top_n,
-            "top_limit": rank_spec.get("top_limit") or 0,
-            "bottom_limit": rank_spec.get("bottom_limit") or 0,
-            "sort_metric_key": metric.get("key") or "",
-            "sort_metric_column": metric.get("column") or metric.get("label") or "",
-            "direction": direction,
-            "rank_sides": rank_spec.get("sides") or "",
-            "output_mode": ranking_policy.get("outputMode") or "topn_only",
-            "matched_triggers": matched_triggers,
-        })
-        return intent
+        resolver = getattr(self, "_intent_resolver", None)
+        if resolver is None:
+            resolver = self._build_intent_resolver()
+            self._intent_resolver = resolver
+        return resolver.resolve(question, context)
 
     @staticmethod
     def _normalize_prompt_items(items: Any) -> List[Dict[str, Any]]:
-        return [item for item in (items or []) if isinstance(item, dict)]
+        return ask_engine_utils._normalize_prompt_items(items)
 
     @staticmethod
     def _is_read_only_sql(sql_text: str) -> bool:
-        normalized = re.sub(r"/\*.*?\*/", " ", str(sql_text or ""), flags=re.S)
-        normalized = re.sub(r"--.*?$", " ", normalized, flags=re.M).strip().lower()
-        if not normalized:
-          return False
-        if not (normalized.startswith("select") or normalized.startswith("with")):
-          return False
-        blocked = [
-            " insert ", " update ", " delete ", " drop ", " truncate ", " alter ",
-            " create ", " replace ", " grant ", " revoke ", " merge ", " call ",
-        ]
-        padded = f" {normalized} "
-        return not any(token in padded for token in blocked)
+        return ask_engine_utils._is_read_only_sql(sql_text)
 
     def _dataset_field_validation(self, sql_text: str, context: Dict[str, Any]) -> Dict[str, Any]:
         dictionary = context.get("data_dictionary") or []
@@ -1541,19 +441,7 @@ LIMIT 10000
         option_type: str = "dataset_scope",
         extra: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        option = {
-            "id": option_id,
-            "label": label,
-            "description": description,
-            "dataset_ids": [int(item) for item in (dataset_ids or []) if item is not None],
-            "option_type": option_type,
-        }
-        if isinstance(extra, dict):
-            for key, value in extra.items():
-                if key in option or value is None:
-                    continue
-                option[key] = value
-        return option
+        return ask_engine_utils._build_confirmation_option(option_id, label, description, dataset_ids, option_type, extra)
 
     def _normalize_confirmation_options(
         self,
@@ -1714,22 +602,7 @@ LIMIT 10000
 
     @staticmethod
     def _to_float(value: Any) -> Optional[float]:
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            if value != value:
-                return None
-            return float(value)
-        text = str(value).strip()
-        if not text:
-            return None
-        cleaned = re.sub(r"[^0-9.\-]", "", text)
-        if not cleaned:
-            return None
-        try:
-            return float(cleaned)
-        except ValueError:
-            return None
+        return ask_engine_utils._to_float(value)
 
     @staticmethod
     def _format_metric(
@@ -1737,198 +610,11 @@ LIMIT 10000
         suffix: str = "",
         metric: Optional[Dict[str, Any]] = None,
     ) -> str:
-        if value is None:
-            return "-"
-        if suffix:
-            if value == int(value):
-                return f"{int(value):,}{suffix}"
-            return f"{value:.2f}{suffix}"
-
-        def _fmt(num: float) -> str:
-            if num == int(num):
-                return str(int(num))
-            return f"{num:.2f}".rstrip("0").rstrip(".")
-
-        if isinstance(metric, dict) and metric.get("format") in ("amount", "currency"):
-            unit = str(metric.get("unit") or "").strip()
-            scale = float(metric.get("scale") or 0) or 1.0
-            column = str(metric.get("column") or "").strip()
-            if not unit:
-                if "_万元" in column or column.endswith("万元"):
-                    unit = "万元"
-                else:
-                    unit = "元"
-            display = value / scale
-            abs_display = abs(display)
-            if unit == "万元":
-                if abs_display < 10000:
-                    return _fmt(display) + "万"
-                return _fmt(display / 10000) + "亿"
-            # unit == "元"：与商用数据集保持一致的自动缩放展示
-            if abs_display < 10000:
-                return _fmt(display)
-            if abs_display < 1000000:
-                return f"{display / 10000:.1f}".rstrip("0").rstrip(".") + "万"
-            if abs_display < 100000000:
-                return f"{round(display / 10000)}万"
-            return f"{display / 100000000:.2f}".rstrip("0").rstrip(".") + "亿"
-
-        # 兼容旧调用：未传入 metric 时默认按元口径处理
-        abs_value = abs(value)
-        if abs_value < 10000:
-            if value == int(value):
-                return str(int(value))
-            return f"{value:.2f}".rstrip("0").rstrip(".")
-        if abs_value < 1000000:
-            return f"{value / 10000:.1f}万"
-        if abs_value < 100000000:
-            return f"{round(value / 10000)}万"
-        return f"{value / 100000000:.2f}亿"
+        return ask_engine_utils._format_metric(value, suffix, metric)
 
     @staticmethod
     def _build_display_title(question: str, dataset_result: Dict[str, Any]) -> str:
-        """基于 query_intent 和数据集名称生成一句简洁的展示标题。"""
-        from collections import Counter
-
-        query_intent = dataset_result.get("query_intent") or {}
-        dataset_name = str(dataset_result.get("dataset_name") or "").strip()
-
-        # 数据集简称：去掉“飞书/安吉”等前缀后优先保留“…事业部”，否则保留有意义的部分
-        cleaned_name = re.sub(r"^(飞书|安吉|cloud|公共)\s*", "", dataset_name, flags=re.I)
-        domain_match = re.search(r".*?事业部", cleaned_name)
-        if domain_match:
-            domain = domain_match.group(0)
-        else:
-            # 去掉“测试数据集/数据集/数据/业绩/报告”等无意义后缀
-            domain = re.sub(r"(测试数据集|数据集|数据|业绩|报告|分析|预算)$", "", cleaned_name, flags=re.I).strip() or cleaned_name
-            # 如果剩下来的是“消费者/商用”等事业部简称，补上“事业部”
-            if domain and not domain.endswith("事业部") and re.match(r"^(消费者|商用|电商|飞书).*$", domain):
-                domain = domain + "事业部"
-
-        intent = str(query_intent.get("intent") or "").strip()
-        rows = dataset_result.get("rows") or []
-        target_level = str(query_intent.get("target_level") or "").strip()
-        # 标题层级优先使用 query_intent.target_level；只有为空时才按返回行中最多层级兜底
-        if not target_level and rows:
-            levels = [str(r.get("层级") or "").strip() for r in rows if r.get("层级")]
-            if levels:
-                target_level = Counter(levels).most_common(1)[0][0]
-
-        # 指标标签支持业务线口径展示
-        metric_label_map = {
-            "年度开单金额": "开单金额",
-            "线下业务开单金额": "线下业务开单金额",
-            "新零售业务开单金额": "新零售业务开单金额",
-            "燃气定制业务开单金额": "燃气定制业务开单金额",
-            "地产业务开单金额": "地产业务开单金额",
-            "总任务金额": "任务金额",
-            "剩余任务金额": "剩余任务金额",
-            "达成率": "达成率",
-        }
-        metric_key_map = {"actual": "开单金额", "task": "任务金额", "remain": "剩余任务金额", "rate": "达成率"}
-
-        def metric_label(metric_key: str, metric_column: str) -> str:
-            if metric_column in metric_label_map:
-                return metric_label_map[metric_column]
-            if metric_key in metric_label_map:
-                return metric_label_map[metric_key]
-            return metric_key_map.get(metric_key) or metric_key or "指标"
-
-        op_text_map = {">": "大于", ">=": "大于等于", "<": "小于", "<=": "小于等于", "=": "等于", "between": "在"}
-
-        def _level_filter_title(names: List[str], level: str) -> str:
-            if not names:
-                suffix = f"{level}筛选结果" if level else "筛选结果"
-                return f"{domain}{suffix}" if domain else suffix
-            shown = names[:3]
-            joined = "、".join(shown)
-            if len(names) > 3:
-                joined = f"{joined}等"
-            return f"{domain}{joined}的筛选结果" if domain else f"{joined}的筛选结果"
-
-        if intent == "filter":
-            metric_key = str(query_intent.get("filter_metric_key") or "")
-            # 纯层级/点名 filter，没有附带数值阈值
-            if metric_key == "level_only":
-                resolved_names = FourAgentAskService._resolved_entity_names(dataset_result)
-                if query_intent.get("_multi_parent"):
-                    dataset_hint = {"dataset_name": dataset_result.get("dataset_name") or ""}
-                    parent_names = [
-                        n for n in (query_intent.get("_multi_parent_names") or resolved_names)
-                        if not FourAgentAskService._is_dataset_root_name(n, dataset_hint)
-                    ]
-                    shown = parent_names[:3]
-                    joined = "、".join(shown)
-                    if len(parent_names) > 3:
-                        joined = f"{joined}等"
-                    return f"{domain}{joined}的业绩" if domain else f"{joined}的业绩"
-                return _level_filter_title(resolved_names, target_level)
-            metric_column = str(query_intent.get("filter_metric_column") or "")
-            operator = str(query_intent.get("filter_operator") or "")
-            value = query_intent.get("filter_value")
-            value2 = query_intent.get("filter_value2")
-            label = metric_label(metric_key, metric_column)
-            is_rate = label == "达成率"
-            suffix = "%" if is_rate else ""
-
-            if operator == "between" and value is not None and value2 is not None:
-                value_text = f"{FourAgentAskService._format_metric(value, suffix)}到{FourAgentAskService._format_metric(value2, suffix)}之间"
-                op_text = ""
-            else:
-                value_text = FourAgentAskService._format_metric(value, suffix) if value is not None else ""
-                # 金额类阈值优先按题干单位显示
-                if not is_rate and value is not None:
-                    if "亿" in question and float(value) < 10000:
-                        value_text = f"{int(value)}亿" if float(value) == int(value) else f"{value}亿"
-                    elif "万" in question and float(value) < 10000:
-                        value_text = f"{int(value)}万" if float(value) == int(value) else f"{value}万"
-                op_text = op_text_map.get(operator, "超过") if operator else "超过"
-
-            parts = [domain, label]
-            if op_text:
-                parts.append(op_text)
-            if value_text:
-                parts.append(value_text)
-            title = "".join(parts)
-            if target_level:
-                title = f"{title}的{target_level}"
-            return title
-
-        if intent == "ranking":
-            metric_key = str(query_intent.get("sort_metric_key") or "")
-            metric_column = str(query_intent.get("sort_metric_column") or "")
-            label = metric_label(metric_key, metric_column)
-            top_n = query_intent.get("top_n")
-            direction = str(query_intent.get("direction") or "desc")
-            rank_word = "排名后" if direction == "asc" else "排名前"
-            if target_level and top_n:
-                return f"{rank_word}{top_n}的{target_level}"
-            # 单点“哪个最高/最低”问法，标题直接表达为“最高的分公司”
-            if top_n == 1 and (
-                re.search(r"哪个|哪一家", question or "")
-                or re.search(r"最高|最低|最好|最差", question or "")
-            ):
-                extrema_word = "最低" if direction == "asc" else "最高"
-                if target_level:
-                    title = f"{domain}{label}{extrema_word}的{target_level}"
-                else:
-                    title = f"{domain}{extrema_word}的对象"
-                return title
-            # 排名类标题：数据集 + 层级 + 指标 + 排名（+ TopN），避免“达成率的分公司”这种倒装
-            if target_level:
-                title = f"{domain}{target_level}{label}排名"
-            else:
-                title = f"{domain}{label}排名"
-            if top_n:
-                title = f"{title}{rank_word}{top_n}"
-            return title
-
-        # 兜底：去掉口语前缀后返回
-        return re.sub(
-            r"^(?:我说的是|我说的是|我说|我的问题是|我想问|我想知道|请问|问一下|看一下|查一下|看下|查下|请|麻烦|帮我|给我|告诉我|咨询一下|了解一下|看看)(?:[，,：:\s]+)?",
-            "",
-            str(question or ""),
-        ).strip()
+        return ask_engine_utils._build_display_title(question, dataset_result)
 
     def _build_layered_management_report(
         self,
@@ -2923,7 +1609,7 @@ LIMIT 10000
 
     @staticmethod
     def _normalize_entity_key(value: Any) -> str:
-        return re.sub(r"[\s,，、/\\|()（）【】\[\]{}<>《》“”\"'：:；;.!！?？-]+", "", str(value or "")).lower()
+        return ask_engine_utils._normalize_entity_key(value)
 
     @classmethod
     def _looks_like_noise_subject(cls, value: str) -> bool:
@@ -2987,11 +1673,7 @@ LIMIT 10000
 
     @staticmethod
     def _has_specific_node(context: Dict[str, Any]) -> bool:
-        resolved = context.get("resolved_entities") or {}
-        flag = resolved.get("has_specific_node")
-        if isinstance(flag, bool):
-            return flag
-        return True
+        return ask_engine_utils._has_specific_node(context)
 
     def _current_dataset_ids_for_node_index(self, context: Dict[str, Any]) -> List[int]:
         dataset = self._safe_dict(context.get("dataset"))
@@ -3250,29 +1932,7 @@ LIMIT 10000
 
     @staticmethod
     def _clean_org_subject_candidate(value: str) -> str:
-        text = str(value or "").strip("，。！？、 ")
-        text = re.sub(
-            r"^(?:请|麻烦|帮我|帮忙|我想看|我想查|我想问|我想知道|我想了解|想看|想查|想问|看下|看一下|查下|查一下|查询|查询下|查询一下|帮我看看|麻烦帮我查下|麻烦帮我看下|问下|问一下|分析下|分析一下|了解下|了解一下|再看|再看下|再看一下|继续看|继续看下|继续看一下|继续查|继续查下|继续查一下)+",
-            "",
-            text,
-        ).strip()
-        # 去掉口语方位/指代词，避免 "上海那边"、"东部那个" 这类干扰
-        text = re.sub(r"那边|那个|这块|那块|这边|这个|这位|那位", "", text).strip()
-        # 去掉前缀数量词，避免 "三个业务部"、"前3分公司" 被当成主体名称。
-        # 计数词必须跟量词（个/位/名...）才剥，避免吃掉 "三明"、"四川" 这种首字是数字的人名/地名。
-        text = re.sub(r"^(?:前|第)?\s*(?:一|二|三|四|五|六|七|八|九|十|两|几|\d+)\s*(?:个|大|家|者|位|名)", "", text).strip("，。！？、 ")
-        # 去掉尾部通用业务词与口语后缀
-        text = re.sub(
-            r"(?:的)?(?:业绩.*|表现.*|情况.*|完成情况.*|完成的怎么样.*|完成得怎么样.*|完成咋样.*|啥情况.*|啥.*)$",
-            "",
-            text,
-        )
-        text = re.sub(
-            r"(?:的)?(?:怎么样了|怎么样|如何了|如何|咋样|怎样)$",
-            "",
-            text,
-        ).strip("，。！？、 ")
-        return text
+        return ask_engine_utils._clean_org_subject_candidate(value)
 
     def _normalize_dataset_subject_names(
         self,
@@ -3364,6 +2024,33 @@ LIMIT 10000
                 })
         return matches
 
+    _BARE_NODE_INDICATOR_TOKENS = (
+        "业绩", "排名", "排行", "排序", "开单", "任务", "达成",
+        "表现", "数据", "金额", "收入", "销量", "指标", "情况",
+        "咋样", "怎样", "如何", "对比", "比较", "差异",
+        "前", "后", "倒数", "最高", "最低", "最好", "最差",
+        "Top", "top", "TOP",
+    )
+
+    def _extract_bare_node_candidate(self, question: str) -> str:
+        """从短裸节点问题中提取候选主体名（如"查询丁杰"→"丁杰"）。
+        仅当问题长度 ≤ 8 字、且不含业务指标词时返回剥离后的主体名；
+        否则返回空字符串，让原路径继续处理。"""
+        if not question:
+            return ""
+        stripped = str(question).strip()
+        # 长度过长（> 8 字）说明问题有较多修饰，不太可能是裸节点
+        if len(stripped) > 8:
+            return ""
+        # 含指标词 → 不是裸节点
+        if any(token in stripped for token in self._BARE_NODE_INDICATOR_TOKENS):
+            return ""
+        # 剥常见口语前缀
+        for prefix in ("查询", "看下", "看看", "麻烦帮我查", "麻烦帮我看", "帮我查", "帮我看"):
+            if stripped.startswith(prefix) and len(stripped) > len(prefix):
+                return stripped[len(prefix):].strip()
+        return stripped
+
     def _node_index_matches(
         self,
         candidate: str,
@@ -3434,13 +2121,7 @@ LIMIT 10000
 
     @staticmethod
     def _node_index_match_key(item: Dict[str, Any]) -> Tuple[int, str, str, str, str]:
-        return (
-            int(item.get("dataset_id") or 0),
-            str(item.get("node_name") or "").strip(),
-            str(item.get("node_level") or "").strip(),
-            str(item.get("parent_name") or "").strip(),
-            str(item.get("track") or "").strip(),
-        )
+        return ask_engine_utils._node_index_match_key(item)
 
     def _dedupe_node_index_matches(
         self,
@@ -3465,16 +2146,7 @@ LIMIT 10000
 
     @staticmethod
     def _extract_subject_from_confirmation_label(label: str) -> str:
-        text = str(label or "").strip()
-        if not text:
-            return ""
-        text = re.sub(r"^系统推荐[:：]\s*", "", text)
-        for sep in [" - ", " · ", "-", "·"]:
-            if sep in text:
-                text = text.split(sep, 1)[-1].strip()
-                break
-        text = re.sub(r"(的)?(业绩|情况|表现|完成情况|完成率|达成率|数据)$", "", text).strip()
-        return text
+        return ask_engine_utils._extract_subject_from_confirmation_label(label)
 
     def _role_person_subject_names(self, question: str) -> List[str]:
         text = str(question or "").replace("\n", " ").strip()
@@ -3590,140 +2262,9 @@ LIMIT 10000
         stage: str = "",
         agent_name: str = "",
     ) -> str:
-        self._load_llm()
-        candidate_configs = self._candidate_llm_configs(preferred_model_id=self._preferred_model_id)
-        if not candidate_configs:
-            raise RuntimeError("Default AI model is not configured.")
-        last_error: Optional[Exception] = None
-
-        for index, config in enumerate(candidate_configs, start=1):
-            self._activate_llm(config)
-            started = time.time()
-            self._append_trace(
-                trace,
-                stage or "llm.call",
-                "request",
-                agent=agent_name,
-                provider="openai-compatible",
-                model=self._llm_model,
-                endpoint=f"{getattr(self._llm_client, 'base_url', '')}chat.completions.create",
-                candidate_index=index,
-                candidate_count=len(candidate_configs),
-                max_tokens=max_tokens,
-                system_prompt=self._truncate_text(system_prompt, 12000),
-                user_prompt=self._truncate_text(user_prompt, 16000),
-            )
-            try:
-                stream = self._llm_client.chat.completions.create(
-                    model=self._llm_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.1,
-                    max_tokens=max_tokens,
-                    stream=True,
-                    timeout=180,
-                )
-                chunks: List[str] = []
-                reasoning_chunks: List[str] = []
-                pending_delta = ""
-                pending_reasoning = ""
-                last_emit_at = time.time()
-                last_reasoning_emit_at = time.time()
-                for chunk in stream:
-                    try:
-                        delta_obj = chunk.choices[0].delta
-                        delta, reasoning_delta = self._extract_stream_delta(delta_obj)
-                    except Exception:
-                        delta = ""
-                        reasoning_delta = ""
-                    if not delta and not reasoning_delta:
-                        continue
-                    now = time.time()
-                    if delta:
-                        chunks.append(delta)
-                        pending_delta += delta
-                    if reasoning_delta:
-                        reasoning_chunks.append(reasoning_delta)
-                        pending_reasoning += reasoning_delta
-                    if pending_delta and (len(pending_delta) >= 24 or now - last_emit_at >= 0.35):
-                        self._append_llm_delta(
-                            trace,
-                            stage or "llm.call",
-                            agent_name,
-                            pending_delta,
-                            "".join(chunks),
-                            started,
-                        )
-                        pending_delta = ""
-                        last_emit_at = now
-                    if pending_reasoning and (len(pending_reasoning) >= 24 or now - last_reasoning_emit_at >= 0.35):
-                        self._append_llm_delta(
-                            trace,
-                            stage or "llm.call",
-                            agent_name,
-                            "",
-                            "",
-                            started,
-                            reasoning_delta=pending_reasoning,
-                            reasoning_text="".join(reasoning_chunks),
-                            delta_kind="reasoning",
-                        )
-                        pending_reasoning = ""
-                        last_reasoning_emit_at = now
-
-                content = "".join(chunks).strip()
-                if pending_delta:
-                    self._append_llm_delta(
-                        trace,
-                        stage or "llm.call",
-                        agent_name,
-                        pending_delta,
-                        content,
-                        started,
-                    )
-                if pending_reasoning:
-                    self._append_llm_delta(
-                        trace,
-                        stage or "llm.call",
-                        agent_name,
-                        "",
-                        "",
-                        started,
-                        reasoning_delta=pending_reasoning,
-                        reasoning_text="".join(reasoning_chunks),
-                        delta_kind="reasoning",
-                    )
-                self._append_trace(
-                    trace,
-                    stage or "llm.call",
-                    "response",
-                    agent=agent_name,
-                    duration_seconds=round(time.time() - started, 2),
-                    response_text=self._truncate_text(content, 16000),
-                )
-                return content
-            except Exception as exc:
-                last_error = exc
-                retryable = index < len(candidate_configs) and self._should_retry_with_another_model(exc)
-                self._append_trace(
-                    trace,
-                    stage or "llm.call",
-                    "retry" if retryable else "error",
-                    agent=agent_name,
-                    duration_seconds=round(time.time() - started, 2),
-                    error=str(exc),
-                    candidate_index=index,
-                    candidate_count=len(candidate_configs),
-                    retry_with_next_model=retryable,
-                )
-                if not retryable:
-                    raise
-
-        if last_error:
-            raise last_error
-        raise RuntimeError("No active AI model is available.")
+        return self._llm_component()._chat(
+            system_prompt, user_prompt, max_tokens, trace, stage, agent_name
+        )
 
     def _chat_json(
         self,
@@ -3734,28 +2275,9 @@ LIMIT 10000
         stage: str = "",
         agent_name: str = "",
     ) -> Dict[str, Any]:
-        try:
-            raw = self._chat(system_prompt, user_prompt, trace=trace, stage=stage, agent_name=agent_name)
-            parsed = json.loads(_extract_json_block(raw))
-            self._append_trace(
-                trace,
-                stage or "llm.call",
-                "parsed",
-                agent=agent_name,
-                parsed_json=parsed,
-            )
-            return parsed
-        except Exception as exc:
-            self._append_trace(
-                trace,
-                stage or "llm.call",
-                "fallback",
-                agent=agent_name,
-                error=str(exc),
-                traceback=traceback.format_exc(),
-                fallback=fallback,
-            )
-            return fallback
+        return self._llm_component()._chat_json(
+            system_prompt, user_prompt, fallback, trace, stage, agent_name
+        )
 
     def _get_agent_prompt(self, agent_no: int, fallback: str) -> str:
         agent = get_agent(agent_no)
@@ -3837,66 +2359,15 @@ LIMIT 10000
 
     @staticmethod
     def _profile_catalog(profile: Dict[str, Any]) -> List[Dict[str, Any]]:
-        catalog = []
-        for level in profile.get("levels") or []:
-            if not isinstance(level, dict):
-                continue
-            members = [str(item).strip() for item in (level.get("members") or []) if str(item).strip()]
-            groups = []
-            for group in level.get("groups") or []:
-                if isinstance(group, dict):
-                    groups.append(
-                        {
-                            "group_name": group.get("group_name"),
-                            "aliases": group.get("aliases") or [],
-                            "members": group.get("members") or [],
-                        }
-                    )
-            catalog.append(
-                {
-                    "dimension_name": level.get("dimension_name"),
-                    "aliases": level.get("aliases") or [],
-                    "members": members[:80],
-                    "groups": groups[:20],
-                }
-            )
-        return catalog
+        return ask_engine_utils._profile_catalog(profile)
 
     @staticmethod
     def _profile_member_map(profile: Dict[str, Any]) -> Dict[str, str]:
-        member_map: Dict[str, str] = {}
-        for level in profile.get("levels") or []:
-            if not isinstance(level, dict):
-                continue
-            for member in level.get("members") or []:
-                value = str(member or "").strip()
-                if value:
-                    member_map[value] = str(level.get("dimension_name") or "").strip()
-        return member_map
+        return ask_engine_utils._profile_member_map(profile)
 
     @staticmethod
     def _normalize_llm_ranking_params(raw_ranking: Any) -> Optional[Dict[str, Any]]:
-        if not isinstance(raw_ranking, dict):
-            return None
-        try:
-            llm_top_n = int(raw_ranking.get("top_n")) if raw_ranking.get("top_n") is not None else None
-        except Exception:
-            llm_top_n = None
-        llm_sides = str(raw_ranking.get("rank_sides") or "").strip().lower()
-        if llm_sides not in {"top", "bottom", "both"}:
-            llm_sides = ""
-        llm_direction = str(raw_ranking.get("direction") or "").strip().lower()
-        if llm_direction not in {"asc", "desc"}:
-            llm_direction = ""
-        llm_metric = str(raw_ranking.get("metric_hint") or "").strip() or None
-        if llm_top_n is None and not llm_sides and not llm_direction and not llm_metric:
-            return None
-        return {
-            "top_n": llm_top_n,
-            "rank_sides": llm_sides,
-            "direction": llm_direction,
-            "metric_hint": llm_metric,
-        }
+        return ask_engine_utils._normalize_llm_ranking_params(raw_ranking)
 
     @staticmethod
     def _normalize_entity_resolution(
@@ -3904,122 +2375,11 @@ LIMIT 10000
         fallback: Dict[str, Any],
         profile: Dict[str, Any],
     ) -> Dict[str, Any]:
-        member_map = FourAgentAskService._profile_member_map(profile)
-        ordered_members: List[str] = []
-        entities_by_dimension: Dict[str, Dict[str, Any]] = {}
-
-        for entity in raw.get("entities") or []:
-            if not isinstance(entity, dict):
-                continue
-            dimension_name = str(entity.get("dimension_name") or "").strip()
-            for member in entity.get("members") or []:
-                member_name = str(member or "").strip()
-                if not member_name:
-                    continue
-                # 允许不在画像中的人名（如业务代表）
-                is_person_name = re.fullmatch(r"[\u4e00-\u9fa5]{2,4}", member_name) is not None
-                if not is_person_name and member_name not in member_map:
-                    continue
-                resolved_dimension = dimension_name or member_map.get(member_name) or ""
-                if member_name not in ordered_members:
-                    ordered_members.append(member_name)
-                bucket = entities_by_dimension.setdefault(
-                    resolved_dimension,
-                    {
-                        "dimension_name": resolved_dimension,
-                        "members": [],
-                        "matched_phrase": str(entity.get("matched_phrase") or entity.get("matched_alias") or "").strip(),
-                        "source": str(raw.get("source") or entity.get("source") or "llm_semantic"),
-                    },
-                )
-                if member_name not in bucket["members"]:
-                    bucket["members"].append(member_name)
-
-        if not ordered_members:
-            for member in fallback.get("all_members") or []:
-                member_name = str(member or "").strip()
-                if not member_name or member_name not in member_map or member_name in ordered_members:
-                    continue
-                ordered_members.append(member_name)
-                dimension_name = member_map.get(member_name) or ""
-                bucket = entities_by_dimension.setdefault(
-                    dimension_name,
-                    {
-                        "dimension_name": dimension_name,
-                        "members": [],
-                        "matched_phrase": "",
-                        "source": "profile_semantic",
-                    },
-                )
-                bucket["members"].append(member_name)
-        else:
-            for member in fallback.get("all_members") or []:
-                member_name = str(member or "").strip()
-                if not member_name or member_name not in member_map or member_name in ordered_members:
-                    continue
-                ordered_members.append(member_name)
-                dimension_name = member_map.get(member_name) or ""
-                bucket = entities_by_dimension.setdefault(
-                    dimension_name,
-                    {
-                        "dimension_name": dimension_name,
-                        "members": [],
-                        "matched_phrase": "",
-                        "source": "profile_semantic",
-                    },
-                )
-                bucket["members"].append(member_name)
-
-        scope_mode = str(raw.get("scope_mode") or raw.get("intent") or fallback.get("scope_mode") or "").lower()
-        if len(ordered_members) > 1:
-            scope_mode = "compare"
-        elif len(ordered_members) == 1 and scope_mode not in {"aggregate", "ranking"}:
-            scope_mode = "single"
-        elif not ordered_members:
-            scope_mode = "unknown"
-
-        confidence = raw.get("confidence", fallback.get("confidence", 0))
-        try:
-            confidence_value = float(confidence)
-        except Exception:
-            confidence_value = 0
-
-        # 解析并校验 LLM 输出的 ranking_params
-        ranking_params = FourAgentAskService._normalize_llm_ranking_params(raw.get("ranking_params"))
-
-        has_specific_node = raw.get("has_specific_node")
-        if not isinstance(has_specific_node, bool):
-            # LLM 未显式输出该标志时，按是否解析出真实成员推断：
-            # 没有真实成员则视为未指定具体节点，避免 fallback 正则误触发。
-            has_specific_node = bool(ordered_members)
-
-        return {
-            "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else str(raw.get("intent") or fallback.get("intent") or "unknown")),
-            "scope_mode": scope_mode,
-            "entities": list(entities_by_dimension.values()),
-            "all_members": ordered_members,
-            "confidence": confidence_value,
-            "source": str(raw.get("source") or ("llm_semantic" if ordered_members else fallback.get("source") or "unknown")),
-            "ranking_params": ranking_params,
-            "has_specific_node": has_specific_node,
-        }
+        return ask_engine_utils._normalize_entity_resolution(raw, fallback, profile)
 
     @staticmethod
     def _profile_scope_hint(question: str, profile: Dict[str, Any], fallback: Dict[str, Any]) -> bool:
-        if fallback.get("all_members"):
-            return True
-        normalized_question = re.sub(r"\s+", "", str(question or ""))
-        for level in profile.get("levels") or []:
-            if not isinstance(level, dict):
-                continue
-            terms = [level.get("dimension_name"), *(level.get("aliases") or [])]
-            for term in terms:
-                if term and str(term) in normalized_question:
-                    return True
-        # 问题中包含显式人名（如"赵标和靳锋的业绩"、"赵标的业绩"）也应触发 Agent1.5 解析
-        if re.search(r"[\u4e00-\u9fa5]{2,4}(?:(?:和|与|及|跟|、)[\u4e00-\u9fa5]{2,4})?(?:的)?(?:业绩|绩效|达成率|开单|完成情况|表现)", normalized_question):
-            return True
-        return False
+        return ask_engine_utils._profile_scope_hint(question, profile, fallback)
 
     def _ranking_semantic_hint(self, question: str, context: Dict[str, Any]) -> bool:
         text = self._normalize_chinese_numbers(str(question or "").replace("\n", " "))
@@ -4369,105 +2729,31 @@ ranking_params 说明：
 
     @staticmethod
     def _resolved_entity_names(context: Dict[str, Any]) -> List[str]:
-        resolved = context.get("resolved_entities") if isinstance(context, dict) else {}
-        if not isinstance(resolved, dict):
-            return []
-        names: List[str] = []
-        for name in resolved.get("all_members") or []:
-            value = str(name or "").strip()
-            if value and value not in names:
-                names.append(value)
-        for entity in resolved.get("entities") or []:
-            if not isinstance(entity, dict):
-                continue
-            for name in entity.get("members") or []:
-                value = str(name or "").strip()
-                if value and value not in names:
-                    names.append(value)
-        return names
+        return ask_engine_utils._resolved_entity_names(context)
 
     @staticmethod
     def _dataset_root_name(dataset: Dict[str, Any]) -> str:
-        """从数据集名称中提取可能的根节点名（如'商用事业部'），用于过滤默认带入的根节点别名。"""
-        name = str(dataset.get("dataset_name") or "").strip()
-        if not name:
-            return ""
-        name = re.sub(r"（[^）]+）", "", name)
-        name = re.sub(r"\s+", "", name)
-        name = re.sub(r"^(飞书|安吉|cloud|公共)", "", name, flags=re.I)
-        name = re.sub(
-            r"(测试数据集|数据集|数据|业绩|报告|分析|经营预算|预算|升级版|阶段一|阶段二|阶段[一二三四五六七八九十]+)$",
-            "",
-            name,
-            flags=re.I,
-        )
-        # 只要能匹配到“...事业部”，就取到事业部为止，避免残留“经营”等词
-        match = re.search(r".*?事业部", name)
-        if match:
-            return match.group(0)
-        return name
+        return ask_engine_utils._dataset_root_name(dataset)
 
     @staticmethod
     def _is_dataset_root_name(name: str, dataset: Dict[str, Any]) -> bool:
-        root = FourAgentAskService._dataset_root_name(dataset)
-        if not root or not name:
-            return False
-        # 保守策略：只过滤名称明确为“XX事业部”的根节点别名，避免误伤普通业务词
-        if not root.endswith("事业部"):
-            return False
-        return name == root
+        return ask_engine_utils._is_dataset_root_name(name, dataset)
 
     @staticmethod
     def _looks_like_ranking_question(question: str) -> bool:
-        text = str(question or "").lower()
-        return bool(re.search(
-            r"前\s*(?:\d+|[一二两三四五六七八九十]+)|后\s*(?:\d+|[一二两三四五六七八九十]+)|"
-            r"倒数|排名|排行|\btop\s*\d*|最高|最低|最好|最差|最大|最小|垫底|落后",
-            text,
-        ))
+        return ask_engine_utils._looks_like_ranking_question(question)
 
     @staticmethod
     def _route_entity_resolution(route: Dict[str, Any]) -> Dict[str, Any]:
-        members = []
-        for name in route.get("resolved_members") or route.get("resolved_entities_preview") or []:
-            value = str(name or "").strip()
-            if value and value not in members:
-                members.append(value)
-        for mention in route.get("organization_mentions") or []:
-            if not isinstance(mention, dict):
-                continue
-            value = str(mention.get("node_name") or "").strip()
-            if value and value not in members:
-                members.append(value)
-        if not members:
-            return {}
-        scope_mode = str(route.get("scope_mode") or "").strip().lower()
-        if scope_mode not in {"single", "compare", "aggregate", "ranking"}:
-            scope_mode = "compare" if len(members) > 1 else "single"
-        return {
-            "intent": "compare" if scope_mode == "compare" else ("single" if scope_mode == "single" else scope_mode),
-            "scope_mode": scope_mode,
-            "entities": [
-                {
-                    "dimension_name": "组织树节点",
-                    "members": members,
-                    "matched_phrase": "、".join(members),
-                    "source": "organization_tree_route",
-                }
-            ],
-            "all_members": members,
-            "confidence": 1.0,
-            "source": "organization_tree_route",
-        }
+        return ask_engine_utils._route_entity_resolution(route)
 
     @staticmethod
     def _tokenize(text: str) -> set:
-        parts = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{1,4}", (text or "").lower())
-        return {item for item in parts if item.strip()}
+        return ask_engine_utils._tokenize(text)
 
     @staticmethod
     def _normalize_compact_text(text: Any) -> str:
-        return re.sub(r"\s+", "", str(text or "")).lower()
+        return ask_engine_utils._normalize_compact_text(text)
 
     def _is_pure_generic_level_question(self, question: str, matched_levels: List[str]) -> bool:
         """
@@ -4501,16 +2787,7 @@ ranking_params 说明：
 
     @staticmethod
     def _matched_org_level_terms(question: str) -> List[str]:
-        text = str(question or "")
-        ordered_terms = ["城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "条线"]
-        matched: List[str] = []
-        for term in ordered_terms:
-            if term not in text:
-                continue
-            if term == "分公司" and "城市分公司" in matched:
-                continue
-            matched.append(term)
-        return matched
+        return ask_engine_utils._matched_org_level_terms(question)
 
     def _build_dataset_level_confirmation_route(
         self,
@@ -4562,9 +2839,7 @@ ranking_params 说明：
 
     @staticmethod
     def _normalize_known_sql_alias_typos(sql_text: str) -> str:
-        sql = str(sql_text or "")
-        sql = re.sub(r"条线[\s_-]*type\b", "条线类型", sql, flags=re.IGNORECASE)
-        return sql
+        return ask_engine_utils._normalize_known_sql_alias_typos(sql_text)
 
     @classmethod
     def _profile_level_alias_score(cls, question: str, profile: Optional[Dict[str, Any]]) -> int:
@@ -5010,16 +3285,7 @@ ranking_params 说明：
 
     @staticmethod
     def _summarize_candidate_strengths(context: Dict[str, Any]) -> Dict[str, Any]:
-        samples = context.get("golden_sql_samples", []) or []
-        common_questions = context.get("common_questions", []) or []
-        return {
-            "golden_sql_count": len(samples),
-            "top_sample_questions": [item.get("question", "") for item in samples[:3] if item.get("question")],
-            "common_question_examples": [item.get("question_text", "") for item in common_questions[:3] if item.get("question_text")],
-            "has_lld": bool(str((context.get("lld_document") or {}).get("content") or "").strip()),
-            "schema_table_count": len(context.get("schema_definition", []) or []),
-            "dictionary_count": len(context.get("data_dictionary", []) or []),
-        }
+        return ask_engine_utils._summarize_candidate_strengths(context)
 
     @classmethod
     def _extract_supported_levels(cls, dataset: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
@@ -5162,17 +3428,7 @@ ranking_params 说明：
 
     @staticmethod
     def _should_auto_expand_profile_group(question: str, matched_alias: str, members: List[str]) -> bool:
-        if len(members) <= 1:
-            return False
-        text = re.sub(r"\s+", "", str(question or ""))
-        alias = re.sub(r"\s+", "", str(matched_alias or ""))
-        if not alias:
-            return False
-        explicit_group_markers = ("三大", "3大", "三个", "各", "所有", "全部", "每个", "分别", "对比", "比较", "排名", "排行")
-        intent_markers = ("业绩", "表现", "情况", "如何", "怎么样", "达成", "开单", "任务", "缺口", "对比", "比较", "排名", "排行")
-        return any(marker in alias or marker in text for marker in explicit_group_markers) and any(
-            marker in text for marker in intent_markers
-        )
+        return ask_engine_utils._should_auto_expand_profile_group(question, matched_alias, members)
 
     def _detect_ambiguity(self, question: str, ranked_candidates: List[Tuple[Dict[str, Any], int]]) -> Optional[Dict[str, Any]]:
         if not ranked_candidates:
@@ -5470,6 +3726,90 @@ ranking_params 说明：
                 thought=self._build_route_thought(org_route, current_question or question, full_catalog),
             )
             return org_route
+
+        # 短裸节点早检测：问题很短（≤8字）且无明显业务指标词时，先用节点索引探测
+        # 修复"查询丁杰"等场景：这些问题的 _looks_like_org_subject_question 为 False，
+        # 会走到 LLM arbiter 打分，但 LLM 不知道丁杰具体在哪个数据集，结果"三个都可能包含"。
+        # baseline 3.4：裸节点问题应优先走真实节点索引。
+        bare_node_candidate = self._extract_bare_node_candidate(question)
+        if bare_node_candidate:
+            index_matches = self._node_index_matches(bare_node_candidate)
+            available_ids = {int(ds.get("id") or 0) for ds in catalog}
+            filtered = [
+                m for m in index_matches
+                if int(m.get("dataset_id") or 0) in available_ids
+                and (allowed_dataset_ids is None or int(m.get("dataset_id") or 0) in {int(i) for i in allowed_dataset_ids})
+            ]
+            if len(filtered) == 1:
+                only = filtered[0]
+                rewritten = f"{only['node_name']}的业绩"
+                self._append_trace(
+                    trace,
+                    "agent1.bare_node_index_unique",
+                    "info",
+                    node_name=only["node_name"],
+                    dataset_id=only["dataset_id"],
+                    candidate=bare_node_candidate,
+                )
+                return {
+                    "dataset_ids": [only["dataset_id"]],
+                    "intent": "detail",
+                    "refined_query": rewritten,
+                    "requires_confirmation": False,
+                    "decision": "generate_sql",
+                    "match_score": 100,
+                    "route_margin": 100,
+                    "candidate_dataset_ids": [only["dataset_id"]],
+                    "arbiter_reason": "bare_node_index_unique",
+                    "resolved_subject_name": only["node_name"],
+                    "resolved_subject_level": only["node_level"],
+                    "split_queries": [{"dataset_id": only["dataset_id"], "sub_query": rewritten}],
+                }
+            if len(filtered) >= 2:
+                confirmation_options = []
+                seen_option_ids = set()
+                for idx, item in enumerate(filtered):
+                    did = int(item["dataset_id"])
+                    if did not in available_ids:
+                        continue
+                    opt_id = f"node_index_{did}_{idx + 1}"
+                    if opt_id in seen_option_ids:
+                        continue
+                    seen_option_ids.add(opt_id)
+                    confirmation_options.append({
+                        "id": opt_id,
+                        "label": f"{item['dataset_name']} - {item['node_name']}",
+                        "description": f"{item['node_level']}层级",
+                        "dataset_ids": [did],
+                        "option_type": "dataset_disambiguation",
+                        "option_id": opt_id,
+                        "confirmation_type": "dataset_disambiguation",
+                        "resolved_subject_name": item["node_name"],
+                        "resolved_subject_level": item["node_level"],
+                        "scope_filter": {},
+                        "score": 100,
+                    })
+                self._append_trace(
+                    trace,
+                    "agent1.bare_node_index_ambiguous",
+                    "info",
+                    node_name=bare_node_candidate,
+                    candidate_dataset_ids=[o["dataset_ids"][0] for o in confirmation_options],
+                )
+                return {
+                    "dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
+                    "intent": "confirm",
+                    "refined_query": f"{bare_node_candidate}的业绩",
+                    "requires_confirmation": True,
+                    "decision": "wait_boss_confirm",
+                    "match_score": 100,
+                    "confirmation_role": "boss",
+                    "confirmation_type": "dataset_disambiguation",
+                    "confirmation_question": f"您说的「{bare_node_candidate}」在多个数据集中都有命中，请确认要查询哪个：",
+                    "confirmation_options": confirmation_options,
+                    "candidate_dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
+                    "arbiter_reason": "bare_node_index_ambiguous",
+                }
 
         if self._looks_like_org_subject_question(question):
             resolved_subject = self._agent1_resolve_org_subject(
@@ -8724,47 +7064,7 @@ Agent1 路由结果：
 
     @staticmethod
     def _looks_like_org_subject_question(question: str) -> bool:
-        text = str(question or "").strip()
-        if not text:
-            return False
-        # 纯层级词（如"城市分公司"）+ 业绩/情况，不应走主体追问，应直接按层级 Overview 处理
-        level_only_terms = {"分公司", "代表处", "业务部", "城市分公司", "城市公司", "事业部", "业务代表", "业务员"}
-        stripped = re.sub(r"^(?:看下|看一下|查下|查一下|查询|看看|请看下|请查下)", "", text)
-        stripped = re.sub(r"(?:的)?(?:业绩|表现|情况|咋样|怎样|如何|咋样了|怎样了|如何了)$", "", stripped).strip("，,、 的")
-        if stripped in level_only_terms:
-            return False
-        # 排名/TopN 类问题不应被当作组织主体追问处理，否则数量词（前3、前三等）
-        # 会在重写时被丢掉，导致 SQL 不限制行数、标题也失真。
-        if re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I):
-            return False
-        # 带数值阈值/单位（如小于500万、超过80%）的筛选问题，应走 filter 路径，
-        # 不要当成组织主体追问处理，避免过滤条件被 refined_query 覆盖掉。
-        has_numeric_threshold = bool(
-            re.search(
-                r"(?:大于等于|小于等于|不少于|不超过|大于|小于|高于|低于|超过|不足|等于|>=|<=|>|<)\s*(?:\d+(?:\.\d+)?)\s*(?:万|亿|%)?",
-                text,
-            )
-        )
-        if has_numeric_threshold:
-            return False
-        # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）应直接走 drilldown 规则，
-        # 不要经过 Agent1 改写，避免子层级信息被丢失。
-        level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
-        level_pattern = "|".join(re.escape(level) for level in sorted(level_like_values, key=len, reverse=True))
-        if re.search(rf"[\u4e00-\u9fa5A-Za-z0-9（）()]{{2,}}(?:的|之下|下面|下属)?\s*({level_pattern})\s*$", text):
-            return False
-        has_org_level = bool(re.search(r"代表处|分公司|业务部|城市分公司|城市公司|事业部|业务代表|业务员", text))
-        has_spoken_style = bool(
-            re.search(
-                r"继续|再看|再查|看下|看一下|查下|查一下|查询下|问下|分析下|了解下|如何了|怎么样了|情况如何|啥情况了|啥情况|情况咋样|情况怎样|表现如何|那边|这边|那个|这块|那块|想看|帮我看|麻烦看|咋样|怎样",
-                text,
-            )
-        )
-        # 兜底：地名/组织简称 + 业绩/表现/情况等通用词，也视为可能的主体问法
-        has_generic_org_metric = bool(
-            re.search(r"^[\u4e00-\u9fa5]{2,}(?:业绩|表现|情况|咋样|怎样)", text)
-        )
-        return has_org_level or has_spoken_style or has_generic_org_metric
+        return ask_engine_utils._looks_like_org_subject_question(question)
 
     def _agent1_resolve_org_subject(
         self,
@@ -8943,22 +7243,7 @@ Agent1 路由结果：
 
     @staticmethod
     def _infer_subject_level_from_name(subject_name: str) -> str:
-        text = str(subject_name or "").strip()
-        if not text:
-            return ""
-        for suffix, level in (
-            ("城市分公司", "城市分公司"),
-            ("城市公司", "城市公司"),
-            ("代表处", "代表处"),
-            ("业务部", "业务部"),
-            ("分公司", "分公司"),
-            ("事业部", "事业部"),
-            ("业务代表", "业务代表"),
-            ("业务员", "业务代表"),
-        ):
-            if text.endswith(suffix):
-                return level
-        return ""
+        return ask_engine_utils._infer_subject_level_from_name(subject_name)
 
     def _build_followup_org_target_miss_result(
         self,
@@ -10182,38 +8467,7 @@ Agent3 复核结果：
 
     @staticmethod
     def _filter_route_by_allowed_datasets(route: Dict[str, Any], allowed_set: set[int]) -> Dict[str, Any]:
-        route = dict(route or {})
-
-        def allowed_ids(values: Any) -> List[int]:
-            result: List[int] = []
-            for item in values or []:
-                try:
-                    dataset_id = int(item)
-                except (TypeError, ValueError):
-                    continue
-                if dataset_id in allowed_set and dataset_id not in result:
-                    result.append(dataset_id)
-            return result
-
-        route["dataset_ids"] = allowed_ids(route.get("dataset_ids"))
-        route["candidate_dataset_ids"] = allowed_ids(route.get("candidate_dataset_ids"))
-        route["split_queries"] = [
-            item for item in (route.get("split_queries") or [])
-            if isinstance(item, dict) and allowed_ids([item.get("dataset_id")])
-        ]
-        filtered_options = []
-        for option in route.get("confirmation_options") or []:
-            if not isinstance(option, dict):
-                continue
-            next_option = dict(option)
-            next_option["dataset_ids"] = allowed_ids(next_option.get("dataset_ids"))
-            if next_option["dataset_ids"]:
-                filtered_options.append(next_option)
-        route["confirmation_options"] = filtered_options
-        if route.get("requires_confirmation") and not filtered_options:
-            route["requires_confirmation"] = False
-            route["decision"] = "generate_sql"
-        return route
+        return ask_engine_utils._filter_route_by_allowed_datasets(route, allowed_set)
 
     def ask(
         self,

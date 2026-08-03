@@ -1,0 +1,304 @@
+# ===========================================================================
+# Full-Stack Dev Team — 框架无关的项目级配置
+# ===========================================================================
+# 本文件是专家团能力在 SmartAsk 仓库内的机器可读单一事实来源。
+# 任何 AI 工具或后端代码均可读取本文件，加载角色 prompt、SOP 编排、
+# 路由表与质量门禁，无需依赖 WorkBuddy 平台运行时。
+#
+# 与 ~/.workbuddy/.../fullstack-dev-team 的关系：
+#   专家包（WorkBuddy plugin）是源头；本文件 + agents/*.md 是框架无关副本。
+#   专家包变更后，运行 scripts/sync-from-expert-pack.sh 可同步本目录。
+# ===========================================================================
+
+version: 1
+team:
+  name: fullstack-dev-team
+  display_name: 全栈研发专家团
+  lead: fullstack-dev-team-lead
+  size: 9
+  source: ~/.workbuddy/plugins/marketplaces/my-experts/plugins/fullstack-dev-team
+
+# ---------------------------------------------------------------------------
+# 成员注册表
+# ---------------------------------------------------------------------------
+members:
+  - id: fullstack-dev-team-lead
+    name: 宋必达
+    profession: 交付总监
+    role: lead
+    prompt_file: agents/fullstack-dev-team-lead.md
+    capabilities: [编排与裁决, 工作流路由, 上下文中转, 交付汇编]
+    typical_asks: ["帮我从需求到上线开发一个应用", "评审项目架构出重构方案"]
+  - id: fullstack-dev-pm
+    name: 文清源
+    profession: 产品经理
+    role: member
+    prompt_file: agents/fullstack-dev-pm.md
+    capabilities: [需求澄清, 用户故事拆解, P0/P1/P2优先级, 验收标准]
+    typical_asks: ["帮我理清需求", "这个功能值不值得做"]
+  - id: fullstack-dev-designer
+    name: 简致远
+    profession: UI/UX 设计师
+    role: member
+    prompt_file: agents/fullstack-dev-designer.md
+    capabilities: [信息架构, 页面流, Design Token, 组件规范, 可访问性]
+    typical_asks: ["帮我设计这个页面", "这套界面怎么改更好用"]
+  - id: fullstack-dev-architect
+    name: 梁定邦
+    profession: 系统架构师
+    role: member
+    prompt_file: agents/fullstack-dev-architect.md
+    capabilities: [技术选型决策树, 模块划分, 数据模型, 接口契约, 任务分解, 架构评审, 项目公约勘察]
+    typical_asks: ["这个系统怎么设计", "帮我评审现有架构"]
+  - id: fullstack-dev-frontend
+    name: 叶明轩
+    profession: 前端工程师
+    role: member
+    prompt_file: agents/fullstack-dev-frontend.md
+    capabilities: [组件实现, 状态管理, 路由与数据获取, 样式与响应式, 性能优化]
+    typical_asks: ["把这个页面实现出来", "前端卡顿怎么优化"]
+  - id: fullstack-dev-backend
+    name: 岳承基
+    profession: 后端工程师
+    role: member
+    prompt_file: agents/fullstack-dev-backend.md
+    capabilities: [API实现, 数据层设计与落地, 认证鉴权, 业务事务一致性, 缓存与异步]
+    typical_asks: ["写一套用户系统的接口", "这个查询太慢了"]
+  - id: fullstack-dev-reviewer
+    name: 贺明察
+    profession: 代码审查工程师
+    role: member
+    prompt_file: agents/fullstack-dev-reviewer.md
+    capabilities: [静态代码审查, OWASP安全审计, 契约符合性核对, 变更影响面分析, 项目公约符合性]
+    typical_asks: ["帮我 review 这段代码", "这个改动有没有安全问题"]
+  - id: fullstack-dev-qa
+    name: 严守真
+    profession: 测试工程师
+    role: member
+    prompt_file: agents/fullstack-dev-qa.md
+    capabilities: [测试策略, 用例设计, 测试实现与执行, 缺陷定位与路由, 回归验证]
+    typical_asks: ["帮我测一下", "这个 bug 到底出在哪"]
+  - id: fullstack-dev-devops
+    name: 常升平
+    profession: DevOps 工程师
+    role: member
+    prompt_file: agents/fullstack-dev-devops.md
+    capabilities: [容器化, CI/CD流水线, 环境与配置管理, 部署与回滚, 可观测性]
+    typical_asks: ["怎么部署上线", "帮我配一套 CI"]
+
+# ---------------------------------------------------------------------------
+# 标准 SOP（六阶段 + Phase 0 存量勘察）
+# ---------------------------------------------------------------------------
+sop:
+  phases:
+    - id: 0
+      name: 项目公约勘察
+      condition: brownfield   # 仅存量项目执行
+      members: [fullstack-dev-architect]
+      parallel: false
+      input: [现有代码库]
+      output: 项目公约摘要（技术栈实况/目录约定/既有模式/质量基线/禁区，≤1页）
+      gate: 公约五项齐全才放行
+    - id: 1
+      name: 需求定义
+      condition: always
+      members: [fullstack-dev-pm]
+      parallel: false
+      input: [用户需求]
+      output: PRD（精简版默认）
+      gate: 无阻塞级待确认问题
+    - id: 2
+      name: 设计与架构
+      condition: always
+      members: [fullstack-dev-designer, fullstack-dev-architect]
+      parallel: true
+      shared_input: [PRD全文]
+      output: [设计规范, 架构设计+接口契约+任务列表]
+      gate: 接口契约精确到字段级；契约打 CONTRACT v1 冻结
+    - id: 3
+      name: 编码实现
+      condition: always
+      members: [fullstack-dev-frontend, fullstack-dev-backend]
+      parallel: true
+      shared_input: [带版本号的接口契约（逐字一致）, 任务子集, 项目公约摘要（存量项目）]
+      output: [前端代码+摘要, 后端代码+摘要]
+      gate: 各自 IS_PASS=YES；最多2轮
+    - id: 4
+      name: 代码审查
+      condition: always   # ≤10源文件且无鉴权/数据写入/外部输入时可跳过
+      members: [fullstack-dev-reviewer]
+      parallel: false
+      input: [接口契约, 前后端实现摘要+文件清单, 项目公约摘要（存量项目）]
+      output: "审查报告 + REVIEW: PASS/CONDITIONAL/REJECT"
+      gate: REJECT（有BLOCKER）回流修复最多2轮；CONDITIONAL记录放行条件
+    - id: 5
+      name: 测试验证
+      condition: always
+      members: [fullstack-dev-qa]
+      parallel: false
+      input: [代码摘要, 文件清单, Phase4审查报告]
+      output: 测试报告 + 缺陷路由
+      gate: 缺陷按路由回流最多2轮
+    - id: 6
+      name: 部署交付
+      condition: user_confirms   # 用户说"不用部署"可跳过
+      members: [fullstack-dev-devops]
+      parallel: false
+      input: [代码, 测试命令]
+      output: 部署交付说明（含回滚方案）
+      gate: 必须有回滚方案，否则视为未完成
+
+# ---------------------------------------------------------------------------
+# 工作流路由表（收到请求后第一步判定走哪条）
+# ---------------------------------------------------------------------------
+workflows:
+  - id: single-point
+    name: 单点直调
+    when: 只问一个专业领域的问题，不需要多角色
+    route: 直接调对应成员（见 routing_table）
+    note: 即便单点直调也建议先建团队上下文
+  - id: quick
+    name: 快速模式
+    when: 单页应用/小游戏/工具脚本/≤10源文件
+    route: "TeamCreate → [前端 ∥ 后端] → QA → 交付"
+    skip: [PRD, 架构文档, 代码审查]
+  - id: bugfix
+    name: BugFix 快捷路径
+    when: 明确的缺陷报告，非新功能
+    route: "QA(复现+定位) → 工程师(修复) → [审查(若触及鉴权/数据/契约)] → QA(回归)"
+    max_rounds: 2
+  - id: standard-sop
+    name: 标准 SOP
+    when: 多模块/前后端齐全/需架构决策/>10源文件
+    route: 完整 Phase 0-6
+  - id: incremental
+    name: 增量模式
+    when: 在既有代码基础上加功能或重构
+    route: "Phase0(公约勘察) → PM(增量PRD) → 架构(增量设计) → 工程师(最小变更) → 审查(影响面) → QA(全量回归)"
+  - id: partial
+    name: 部分工作流
+    when: 只要中间产物
+    route: 仅 PRD→PM / 仅设计→设计师 / 架构评审→架构师 / 代码审查→审查员 / 测试方案→QA / 部署→DevOps
+
+# 单点直调路由
+routing_table:
+  需求/优先级: fullstack-dev-pm
+  界面/交互: fullstack-dev-designer
+  技术选型/系统分层: fullstack-dev-architect
+  前端代码/优化: fullstack-dev-frontend
+  接口/数据库/性能: fullstack-dev-backend
+  review代码/安全隐患: fullstack-dev-reviewer
+  测试/用例: fullstack-dev-qa
+  部署/CI/监控: fullstack-dev-devops
+
+# ---------------------------------------------------------------------------
+# 上下文三级传递规则（阶段间信息下发）
+# ---------------------------------------------------------------------------
+context_rules:
+  L1_full_text:   # 逐字全文，多方共享的事实来源
+    - 接口契约（带版本号）
+    - Design Token
+    - 验收标准
+    - 项目公约摘要
+  L2_structured_summary:   # 结构化摘要
+    - 代码实现产出（保留文件清单+关键决策+未决问题+判定结论）
+    - PRD中与本阶段无关的章节
+    - 上一轮审查/测试报告
+  L3_on_demand:   # 按需索取，默认不传
+    - 更早阶段的原始讨论
+    - 被否决的方案
+  mnemonic: 下游要照着做的→L1；下游要知道结果的→L2；下游可能想追溯的→L3
+
+# ---------------------------------------------------------------------------
+# 质量门禁
+# ---------------------------------------------------------------------------
+quality_gates:
+  - name: 公约完备性
+    phase: 0
+    check: 项目公约摘要五项齐全
+    fail_action: 退回架构师补齐
+  - name: 需求完整性
+    phase: 1
+    check: PRD无阻塞级待确认问题
+    fail_action: 向用户澄清后再进入Phase2
+  - name: 契约完备性
+    phase: 2
+    check: 接口契约精确到字段级并打版本号冻结
+    fail_action: 退回架构师补齐
+  - name: 实现自检
+    phase: 3
+    check: 各角色IS_PASS=YES
+    fail_action: 自行修复后重审，最多2轮
+  - name: 审查门禁
+    phase: 4
+    check: REVIEW为PASS或CONDITIONAL
+    fail_action: REJECT按路由回流修复，最多2轮
+  - name: 测试门禁
+    phase: 5
+    check: QA质量结论为可交付
+    fail_action: 缺陷按路由回流，最多2轮
+  - name: 部署门禁
+    phase: 6
+    check: 部署方案含回滚路径
+    fail_action: 无回滚方案视为未完成
+
+# ---------------------------------------------------------------------------
+# 契约版本管理
+# ---------------------------------------------------------------------------
+contract_versioning:
+  freeze_on_merge: true       # Phase2合并时打 CONTRACT v1 并冻结
+  revision_rule: 升版本号 + 同时同步所有持有方 + 交付说明记录变更点
+  prohibition: 严禁前后端手里契约版本不一致
+
+# ---------------------------------------------------------------------------
+# 冲突仲裁（详见 agents/fullstack-dev-team-lead.md）
+# ---------------------------------------------------------------------------
+arbitration:
+  设计vs架构可行性: 主理人裁决（优先保P0，其次保工期）
+  前端预期vs后端实现: 架构师裁决（以契约原文为准）
+  契约本身矛盾: 架构师修订并同步双方
+  QA判定vs工程师申辩: 以QA为准（工程师须提供可复现证据）
+  审查判定vs工程师申辩: 以审查为准（BLOCKER必须修复）
+
+# ---------------------------------------------------------------------------
+# 阻塞上报格式
+# ---------------------------------------------------------------------------
+blocked_format: |
+  BLOCKED
+  - 卡在哪：<具体问题>
+  - 需要谁决断：<用户/主理人/某角色>
+  - 我需要什么才能继续：<明确输入或决定>
+  - 临时兜底方案：<有则写，无则写"无">
+
+# ---------------------------------------------------------------------------
+# 跨团队交接协议（与 .ai-data/ 数据分析团队的交接路径）
+# ---------------------------------------------------------------------------
+# .ai-team/ 是开发态工具（人+IDE消费），.ai-data/ 是生产态组件（系统消费）。
+# 两团队 Agent ID 前缀隔离：fullstack-dev-* / data-team-*
+# 交接场景定义在此，对称配置在 .ai-data/team-config.yaml 的 cross_team 块中。
+cross_team:
+  # 数据团队产出 -> 代码团队实现
+  - trigger: 数据团队产出看板/前端设计方案，需要代码团队实现
+    from: data-team-viz-designer
+    to: fullstack-dev-frontend
+    handoff: |
+      viz-designer 产出: 看板信息架构 + 图表选型 + 视觉规范 + 交互设计
+      frontend 接收为: Vue 组件实现输入（ECharts 配置 + Element Plus 布局）
+      交接物: design-spec.md（含图表清单/布局/交互状态/数据绑定字段）
+
+  - trigger: 数据团队的分析结论需要嵌入到 SmartAsk 的 Agent4 输出中
+    from: data-team-lead
+    to: fullstack-dev-backend
+    handoff: |
+      data-team-lead 产出: 三视角分析 prompt 模板（趋势/结构/异常）
+      backend 接收为: Agent4 增强方案（集成到 four_agent_ask.py 的 Agent4 调用链）
+      交接物: integration-spec.md（含 prompt 模板/调用时机/输入输出格式）
+
+  # 代码团队 -> 数据团队（反向交接）
+  - trigger: 代码团队改动了 Agent4 的接口或数据结构，影响数据团队集成
+    from: fullstack-dev-backend
+    to: data-team-lead
+    handoff: |
+      backend 产出: 变更说明（改了什么/影响什么/新接口格式）
+      data-team-lead 接收为: 集成方案调整依据
+      交接物: change-notice.md

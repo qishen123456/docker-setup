@@ -28,6 +28,7 @@ from data_permission_store import apply_row_level_filter, dataset_access_summary
 from feature_flags import feature_available
 from security import require_feature
 from system_log_store import log_event, request_snapshot
+from ask_engine_utils import _is_read_only_sql
 
 
 bookshelf_bp = Blueprint("bookshelf", __name__)
@@ -69,22 +70,6 @@ def _require_dataset_modify(dataset_id: int, feature_key: str = "dataset_save"):
     if _can_modify_dataset(dataset_id, feature_key):
         return None
     return jsonify({"error": "当前账号没有该数据集的编辑权限，或未命中员工组织范围。"}), 403
-
-
-def _is_read_only_sql(sql_text: str) -> bool:
-    normalized = re.sub(r"/\*.*?\*/", " ", str(sql_text or ""), flags=re.S)
-    normalized = re.sub(r"--.*?$", " ", normalized, flags=re.M).strip().lower()
-    if not normalized:
-        return False
-    if not (normalized.startswith("select") or normalized.startswith("with")):
-        return False
-    blocked = [
-        " insert ", " update ", " delete ", " drop ", " truncate ", " alter ",
-        " create ", " replace ", " grant ", " revoke ", " merge ", " call ",
-        " execute ", " vacuum ", " analyze ", " copy ",
-    ]
-    padded = f" {normalized} "
-    return not any(token in padded for token in blocked)
 
 
 def _wrap_preview_sql(sql_text: str, limit: int) -> str:
