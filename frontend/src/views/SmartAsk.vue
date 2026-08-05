@@ -16,6 +16,24 @@
             />
           </div>
 
+          <!-- 只读视图提示：正在查看历史，后台有任务执行中/待确认/已完成/失败 -->
+          <div v-if="isViewingReadonly && runningTaskStatus !== 'idle'" class="sa-readonly-banner" :class="`banner-${runningTaskStatus}`" @click="handleReturnToRunning">
+            <span v-if="runningTaskStatus === 'running'" class="sa-readonly-banner-icon sa-spin-ring-small">
+              <span class="sa-spin-ring-track-small"></span>
+              <span class="sa-spin-ring-bar-small"></span>
+            </span>
+            <span v-else-if="runningTaskStatus === 'pending_confirmation'" class="sa-readonly-banner-icon">⚠️</span>
+            <span v-else-if="runningTaskStatus === 'completed'" class="sa-readonly-banner-icon">✅</span>
+            <span v-else class="sa-readonly-banner-icon">❌</span>
+            <span class="sa-readonly-banner-text">
+              <template v-if="runningTaskStatus === 'running'">正在查看历史任务，后台有任务正在执行中，点击此处跳回执行中的任务</template>
+              <template v-else-if="runningTaskStatus === 'pending_confirmation'">后台任务需要确认口径，点击此处返回确认</template>
+              <template v-else-if="runningTaskStatus === 'completed'">后台任务已执行完成，点击此处查看结果</template>
+              <template v-else>后台任务执行失败，点击此处查看详情</template>
+            </span>
+            <!-- i18n: smartask.task.readonlyBanner -->
+          </div>
+
           <!-- 会话滚动区-->
           <div class="sa-chat-body" ref="chatBodyRef">
             <div class="sa-content-track sa-chat-content">
@@ -32,7 +50,7 @@
 
             <!-- 消息列表 -->
             <div class="sa-msg-list">
-              <div v-for="msg in messages" :key="msg.id" class="sa-msg-wrap">
+              <div v-for="msg in displayMessages" :key="msg.id" class="sa-msg-wrap">
                 <!-- 用户气泡 -->
                 <UserBubble
                   v-if="msg.role === 'user'"
@@ -71,7 +89,7 @@
                   </div>
                   <div class="sa-ai-cards">
                     <!-- 加载中-->
-                    <div v-if="msg.loading && !session.state.logs.length" class="sa-thinking-loading">
+                    <div v-if="msg.loading && !displayLogs.length" class="sa-thinking-loading">
                       <div class="sa-dots">
                         <span></span><span></span><span></span>
                       </div>
@@ -81,7 +99,7 @@
                     <!-- 执行进度卡-->
                     <LiveExecutionFeed
                       v-if="shouldShowLiveFeed(msg)"
-                      :logs="session.state.logs"
+                      :logs="displayLogs"
                       :mode="getLiveFeedMode(msg)"
                       :max-items="6"
                       :elapsed-label="getMessageElapsedLabel(msg)"
@@ -285,6 +303,7 @@
               :datasets="datasets"
               :ai-models="aiModels"
               :is-running="isRunning"
+              :disabled="isViewingReadonly"
               :allow-send="featureAccess.smart_send_question"
               :allow-stop="featureAccess.smart_stop_run"
               :allow-dataset-select="featureAccess.smart_dataset_select"
@@ -321,7 +340,7 @@
             <div class="sa-panel-content" ref="panelRef">
               <LogTimeline
                 :key="timelineKey"
-                :logs="session.state.logs"
+                :logs="displayLogs"
                 :open-state="logOpen"
                 @toggle="toggleLog"
               >
@@ -1237,6 +1256,7 @@ import ComposerArea from '../components/smartask/ComposerArea.vue'
 import LogTimeline from '../components/smartask/LogTimeline.vue'
 import SqlBlock from '../components/smartask/SqlBlock.vue'
 import { useSmartAskHistory } from '../state/smartAskHistory'
+import { useSmartAskTaskView } from '../state/smartAskTaskView'
 import { useSmartAskReportHistory } from '../composables/useSmartAskReportHistory'
 import { buildOrgTree, getDefaultConfig as getDefaultReportTreeConfig } from '../composables/useOrgTree'
 
@@ -1275,7 +1295,24 @@ const {
   findHistoryById,
   clearRestoreRequest,
   setActiveHistory,
+  takePendingRestoreOptions,
 } = useSmartAskHistory()
+const {
+  runningSessionId,
+  viewingTaskId,
+  isViewingReadonly,
+  readonlySnapshot,
+  runningTaskStatus,
+  completedTaskId,
+  pendingTaskId,
+  setRunningSessionId,
+  clearRunningSessionId,
+  markRunningTaskPending,
+  markRunningTaskCompleted,
+  markRunningTaskFailed,
+  switchViewToRunning,
+  switchViewToDefault,
+} = useSmartAskTaskView()
 const query = ref('')
 const datasetId = ref(null)
 const modelId = ref(null)
@@ -1341,6 +1378,28 @@ const pendingQuickDataset = ref(null)
 const isDatasetManuallySelected = ref(false)
 
 const isRunning = computed(() => session.state.status === 'running')
+
+const displayMessages = computed(() => {
+  if (isViewingReadonly.value && readonlySnapshot.value?.messages) {
+    return readonlySnapshot.value.messages
+  }
+  return messages
+})
+
+const displayLogs = computed(() => {
+  if (isViewingReadonly.value && readonlySnapshot.value?.logs) {
+    return readonlySnapshot.value.logs
+  }
+  return session.state.logs
+})
+
+const displayResult = computed(() => {
+  if (isViewingReadonly.value && readonlySnapshot.value?.result) {
+    return readonlySnapshot.value.result
+  }
+  return session.state.result
+})
+
 const timelineKey = computed(() => `${session.state.conversationSessionId || 'fresh'}-${timelineVersion.value}`)
 const detailPanelVisible = computed(() => showPanel.value && canUseFeature('debug_execution_trace'))
 const canViewCharts = computed(() => canUseFeature('chart_viewer'))
@@ -1357,7 +1416,12 @@ const statusBarText = computed(() => {
   return m[session.state.status] || ''
 })
 
-const activeReportResult = computed(() => detailReportResult.value || session.state.result || null)
+const activeReportResult = computed(() => {
+  if (isViewingReadonly.value && displayResult.value) {
+    return displayResult.value
+  }
+  return detailReportResult.value || session.state.result || null
+})
 const latestSessionError = computed(() => {
   const msg = activeRequestAiMessage.value || currentSessionAiMessage.value
   return String(msg?.data?.error || session.state.result?.error || '').trim()
@@ -4334,22 +4398,44 @@ const rerunQuestion = async (msg) => {
   const text = String(msg?.content || '').trim()
   if (!text || isRunning.value) return
 
-  const userIndex = messages.findIndex(item => item.id === msg.id)
-  if (userIndex < 0) return
+  // 重问创建新的任务条目
+  const createShellId = () => {
+    if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+      return `history-report-${window.crypto.randomUUID()}`
+    }
+    return `history-report-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+  const shellId = createShellId()
 
-  const removed = messages.splice(userIndex + 1)
-  clearMessageRuntimeState(removed)
+  const runningShell = {
+    id: shellId,
+    title: String(text).slice(0, 24),
+    question: text,
+    datasetId: datasetId.value || null,
+    datasetName: datasets.value.find(d => d.id === datasetId.value)?.name || '',
+    updatedAt: new Date().toISOString(),
+    status: 'running',
+    reportSnapshot: null,
+  }
+  upsertHistory(runningShell)
+  setActiveHistory(shellId)
+  setRunningSessionId(shellId)
+  switchViewToDefault()
+
   session.resetSession()
   clearChatUiState()
-
+  messages.splice(0, messages.length)
+  const uid = ++msgCounter
+  messages.push({ id: uid, role: 'user', content: text })
   const aid = ++msgCounter
   const aiMsg = { id: aid, role: 'ai', loading: true, data: null }
-  messages.splice(userIndex + 1, 0, aiMsg)
+  messages.push(aiMsg)
   activeRequestAiMessageId.value = aid
   thinkingOpen[aid] = true
 
   query.value = ''
   showPanel.value = true
+  clearExecutionPanelState()
   scheduleChatScroll(24, 'smooth')
   startTimer()
 
@@ -4360,12 +4446,22 @@ const rerunQuestion = async (msg) => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
-      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
+      if (res?.requires_confirmation) {
+        markRunningTaskPending(shellId)
+        upsertHistory({ ...runningShell, status: 'pending_confirmation' })
+      } else if (!res?.error) {
+        saveCurrentToHistory(res, { preferId: shellId })
+        markRunningTaskCompleted(shellId)
+      } else {
+        markRunningTaskFailed(shellId)
+      }
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
+      markRunningTaskFailed(shellId)
     } else {
       aiMsg.loading = false
+      markRunningTaskFailed(shellId)
     }
     thinkingOpen[aid] = false
     if (res && !res?.requires_confirmation && !res?.error) scheduleChatReportTop(48, 'smooth')
@@ -4376,6 +4472,7 @@ const rerunQuestion = async (msg) => {
       aiMsg.data = { aborted: true, question: text }
       thinkingOpen[aid] = false
       scheduleChatScroll(36, 'smooth')
+      markRunningTaskFailed(shellId)
       return
     }
     if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
@@ -4398,6 +4495,29 @@ const handleSend = async () => {
   const text = query.value.trim()
   if (!text || isRunning.value) return
 
+  const createShellId = () => {
+    if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+      return `history-report-${window.crypto.randomUUID()}`
+    }
+    return `history-report-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+  const shellId = createShellId()
+
+  const runningShell = {
+    id: shellId,
+    title: String(text).slice(0, 24),
+    question: text,
+    datasetId: datasetId.value || null,
+    datasetName: datasets.value.find(d => d.id === datasetId.value)?.name || '',
+    updatedAt: new Date().toISOString(),
+    status: 'running',
+    reportSnapshot: null,
+  }
+  upsertHistory(runningShell)
+  setActiveHistory(shellId)
+  setRunningSessionId(shellId)
+  switchViewToDefault()
+
   const uid = ++msgCounter
   messages.push({ id: uid, role: 'user', content: text })
   const aid = ++msgCounter
@@ -4418,12 +4538,22 @@ const handleSend = async () => {
     if (res) {
       aiMsg.loading = false
       aiMsg.data = res
-      if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
+      if (res?.requires_confirmation) {
+        markRunningTaskPending(shellId)
+        upsertHistory({ ...runningShell, status: 'pending_confirmation' })
+      } else if (!res?.error) {
+        saveCurrentToHistory(res, { preferId: shellId })
+        markRunningTaskCompleted(shellId)
+      } else {
+        markRunningTaskFailed(shellId)
+      }
     } else if (!aiMsg.data) {
       aiMsg.loading = false
       aiMsg.data = { aborted: true }
+      markRunningTaskFailed(shellId)
     } else {
       aiMsg.loading = false
+      markRunningTaskCompleted(shellId)
     }
     query.value = ''
     thinkingOpen[aid] = false
@@ -4435,6 +4565,7 @@ const handleSend = async () => {
       aiMsg.data = { aborted: true, question: text }
       thinkingOpen[aid] = false
       scheduleChatScroll(36, 'smooth')
+      markRunningTaskFailed(shellId)
       return
     }
     if (aiMsg.data?.requires_confirmation && session.state.status === 'waiting_confirmation') {
@@ -4447,6 +4578,7 @@ const handleSend = async () => {
     aiMsg.data = { error: err.response?.data?.error || err.message || '系统繁忙' }
     query.value = text
     scheduleChatScroll(36, 'smooth')
+    markRunningTaskFailed(shellId)
   } finally {
     stopTimer()
   }
@@ -4466,6 +4598,9 @@ const handleStop = () => {
     thinkingOpen[msg.id] = false
   }
   stopTimer()
+  if (runningSessionId.value) {
+    markRunningTaskFailed(runningSessionId.value)
+  }
   ElMessage({
     message: '已停止执行',
     type: 'warning',
@@ -4769,6 +4904,15 @@ const doConfirm = async (opt, msg) => {
   if (!canUseFeature('smart_confirm_scope') && typeof opt !== 'string') return
   startTimer()
   detailReportResult.value = null
+  // 用户确认后，状态从待确认变回执行中
+  if (runningTaskStatus.value === 'pending_confirmation' && runningSessionId.value) {
+    runningTaskStatus.value = 'running'
+    pendingTaskId.value = null
+    const currentShell = historySessions.value.find(h => h.id === runningSessionId.value)
+    if (currentShell) {
+      upsertHistory({ ...currentShell, status: 'running' })
+    }
+  }
   if (msg?.id) confirmationSubmitting[msg.id] = true
   const originalData = msg?.data ? JSON.parse(JSON.stringify(msg.data)) : null
   if (msg) {
@@ -4792,6 +4936,7 @@ const doConfirm = async (opt, msg) => {
         last.data = { aborted: true, question: session.state.question }
       }
       if (msg?.id) confirmationSubmitting[msg.id] = false
+      if (runningSessionId.value) markRunningTaskFailed(runningSessionId.value)
       scheduleChatScroll(36, 'smooth')
       return
     }
@@ -4800,7 +4945,18 @@ const doConfirm = async (opt, msg) => {
       last.data = res
       activeRequestAiMessageId.value = last.id
     }
-    if (!res?.requires_confirmation && !res?.error) saveCurrentToHistory(res)
+    if (!res?.requires_confirmation && !res?.error) {
+      saveCurrentToHistory(res, { preferId: runningSessionId.value })
+      markRunningTaskCompleted(runningSessionId.value)
+    } else if (res?.requires_confirmation) {
+      markRunningTaskPending(runningSessionId.value)
+      const currentShell = historySessions.value.find(h => h.id === runningSessionId.value)
+      if (currentShell) {
+        upsertHistory({ ...currentShell, status: 'pending_confirmation' })
+      }
+    } else {
+      markRunningTaskFailed(runningSessionId.value)
+    }
     if (msg?.id && typeof opt === 'string') confirmationDrafts[msg.id] = ''
     if (!res?.requires_confirmation && !res?.error) scheduleChatReportTop(36, 'smooth')
     else scheduleChatScroll(36, 'smooth')
@@ -4893,6 +5049,7 @@ const {
 })
 
 const scheduleChatScroll = (delay = 40, behavior = 'smooth') => {
+  if (isViewingReadonly.value) return
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   chatScrollTimer = window.setTimeout(() => {
     scrollChat(behavior)
@@ -4905,6 +5062,7 @@ const clearReportTopScrollTimers = () => {
 }
 
 const scheduleChatReportTop = (delay = 40, behavior = 'auto') => {
+  if (isViewingReadonly.value) return
   if (chatScrollTimer) clearTimeout(chatScrollTimer)
   clearReportTopScrollTimers()
   ;[delay, delay + 90, delay + 240].forEach((timeout) => {
@@ -5483,6 +5641,16 @@ watch(() => messages.length, () => {
   scheduleChatScroll(24, 'smooth')
 }, { flush: 'post' })
 
+const handleReturnToRunning = () => {
+  switchViewToRunning()
+  const targetId = runningSessionId.value || completedTaskId.value
+  if (targetId) {
+    setActiveHistory(targetId)
+  } else {
+    setActiveHistory(null)
+  }
+}
+
 watch(() => pendingRestoreId.value, async (historyId) => {
   if (!historyId) return
   const item = findHistoryById(historyId)
@@ -5491,9 +5659,12 @@ watch(() => pendingRestoreId.value, async (historyId) => {
     clearRestoreRequest()
     return
   }
-  await restoreHistory(item)
-  datasetId.value = null
-  isDatasetManuallySelected.value = false
+  const options = takePendingRestoreOptions()
+  await restoreHistory(item, options)
+  if (!options?.readonly) {
+    datasetId.value = null
+    isDatasetManuallySelected.value = false
+  }
   clearRestoreRequest()
 }, { flush: 'post', immediate: true })
 
@@ -5688,6 +5859,115 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
+/* 只读视图提示条 */
+.sa-readonly-banner {
+  flex: 0 0 auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  margin: 0 20px 12px;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.sa-readonly-banner:hover {
+  transform: translateY(-1px);
+}
+
+.sa-readonly-banner.banner-running {
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.06) 0%, rgba(230, 31, 36, 0.02) 100%);
+  border-left: 4px solid #E61F24;
+  color: #C41E24;
+  box-shadow: 0 3px 10px rgba(230, 31, 36, 0.08);
+}
+
+.sa-readonly-banner.banner-running:hover {
+  background: linear-gradient(90deg, rgba(230, 31, 36, 0.1) 0%, rgba(230, 31, 36, 0.04) 100%);
+  box-shadow: 0 4px 14px rgba(230, 31, 36, 0.14);
+}
+
+.sa-readonly-banner.banner-completed {
+  background: linear-gradient(90deg, rgba(82, 196, 26, 0.06) 0%, rgba(82, 196, 26, 0.02) 100%);
+  border-left: 4px solid #52c41a;
+  color: #389e0d;
+  box-shadow: 0 3px 10px rgba(82, 196, 26, 0.08);
+}
+
+.sa-readonly-banner.banner-completed:hover {
+  background: linear-gradient(90deg, rgba(82, 196, 26, 0.1) 0%, rgba(82, 196, 26, 0.04) 100%);
+  box-shadow: 0 4px 14px rgba(82, 196, 26, 0.14);
+}
+
+.sa-readonly-banner.banner-pending_confirmation {
+  background: linear-gradient(90deg, rgba(250, 173, 20, 0.06) 0%, rgba(250, 173, 20, 0.02) 100%);
+  border-left: 4px solid #faad14;
+  color: #d48806;
+  box-shadow: 0 3px 10px rgba(250, 173, 20, 0.08);
+}
+
+.sa-readonly-banner.banner-pending_confirmation:hover {
+  background: linear-gradient(90deg, rgba(250, 173, 20, 0.1) 0%, rgba(250, 173, 20, 0.04) 100%);
+  box-shadow: 0 4px 14px rgba(250, 173, 20, 0.14);
+}
+
+.sa-readonly-banner.banner-failed {
+  background: linear-gradient(90deg, rgba(255, 77, 79, 0.06) 0%, rgba(255, 77, 79, 0.02) 100%);
+  border-left: 4px solid #ff4d4f;
+  color: #cf1322;
+  box-shadow: 0 3px 10px rgba(255, 77, 79, 0.08);
+}
+
+.sa-readonly-banner.banner-failed:hover {
+  background: linear-gradient(90deg, rgba(255, 77, 79, 0.1) 0%, rgba(255, 77, 79, 0.04) 100%);
+  box-shadow: 0 4px 14px rgba(255, 77, 79, 0.14);
+}
+
+.sa-spin-ring-small {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sa-spin-ring-track-small {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.25;
+}
+.sa-spin-ring-bar-small {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  animation: sa-ring-spin-small 0.8s linear infinite;
+}
+@keyframes sa-ring-spin-small {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.sa-readonly-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.sa-readonly-banner-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
 /* 聊天区 */
 .sa-chat-body {
   flex: 1;
@@ -5758,16 +6038,17 @@ onUnmounted(() => {
 .sa-ai-wrap {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  margin: 20px 0;
 }
 .sa-ai-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .sa-ai-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   position: relative;
   overflow: visible;
   background: transparent;
@@ -5790,8 +6071,8 @@ onUnmounted(() => {
   position: absolute;
   right: 1px;
   bottom: 1px;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #10B981;
   box-shadow:
@@ -5804,25 +6085,43 @@ onUnmounted(() => {
 }
 
 .sa-ai-avatar-svg {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: block;
 }
 .sa-ai-name {
-  font-size: 14px;
-  font-weight: 800;
-  color: #111827;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1E293B;
+  letter-spacing: 0.2px;
 }
 .sa-ai-cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-left: 54px;
+  gap: 14px;
+  padding-left: 52px;
   max-width: 900px;
 }
 
 .sa-chat-panel.is-detail-hidden .sa-ai-cards {
   max-width: 880px;
+}
+
+/* 通用卡片样式优化 */
+.sa-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 
+    0 1px 3px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.sa-card:hover {
+  box-shadow: 
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
 .sa-result-chain {

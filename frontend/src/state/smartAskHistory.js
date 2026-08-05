@@ -10,6 +10,7 @@ export const SMART_ASK_HISTORY_KEY = 'smartask_history_sessions_v2'
 
 const historySessions = ref([])
 const pendingRestoreId = ref('')
+const pendingRestoreOptions = ref({})
 const activeHistoryId = ref('')
 let loaded = false
 let historyScope = 'anonymous'
@@ -461,6 +462,7 @@ export const clearSmartAskHistory = async () => {
   historySessions.value = []
   activeHistoryId.value = ''
   pendingRestoreId.value = ''
+  pendingRestoreOptions.value = {}
   persistSmartAskHistory()
 
   lastClearGeneration += 1
@@ -486,12 +488,20 @@ export const findSmartAskHistoryById = (id) => {
   return historySessions.value.find(item => item.id === id) || null
 }
 
-export const requestSmartAskHistoryRestore = (id) => {
+export const requestSmartAskHistoryRestore = (id, options = {}) => {
   pendingRestoreId.value = id || ''
+  pendingRestoreOptions.value = options
+}
+
+export const takePendingRestoreOptions = () => {
+  const opts = clone(pendingRestoreOptions.value)
+  pendingRestoreOptions.value = {}
+  return opts
 }
 
 export const clearSmartAskHistoryRestoreRequest = () => {
   pendingRestoreId.value = ''
+  pendingRestoreOptions.value = {}
 }
 
 export const setActiveSmartAskHistory = (id) => {
@@ -511,6 +521,7 @@ export const useSmartAskHistory = () => ({
   clearHistory: clearSmartAskHistory,
   findHistoryById: findSmartAskHistoryById,
   requestRestore: requestSmartAskHistoryRestore,
+  takePendingRestoreOptions,
   clearRestoreRequest: clearSmartAskHistoryRestoreRequest,
   setActiveHistory: setActiveSmartAskHistory,
 })

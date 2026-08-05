@@ -72,8 +72,7 @@
           >
             <div class="sidebar-history-head">
               <div>
-                <div class="sidebar-history-title">历史分析</div>
-                <div class="sidebar-history-subtitle">最近 {{ historyPreviewList.length }} 条分析记录</div>
+                <div class="sidebar-history-title">任务 ({{ historyPreviewList.length + (currentRunningTask ? 1 : 0) }})</div>
               </div>
               <div class="sidebar-history-actions">
                 <button
@@ -96,7 +95,30 @@
               </div>
             </div>
 
-            <div v-if="historyPreviewList.length" class="sidebar-history-list">
+            <div v-if="historyPreviewList.length || currentRunningTask" class="sidebar-history-list">
+              <!-- 虚拟"当前执行任务"行：不持久化，仅 session.status === 'running' 时显示 -->
+              <article
+                v-if="currentRunningTask"
+                class="history-item history-item-running"
+                :key="currentRunningTask.id"
+                :aria-label="'当前任务：' + currentRunningTask.title"
+                @click="handleRunningTaskClick"
+              >
+                <div class="history-item-main">
+                  <div class="history-item-top">
+                    <div class="history-item-title">{{ currentRunningTask.title }}</div>
+                    <div class="history-item-status">
+                      <TaskStatusIndicator
+                        :variant="currentRunningTask.status"
+                        :show-text-label="true"
+                      />
+                    </div>
+                  </div>
+                  <div class="history-item-meta">{{ currentRunningTask.datasetName }}</div>
+                  <div class="history-item-time">刚刚发起</div>
+                </div>
+              </article>
+
               <article
                 v-for="item in historyPreviewList"
                 :key="item.id"
@@ -107,7 +129,13 @@
                 <div class="history-item-main">
                   <div class="history-item-top">
                     <div class="history-item-title">{{ item.title }}</div>
-                    <span v-if="item.id === activeHistoryId" class="history-item-badge">当前</span>
+                    <div class="history-item-status">
+                      <TaskStatusIndicator
+                        :variant="inferTaskVariant(item)"
+                        :show-text-label="true"
+                      />
+                      <span v-if="item.id === activeHistoryId" class="history-item-badge">当前</span>
+                    </div>
                   </div>
                   <div class="history-item-meta">{{ item.datasetName || '自动路由数据集' }}</div>
                   <div class="history-item-time">{{ item.updatedAt }}</div>
@@ -116,7 +144,7 @@
                   v-if="appFeatureAccess.app_history_delete"
                   class="history-item-delete"
                   type="button"
-                  aria-label="删除历史对话"
+                  aria-label="删除任务"
                   @click.stop="removeHistoryItem(item.id)"
                 >
                   <span class="history-item-delete-icon" aria-hidden="true"></span>
@@ -125,8 +153,8 @@
             </div>
 
             <div v-else class="sidebar-history-empty">
-              <div class="sidebar-history-empty-title">暂无历史记录</div>
-              <div class="sidebar-history-empty-desc">发起分析后，这里会沉淀可恢复的会话记录。</div>
+              <div class="sidebar-history-empty-title">暂无任务</div>
+              <div class="sidebar-history-empty-desc">发起分析后，这里会显示你的任务记录。</div>
             </div>
           </section>
         </transition>
@@ -134,14 +162,14 @@
 
       <el-drawer
         v-model="historyDrawerVisible"
-        title="全部历史分析"
+        title="全部任务"
         size="420px"
         custom-class="history-drawer"
       >
         <div class="history-drawer-head">
           <div>
-            <div class="history-drawer-title">{{ historySessions.length }} 条分析记录</div>
-            <div class="history-drawer-desc">选择任意记录可恢复到分析工作台。</div>
+            <div class="history-drawer-title">{{ historySessions.length }} 个任务</div>
+            <div class="history-drawer-desc">选择任意任务可恢复到分析工作台。</div>
           </div>
           <button
             v-if="historySessions.length && appFeatureAccess.app_history_clear"
@@ -153,7 +181,33 @@
             {{ isClearingHistory ? '清空中...' : '清空全部' }}
           </button>
         </div>
-        <div v-if="historySessions.length" class="history-drawer-list">
+        <div v-if="historySessions.length || currentRunningTask" class="history-drawer-list">
+          <!-- 抽屉里的虚拟"当前执行任务"行 -->
+          <article
+            v-if="currentRunningTask"
+            class="history-item history-drawer-item history-item-running"
+            :key="currentRunningTask.id"
+            :aria-label="'当前任务：' + currentRunningTask.title"
+            @click="handleRunningTaskClick; historyDrawerVisible = false"
+          >
+            <div class="history-drawer-index">{{ currentRunningTask.status === 'pending_confirmation' ? '待确认' : '执行' }}</div>
+            <div class="history-item-main">
+              <div class="history-item-top">
+                <div class="history-item-title">{{ currentRunningTask.title }}</div>
+                <div class="history-item-status">
+                  <TaskStatusIndicator
+                    :variant="currentRunningTask.status"
+                    :show-text-label="true"
+                  />
+                </div>
+              </div>
+              <div class="history-drawer-meta-row">
+                <span class="history-drawer-dataset">{{ currentRunningTask.datasetName }}</span>
+                <span class="history-drawer-time">刚刚发起</span>
+              </div>
+            </div>
+          </article>
+
           <article
             v-for="(item, index) in historySessions"
             :key="item.id"
@@ -165,7 +219,13 @@
             <div class="history-item-main">
               <div class="history-item-top">
                 <div class="history-item-title">{{ item.title }}</div>
-                <span v-if="item.id === activeHistoryId" class="history-item-badge">当前</span>
+                <div class="history-item-status">
+                  <TaskStatusIndicator
+                    :variant="inferTaskVariant(item)"
+                    :show-text-label="true"
+                  />
+                  <span v-if="item.id === activeHistoryId" class="history-item-badge">当前</span>
+                </div>
               </div>
               <div class="history-drawer-meta-row">
                 <span class="history-drawer-dataset">{{ item.datasetName || '自动路由数据集' }}</span>
@@ -176,7 +236,7 @@
               v-if="appFeatureAccess.app_history_delete"
               class="history-item-delete"
               type="button"
-              aria-label="删除历史对话"
+              aria-label="删除任务"
               @click.stop="removeHistoryItem(item.id)"
             >
               <span class="history-item-delete-icon" aria-hidden="true"></span>
@@ -184,8 +244,8 @@
           </article>
         </div>
         <div v-else class="sidebar-history-empty history-drawer-empty">
-          <div class="sidebar-history-empty-title">暂无历史记录</div>
-          <div class="sidebar-history-empty-desc">发起分析后，这里会沉淀可恢复的会话记录。</div>
+          <div class="sidebar-history-empty-title">暂无任务</div>
+          <div class="sidebar-history-empty-desc">发起分析后，这里会显示你的任务记录。</div>
         </div>
       </el-drawer>
 
@@ -368,10 +428,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { ChatLineRound, Coin, Collection, Connection, Cpu, Document, Hide, Lock, MagicStick, Monitor, Operation, Setting, Share, UploadFilled, View } from '@element-plus/icons-vue'
 import AuthLogin from './auth/AuthLogin.vue'
 import SqlDebugFloat from './components/SqlDebugFloat.vue'
+import TaskStatusIndicator from './components/TaskStatusIndicator.vue'
 import { preloadRouteComponents } from './router'
 import { changePassword, clearAuthToken, getCurrentUser, healthCheck, logout } from './api/index.js'
 import { useSmartAskSession } from './state/smartAskSession.js'
 import { useSmartAskHistory } from './state/smartAskHistory.js'
+import { useSmartAskTaskView } from './state/smartAskTaskView.js'
 import { useFeatureFlags } from './state/featureFlags.js'
 
 const route = useRoute()
@@ -389,6 +451,18 @@ const {
   requestRestore,
   setActiveHistory,
 } = useSmartAskHistory()
+const {
+  runningSessionId,
+  runningTaskStatus,
+  completedTaskId,
+  viewingTaskId,
+  isViewingReadonly,
+  setRunningSessionId,
+  setViewingTask,
+  switchViewToDefault,
+  clearRunningSessionId,
+  switchViewToRunning,
+} = useSmartAskTaskView()
 const {
   features: featureFlags,
   ready: featureFlagsReady,
@@ -519,6 +593,20 @@ const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析�
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
 const historyPreviewList = computed(() => historySessions.value.slice(0, 5))
 const showHistorySidebar = computed(() => route.path === '/smart-ask' && !collapsed.value)
+// 虚拟"当前执行/待确认任务"：session 在跑或待确认时显示在历史列表顶部，不持久化
+const currentRunningTask = computed(() => {
+  const status = session.state?.status
+  if (status !== 'running' && status !== 'waiting_confirmation') return null
+  const question = String(session.state?.question || '').trim()
+  if (!question) return null
+  return {
+    id: '__current_running__',
+    title: question.slice(0, 24),
+    datasetName: status === 'waiting_confirmation' ? '待确认' : '正在分析中',
+    status: status === 'waiting_confirmation' ? 'pending_confirmation' : 'running',
+    isVirtual: true,
+  }
+})
 const cleanDisplayName = (value) => {
   const text = String(value || '').trim()
   if (!text || /^[?\s]+$/.test(text)) return ''
@@ -831,27 +919,59 @@ const pulseHistoryPanel = () => {
 const openHistorySession = async (item) => {
   if (!item?.id) return
   setActiveHistory(item.id)
-  requestRestore(item.id)
-  await router.push('/smart-ask')
-  pulseHistoryPanel()
+  // 如果点击的就是当前运行中/刚完成的任务，直接切回对应视图
+  if (runningSessionId.value === item.id || completedTaskId.value === item.id) {
+    switchViewToRunning()
+    await router.push('/smart-ask')
+    pulseHistoryPanel()
+  } else if (session.hasActiveAsk()) {
+    setViewingTask(item.id)
+    await requestRestore(item.id, { readonly: true })
+    await router.push('/smart-ask')
+    pulseHistoryPanel()
+  } else {
+    switchViewToDefault()
+    requestRestore(item.id)
+    await router.push('/smart-ask')
+    pulseHistoryPanel()
+  }
 }
 
 const removeHistoryItem = (id) => {
   removeHistory(id)
 }
 
+// 根据 history item 推断 TaskStatusIndicator 的 variant（仅历史项）
+// 注意：执行中状态由 currentRunningTask 虚拟行单独处理
+const inferTaskVariant = (item) => {
+  if (item?.status === 'running' || (runningSessionId.value === item?.id && runningTaskStatus.value === 'running')) return 'running'
+  const result = item?.reportSnapshot?.result || {}
+  if (result.requires_confirmation) return 'pending_confirmation'
+  if (result.error) return 'failed'
+  return 'completed'
+}
+
 const createFreshChat = async () => {
   setActiveHistory('')
+  switchViewToDefault()
   await router.push('/smart-ask')
   window.dispatchEvent(new CustomEvent('smartask-create-fresh-chat'))
+  pulseHistoryPanel()
+}
+
+// 点击左侧执行中虚拟任务行：直接切回实时执行视图
+const handleRunningTaskClick = async () => {
+  switchViewToRunning()
+  setActiveHistory(runningSessionId.value || '')
+  await router.push('/smart-ask')
   pulseHistoryPanel()
 }
 
 const clearHistoryList = async () => {
   try {
     await ElMessageBox.confirm(
-      '清空后将删除当前保存的全部历史对话记录。',
-      '清空历史对话',
+      '清空后将删除当前保存的全部任务记录。',
+      '清空任务',
       {
         type: 'info',
         confirmButtonText: '确认清空',
@@ -867,10 +987,10 @@ const clearHistoryList = async () => {
   isClearingHistory.value = true
   try {
     await clearHistory()
-    ElMessage.success('历史对话已清空')
+    ElMessage.success('任务已清空')
   } catch (error) {
     console.error('[clearHistoryList] failed to clear history', error)
-    ElMessage.error('清空失败，历史记录已恢复，请稍后重试')
+    ElMessage.error('清空失败，任务记录已恢复，请稍后重试')
   } finally {
     isClearingHistory.value = false
   }
@@ -1652,14 +1772,14 @@ body,
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 11px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-md, 12px);
-  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   animation: history-item-enter 0.24s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
@@ -1668,25 +1788,25 @@ body,
   content: '';
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
+  top: 12px;
+  bottom: 12px;
   width: 3px;
   border-radius: 999px;
   background: transparent;
-  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .history-item:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
   transform: translateY(-1px);
 }
 
 .history-item-active {
-  border-color: rgba(230, 31, 36, 0.2);
-  background: rgba(230, 31, 36, 0.12);
-  box-shadow: none;
+  border-color: rgba(230, 31, 36, 0.25);
+  background: rgba(230, 31, 36, 0.1);
+  box-shadow: 0 2px 8px rgba(230, 31, 36, 0.08);
 }
 
 .history-item-active::before {
@@ -1695,7 +1815,7 @@ body,
 
 .history-item-active .history-item-title {
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .history-item-main {
@@ -1708,6 +1828,8 @@ body,
   align-items: flex-start;
   gap: 6px;
   padding-right: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .history-item-title {
@@ -1719,6 +1841,8 @@ body,
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  min-width: 0;
+  flex: 1;
 }
 
 .history-item-badge {
@@ -1734,12 +1858,47 @@ body,
   align-items: center;
 }
 
+/* 状态指示容器：标题 + 状态指示器 + 当前 badge 同行排列 */
+.history-item-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 虚拟"当前执行任务"行：与历史项区分，左红竖条 + 微红底 */
+.history-item-running {
+  position: relative;
+  background: linear-gradient(135deg, rgba(230, 31, 36, 0.1) 0%, rgba(230, 31, 36, 0.06) 100%);
+  border: 1px solid rgba(230, 31, 36, 0.2);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  padding-right: 14px;
+}
+
+.history-item-running::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--brand-primary, #E61F24);
+  opacity: 0.9;
+}
+
+.history-item-running .history-item-title {
+  font-weight: 600;
+}
+
 .history-item-meta,
 .history-item-time {
-  margin-top: 4px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, 0.5);
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .history-item-delete {

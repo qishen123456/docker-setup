@@ -1,5 +1,6 @@
 import { nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { setReadonlySnapshot } from '@/state/smartAskTaskView'
 
 const clone = (value) => JSON.parse(JSON.stringify(value))
 const MAX_SNAPSHOT_MESSAGES = 30
@@ -120,7 +121,8 @@ export const useSmartAskReportHistory = ({
     return parts.join('||')
   }
 
-  const saveCurrentToHistory = (result = session.state.result) => {
+  const saveCurrentToHistory = (result = session.state.result, options = {}) => {
+    const { preferId = '' } = options
     // 修 5（双写一致）：如果入参 result 是完整正确结果，但 messages 最后一条 ai.data 和它不一样，
     // 强制把 messages 最后一条 ai.data 更新为入参 result，防止保存时 messages 里是旧的错误层级
     if (result && !result.error && !result.requires_confirmation && Array.isArray(messages) && messages.length) {
@@ -158,12 +160,13 @@ export const useSmartAskReportHistory = ({
     // 服务端完整历史列表；upsertHistory 内部已有 ensureLoaded 兜底。
     lastSavedHistorySignature.value = signature
     const payload = {
-      id: createHistoryId(),
+      id: preferId || createHistoryId(),
       title: String(reportSnapshot.question || buildHistoryTitle()).slice(0, 24),
       question: reportSnapshot.question,
       datasetId: reportSnapshot.datasetId,
       datasetName: reportSnapshot.datasetName,
       updatedAt: reportSnapshot.updatedAt,
+      status: 'completed',
       reportSnapshot,
     }
     return upsertHistory(payload)
@@ -212,9 +215,11 @@ export const useSmartAskReportHistory = ({
     ]
   }
 
-  const restoreHistory = async (item) => {
+  const restoreHistory = async (item, options = {}) => {
+    const { readonly = false } = options
     if (!item) return false
-    if (isRunning.value) {
+
+    if (isRunning.value && !readonly) {
       ElMessage.warning('正在执行中，无法恢复历史对话')
       return false
     }
@@ -250,15 +255,14 @@ export const useSmartAskReportHistory = ({
     }
 
     const question = item.question || reportSnapshot.question || restoredResult.question || item.title || ''
-    messages.splice(0, messages.length, ...restoreSnapshotMessages(reportSnapshot.messages, question, restoredResult))
-
+    const restoredMessages = restoreSnapshotMessages(reportSnapshot.messages, question, restoredResult)
     // 修 3（恢复双写一致）：messages 替换后，再强制把最后一条 AI 的 data 等于 restoredResult。
     // 彻底防止 snapshot.messages 中旧的错误层级 data 覆盖正确结果，保证任何渲染分支（msg.data / session.state.result）同一份。
     {
       let lastAi = null
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]?.role === 'ai') {
-          lastAi = messages[i]
+      for (let i = restoredMessages.length - 1; i >= 0; i--) {
+        if (restoredMessages[i]?.role === 'ai') {
+          lastAi = restoredMessages[i]
           break
         }
       }
@@ -267,15 +271,30 @@ export const useSmartAskReportHistory = ({
       }
     }
 
-    session.state.question = question
+    const restoredLogs = Array.isArray(reportSnapshot.logs) ? clone(reportSnapshot.logs) : []
     const restoredSelectedDatasetId = reportSnapshot.datasetId || item.datasetId || restoredResult.selectedDatasetId || restoredResult.dataset_id || null
+
+    if (readonly) {
+      setReadonlySnapshot({
+        messages: restoredMessages,
+        result: restoredResult,
+        question,
+        logs: restoredLogs,
+        datasetId: item.datasetId && (!isDatasetVisible || isDatasetVisible(item.datasetId)) ? item.datasetId : null,
+        updatedAt: reportSnapshot.updatedAt || item.updatedAt || '',
+      })
+      return true
+    }
+
+    messages.splice(0, messages.length, ...restoredMessages)
+    session.state.question = question
     session.state.selectedDatasetId = restoredSelectedDatasetId
     session.state.status = 'completed'
     session.state.result = restoredResult
     detailReportResult.value = null
     session.state.error = restoredResult.error || ''
     // S2 logs 对称还原：优先从 reportSnapshot.logs 还原，缺失时保持空数组（旧快照 v2 兼容）
-    session.state.logs = Array.isArray(reportSnapshot.logs) ? clone(reportSnapshot.logs) : []
+    session.state.logs = restoredLogs
     // S1 历史快照信号：用于渲染层区分"真实执行中/当前会话" vs "历史快照恢复"
     session.state.isHistoricalSnapshot = true
     session.state.startedAt = ''

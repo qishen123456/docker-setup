@@ -92,21 +92,21 @@ defineEmits(['copy', 'edit', 'rerun'])
 .sa-user-message {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   justify-content: flex-end;
-  margin: 18px 0;
+  margin: 20px 0;
 }
 
 .sa-user-main {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  max-width: 72%;
+  max-width: 70%;
 }
 
 .sa-user-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   position: relative;
   overflow: visible;
   background: transparent;
@@ -129,33 +129,33 @@ defineEmits(['copy', 'edit', 'rerun'])
   position: absolute;
   right: 1px;
   bottom: 1px;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: #E61F24;
+  background: #DC2626;
   box-shadow:
     0 0 0 3px #FFFFFF,
-    0 4px 9px rgba(230, 31, 36, 0.18);
+    0 4px 9px rgba(185, 28, 28, 0.15);
 }
 
 .sa-user-avatar-svg {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: block;
 }
 
 .sa-user-bubble {
-  padding: 14px 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #FAFBFC 100%);
-  color: #111827;
-  border: 1px solid rgba(17, 24, 39, 0.07);
-  border-radius: 20px 20px 8px 20px;
-  font-size: 14px;
-  line-height: 1.68;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 20px 20px 6px 20px;
+  font-size: 15px;
+  line-height: 1.7;
   word-break: break-word;
   box-shadow:
-    0 16px 28px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    0 6px 16px rgba(185, 28, 28, 0.15),
+    0 2px 5px rgba(185, 28, 28, 0.08);
 }
 
 .sa-user-actions {
@@ -163,12 +163,12 @@ defineEmits(['copy', 'edit', 'rerun'])
   align-items: center;
   gap: 4px;
   min-height: 28px;
-  margin-top: 4px;
+  margin-top: 6px;
   padding: 2px;
   opacity: 0;
   pointer-events: none;
   transform: translateY(-3px);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .sa-user-message:hover .sa-user-actions,
@@ -179,25 +179,26 @@ defineEmits(['copy', 'edit', 'rerun'])
 }
 
 .sa-user-action {
-  width: 26px;
-  height: 26px;
-  border: 1px solid rgba(26, 24, 22, 0.12);
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.96);
-  color: #6B7280;
+  background: rgba(255, 255, 255, 0.98);
+  color: #64748B;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: color 0.16s ease, border-color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
 }
 
 .sa-user-action:hover:not(:disabled) {
-  color: #1A1816;
-  border-color: rgba(26, 24, 22, 0.32);
+  color: #B91C1C;
+  border-color: rgba(185, 28, 28, 0.18);
   background: #ffffff;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.1);
 }
 
 .sa-user-action:disabled {

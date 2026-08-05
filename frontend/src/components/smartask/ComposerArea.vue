@@ -56,10 +56,10 @@
 
         <div class="sa-composer-main">
           <div class="sa-textarea-wrap" :class="{ 'is-running': isRunning, 'has-query': hasQuery }">
-            <div v-if="isRunning" class="sa-composer-running-mask" aria-hidden="true">
+            <div v-if="isRunning || disabled" class="sa-composer-running-mask" aria-hidden="true">
               <div class="sa-composer-running-panel">
                 <span class="sa-composer-running-line"></span>
-                <span class="sa-composer-running-text">正在生成结果，输入区暂不可编辑</span>
+                <span class="sa-composer-running-text">{{ disabled ? '正在查看历史任务，请先返回执行中的对话' : '正在生成结果，输入区暂不可编辑' }}</span>
               </div>
             </div>
 
@@ -69,7 +69,7 @@
               class="sa-textarea"
               placeholder="请输入您的业务问题，支持自然语言提问或指令..."
               rows="2"
-              :disabled="isRunning"
+              :disabled="isRunning || disabled"
               @input="autoGrow"
               @keydown="handleKeydown"
             ></textarea>
@@ -174,6 +174,10 @@ const props = defineProps({
     default: () => []
   },
   isRunning: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
     type: Boolean,
     default: false
   },
