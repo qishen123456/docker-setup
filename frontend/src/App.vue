@@ -919,17 +919,19 @@ const pulseHistoryPanel = () => {
 const openHistorySession = async (item) => {
   if (!item?.id) return
   setActiveHistory(item.id)
-  // 如果点击的就是当前运行中/刚完成的任务，直接切回对应视图
+  // 如果点击的就是当前运行中/待确认/刚完成的任务，直接切回对应视图
   if (runningSessionId.value === item.id || completedTaskId.value === item.id) {
     switchViewToRunning()
     await router.push('/smart-ask')
     pulseHistoryPanel()
-  } else if (session.hasActiveAsk()) {
+  } else if (runningSessionId.value) {
+    // 只要有后台运行中/待确认任务，都以只读模式打开历史，不打断当前任务
     setViewingTask(item.id)
     await requestRestore(item.id, { readonly: true })
     await router.push('/smart-ask')
     pulseHistoryPanel()
   } else {
+    // 没有活动任务时才恢复历史并重置当前会话
     switchViewToDefault()
     requestRestore(item.id)
     await router.push('/smart-ask')

@@ -103,6 +103,7 @@
                       :mode="getLiveFeedMode(msg)"
                       :max-items="6"
                       :elapsed-label="getMessageElapsedLabel(msg)"
+                      :force-expanded="isViewingReadonly"
                     />
                     <PlanCard :route="msg.data?.route" />
 
@@ -133,15 +134,15 @@
                         <span class="sa-confirm-badge">需要确认</span>
                         <span class="sa-confirm-q">{{ msg.data.confirmation_question }}</span>
                       </div>
-                      <div v-if="featureAccess.smart_confirm_scope" class="sa-confirm-opts">
+                      <div class="sa-confirm-opts">
                         <div class="sa-confirm-list">
                           <button
                             v-for="(opt, idx) in visibleConfirmationOptions(msg)"
                             :key="getConfirmOptionKey(opt)"
                             class="sa-confirm-row"
                             :class="{ 'sa-confirm-row-top': idx === 0 }"
-                            :disabled="isRunning"
-                            @click="doConfirm(opt, msg)"
+                            :disabled="isRunning || confirmationSubmitting[msg.id]"
+                            @click.stop.prevent="doConfirm(opt, msg)"
                           >
                             <span class="sa-confirm-rank">{{ idx + 1 }}</span>
                             <span class="sa-confirm-info">
@@ -162,8 +163,8 @@
                         <button
                           v-if="(msg.data.confirmation_options || []).length > 4"
                           class="sa-confirm-toggle"
-                          :disabled="isRunning"
-                          @click="toggleConfirmOptions(msg.id)"
+                          :disabled="isRunning || confirmationSubmitting[msg.id]"
+                          @click.stop.prevent="toggleConfirmOptions(msg.id)"
                         >
                           {{ confirmExpanded[msg.id] ? '收起' : `展开更多 (${msg.data.confirmation_options.length - 4})` }}
                         </button>
@@ -172,15 +173,15 @@
                         <textarea
                           v-model="confirmationDrafts[msg.id]"
                           class="sa-confirm-textarea"
-                          :disabled="isRunning"
+                          :disabled="isRunning || confirmationSubmitting[msg.id]"
                           placeholder="都不合适？补充说明继续分析，例如：按华东区域分公司口径。"
                           @keydown.enter.exact.prevent="handleConfirmationDraftEnter($event, msg)"
+                          @click.stop
                         ></textarea>
                         <button
-                          v-if="featureAccess.smart_submit_note"
                           class="sa-confirm-send"
-                          :disabled="isRunning || !String(confirmationDrafts[msg.id] || '').trim()"
-                          @click="submitConfirmationDraft(msg)"
+                          :disabled="isRunning || confirmationSubmitting[msg.id] || !String(confirmationDrafts[msg.id] || '').trim()"
+                          @click.stop.prevent="submitConfirmationDraft(msg)"
                         >
                           发送补充说明
                         </button>
@@ -1289,6 +1290,7 @@ const featureAccess = computed(() => smartFeatureKeys.reduce((map, key) => {
 }, {}))
 const canUseFeature = (key) => Boolean(featureAccess.value[key])
 const {
+  historySessions,
   pendingRestoreId,
   loadHistory,
   upsertHistory,
@@ -1342,6 +1344,15 @@ const messages = reactive([])
 const confirmationDrafts = reactive({})
 const confirmationSubmitting = reactive({})
 const confirmExpanded = reactive({})
+
+// keep-alive 切回 / 刷新都会调：先看是否有残留 stale，再清掉 session.result + 全部 UI 卡片状态
+// hasActiveAsk 守卫：本页正在执行的问数不清（误杀会导致 result 帧被忽略、显示已取消）
+const clearStaleSessionState = () => {
+  const hasStaleRecovered = session.state.result || session.state.question || session.state.logs?.length
+  if (!hasStaleRecovered || session.hasActiveAsk?.()) return
+  session.clearRecoveredSessionResult()
+  clearChatUiState()
+}
 const showPanel = ref(true)
 const chatBodyRef = ref(null)
 const panelRef = ref(null)
@@ -4163,15 +4174,16 @@ const shouldShowThinkingCard = (msg) => {
 }
 
 const shouldShowConfirmationCard = (msg) => Boolean(
-  msg?.data?.requires_confirmation && !confirmationSubmitting[msg.id]
+  !isViewingReadonly.value && msg?.data?.requires_confirmation && !confirmationSubmitting[msg.id] && !msg?.loading
 )
 
 const shouldShowConfirmationSubmitted = (msg) => Boolean(
-  msg?.data?.requires_confirmation && confirmationSubmitting[msg.id] && !msg?.loading
+  !isViewingReadonly.value && msg?.data?.requires_confirmation && confirmationSubmitting[msg.id]
 )
 
 const isMessageExecutionComplete = (msg) => {
   if (!msg?.data || msg?.loading || msg?.data?.error || msg?.data?.requires_confirmation) return false
+  if (isViewingReadonly.value) return true
   if (!isCurrentSessionMessage(msg)) return true
   return session.state.status === 'completed'
 }
@@ -4901,10 +4913,9 @@ const getConfirmationScopeSummary = (msg) => {
 }
 
 const doConfirm = async (opt, msg) => {
-  if (!canUseFeature('smart_confirm_scope') && typeof opt !== 'string') return
-  startTimer()
-  detailReportResult.value = null
-  // 用户确认后，状态从待确认变回执行中
+  // 第一时间设置提交状态，立即禁用按钮，防止重复点击或事件冒泡干扰
+  if (msg?.id) confirmationSubmitting[msg.id] = true
+  // 用户确认后，全局状态从待确认变回执行中，同步顶部banner和左侧任务状态
   if (runningTaskStatus.value === 'pending_confirmation' && runningSessionId.value) {
     runningTaskStatus.value = 'running'
     pendingTaskId.value = null
@@ -4913,21 +4924,17 @@ const doConfirm = async (opt, msg) => {
       upsertHistory({ ...currentShell, status: 'running' })
     }
   }
-  if (msg?.id) confirmationSubmitting[msg.id] = true
+  startTimer()
+  detailReportResult.value = null
   const originalData = msg?.data ? JSON.parse(JSON.stringify(msg.data)) : null
   if (msg) {
     msg.loading = true
-    msg.data = {
-      ...(msg.data || {}),
-      requires_confirmation: false,
-      error: '',
-      question: msg?.data?.question || session.state.question,
-    }
   }
   try {
     const res = await session.submitBossConfirmation(opt, {
       candidateDatasetIds: msg?.data?.route?.candidate_dataset_ids || msg?.data?.route?.dataset_ids || [],
       originalQuestion: msg?.data?.question || session.state.question,
+      sessionId: msg?.data?.session_id,
     })
     const last = [...messages].reverse().find(m => m.role === 'ai')
     if (!res) {
@@ -5708,14 +5715,8 @@ onMounted(async () => {
   }
 
   // 页面重新打开时不自动回灌旧结果；历史恢复仍通过显式操作触发。
-  // 注意：必须排除"本页正在执行的问数"。onMounted 的 async 体在 await 数据集期间
-  // 会让出执行权，用户可能已发问（startAsk 已写入 state.question/status），
-  // 若此时仍按"有残留状态"清理会误杀正在进行的问数（runToken 失效→结果帧被忽略→显示已取消）。
-  // hasActiveAsk 精确区分"本页活跃问数"（true，绝不清）与"刷新残留 running"（false，可清）。
-  const hasStaleRecovered = session.state.result || session.state.question || session.state.logs?.length
-  if (hasStaleRecovered && !session.hasActiveAsk?.()) {
-    session.clearRecoveredSessionResult()
-  }
+  // 守卫细节见 clearStaleSessionState 定义处（L1346 区域）。
+  clearStaleSessionState()
 })
 
 // keep-alive 重新激活时刷新引用数据（数据集、模型可能在其他页面被修改）
@@ -5731,6 +5732,8 @@ onActivated(async () => {
     aiModels.value = modelRes.models || []
   } catch {}
   loadHistory()
+  // keep-alive 切回也会复用旧实例上的 reactive 状态；同样需要清掉刷新/上一次卡死时的残留
+  clearStaleSessionState()
 })
 
 // 将关键输入状态持久化到 sessionStorage，页面跳转后还原

@@ -86,6 +86,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  forceExpanded: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const clockNow = ref(Date.now())
@@ -94,11 +98,13 @@ const frozenElapsedLabel = ref('')
 const hasFrozenElapsed = ref(false)
 const isExpanded = ref(true)
 
-// 执行完成后默认折叠，执行过程中始终展开
+// 执行完成后默认折叠，执行过程中始终展开。forceExpanded=true 时强制展开（readonly 历史模式用）
 watch(
   () => props.mode,
   (mode) => {
-    if (mode === 'completed' || mode === 'canceled') {
+    if (props.forceExpanded) {
+      isExpanded.value = true
+    } else if (mode === 'completed' || mode === 'canceled') {
       isExpanded.value = false
     } else {
       isExpanded.value = true

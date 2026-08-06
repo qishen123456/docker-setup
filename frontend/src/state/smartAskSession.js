@@ -1993,8 +1993,10 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
     String(context?.originalQuestion || state.question || '').trim(),
     optionLabel ? `补充确认口径：${optionLabel}` : '',
   ].filter(Boolean).join('\n')
+  // 优先从上下文传入的sessionId获取，再从state.result获取，最后从state.currentSessionId获取，确保不丢失
+  const existingSessionId = context?.sessionId || state.result?.session_id || state.currentSessionId
 
-  if (!state.result?.session_id) {
+  if (!existingSessionId) {
     return startAsk(fallbackQuestion, selectedDatasetIds.length > 0 ? selectedDatasetIds : fallbackCandidateIds)
   }
 
@@ -2018,7 +2020,7 @@ const submitBossConfirmation = async (selectedOption, context = {}) => {
     }
     activeAbortController = new AbortController()
     const data = await runConfirmationStream({
-      session_id: state.result.session_id,
+      session_id: existingSessionId,
       selected_option: optionLabel,
       option_id: optionId || undefined,
       selected_dataset_ids: selectedDatasetIds.length > 0 ? selectedDatasetIds : undefined,
