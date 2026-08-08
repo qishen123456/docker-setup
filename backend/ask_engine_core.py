@@ -29,9 +29,10 @@ def _stream_preview(value: Any, limit: int = 1400) -> str:
 
 
 def _should_retry_with_another_model(exc: Exception) -> bool:
+    # 2026-08-06 审计修正（L-04/B16-c）：
+    # AuthenticationError / PermissionDeniedError 移出重试集合——凭据失效是配置问题，
+    # 不是可用性问题，不应触发跨候选重发 prompt。正确行为是直接失败+告警。
     return exc.__class__.__name__ in {
-        "AuthenticationError",
-        "PermissionDeniedError",
         "APITimeoutError",
         "APIConnectionError",
         "InternalServerError",

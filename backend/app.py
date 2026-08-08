@@ -5,6 +5,7 @@ Application entry for the smart analytics backend.
 import os
 import sys
 import time
+import threading
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -248,7 +249,23 @@ def internal_error(error):
     return jsonify({"error": "Internal server error", "detail": str(error)}), 500
 
 
+def _start_feishu_sync_scheduler():
+    """后台守护线程启动飞书同步调度器，不阻塞Flask主线程"""
+    try:
+        from feishu_sync_service import sync_service
+        print("启动飞书同步调度器后台线程...")
+        sync_service.start_scheduler()
+    except Exception as e:
+        print(f"飞书同步调度器启动失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 if __name__ == "__main__":
+    # 启动飞书同步后台调度线程（守护线程，随Flask进程退出）
+    feishu_sync_thread = threading.Thread(target=_start_feishu_sync_scheduler, daemon=True)
+    feishu_sync_thread.start()
+
     print("=" * 60)
     print(f"Smart analytics backend starting at http://localhost:{BACKEND_PORT}")
     print("=" * 60)

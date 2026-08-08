@@ -9,14 +9,15 @@ description: >
 
 ## 1. 项目结构
 
-- 工作目录 `d:\1、工作文件\25.自研项目\13.智能问数v4` 不是项目根目录。
-- **真正的项目根目录是 `smartask/`**。
-- 前端源码：`smartask/frontend/src/`
-- 后端源码：`smartask/backend/`
-- 构建产物：`smartask/frontend/dist/`
-- Agent Skill 目录：`smartask/.agents/skills/`
+- 项目根目录是 `smartask/`（旧 Windows 环境路径 `d:\1、工作文件\25.自研项目\13.智能问数v4` 已迁移至 macOS，当前工作目录为 `/Users/ltl123/smartask/sa1.0/smartask`）。
+- 前端源码：`frontend/src/`（相对项目根）
+- 后端源码：`backend/`
+- 构建产物：`frontend/dist/`
+- Agent Skill 目录：`.agents/skills/`
+- 全栈研发专家团：`.ai-team/`
+- 数据分析专家团：`.ai-data/`
 
-任何文件操作、路径引用都要以 `smartask/` 为根，不要直接写 `frontend/src/...`。
+任何文件操作、路径引用都要以项目根为基准。跨平台注意：Windows 用 `smartask\frontend\src\`，macOS/Linux 用 `smartask/frontend/src/`。
 
 ## 2. Docker 运行约束
 
@@ -264,6 +265,15 @@ description: >
 - 不要为了恢复旧效果而随意恢复 `dataset_dimension_profiles.json` 并让它覆盖节点索引。
 - 若必须维护 `dataset_dimension_profiles.json`，只能作为别名/集合口径增强，不能覆盖自动节点索引中的真实节点关系。
 - 迁移新服务器时，优先确保飞书数据、书架数据和 `config/dataset_node_index.json` 的生成链路一致，而不是依赖旧画像文件。
+
+**审计补充（2026-08-06，A-02）**：`dataset_dimension_profiles.py`（294 行）已完整实现同义词/成员/分组匹配逻辑，但 `backend/data/dataset_dimension_profiles.json` 文件**不存在**，31 个调用点（`four_agent_ask.py` 23 处 + `disambiguation/llm_arbiter.py` 4 处 + 其他 4 处）全部拿到 None，路由层级判定和实体消解全部退化，无任何日志告警。
+
+**矛盾调和**：上述"不要随意恢复"与审计"补文件激活调用点"**不矛盾**：
+- "不要恢复" = 不让旧画像覆盖 `dataset_node_index.json` 的节点层级关系
+- "补文件" = 激活 `dataset_dimension_profiles.py` 294 行已写好的同义词/成员匹配代码
+- 正确做法：补的文件**只含同义词映射和集合口径增强**数据，**不含**节点层级关系定义。节点关系仍以 `dataset_node_index.json` 为唯一事实源。
+
+详见审计报告 A-02 与 `smartask-runtime-migration` skill §9.4。
 
 **相关文件**：
 - `smartask/config/dataset_node_index.json`

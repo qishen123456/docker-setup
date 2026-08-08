@@ -19,12 +19,13 @@ description: >
 - 本地代码目录：`backend/`
 - 节点索引：`config/dataset_node_index.json`（334 个 alias，3 个数据集，8 个层级）
 - 关键文件：
-  - `backend/four_agent_ask.py` — 主体提取核心
-    - `_clean_org_subject_candidate`（line ~3252）：正则清洗口语前后缀
-    - `_extract_bare_org_subject_by_node_index`（line ~8658）：裸题器，精确+contains+层级优先+raw兜底
-    - `_extract_followup_org_target`（line ~8623）：追问链路，**已委托裸题器**
-    - `_contains_match_subject`（line ~8680）：contains 匹配 + 层级优先
-    - `_looks_like_org_subject_question`（line ~8695）：判断是否走主体追问
+  - `backend/four_agent_ask.py` — 主体提取核心（9063行，旧文档行号已失效）
+    - `_clean_org_subject_candidate`（:1934）：正则清洗口语前后缀
+    - `_extract_followup_org_target`（:6962）：追问链路，**已委托裸题器**
+    - `_extract_bare_org_subject_by_node_index`（:6971）：裸题器，精确+contains+层级优先+raw兜底
+    - `_contains_match_subject`（:7009）：contains 匹配 + 层级优先
+    - `_looks_like_org_subject_question`（:7066）：判断是否走主体追问
+    - `_agent1_resolve_org_subject`（:7069）：LLM 主路径，**零缓存**
   - `backend/report_spec_builder.py` — 报告契约（focusNodeIsLeaf 等）
   - `frontend/src/components/smartask/ResultDigestCard.vue` — 结果展示
   - `config/confirmed_behaviors_baseline.md` — 已确认效果基线
@@ -43,7 +44,7 @@ description: >
        └─ 3. _contains_match_subject(raw_question) → raw 兜底（倒桩）
 ```
 
-**关键**：追问链路（line 8749: `followup or bare`）优先于裸题器。如果 followup 返回非空（即使错误），裸题器不跑。2026-08-01 修复前这是 "迟昊" 截图的根因。
+**关键**：追问链路优先于裸题器。如果 followup 返回非空（即使错误），裸题器不跑。2026-08-01 修复前这是 "迟昊" 截图的根因。
 
 ## 快速验证脚本
 
@@ -96,7 +97,7 @@ print('subject:', r.get('subject_name'), 'rewritten:', r.get('rewritten_question
 
 ### 2. 名字首字被吃掉？
 
-- 检查 `_clean_org_subject_candidate` 的数量词正则（line ~3262）
+- 检查 `_clean_org_subject_candidate` 的数量词正则（:1934）
 - 正则 `^(?:前|第)?\s*(?:一|二|三|...|\d+)\s*(?:个|大|家|者|位|名)` — 计数词**必须跟量词**才剥
 - 如果量词后面的 `?` 被加回来（变成可选），"三明"的"三"会被吃
 
@@ -120,7 +121,7 @@ print('subject:', r.get('subject_name'), 'rewritten:', r.get('rewritten_question
 
 ### 6. fallback 对了但用户反馈仍不对？（LLM 主路径问题）
 
-- **最关键**：`_agent1_resolve_org_subject`（line ~8742）是主路径，先调 LLM；`_extract_followup_org_target` / `_extract_bare_org_subject_by_node_index` 只是 fallback
+- **最关键**：`_agent1_resolve_org_subject`（:7069）是主路径，先调 LLM；`_extract_followup_org_target` / `_extract_bare_org_subject_by_node_index` 只是 fallback
 - 原 `result.get("subject_name") or fallback_name` 直接采信 LLM 非空结果——LLM 返回错误非空时 fallback 没机会执行
 - 检查 `_pick_finer_subject(llm_subject, fallback_name)` 是否生效：LLM 返回上层组织单元（事业部/分公司）而 fallback 提取到更细节点（业务代表/城市公司）时取更细的
 - 检查 rewritten_question 一致性：subject 被纠正后 rewritten_question 是否同步重写
@@ -153,3 +154,20 @@ print('subject:', r.get('subject_name'), 'rewritten:', r.get('rewritten_question
 ## 参考
 
 - 已踩过的具体坑与修复记录：见 [references/common-pitfalls.md](references/common-pitfalls.md)
+
+## 审计发现（2026-08-06，详见 docs/audit/2026-08-06_final-audit-report.md B-27）
+
+`_agent1_resolve_org_subject`（:7069）存在三个已实证的问题：
+
+1. **零缓存重复调用**：单次 `ask()` 内 `:8493` 与 `:8656` 两个调用点入参完全相同（question / memory_history / trace 三者在区间内无重新赋值），且 `:8655` 条件是 `:8492` 的严格子集——`:8656` 触发时第一次必然已执行。第二次调用纯冗余。`:8981` 在 `confirm_by_boss()` 内属另一入口，不传 trace 完全隐形。
+
+2. **非确定性路由**：`llm_client.py:142` `temperature=0.1` 非零，同输入两次调用返回不同结果（trace 实证："东部" vs ""）。第二次返回空导致 `:8662 if subject_name:` 判假 → `:8663-8676` 的 node_index 歧义释放检查整段被跳过 → `preferred_dataset_ids` 不被清空 → 数据集选择走向与第一次不一致。**同一用户问同一问题两次可能选不同数据集。**
+
+3. **性能**：该 stage 占全部 LLM 耗时 99.4%（151.8s / 152.66s）。删 `:8656` 即可砍 27.8% 端到端，成本 S。
+
+**修复方向**：
+- `:8656` 改为复用 `:8491` 的 `org_subject_resolution` 结果（三条命题已证明安全）
+- `:8981` 补 `trace=trace`（注意它传 `conversation_context=[]`，语义与前两处不同，不能简单合并）
+- 长期：`temperature` 改 0，或对结构化抽取类调用单独设 0
+
+> 注意：§架构口径称"残留 ~0.4% 失败走 Layer 5 失败反问（不静默返回 0 行）"，但审计发现 SD-2 证实硬失败路径统一降级为"未查询到匹配数据"，即**确实静默返回 0 行**。该口径是目标而非现状，修复 SD-2 后才能成立。

@@ -252,3 +252,41 @@ query_intent: {"intent": "ranking", "target_level": "承接人", "top_n": 3, ...
 ## 参考
 
 - 已踩过的具体坑与修复记录：见 [references/common-pitfalls.md](references/common-pitfalls.md)
+
+## 审计发现（2026-08-06，详见 docs/audit/2026-08-06_final-audit-report.md）
+
+### B4：行级权限外层包裹对排名 SQL 无效（P0）
+
+排名 SQL（`ask_engine_sql.py:36-47` `_build_ranked_select_sql`）的执行序为：
+
+```
+全域排名（ROW_NUMBER OVER 全部行）
+→ 全域截断 TopN（WHERE 全局排名 <= N + LIMIT N）
+→ 才按用户权限过滤（外层 SELECT * FROM (...) WHERE 权限条件）
+```
+
+权限包裹发生在最外层（`data_permission_store.py:514`），排名在全域数据上计算，TopN 在全域上截断，**然后**才过滤。
+
+产生两条泄露/失真路径：
+
+**路径 A：排名序号本身跨域泄露**
+`SELECT *` 把 `全局排名`（双向模式下还有 `前排名`/`后排名`/`排名分组`）带进结果。用户即使只看到本部门行，也能读到该行的全公司排名值——"全局排名 = 47"即可推知全公司至少有 46 个同级单位业绩优于自己。行级权限过滤了行，没过滤聚合量。
+
+**路径 B：TopN 语义塌缩**
+用户问"前10的代表处"，内层先取全公司前10，外层再按权限滤成可见部分。若用户部门无人进全公司前10 → 返回零行 → 落入静默降级族 → 显示"未查询到匹配数据"。正确语义应是"用户可见范围内的前10"，实际给出的是"全公司前10 ∩ 用户可见范围"，两者在非超管账号下不等价。
+
+**修复方向**：权限谓词必须下推到最内层事实表扫描（在 `source_cte` 的 WHERE 内），使排名在授权子集上计算。外层包裹方案对任何含窗口函数或聚合的 SQL 都不成立。
+
+### B5：达成率分母为零显示 0%（P1）
+
+`four_agent_ask.py` 多处（`:4881` / `:5471` / `:5497` / `:6108`）在节点 `总任务金额=0` 但有实际开单额时，`ELSE 0` 把"没派指标的单位"报成"达成率 0%"。
+
+后果：该节点在"达成率最低 TopN"中稳定占榜首，把"没派指标的单位"报成"业绩最差的单位"。用户不可察觉。
+
+**修复方向**：分母为 0 返回 NULL 而非 0，排序 `NULLS LAST`，展示层区分"—"与"0%"。
+
+### 关于 dataset_dimension_profiles.json
+
+本 skill §9 提到"检查是否因为 `backend/data/dataset_dimension_profiles.json` 缺失导致旧 Agent1.5 画像链路返回 `source=no_profile`"——审计 A-02 确认该文件确实不存在，31 个调用点全部拿到 None。
+
+补文件时注意：补的文件只含同义词映射和集合口径增强，不含节点层级关系定义。节点关系以 `config/dataset_node_index.json` 为唯一事实源。详见 `smartask-runtime-migration` skill §9.4。

@@ -180,3 +180,50 @@ python scripts/export_runtime_config.py --output backend/imports/runtime_config_
 
 - 确认 `config/dataset_node_index.json` 已按最新数据重建。
 - 在新服务器首次部署后，先导入/同步数据，再验证节点索引，不要依赖旧 `dataset_dimension_profiles.json`。
+
+## 9. 审计发现：部署完整性缺陷（2026-08-06，详见 docs/audit/2026-08-06_final-audit-report.md）
+
+审计发现三组部署完整性问题，当前本 skill 未覆盖，修复 W0/W4 时必须知道：
+
+### 9.1 angel_group_data 表单点建表（L-01，P0）
+
+`docker/postgres/init/002_angel_group_data.sql` 是该表唯一建表途径。`docker-compose.yml:19` 把 `docker/postgres/init/` 挂载为 `docker-entrypoint-initdb.d:ro`，Postgres 官方镜像**仅在数据目录为空时执行一次**。`bootstrap.py:45-57` 的 MIGRATIONS 列表无对应项。
+
+后果：已有数据卷的环境升级 / 换机器 / 恢复备份 → init 不跑 → bootstrap 也不建 → 表不存在。
+
+修复方向：DDL 补进 `backend/migrations/` 并登记到 `bootstrap.py` MIGRATIONS。
+
+### 9.2 三张生产表不在任何迁移文件中（L-02/B-23，P0）
+
+`bs_common_questions` / `bs_dataset_external_configs` / `bs_regression_cases` 三张表：
+- `backend/migrations/` 7 个 sql —— 无
+- `docker/postgres/init/` 6 个 sql —— 无
+
+唯一定义在 `controllers/bookshelf.py:526-570` 内联 DDL，且该份恰好缺 `bs_dataset_report_config`。
+
+另有 5 份 `_ensure_optional_tables` 同名函数，md5 归一化比对**全部不同**——已分叉的副本，表结构取决于环境先跑过哪个脚本。
+
+修复方向：三张表 DDL 收敛到 `backend/migrations/`，5 份 `_ensure_optional_tables` 全部删除。
+
+### 9.3 两套迁移体系已分叉（L-03，P1）
+
+| 体系 | 文件数 | 独有内容 |
+|---|---|---|
+| `docker/postgres/init/` | 6 | `angel_group_data.sql` |
+| `backend/migrations/` | 7 | `dataset_transforms.sql`、`ecommerce_standard_view.sql` |
+
+双向差集——各有对方没有的东西。叠加 `CREATE TABLE IF NOT EXISTS` 语义（先跑者定义结构，后者静默跳过），同一份代码在不同环境得到不同表结构，无任何机制报错。
+
+加重项：`bootstrap.py:420-425` 全部迁移跑完但失败仅记日志注释标为"非致命"，迁移失败不阻断启动，服务带着残缺表结构对外提供服务。
+
+修复方向：迁移体系单一化。`backend/migrations/` 为唯一真相源，`docker/postgres/init/` 只保留数据库/用户初始化（不含业务表），bootstrap 迁移失败必须阻断启动。
+
+### 9.4 dataset_dimension_profiles.json 矛盾调和
+
+审计 A-02 建议补 `backend/data/dataset_dimension_profiles.json` 激活 31 个已写好的调用点。但本 skill §7.4 和 global-constraints §6.5 一致警示"不要通过恢复旧画像来修复节点缺失"。
+
+**两者不矛盾**：
+- skill 的警示 = 不让旧画像**覆盖** `dataset_node_index.json` 的节点关系
+- 审计的建议 = 激活 `dataset_dimension_profiles.py` 294 行已实现的同义词/成员匹配代码
+
+正确做法：补的文件只含**同义词映射和集合口径增强**数据，不含节点层级关系定义。节点关系仍以 `dataset_node_index.json` 为唯一事实源。

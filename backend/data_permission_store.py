@@ -472,7 +472,13 @@ def org_mention_permission_check(
 def apply_row_level_filter(sql: str, user: Dict[str, Any], dataset_id: int, permissions: Optional[Dict[str, Any]] = None) -> str:
     data = permissions or load_data_permissions()
     rule = (data.get("rules") or {}).get(str(int(dataset_id))) or {}
-    if (user or {}).get("role") == "super_admin" or rule.get("mode") != "org_tree":
+    if (user or {}).get("role") == "super_admin":
+        return sql
+    if not rule:
+        # 无规则 → 默认 deny（fail-closed），防止未配置的数据集越权
+        return f"SELECT * FROM (\n{sql.strip().rstrip(';')}\n) AS __smartask_row_scope\nWHERE 1 = 0"
+    if rule.get("mode") != "org_tree":
+        # 有规则但非 org_tree（如 public）→ 有意放行
         return sql
     field = _as_text((rule.get("scope") or {}).get("organization_field")) or "组织编码"
     scope = user_org_scope_for_rule(user or {}, rule)

@@ -12,7 +12,7 @@
 
 | 层 | 技术 | 关键模块 |
 |---|---|---|
-| 后端 | Flask 3.0.3 (端口 5002) + Vanna[chromadb] 0.7.9 | `backend/app.py`(入口,18 blueprint) · `backend/controllers/smart_chat.py`(问数主路由,同步+SSE) · `backend/ask_flow/controller.py`(basic/advanced引擎开关) · `backend/four_agent_ask.py`(**~10748行上帝文件**,四智能体流水线+硬编码规则SQL引擎) |
+| 后端 | Flask 3.0.3 (端口 5002) + Vanna[chromadb] 0.7.9 | `backend/app.py`(入口,18 blueprint) · `backend/controllers/smart_chat.py`(问数主路由,同步+SSE) · `backend/ask_flow/controller.py`(basic/advanced引擎开关) · `backend/four_agent_ask.py`(**9063行,单类FourAgentAskService/156方法**,四智能体流水线+硬编码规则SQL引擎) |
 | 前端 | Vue 3.5 + Vite 8 + Element Plus + ECharts | `frontend/src/` (views/components/api) |
 | 配置 | `config/` 下 16 json + 9 md | datasetPolicies · feature_flag(advanced_ask_flow) · advancedRoles(默认super_admin) |
 | 数据 | MySQL/PostgreSQL + ChromaDB(向量) | `docker/*.sql`(建表) |
@@ -22,8 +22,13 @@
 **已知架构事实**（改任何东西前必须知道）：
 - 默认 advanced 关闭，流量全走 basic 引擎
 - SSE 本质同步（单 worker 线程 + 内存 queue），多 worker 部署会丢确认会话状态
-- `four_agent_ask.py` 是上帝文件，任何问数逻辑改动几乎都在这里
+- `four_agent_ask.py` 是 9063 行单类（156 方法），但 **58% 零实例状态依赖**（35 方法 / 5215 行），三套规则 SQL 引擎 2112 行实例属性引用=0，拆分成本远低于直觉判断
 - 改动边界：`backend/ask_flow/contracts.py` 的 AskRequest/ConfirmRequest/FlowDecision
+- **安全护栏方向反置**：approved=True 的 SQL 不校验直落执行，approved=False 的才过校验，物理执行点零护栏（详见 `docs/audit/2026-08-06_final-audit-report.md` A-01）
+- **LLM 状态共享**：模块级单例 + 每请求写共享 `_preferred_model_id`，并发请求互相覆盖模型选择（详见审计报告 A-03/SD-1）
+- **部署不完整**：`angel_group_data` 表仅靠 docker init 首次执行建表，bootstrap 迁移无对应项；三张 bs_* 表不在任何迁移文件中，唯一定义在请求处理器内联 DDL（详见审计报告 L-01/L-02）
+- **语义层空转**：`backend/data/dataset_dimension_profiles.json` 不存在，31 个调用点全部返回 None，路由层级判定和实体消解全部退化（详见审计报告 A-02）
+- **`_connect()` 无连接池**：44 处裸调用 / 13 文件 / 3 套独立定义，`backend/services/` 和 `backend/repositories/` 目录不存在
 
 ---
 

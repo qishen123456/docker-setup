@@ -524,56 +524,11 @@ def _log_dataset_prompt_event(
 
 
 def _ensure_optional_tables(cur):
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS bs_common_questions (
-            id BIGSERIAL PRIMARY KEY,
-            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
-            question_text TEXT NOT NULL,
-            sort_order INT NOT NULL DEFAULT 100,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS bs_dataset_external_configs (
-            id BIGSERIAL PRIMARY KEY,
-            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
-            config_type VARCHAR(64) NOT NULL,
-            config_key VARCHAR(128) NOT NULL,
-            config_value JSONB NOT NULL DEFAULT '{}'::jsonb,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(dataset_id, config_type, config_key)
-        );
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS bs_regression_cases (
-            id BIGSERIAL PRIMARY KEY,
-            dataset_id BIGINT NOT NULL REFERENCES bs_datasets(id) ON DELETE CASCADE,
-            case_type VARCHAR(32) NOT NULL DEFAULT 'summary',
-            question_text TEXT NOT NULL,
-            expected_focus TEXT NOT NULL DEFAULT '',
-            expected_intent VARCHAR(32) NOT NULL DEFAULT 'generate_sql',
-            sort_order INT NOT NULL DEFAULT 100,
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
-    )
-    cur.execute(
-        """
-        ALTER TABLE bs_schema_definitions
-        ADD COLUMN IF NOT EXISTS source_id BIGINT;
-        """
-    )
+    # 2026-08-06 审计修正（L-02/B-23/B-16）：
+    # 四张表已迁移到 backend/migrations/20260807_missing_tables.sql，
+    # bootstrap.py 启动时幂等建表。此处保留为 no-op 避免调用点报错，
+    # 后续 W4 数据层归位时删除全部 5 份 _ensure_optional_tables 副本及其调用点。
+    pass
 
 
 @bookshelf_bp.route("/api/bookshelves/health", methods=["GET"])

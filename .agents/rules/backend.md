@@ -5,10 +5,19 @@
 
 ## 关键文件改动规则
 
-### `backend/four_agent_ask.py`（上帝文件，~10748行）
+### `backend/four_agent_ask.py`（9063行，单类 FourAgentAskService / 156方法）
+
+> 2026-08-06 审计修正：旧文档称 ~10748 行，实际 9063 行（2026-08-03 删除 1685 行后行号整体漂移，所有旧行号引用失效）。
+
 - **改前必须全局搜索目标函数/规则位置**，确认所有调用方
 - 不要在这个文件里新增大类，尽量外移到 `ask_flow/` 或 `ask_engine_*.py`
 - 改后必须跑 `cd backend && python -m pytest`
+
+审计关键发现（2026-08-06，详见 `docs/audit/2026-08-06_final-audit-report.md`）：
+- **58% 零状态依赖**：35 个方法 / 5215 行不引用 `self.<属性>`，三套规则 SQL 引擎合计 2112 行实例属性引用=0（被误写成方法的纯函数，外提是机械操作不是架构手术）
+- **安全护栏方向反置**：approved=True 不校验直落执行（`:8225-8263`），approved=False 才过校验（`:8238`），物理执行点零护栏（`datasource_router.py:192-199`）
+- **LLM 状态共享**：模块级单例（`:9063`）+ `ask()` 每请求写共享 `_preferred_model_id`（`:8487`），并发请求互相覆盖模型选择
+- **agent1.org_subject 重复调用**：`:8493` 与 `:8656` 入参完全相同且条件为严格子集，第二次纯冗余；temperature=0.1 非零致同输入不同输出 = 非确定性路由，占全部 LLM 耗时 99.4%
 
 ### `backend/controllers/smart_chat.py`（问数主路由）
 - 改 SSE 逻辑时注意帧序列：ready -> trace -> summary -> heartbeat -> result -> done

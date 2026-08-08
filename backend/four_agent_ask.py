@@ -1377,7 +1377,7 @@ class FourAgentAskService:
         route_match_score = self._safe_int(route.get("match_score"), 0)
         route_margin = self._safe_int(route.get("route_margin"), 0)
         preferred_override = bool(route.get("preferred_dataset_override"))
-        rule_based_sql = self._build_rule_based_sql(question, route, context)
+        rule_based_sql = None  # 惰性求值，仅在需要时计算（审计 A-07）
         route_sample_sql = str(route.get("matched_sample_sql") or "").strip()
         route_sample_id = route.get("matched_sample_id")
         query_intent = self._safe_dict(context.get("query_intent"))
@@ -1444,6 +1444,8 @@ class FourAgentAskService:
 
         # Filter/comparison/aggregate questions should not be hijacked by ranking-style Golden SQL samples.
         # Prefer deterministic rule SQL; if unavailable, fall back to fresh generation.
+        if rule_based_sql is None:
+            rule_based_sql = self._build_rule_based_sql(question, route, context)
         if filter_intent or comparison_intent or aggregate_intent:
             if rule_based_sql:
                 return {
@@ -8068,10 +8070,6 @@ Agent3 复核结果：
                 sql_text = str(sql_strategy.get("sql") or "").strip()
                 agent3_review_policy = "trusted_sql"
                 delay_seconds = 0.0
-                if not golden_hit_delay_applied:
-                    delay_seconds = random.uniform(2.0, 3.0)
-                    time.sleep(delay_seconds)
-                    golden_hit_delay_applied = True
                 self._append_trace(
                     trace,
                     "agent2.sql_generate.golden_direct",
@@ -8218,35 +8216,21 @@ Agent3 复核结果：
                 {
                     "title": "Agent3 全量复核",
                     "duration": round((time.time() - step_started) * 1000, 2),
-                    "status": "success",
+                    "status": "success" if review.get("approved") is not False else "rejected",
                 }
             )
 
             if review.get("approved") is False:
-                fallback_sql = (final_sql or "").strip()
-                if not fallback_sql:
-                    dataset_results.append(
-                        self._build_graceful_dataset_result(
-                            question=question,
-                            context=context,
-                            review=review,
-                            result={"columns": [], "rows": [], "row_count": 0},
-                            sql_text=sql_text,
-                        )
+                dataset_results.append(
+                    self._build_graceful_dataset_result(
+                        question=question,
+                        context=context,
+                        review=review,
+                        result={"columns": [], "rows": [], "row_count": 0},
+                        sql_text=sql_text,
                     )
-                    continue
-                if not self._is_read_only_sql(fallback_sql):
-                    dataset_results.append(
-                        self._build_graceful_dataset_result(
-                            question=question,
-                            context=context,
-                            review=review,
-                            result={"columns": [], "rows": [], "row_count": 0},
-                            sql_text="",
-                        )
-                    )
-                    continue
-                final_sql = fallback_sql
+                )
+                continue
 
             step_started = time.time()
             try:
@@ -8653,11 +8637,7 @@ Agent3 复核结果：
                         preferred_dataset_ids = []
 
             if preferred_dataset_ids and self._looks_like_org_subject_question(question):
-                resolved_subject = self._agent1_resolve_org_subject(
-                    question,
-                    conversation_context=memory_history,
-                    trace=trace,
-                ) or {}
+                resolved_subject = org_subject_resolution or {}
                 subject_name = str(resolved_subject.get("subject_name") or "").strip()
                 if subject_name:
                     index_matches = self._node_index_matches(subject_name)

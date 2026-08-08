@@ -54,6 +54,7 @@ MIGRATIONS = [
     "20260512_system_event_logs.sql",
     "20260627_ecommerce_standard_view.sql",
     "20260630_dataset_transforms.sql",
+    "20260807_missing_tables.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
