@@ -81,6 +81,7 @@ services:
       dockerfile: Dockerfile
       args:
         NPM_REGISTRY: ${SMARTASK_NPM_REGISTRY:-https://registry.npmmirror.com}
+        BASE_PATH: ${BASE_PATH:-/}
     container_name: smartask-frontend
     restart: unless-stopped
     depends_on:

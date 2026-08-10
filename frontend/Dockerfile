@@ -1,10 +1,12 @@
 FROM node:20-alpine AS build
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG BASE_PATH=/
 ENV npm_config_registry=${NPM_REGISTRY}
 ENV npm_registry=${NPM_REGISTRY}
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
+ENV BASE_PATH=${BASE_PATH}
 
 WORKDIR /app
 
