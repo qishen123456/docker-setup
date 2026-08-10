@@ -304,8 +304,8 @@ dump_backend_diagnostics() {
   echo ""
   warn "后端健康检查失败，开始输出诊断信息"
   echo ""
-  echo "---- docker compose ps ----"
-  docker compose ps || true
+  echo "---- ${DOCKER_COMPOSE_CMD} ps ----"
+  ${DOCKER_COMPOSE_CMD} ps || true
   echo ""
   echo "---- backend container state ----"
   docker inspect smartask-backend \
@@ -316,7 +316,7 @@ dump_backend_diagnostics() {
   curl -vS --max-time 8 "$url" || true
   echo ""
   echo "---- backend logs tail 180 ----"
-  docker compose logs --tail=180 backend || true
+  ${DOCKER_COMPOSE_CMD} logs --tail=180 backend || true
   echo ""
 }
 
@@ -406,7 +406,7 @@ validate_secret_master_key() {
       return 0
     fi
     if [[ "$key_file" == /* ]]; then
-      warn "SMARTASK_SECRET_KEY_FILE=$key_file 是容器内绝对路径，宿主机无法直接校验；请确认 docker compose 已挂载该 Secret。"
+      warn "SMARTASK_SECRET_KEY_FILE=$key_file 是容器内绝对路径，宿主机无法直接校验；请确认 ${DOCKER_COMPOSE_CMD} 已挂载该 Secret。"
       return 0
     fi
     fail "检测到 enc:v1 密文，但 SMARTASK_SECRET_KEY_FILE 指向的文件不存在: $key_file"
@@ -557,7 +557,26 @@ validate_postgres_password_hint() {
 command -v git >/dev/null 2>&1 || fail "未找到 git 命令"
 command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
 docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
-docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
+
+# =========================
+# Docker Compose 命令兼容性检测
+# 支持 docker-compose（v1）和 ${DOCKER_COMPOSE_CMD}（v2 plugin）
+# =========================
+detect_docker_compose_cmd() {
+  # 优先使用 docker-compose（独立安装的 v1 版本）
+  if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+    info "检测到 docker-compose（v1 独立版本）"
+  # 其次尝试 ${DOCKER_COMPOSE_CMD}（Docker 内置的 v2 插件）
+  elif ${DOCKER_COMPOSE_CMD} version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD}"
+    info "检测到 ${DOCKER_COMPOSE_CMD}（v2 插件）"
+  else
+    fail "未找到 Docker Compose！请安装：\n  - CentOS/RHEL: yum install docker-compose-plugin\n  - Ubuntu/Debian: apt install docker-compose-plugin\n  - 或手动下载: https://docs.docker.com/compose/install/"
+  fi
+}
+
+detect_docker_compose_cmd
 [[ -f .env ]] || fail "缺少 .env，请先放好生产配置"
 validate_secret_master_key
 validate_runtime_secret_decryption
@@ -623,7 +642,7 @@ if [[ "$NO_BUILD" -eq 0 ]]; then
   echo "  pip retry : timeout=${SMARTASK_PIP_TIMEOUT}s retries=${SMARTASK_PIP_RETRIES}"
 fi
 
-info "校验 docker compose"
+info "校验 ${DOCKER_COMPOSE_CMD}"
 
 # 根据环境自动选择docker-compose配置文件
 DOCKER_COMPOSE_FILES=("docker-compose.yml")
@@ -643,31 +662,31 @@ case "${RECOMMEND_MODE}" in
 esac
 
 # 使用选定的配置文件进行校验和启动
-docker compose "${DOCKER_COMPOSE_FILES[@]}" config >/dev/null
+${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" config >/dev/null
 cleanup_compose_recreate_leftovers
 
 info "重建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
-  docker compose "${DOCKER_COMPOSE_FILES[@]}" up -d
+  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" up -d
 else
-  docker compose "${DOCKER_COMPOSE_FILES[@]}" up -d --build
+  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" up -d --build
 fi
 echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
-docker compose "${DOCKER_COMPOSE_FILES[@]}" ps
+${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" ps
 
 info "同步内置数据集模板"
-if docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
+if ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
   echo "  [OK] 内置数据集模板已同步"
 else
-  warn "内置数据集模板同步失败，不影响容器运行；请执行: docker compose \"${DOCKER_COMPOSE_FILES[@]}\" logs --tail=120 backend"
+  warn "内置数据集模板同步失败，不影响容器运行；请执行: ${DOCKER_COMPOSE_CMD} \"${DOCKER_COMPOSE_FILES[@]}\" logs --tail=120 backend"
 fi
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"
-  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
+  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
 else
   warn "已跳过容器内自检: --skip-verify"
 fi
@@ -686,8 +705,8 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   if [[ "$RUN_STREAM_TESTS" -eq 1 ]]; then
     STREAM_ARGS+=(--with-stream)
   fi
-  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
-  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/integration_test.py \
+  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
+  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/integration_test.py \
     --base-url "http://localhost:5002" \
     --frontend-url "http://frontend" \
     --no-wait "${STREAM_ARGS[@]}"
