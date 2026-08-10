@@ -1,20 +1,22 @@
 """
 SmartAsk container/local one-shot bootstrap.
 
-Order of operations (each step is best-effort and idempotent):
-    1. Wait for PostgreSQL (default datasource)
-    2. Apply schema migrations under backend/migrations (BEGIN/COMMIT-stripped, dollar-quote-aware)
-    3. Restore runtime config bundle into config/*.json (only fills missing keys, never clobbers user edits)
-    4. First boot only: import bookshelf_bundle.json + angel_group_data_bundle.json
-    5. Sync idempotent built-in dataset templates that should ship with code
-    6. Hand off to app.py via os.execv
+After the bootstrap / migrate split (see ``migrate.py``), this module no
+longer performs schema migrations, bundle imports, or built-in dataset
+syncs on its own. ``main()`` simply hands off to ``app.py`` via
+``os.execv``.
 
-Env switches:
-    SMARTASK_BOOTSTRAP_SKIP_DB=1            -> skip DB step entirely, only start Flask
-    SMARTASK_BOOTSTRAP_FORCE_IMPORT=1       -> import bundles even if bs_datasets is non-empty
-    SMARTASK_BOOTSTRAP_FORCE_CONFIG=1       -> overwrite existing config files from runtime bundle
-    SMARTASK_BOOTSTRAP_SKIP_BUILTINS=1      -> skip built-in dataset template sync
-    SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT=1  -> skip first-time bundle import when bs_datasets is empty
+The legacy helpers below (``_run_migration``, ``_import_runtime_config``,
+``_import_bookshelf_bundle``, ``_import_angel_bundle``,
+``_sync_builtin_datasets``, ``_sync_default_dataset_transforms``,
+``_sync_ecommerce_common_questions``, etc.) are preserved as **manual
+tools** so operators can invoke them from ad-hoc scripts. They are
+**not** triggered automatically by ``main()`` — user-edited golden SQL /
+data dictionaries / agent prompts must not be silently overwritten on
+container restart.
+
+For fresh deployments use the ``migrate`` Compose service (or run
+``python backend/migrate.py`` once before starting the backend).
 """
 from __future__ import annotations
 
@@ -406,55 +408,8 @@ def _sync_ecommerce_common_questions() -> None:
 
 def main() -> None:
     log("========== SmartAsk Bootstrap 开始 ==========")
-
-    skip_db = os.getenv("SMARTASK_BOOTSTRAP_SKIP_DB", "").lower() in {"1", "true", "yes"}
-
-    if skip_db:
-        log("环境变量 SMARTASK_BOOTSTRAP_SKIP_DB=1，跳过 DB 初始化")
-    elif not _wait_for_postgres():
-        log("⚠️ PostgreSQL 不可达，跳过迁移与首次导入；后端仍将启动以便排错。")
-    else:
-        try:
-            from config_manager import init_default_configs
-
-            init_default_configs()
-        except Exception as exc:
-            log(f"初始化默认 JSON 配置失败（非致命）: {exc}")
-
-        # 1) 优先恢复 runtime_config_bundle，让后续步骤用到的数据源/AI 配置已正确
-        _import_runtime_config()
-
-        for migration in MIGRATIONS:
-            try:
-                _run_migration(migration)
-            except Exception as exc:
-                log(f"迁移 {migration} 失败（非致命）: {exc}")
-                traceback.print_exc()
-
-        existing = _bs_dataset_count()
-        force_import = os.getenv("SMARTASK_BOOTSTRAP_FORCE_IMPORT", "").lower() in {"1", "true", "yes"}
-        skip_first_import = os.getenv("SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT", "").lower() in {"1", "true", "yes"}
-        if existing == 0 and skip_first_import and not force_import:
-            log("SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT=1，跳过首次 bundle 导入，等待手动迁移")
-        elif existing == 0 or force_import:
-            log(f"检测到 bs_datasets={existing}，开始首次数据导入...（force={force_import}）")
-            _import_bookshelf_bundle()
-            _import_angel_bundle()
-            # Report config migrations depend on bs_datasets rows. On a fresh
-            # Docker volume those rows are created by the bundle import above,
-            # so run these idempotent migrations once more after import.
-            for migration in ("20260430_report_config.sql", "20260509_report_thresholds.sql"):
-                try:
-                    _run_migration(migration)
-                except Exception as exc:
-                    log(f"导入后补跑迁移 {migration} 失败（非致命）: {exc}")
-                    traceback.print_exc()
-        else:
-            log(f"已检测到 bs_datasets={existing} 行，跳过自动导入（保留用户数据）")
-
-        _sync_builtin_datasets()
-        _sync_default_dataset_transforms()
-        _sync_ecommerce_common_questions()
+    log("⚠️ Bootstrap 不再执行迁移/数据同步；如需初始化数据库，请先运行 backend/migrate.py。")
+    log("本次启动仅作为向后兼容入口，直接交棒给 Flask。")
 
     log("========== Bootstrap 完成，启动 Flask ==========")
     app_path = os.path.join(CURRENT_DIR, "app.py")

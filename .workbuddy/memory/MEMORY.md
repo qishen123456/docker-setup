@@ -15,3 +15,11 @@
 ## 用户协作约定
 - 用户要求：只读不改，理解项目后再升级；方向由我（专家角色）定，确认后再动手。
 - 项目有两套平级 AI 专家资产：`.ai-team/`（代码开发，9角色）+ `.ai-data/`（数据分析/研究/金融，10角色，从平台12个专家包70个角色整合而来）。后者当前仅知识储备，尚未集成到系统。
+
+## 部署架构变更（2026-08-10 bootstrap 解耦 BugFix）
+- `backend/bootstrap.py` 已不再做自动初始化（main 简化为 `os.execv app.py`）；`backend/Dockerfile` 默认 stage CMD = `python app.py`。
+- 新建 `backend/migrate.py`：一次性迁移脚本（等 PG → 默认配置/runtime config → 8 个 schema 迁移；exit 0/1）；`docker-compose.yml` 新增 `migrate` 服务（`restart: no` + `depends_on postgres healthy`），backend 加 `depends_on migrate service_completed_successfully` 保证部署顺序。
+- bootstrap 保留的 5 个 sync helpers（`_sync_builtin_datasets` / `_sync_default_dataset_transforms` / `_sync_ecommerce_common_questions` / `_import_bookshelf_bundle` / `_import_angel_bundle`）与首次 bundle 自动导入**不再被自动调用**，仅作手动工具保留。
+- 关键安全护栏：`create_consumer_standard_dataset.py:792` 的 DELETE+全插内置模板逻辑保留但**不再自动触发**——用户的 golden sql / 数据字典 / agent prompt 走文件迁移导入导出，部署不再覆盖。
+- 部署三步：`docker compose up -d postgres` → `docker compose run --rm migrate`（必须 exit 0）→ `docker compose up -d backend frontend`。旧 `python bootstrap.py` 路径仍兼容（仅 execv app.py）。
+- 已知遗留（QA 标的 tech-debt，与本次解耦）：`.env.example` / `.env.template` / `DEPLOY_TO_SERVER.md` 中 dead env vars（SMARTASK_BOOTSTRAP_SKIP_BUILTINS 等）；`app.py` 启动期无 PG 重试。详细分析与 QA 报告见 `.workbuddy/memory/2026-08-10.md`。

@@ -674,18 +674,16 @@ if [[ "$NO_BUILD" -eq 1 ]]; then
 else
   dc up -d --build
 fi
-echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
+echo "  [OK] migrate 服务已先应用 backend/migrations（含报告阈值与模板配置），backend 直接起 Flask"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
 dc ps
 
-info "同步内置数据集模板"
-if dc exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
-  echo "  [OK] 内置数据集模板已同步"
-else
-  warn "内置数据集模板同步失败，不影响容器运行；请执行: ${DOCKER_COMPOSE_CMD} ${COMPOSE_FILE_ARGS} logs --tail=120 backend"
-fi
+# 内置数据集模板同步已移除（2026-08-10 bootstrap 解耦 BugFix）：
+# apply_payload_direct() 会 DELETE+全插 bs_* 子表，覆盖用户文件迁移导入的
+# golden sql / 数据字典 / agent prompt。元数据改由 bundle 导入导出流程管理。
+# 如需手动同步内置模板：dc exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"

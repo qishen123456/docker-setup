@@ -3,8 +3,15 @@
 # 支持双模式：local（本地开发） / production（生产环境）
 #
 # 使用方式：
-#   本地开发：cp .env.local .env && docker-compose up -d
-#   生产部署：cp .env.production .env && docker-compose up -d
+#   本地开发：cp .env.local .env && docker compose up -d
+#   生产部署：cp .env.production .env && docker compose up -d
+#
+# 启动顺序（由 depends_on 控制）：
+#   postgres (healthy) → migrate (success) → backend → frontend → nginx(prod)
+#
+# "migrate" 服务是一次性任务容器，仅在 postgres ready 后跑一次应用
+# schema 迁移与默认配置初始化，再退出。常规开发/部署只需正常
+# `docker compose up -d` 即可自动按依赖顺序拉起全部服务。
 # =========================
 
 services:
@@ -28,10 +35,49 @@ services:
       timeout: 5s
       retries: 12
 
+  # 一次性迁移任务容器：等待 postgres healthy 后运行 backend/migrate.py
+  # 一次性退出（restart: no）。backend 通过 service_completed_successfully
+  # 依赖此服务，确保数据库迁移 + 默认配置初始化完成后再启动后端。
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: migrate
+      args:
+        APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
+        PIP_INDEX_URL: ${SMARTASK_PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${SMARTASK_PIP_TRUSTED_HOST-mirrors.aliyun.com}
+        PIP_TIMEOUT: ${SMARTASK_PIP_TIMEOUT-120}
+        PIP_RETRIES: ${SMARTASK_PIP_RETRIES-8}
+    container_name: smartask-migrate
+    restart: "no"
+    command: ["python", "migrate.py"]
+    env_file:
+      - .env
+    environment:
+      SMARTASK_DB_HOST: postgres
+      SMARTASK_DB_PORT: 5432
+      SMARTASK_CONFIG_DIR: /app/config
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./backend/logs:/app/backend/logs
+      - ./config:/app/config
+      - ./backend/imports:/app/backend/imports
+      - ./backups:/app/backups
+    networks:
+      - smartask-internal
+      - default
+
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      target: backend
       args:
         APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
         PIP_INDEX_URL: ${SMARTASK_PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}
@@ -44,8 +90,6 @@ services:
       - .env
     environment:
       SMARTASK_BACKEND_PORT: 5002
-      SMARTASK_BOOTSTRAP_SKIP_BUILTINS: ${SMARTASK_BOOTSTRAP_SKIP_BUILTINS:-0}
-      SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT: ${SMARTASK_BOOTSTRAP_SKIP_FIRST_IMPORT:-0}
       SMARTASK_DB_HOST: postgres
       SMARTASK_DB_PORT: 5432
       SMARTASK_CHROMA_PATH: /app/chroma_db
@@ -56,6 +100,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # === 端口暴露（local 模式启用，production 模式注释掉）===
     ports:
       - "${SMARTASK_BACKEND_PORT:-5002}:5002"
@@ -74,6 +120,7 @@ services:
       start_period: 30s
     networks:
       - smartask-internal
+      - default
 
   frontend:
     build:

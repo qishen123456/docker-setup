@@ -851,7 +851,7 @@ def feishu_callback():
             scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
             host = request.headers.get('X-Forwarded-Host', request.host)
             frontend_url = f"{scheme}://{host}{forwarded_prefix}".rstrip("/")
-        redirect_target = f"{frontend_url}/?token={session_token}"
+        redirect_target = f"{frontend_url}/auth/callback?token={session_token}"
         
         html = f"""<!DOCTYPE html>
 <html>
