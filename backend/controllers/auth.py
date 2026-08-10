@@ -840,10 +840,14 @@ def feishu_callback():
             return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403
         session_token = create_session_token(user_info)
         frontend_base_url = (cfg["frontend_url"] or "").rstrip("/")
-        frontend_url = cfg["frontend_callback_url"] or (f"{frontend_base_url}/auth/callback" if frontend_base_url else "/auth/callback")
+        # 优先使用配置的 frontend_callback_url，否则直接跳首页
+        frontend_url = cfg["frontend_callback_url"] or frontend_base_url or "/"
         _log_auth_event("feishu_login_success", "info", "飞书网页登录成功", user=user_info, status_code=302)
         separator = "&" if "?" in frontend_url else "?"
-        return redirect(f"{frontend_url}{separator}token={session_token}")
+        # 处理根路径情况，避免出现 //?token=xxx
+        if frontend_url.endswith("/") or frontend_url == "/":
+            return redirect(f"{frontend_url}{separator.lstrip('&')}token={session_token}")
+        return redirect(f"{frontend_url}/{separator.lstrip('&')}token={session_token}")
     except Exception as exc:
         _log_auth_event("feishu_login_failed", "error", "飞书网页登录失败", error=str(exc), status_code=500)
         return jsonify({"success": False, "error": f"飞书登录失败: {exc}"}), 500
