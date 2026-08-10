@@ -30,6 +30,10 @@ def _rank_limit_match(text: str):
         re.search(rf"(?:Top|TOP|top|前|后|倒数)\s*{pattern}", text or "")
         or re.search(rf"(?:最高|最低|最好|最差|垫底|落后)(?:的)?\s*{pattern}\s*(?:个|名|位|家)?", text or "")
         or re.search(rf"第\s*{pattern}\s*(?:名|位)?", text or "")
+        # 裸中文基数词/阿拉伯数字 + 量词（四大/三个/五家/4位/三家公司），
+        # 无"前/后/最X/第"前缀也要识别为显式排名计数，避免"四大"被漏判回落默认值。
+        # 量词表与 ask_engine_entity._clean_org_subject_candidate 保持一致，避免词表漂移。
+        or re.search(r"(\d+|[一二两三四五六七八九十]+)\s*(?:个|大|家|者|位|名|项)", text or "")
     )
 
 

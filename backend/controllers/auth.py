@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import secrets
 import hashlib
+from datetime import datetime
 from urllib.parse import urlencode
 
 import requests
@@ -259,10 +260,87 @@ def _find_employee_match(user: dict) -> dict | None:
 
 
 def _ensure_feishu_employee_user(user: dict) -> dict:
+    """确保飞书用户在员工列表中存在（支持手机号自动合并）
+
+    合并策略（增强版）：
+    - 优先级 1：精确匹配 + 检查是否需要合并（如果匹配到的是 feishu 自动创建账号，且存在同手机号的本地账号 → 强制合并）
+    - 优先级 2：手机号模糊匹配（合并到已有账号，保留权限，更新飞书信息）
+    - 优先级 3：创建新账号
+    """
     if not isinstance(user, dict) or user.get("source") != "feishu":
         return user
-    if _find_employee_match(user):
+
+    mobile = str(user.get("mobile") or "").strip()
+
+    # 优先级 1：精确匹配
+    existing = _find_employee_match(user)
+
+    # DEBUG: 打印匹配结果
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"[DEBUG-FEISHU-MERGE] mobile={mobile}, existing_id={existing.get('id') if existing else None}, is_feishu_account={existing.get('id', '').startswith('emp_feishu_') if existing else False}")
+
+    if existing:
+        # 检查：如果匹配到的是 feishu 自动创建账号（emp_feishu_*），且存在同手机号的本地账号 → 强制合并
+        if existing.get("id", "").startswith("emp_feishu_") and mobile:
+            local_account = _find_employee_by_mobile(mobile)
+
+            # DEBUG: 打印查找结果
+            logger.warning(f"[DEBUG-FEISHU-MERGE] local_account found={local_account is not None}, local_id={local_account.get('id') if local_account else None}")
+
+            # 如果找到了不同的本地账号（不是当前这个 feishu 账号）→ 合并到本地账号
+            if local_account and local_account["id"] != existing["id"]:
+                _log_auth_event(
+                    "feishu_force_merge",
+                    "info",
+                    f"检测到重复账号：{existing['name']}({existing['id']}) 将合并到 {local_account['name']}({local_account['id']})",
+                    account=mobile,
+                    status_code=200,
+                )
+                # 1. 将飞书信息合并到本地账号
+                _merge_feishu_to_existing(local_account, user)
+                # 2. 禁用旧的 feishu 账号（而不是删除，保留审计记录）
+                _disable_employee(existing["id"], f"已合并到 {local_account['id']}({local_account['name']})")
+
+                _log_auth_event(
+                    "feishu_user_merged",
+                    "info",
+                    f"飞书登录：手机号 {mobile} 强制合并到已有用户 {local_account['name']}({local_account['id']})",
+                    user=local_account,
+                    account=mobile,
+                    union_id=user.get("union_id") or "",
+                    status_code=200,
+                )
+                # 返回合并后的用户信息
+                merged_user = _employee_user_info(local_account)
+                merged_user["source"] = "feishu"
+                return merged_user
+
+        # 正常情况：精确匹配到非 feishu 账号 或 无需合并 → 更新飞书字段
+        _update_feishu_fields(existing, user)
         return user
+
+    # 优先级 2：按手机号查找并合并
+    if mobile:
+        existing_by_mobile = _find_employee_by_mobile(mobile)
+        if existing_by_mobile:
+            # 找到手机号相同的用户 → 合并（保留权限 + 更新飞书信息）
+            _merge_feishu_to_existing(existing_by_mobile, user)
+            _log_auth_event(
+                "feishu_user_merged",
+                "info",
+                f"飞书登录：手机号 {mobile} 匹配已有用户 {existing_by_mobile['name']}({existing_by_mobile['id']})，已合并",
+                user=existing_by_mobile,
+                account=mobile,
+                union_id=user.get("union_id") or "",
+                status_code=200,
+            )
+            # 返回合并后的用户信息（使用原账号 ID）
+            merged_user = _employee_user_info(existing_by_mobile)
+            merged_user["source"] = "feishu"
+            return merged_user
+
+    # 优先级 3：完全无匹配 → 创建新账号
     identity = (
         user.get("union_id")
         or user.get("open_id")
@@ -308,6 +386,105 @@ def _ensure_feishu_employee_user(user: dict) -> dict:
         status_code=200,
     )
     return user
+
+
+def _disable_employee(employee_id: str, reason: str = ""):
+    """禁用员工账号（用于合并后清理旧账号）"""
+    permissions = _load_permissions()
+    employees = permissions.get("employees", [])
+
+    for idx, emp in enumerate(employees):
+        if emp.get("id") == employee_id:
+            employees[idx]["enabled"] = False
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            old_note = employees[idx].get("note", "")
+            employees[idx]["note"] = f"{old_note}; [{timestamp}] 已禁用: {reason}".strip("; ").lstrip("; ")
+            break
+
+    _save_permissions({"employees": employees})
+
+
+def _find_employee_by_mobile(mobile: str) -> dict | None:
+    """根据手机号查找员工（用于飞书合并）"""
+    mobile = str(mobile or "").strip().lower().replace("+", "").replace("-", "").replace(" ", "")
+    if not mobile or len(mobile) < 7:
+        return None
+    for index, item in enumerate(_load_permissions().get("employees", [])):
+        employee = _clean_employee(item, index)
+        emp_mobile = str(employee.get("account") or "").strip().lower().replace("+", "").replace("-", "").replace(" ", "")
+        if emp_mobile == mobile or emp_mobile.endswith(mobile[-8:]) or mobile.endswith(emp_mobile[-8:]):
+            return employee
+    return None
+
+
+def _update_feishu_fields(employee: dict, feishu_user: dict):
+    """更新已有员工的飞书相关字段（不改变权限）"""
+    permissions = _load_permissions()
+    employees = permissions.get("employees", [])
+
+    for idx, emp in enumerate(employees):
+        if emp.get("id") == employee.get("id"):
+            # 只更新飞书信息字段，保留权限配置
+            employees[idx]["union_id"] = feishu_user.get("union_id") or employees[idx].get("union_id", "")
+            employees[idx]["open_id"] = feishu_user.get("open_id") or employees[idx].get("open_id", "")
+            employees[idx]["user_id"] = feishu_user.get("user_id") or employees[idx].get("user_id", "")
+            # 可选：更新姓名（如果飞书的更准确）
+            if feishu_user.get("name"):
+                employees[idx]["name"] = feishu_user["name"]
+            # 更新部门信息
+            if feishu_user.get("department"):
+                employees[idx]["department"] = feishu_user["department"]
+            if feishu_user.get("department_ids"):
+                employees[idx]["department_ids"] = feishu_user["department_ids"]
+            if feishu_user.get("position"):
+                employees[idx]["position"] = feishu_user["position"]
+            # 更新备注
+            old_note = employees[idx].get("note", "")
+            if "飞书同步" not in old_note:
+                employees[idx]["note"] = f"{old_note}; 已从飞书同步信息".strip("; ").lstrip("; ")
+            break
+
+    _save_permissions({"employees": employees})
+
+
+def _merge_feishu_to_existing(employee: dict, feishu_user: dict):
+    """将飞书用户信息合并到已有员工账号（保留权限 + 更新飞书信息）"""
+    permissions = _load_permissions()
+    employees = permissions.get("employees", [])
+
+    for idx, emp in enumerate(employees):
+        if emp.get("id") == employee.get("id"):
+            # === 保留原有权限配置 ===
+            # role, role_ids, organization_node_ids, allowed_model_ids 等保持不变
+
+            # === 更新为飞书信息 ===
+            if feishu_user.get("name"):
+                employees[idx]["name"] = feishu_user["name"]
+            employees[idx]["union_id"] = feishu_user.get("union_id") or ""
+            employees[idx]["open_id"] = feishu_user.get("open_id") or ""
+            employees[idx]["user_id"] = feishu_user.get("user_id") or ""
+            if feishu_user.get("department"):
+                employees[idx]["department"] = feishu_user["department"]
+            if feishu_user.get("department_ids"):
+                employees[idx]["department_ids"] = feishu_user["department_ids"]
+            if feishu_user.get("position"):
+                employees[idx]["position"] = feishu_user["position"]
+            if feishu_user.get("organization"):
+                employees[idx]["organization"] = feishu_user["organization"]
+            if feishu_user.get("company"):
+                employees[idx]["company"] = feishu_user["company"]
+
+            # 更新标识符（便于后续精确匹配）
+            if feishu_user.get("union_id"):
+                employees[idx]["identifier"] = feishu_user["union_id"]
+
+            # 更新备注
+            old_note = employees[idx].get("note", "")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            employees[idx]["note"] = f"{old_note}; [{timestamp}] 飞书账号已合并（手机号匹配）".strip("; ").lstrip("; ")
+            break
+
+    _save_permissions({"employees": employees})
 
 
 def _find_employee_by_account(account: str) -> dict | None:

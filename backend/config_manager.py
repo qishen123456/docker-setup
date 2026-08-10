@@ -326,7 +326,7 @@ def _apply_env_ai_model_overrides(models: list) -> list:
         result = [_build_default_ai_model()]
 
     target = next((item for item in result if item.get('is_default')), None) or result[0]
-    env_api_key = _env_secret('SMARTASK_AI_API_KEY', '')
+    env_api_key = _env_text('SMARTASK_AI_API_KEY', '')  # 使用明文，不经过解密
     env_label = _env_text('SMARTASK_AI_LABEL', '')
     env_provider = _env_text('SMARTASK_AI_PROVIDER', '')
     env_model = _env_text('SMARTASK_AI_MODEL', '')

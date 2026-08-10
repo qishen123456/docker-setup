@@ -98,6 +98,47 @@
             <el-option label="管理员" value="admin" />
           </el-select>
         </el-form-item>
+        <el-form-item label="AI 模型权限">
+          <div class="ai-model-permission-config">
+            <p class="model-permission-tip">留空表示跟随角色默认配置；选择后覆盖角色配置</p>
+
+            <!-- 按渠道分组的树形结构 -->
+            <div v-for="(models, channel) in modelsByChannel" :key="channel" class="model-channel-group">
+              <!-- 渠道级：全选/取消 -->
+              <div class="channel-header" @click="toggleChannelSelection(channel)">
+                <el-icon class="channel-toggle-icon">
+                  <component :is="expandedChannels.includes(channel) ? 'Minus' : 'Plus'" />
+                </el-icon>
+                <el-checkbox
+                  :indeterminate="getChannelIndeterminate(channel)"
+                  :checked="isChannelFullySelected(channel)"
+                  @click.stop
+                  @change="toggleAllModelsInChannel(channel, $event)"
+                >
+                  <strong>{{ channel }}</strong>
+                  <span class="channel-count">{{ getSelectedCountInChannel(channel) }}/{{ models.length }}</span>
+                </el-checkbox>
+              </div>
+
+              <!-- 模型列表（可折叠） -->
+              <transition name="el-zoom-in-top">
+                <div v-show="expandedChannels.includes(channel)" class="channel-models">
+                  <el-checkbox-group v-model="userForm.allowed_model_ids" class="model-checkbox-group">
+                    <el-checkbox
+                      v-for="model in models"
+                      :key="model.id"
+                      :label="model.id"
+                      :disabled="model.is_default"
+                    >
+                      <span :class="{ 'default-model-tag': model.is_default }">{{ model.name }}</span>
+                      <el-tag v-if="model.is_default" size="small" type="warning" effect="plain">默认</el-tag>
+                    </el-checkbox>
+                  </el-checkbox-group>
+                </div>
+              </transition>
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="组织">
           <el-tree-select
             v-model="userForm.organization_node_ids"
@@ -273,7 +314,104 @@ const userForm = reactive({
   oa_account: '',
   manager: '',
   password: '',
+  allowed_model_ids: [], // AI 模型权限（新增）
 })
+
+// AI 模型列表（新增）
+const activeModels = ref([])
+const expandedChannels = ref([]) // 控制渠道折叠状态
+
+/** 加载活跃模型列表（编辑账号用全部模型） */
+const loadActiveModels = async () => {
+  try {
+    // 使用 /api/ai-models 获取全部模型（不受权限过滤）
+    const res = await fetch('/api/ai-models', { credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      // 只显示激活的模型
+      activeModels.value = (data.models || []).filter(m => m.is_active)
+      // 默认展开第一个渠道
+      if (Object.keys(modelsByChannel.value).length > 0) {
+        expandedChannels.value = [Object.keys(modelsByChannel.value)[0]]
+      }
+    }
+  } catch (e) {
+    console.error('加载模型列表失败:', e)
+  }
+}
+
+/** 按渠道分组 */
+const modelsByChannel = computed(() => {
+  const groups = {}
+  activeModels.value.forEach(model => {
+    const channel = model.channel_display_name || '其他'
+    if (!groups[channel]) {
+      groups[channel] = []
+    }
+    groups[channel].push(model)
+  })
+  return groups
+})
+
+/** 获取某渠道下已选中的模型数量 */
+const getSelectedCountInChannel = (channel) => {
+  const models = modelsByChannel.value[channel] || []
+  return models.filter(m =>
+    userForm.allowed_model_ids.includes(m.id)
+  ).length
+}
+
+/** 判断某渠道是否全选 */
+const isChannelFullySelected = (channel) => {
+  const models = modelsByChannel.value[channel] || []
+  const nonDefaultModels = models.filter(m => !m.is_default)
+  if (nonDefaultModels.length === 0) return false
+  return nonDefaultModels.every(m =>
+    userForm.allowed_model_ids.includes(m.id)
+  )
+}
+
+/** 判断某渠道是否半选 */
+const getChannelIndeterminate = (channel) => {
+  const selected = getSelectedCountInChannel(channel)
+  const total = (modelsByChannel.value[channel] || []).filter(m => !m.is_default).length
+  return selected > 0 && selected < total
+}
+
+/** 全选/取消某渠道下所有非默认模型 */
+const toggleAllModelsInChannel = (channel, checked) => {
+  const models = modelsByChannel.value[channel] || []
+  const nonDefaultModelIds = models
+    .filter(m => !m.is_default)
+    .map(m => m.id)
+
+  if (checked) {
+    // 全选：添加到已选列表（去重）
+    nonDefaultModelIds.forEach(id => {
+      if (!userForm.allowed_model_ids.includes(id)) {
+        userForm.allowed_model_ids.push(id)
+      }
+    })
+  } else {
+    // 取消：从已选列表移除
+    userForm.allowed_model_ids = userForm.allowed_model_ids.filter(
+      id => !nonDefaultModelIds.includes(id)
+    )
+  }
+}
+
+/** 切换渠道展开/折叠 */
+const toggleChannelSelection = (channel) => {
+  const index = expandedChannels.value.indexOf(channel)
+  if (index > -1) {
+    expandedChannels.value.splice(index, 1)
+  } else {
+    expandedChannels.value.push(channel)
+  }
+}
+
+// 页面加载时获取活跃模型列表
+loadActiveModels()
 const bulkForm = reactive({
   role: '',
   organization_node_ids: [],
@@ -402,6 +540,7 @@ const resetUserForm = (user = {}) => {
     oa_account: user.oa_account || '',
     manager: user.manager || '',
     password: '',
+    allowed_model_ids: clone(user.allowed_model_ids) || [], // AI 模型权限（新增）
   })
 }
 
@@ -613,6 +752,95 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 14px;
+}
+
+/* AI 模型权限配置样式（树形结构） */
+.ai-model-permission-config {
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #E4E7ED;
+  border-radius: 6px;
+  padding: 10px;
+  background: #FAFAFA;
+}
+
+.model-permission-tip {
+  color: #909399;
+  font-size: 12px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #DCDFE6;
+}
+
+.model-channel-group {
+  margin-bottom: 10px;
+  background: white;
+  border: 1px solid #EBEEF5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.model-channel-group:last-child {
+  margin-bottom: 0;
+}
+
+.channel-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #F5F7FA;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.channel-header:hover {
+  background: #ECF5FF;
+}
+
+.channel-toggle-icon {
+  color: #409EFF;
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.channel-header strong {
+  flex: 1;
+  color: #303133;
+  font-size: 13px;
+}
+
+.channel-count {
+  color: #909399;
+  font-size: 11px;
+  background: #F4F4F5;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.channel-models {
+  padding: 10px 12px;
+  border-top: 1px solid #EBEEF5;
+  background: white;
+}
+
+.model-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-checkbox-group .el-checkbox {
+  margin-right: 0;
+  height: auto;
+  line-height: 1.5;
+}
+
+.default-model-tag {
+  color: #E6A23C;
+  font-weight: 500;
 }
 
 .compact-user-form :deep(.el-form-item:nth-child(4)),
