@@ -567,10 +567,10 @@ detect_docker_compose_cmd() {
   if command -v docker-compose &> /dev/null; then
     DOCKER_COMPOSE_CMD="docker-compose"
     info "检测到 docker-compose（v1 独立版本）"
-  # 其次尝试 ${DOCKER_COMPOSE_CMD}（Docker 内置的 v2 插件）
-  elif ${DOCKER_COMPOSE_CMD} version &> /dev/null; then
-    DOCKER_COMPOSE_CMD="${DOCKER_COMPOSE_CMD}"
-    info "检测到 ${DOCKER_COMPOSE_CMD}（v2 插件）"
+  # 其次尝试 docker compose（Docker 内置的 v2 插件）
+  elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+    info "检测到 docker compose（v2 插件）"
   else
     fail "未找到 Docker Compose！请安装：\n  - CentOS/RHEL: yum install docker-compose-plugin\n  - Ubuntu/Debian: apt install docker-compose-plugin\n  - 或手动下载: https://docs.docker.com/compose/install/"
   fi
