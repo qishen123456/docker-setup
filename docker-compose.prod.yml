@@ -1,0 +1,23 @@
+# =========================
+# SmartAsk 生产环境 Override 配置
+# 用途：覆盖 docker-compose.yml，禁用直接端口暴露，仅通过 Nginx 代理
+#
+# 使用方式：
+#   cp .env.production .env && docker-compose --profile production -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 或使用部署脚本：
+#   ./deploy.sh production    (Linux/Mac)
+#   .\deploy.ps1 -Mode production  (Windows)
+# =========================
+
+services:
+  backend:
+    # === 生产模式：注释掉端口暴露，由 Nginx 代理 ===
+    ports: []
+
+  frontend:
+    # === 生产模式：注释掉端口暴露，由 Nginx 代理 ===
+    ports: []
+
+  # Nginx 服务已在主 docker-compose.yml 中定义（profiles: ["production"]）
+  # 此处无需重复定义

@@ -1,582 +1,364 @@
-#!/usr/bin/env bash 
-set -euo pipefail
+#!/bin/bash
+# =========================
+# SmartAsk 部署切换脚本（支持自动环境检测）
+# 用途：快速在本地开发 / 生产环境之间切换
+#
+# 使用方式：
+#   ./deploy.sh              # 自动检测环境并提示推荐模式
+#   ./deploy.sh local        # 切换到本地开发模式
+#   ./deploy.sh production   # 切换到生产环境模式（Docker内部Nginx）
+#   ./deploy.sh proxy        # 切换到外部代理模式（推荐！适用于已有外部Nginx/负载均衡）
+#   ./deploy.sh status       # 查看当前模式和容器状态
+#
+# 环境检测逻辑：
+#   Linux   → 服务器环境（推荐proxy模式）
+#   Windows → 测试环境（推荐local模式）
+#   macOS   → 开发环境（推荐local模式）
+# =========================
 
-NO_BUILD=0
-RUN_TESTS=0
-RUN_STREAM_TESTS=0
-FORCE_IMPORT=0
-FORCE_CONFIG=0
-SKIP_VERIFY=0
+set -e
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --no-build)
-      NO_BUILD=1
-      shift
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# 项目根目录
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT"
+
+# =========================
+# 自动环境检测
+# =========================
+detect_environment() {
+  local os_name os_type recommend_mode
+
+  case "$(uname -s)" in
+    Linux*)
+      os_name="Linux"
+      os_type="server"
+      # 进一步判断是否为WSL（Windows Subsystem for Linux）
+      if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+        os_name="WSL (Windows Subsystem for Linux)"
+        os_type="windows"
+        recommend_mode="local"
+      else
+        recommend_mode="proxy"
+      fi
       ;;
-    --run-tests)
-      RUN_TESTS=1
-      shift
+    Darwin*)
+      os_name="macOS"
+      os_type="development"
+      recommend_mode="local"
       ;;
-    --run-stream-tests)
-      RUN_STREAM_TESTS=1
-      RUN_TESTS=1
-      shift
+    MINGW*|CYGWIN*|MSYS*)
+      os_name="Windows (Git Bash/MSYS2)"
+      os_type="windows"
+      recommend_mode="local"
       ;;
-    --force-import)
-      FORCE_IMPORT=1
-      shift
+    *)
+      os_name="$(uname -s) (未知系统)"
+      os_type="unknown"
+      recommend_mode="local"
       ;;
-    --force-config)
-      FORCE_CONFIG=1
-      shift
-      ;;
-    --skip-verify)
-      SKIP_VERIFY=1
-      shift
-      ;;
+  esac
+
+  echo "${os_name}|${os_type}|${recommend_mode}"
+}
+
+# 获取环境信息
+IFS='|' read -r OS_NAME OS_TYPE RECOMMEND_MODE <<< "$(detect_environment)"
+
+# 获取当前模式
+get_current_mode() {
+    if [ -f .env ]; then
+        grep -q "^DEPLOY_MODE=production" .env && echo "production" || echo "local"
+    else
+        echo "未配置"
+    fi
+}
+
+# 打印状态（增强版：包含环境检测信息）
+print_status() {
+    current=$(get_current_mode)
+    echo -e "\n${CYAN}============================================${NC}"
+    echo -e "${CYAN}  SmartAsk 部署状态面板${NC}"
+    echo -e "${CYAN}============================================${NC}"
+
+    # 环境信息
+    echo -e "\n${YELLOW}📌 环境检测：${NC}"
+    echo -e "  操作系统：${OS_NAME}"
+    echo -e "  环境类型：${OS_TYPE}"
+    if [[ "${RECOMMEND_MODE}" != "${current:-}" ]]; then
+      echo -e "  推荐模式：${GREEN}${RECOMMEND_MODE}${NC} ${YELLOW}(当前: ${current:-未配置})${NC}"
+    else
+      echo -e "  推荐模式：${GREEN}${RECOMMEND_MODE}${NC} ✅"
+    fi
+
+    # 当前部署模式
+    echo -e "\n${YELLOW}📋 当前部署模式：${NC}"
+    case "${current}" in
+      local)
+        echo -e "  模式：${GREEN}本地开发模式${NC}"
+        echo -e "  后端端口：5002（直接访问）"
+        echo -e "  前端端口：8888（直接访问）"
+        echo -e "  Nginx：未启用"
+        ;;
+      production)
+        echo -e "  模式：${GREEN}生产环境模式（Docker内Nginx）${NC}"
+        echo -e "  访问方式：通过 Docker 内 Nginx 单端口代理"
+        ;;
+      proxy)
+        echo -e "  模式：${GREEN}外部代理模式（推荐用于服务器）${NC}"
+        echo -e "  访问地址：$(grep '^PUBLIC_PROTOCOL=' .env 2>/dev/null | cut -d= -f2)://$(grep '^PUBLIC_DOMAIN=' .env 2>/dev/null | cut -d= -f2):$(grep '^PUBLIC_PORT=' .env 2>/dev/null | cut -d= -f2)$(grep '^BASE_PATH=' .env 2>/dev/null | cut -d= -f2)"
+        echo -e "  后端API：对外暴露 :5002（供外部Nginx转发）"
+        echo -e "  前端页面：对外暴露 :8888（供外部Nginx转发）"
+        ;;
+      *)
+        echo -e "  模式：${RED}未配置${NC}"
+        ;;
+    esac
+
+    # 详细环境变量
+    if [ -f .env ]; then
+        echo -e "\n${YELLOW}⚙️  配置详情：${NC}"
+        echo -e "  DEPLOY_MODE=${current:-未设置}"
+        echo -e "  BACKEND_URL=$(grep '^BACKEND_URL=' .env | cut -d= -f2)"
+        echo -e "  FRONTEND_URL=$(grep '^FRONTEND_URL=' .env | cut -d= -f2)"
+        if grep -q '^PUBLIC_DOMAIN=' .env; then
+          echo -e "  PUBLIC_DOMAIN=$(grep '^PUBLIC_DOMAIN=' .env | cut -d= -f2)"
+        fi
+    fi
+
+    # Docker容器状态
+    echo -e "\n${YELLOW}🐳 Docker 容器状态：${NC}"
+    if command -v docker-compose &> /dev/null; then
+        docker-compose ps 2>/dev/null || echo "  Docker Compose 未运行或未安装"
+    else
+        echo "  未找到 docker-compose 命令"
+    fi
+
+    echo ""
+}
+
+# 切换到本地模式
+switch_to_local() {
+    echo -e "\n${GREEN}>>> 切换到本地开发模式...${NC}\n"
+
+    # 备份当前 .env
+    if [ -f .env ]; then
+        cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+        echo -e "  ${YELLOW}已备份当前 .env 文件${NC}"
+    fi
+
+    # 复制本地配置
+    cp .env.local .env
+
+    # 确保端口暴露（取消注释 docker-compose.yml 中的 ports）
+    sed -i 's/^\(\s*\)#\(\s*ports:\)/\1\2/' docker-compose.yml 2>/dev/null || true
+
+    echo -e "  ${GREEN}✓ 已应用本地配置${NC}"
+    echo -e "  ${GREEN}✓ 后端端口：5002（直接访问）${NC}"
+    echo -e "  ${GREEN}✓ 前端端口：8888（直接访问）${NC}"
+    echo -e "  ${GREEN}✓ Nginx：未启用${NC}"
+
+    echo -e "\n${BLUE}启动命令：docker-compose up -d --build${NC}\n"
+}
+
+# 切换到生产模式（Docker内部Nginx）
+switch_to_production() {
+    echo -e "\n${GREEN}>>> 切换到生产环境模式（Docker内部Nginx）...${NC}\n"
+
+    # 检查是否已配置域名
+    if ! grep -q "^PUBLIC_DOMAIN=" .env.production || grep -q "^PUBLIC_DOMAIN=your-domain.com$" .env.production; then
+        echo -e "${RED}错误：请先修改 .env.production 中的 PUBLIC_DOMAIN！${NC}"
+        exit 1
+    fi
+
+    # 备份当前 .env
+    if [ -f .env ]; then
+        cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+        echo -e "  ${YELLOW}已备份当前 .env 文件${NC}"
+    fi
+
+    # 复制生产配置
+    cp .env.production .env
+
+    echo -e "  ${GREEN}✓ 已应用生产配置${NC}"
+    echo -e "  ${GREEN}✅ 公网域名：$(grep '^PUBLIC_DOMAIN=' .env | cut -d= -f2)${NC}"
+    echo -e "  ${GREEN}✅ 后端 API：通过 Docker内Nginx 代理${NC}"
+    echo -e "  ${GREEN}✅ 前端页面：通过 Docker内Nginx 代理${NC}"
+    echo -e "  ${GREEN}✅ Nginx：Docker容器内启动${NC}"
+
+    echo -e "\n${BLUE}启动命令：${NC}"
+    echo -e "  docker-compose --profile production -f docker-compose.yml -f docker-compose.prod.yml up -d --build"
+    echo ""
+}
+
+# 切换到外部代理模式（推荐！适用于已有外部Nginx/负载均衡）
+switch_to_proxy() {
+    echo -e "\n${GREEN}>>> 切换到外部代理模式...${NC}\n"
+    echo -e "  ${BLUE}适用场景：已有外部Nginx/负载均衡处理HTTPS和路径前缀${NC}\n"
+
+    # 检查是否已配置域名
+    if ! grep -q "^PUBLIC_DOMAIN=" .env.production || grep -q "^PUBLIC_DOMAIN=your-domain.com$" .env.production; then
+        echo -e "${RED}错误：请先修改 .env.production 中的 PUBLIC_DOMAIN！${NC}"
+        exit 1
+    fi
+
+    # 备份当前 .env
+    if [ -f .env ]; then
+        cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+        echo -e "  ${YELLOW}已备份当前 .env 文件${NC}"
+    fi
+
+    # 复制生产配置
+    cp .env.production .env
+
+    domain=$(grep '^PUBLIC_DOMAIN=' .env | cut -d= -f2)
+    port=$(grep '^PUBLIC_PORT=' .env | cut -d= -f2)
+    base_path=$(grep '^BASE_PATH=' .env | cut -d= -f2)
+
+    echo -e "  ${GREEN}✓ 已应用生产配置${NC}"
+    echo -e "  ${GREEN}✅ 公网地址：$(grep '^PUBLIC_PROTOCOL=' .env | cut -d= -f2)://${domain}:${port}${base_path}${NC}"
+    echo -e "  ${GREEN}✅ 后端 API：对外暴露 :5002（供外部Nginx转发）${NC}"
+    echo -e "  ${GREEN}✅ 前端页面：对外暴露 :8888（供外部Nginx转发）${NC}"
+    echo -e "  ${GREEN}✅ Docker内Nginx：已禁用（使用外部代理）${NC}"
+
+    echo -e "\n${YELLOW}⚠️  重要提示：${NC}"
+    echo -e "  请确保外部Nginx已正确配置 /smart-ask/ 和 /smart-ask/api/ 的转发"
+    echo -e "  详细配置见 DEPLOY_TO_SERVER.md"
+    echo ""
+
+    echo -e "${BLUE}启动命令：${NC}"
+    echo -e "  docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build"
+    echo ""
+}
+
+# 主逻辑（支持无参数时自动提示）
+case "${1:-auto}" in
+    local|dev)
+        switch_to_local
+        ;;
+    production|prod)
+        switch_to_production
+        ;;
+    proxy|external)
+        switch_to_proxy
+        ;;
+    status|st|s)
+        print_status
+        ;;
+    auto|"")
+        # 无参数时显示环境检测信息并推荐模式
+        print_status
+
+        echo -e "${CYAN}💡 快速操作：${NC}"
+        echo -e ""
+
+        case "${OS_TYPE}" in
+          server)
+            echo -e "  检测到 ${GREEN}服务器环境${NC}，推荐使用外部代理模式："
+            echo -e "    ${CYAN}./deploy.sh proxy${NC}"
+            echo -e ""
+            echo -e "  或使用一键更新脚本："
+            echo -e "    ${CYAN}bash update.sh${NC} （自动备份+重启）"
+            echo -e ""
+            ;;
+          windows)
+            echo -e "  检测到 ${GREEN}Windows测试环境${NC}，推荐使用本地开发模式："
+            echo -e "    ${CYAN}./deploy.sh local${NC}"
+            echo -e ""
+            echo -e "  启动服务："
+            echo -e "    ${CYAN}docker-compose up -d --build${NC}"
+            echo -e ""
+            ;;
+          development)
+            echo -e "  检测到 ${GREEN}macOS开发环境${NC}，推荐使用本地开发模式："
+            echo -e "    ${CYAN}./deploy.sh local${NC}"
+            echo -e ""
+            ;;
+          *)
+            echo -e "  请手动选择部署模式："
+            echo -e "    ${CYAN}./deploy.sh local${NC}       # 本地开发"
+            echo -e "    ${CYAN}./deploy.sh production${NC}  # 生产环境（Docker内Nginx）"
+            echo -e "    ${CYAN}./deploy.sh proxy${NC}       # 外部代理模式（服务器）"
+            echo -e ""
+            ;;
+        esac
+
+        echo -e "${YELLOW}其他命令：${NC}"
+        echo -e "  ./deploy.sh status     # 查看详细状态"
+        echo -e "  ./deploy.sh --help     # 显示帮助信息"
+        echo -e ""
+        ;;
     -h|--help)
-      cat <<'EOF'
-SmartAsk Linux 一键部署脚本
+        cat <<'HELPEOF'
+${CYAN}
+╔══════════════════════════════════════════════════════════════╗
+║           SmartAsk 部署切换脚本 - 使用帮助                   ║
+╚══════════════════════════════════════════════════════════════╝
+${NC}
 
-用法：
-  bash deploy.sh
-  bash deploy.sh --run-tests
-  bash deploy.sh --no-build
+${YELLOW}基本用法：${NC}
+  ./deploy.sh [命令]
 
-参数：
-  --no-build           不重新构建镜像，只启动容器。
-  --run-tests          启动后运行接口测试。
-  --run-stream-tests   额外运行流式问数测试，需要真实 AI Key。
-  --force-import       强制重新导入元数据/业务数据，谨慎使用。
-  --force-config       强制覆盖 config JSON，谨慎使用。
-  --skip-verify        跳过容器内自检，仅做健康检查。
+${YELLOW}可用命令：${NC}
+  ${GREEN}local${NC}         切换到本地开发模式（Windows/macOS推荐）
+                    - 后端:5002 + 前端:8888 直连访问
+                    - 不启用Nginx
 
-镜像源环境变量：
-  SMARTASK_APT_MIRROR=https://mirrors.aliyun.com
-  SMARTASK_NPM_REGISTRY=https://registry.npmmirror.com
-  SMARTASK_DOCKER_REGISTRY_MIRRORS=https://docker.m.daocloud.io,https://docker.1ms.run
-  SMARTASK_CONFIGURE_APT_MIRROR=1
-  SMARTASK_SKIP_APT_MIRROR=1
-  SMARTASK_SKIP_DOCKER_MIRROR=1
+  ${GREEN}production${NC}    切换到生产环境模式（Docker内部Nginx）
+                    - 仅Nginx对外暴露单端口
+                    - 适用于无外部负载均衡的场景
 
-说明：
-  默认不会改写宿主机 /etc/apt 源。确需改写时再设置 SMARTASK_CONFIGURE_APT_MIRROR=1。
-  如果 .env 或 config/*.json 使用 enc:v1 密文，需同时提供 config/.secret_master_key，
-  或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE。
-EOF
-      exit 0
-      ;;
+  ${GREEN}proxy${NC}         切换到外部代理模式（Linux服务器推荐 ⭐）
+                    - backend/frontend端口对外暴露
+                    - 由外部Nginx/负载均衡处理HTTPS和路径前缀
+                    - 适用于你的场景：https://bifine.angelgroup.com.cn:10899/smart-ask
+
+  ${GREEN}status${NC}        查看当前模式和容器状态（增强版状态面板）
+
+  ${GREEN}(无参数)${NC}      自动检测环境并推荐最佳模式
+
+${YELLOW}示例：${NC}
+  # Windows测试环境
+  ./deploy.sh local && docker-compose up -d --build
+
+  # Linux服务器部署
+  ./deploy.sh proxy
+  docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+
+  # 查看状态
+  ./deploy.sh status
+
+${YELLOW}环境检测逻辑：${NC}
+  • Linux   → 识别为服务器 → 推荐 proxy 模式
+  • Windows → 识别为测试环境 → 推荐 local 模式
+  • macOS   → 识别为开发环境 → 推荐 local 模式
+  • WSL     → 识别为Windows子系统 → 推荐 local 模式
+
+${YELLOW}相关文件：${NC}
+  • .env.local              本地开发环境变量
+  • .env.production         生产环境变量（已配置公网地址）
+  • docker-compose.proxy.yml 外部代理模式配置
+  • DEPLOY_TO_SERVER.md     服务器部署详细指南
+  • NGINX_DEPLOYMENT.md     Nginx配置完整指南
+
+HELPEOF
+        ;;
     *)
-      echo "未知参数: $1"
-      exit 1
-      ;;
-  esac
-done
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR" || exit 1
-
-info() { echo ""; echo "==> $*"; }
-ok() { echo "  [OK] $*"; }
-warn() { echo "  [WARN] $*"; }
-fail() { echo "  [ERR] $*" >&2; exit 1; }
-
-read_env() {
-  local key="$1"
-  local default="${2:-}"
-  if [[ ! -f .env ]]; then
-    echo "$default"
-    return
-  fi
-  local value
-  value="$(
-    grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" .env \
-      | tail -n1 \
-      | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${key}=//" \
-      | tr -d '\r' \
-      | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
-      || true
-  )"
-  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
-    value="${value:1:${#value}-2}"
-  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
-    value="${value:1:${#value}-2}"
-  fi
-  echo "${value:-$default}"
-}
-
-require_env() {
-  local key="$1"
-  local value
-  value="$(read_env "$key" "")"
-  [[ -n "$value" ]] || fail ".env 缺少必填项: $key"
-  local lower="${value,,}"
-  if [[ "$lower" =~ please|change-me|changeme|placeholder|example|dummy|请填写|占位|ai_api_key|secret_key ]]; then
-    fail ".env 中 $key 仍是占位符，请先填写真实值"
-  fi
-  if [[ "$key" == "SMARTASK_SECRET_KEY" && "$value" == "vanna-local-secret-2026" ]]; then
-    fail ".env 中 $key 仍是开发默认值，请先改成随机密钥"
-  fi
-  if [[ "$key" == "SMARTASK_ADMIN_PASSWORD" && "$lower" =~ ^(admin123456|123456|password)$ ]]; then
-    fail ".env 中 $key 不能使用弱密码，请先填写强密码"
-  fi
-}
-
-has_encrypted_runtime_secret() {
-  if [[ -f .env ]] && grep -q "enc:v1:" .env; then
-    return 0
-  fi
-  if [[ -d config ]] && grep -Rqs "enc:v1:" config --include='*.json'; then
-    return 0
-  fi
-  return 1
-}
-
-validate_secret_master_key() {
-  local inline_key key_file
-  if ! has_encrypted_runtime_secret; then
-    return 0
-  fi
-
-  inline_key="$(read_env SMARTASK_SECRET_MASTER_KEY "")"
-  if [[ -n "$inline_key" ]]; then
-    warn "检测到 enc:v1 密文，并将使用 .env 中的 SMARTASK_SECRET_MASTER_KEY 解密。生产环境更建议使用 config/.secret_master_key 或 Docker Secret。"
-    return 0
-  fi
-
-  key_file="$(read_env SMARTASK_SECRET_KEY_FILE "")"
-  if [[ -n "$key_file" ]]; then
-    if [[ -f "$key_file" ]]; then
-      ok "检测到密文主密钥文件: $key_file"
-      return 0
-    fi
-    if [[ "$key_file" == /* ]]; then
-      warn "SMARTASK_SECRET_KEY_FILE=$key_file 是容器内绝对路径，宿主机无法直接校验；请确认 docker compose 已挂载该 Secret。"
-      return 0
-    fi
-    fail "检测到 enc:v1 密文，但 SMARTASK_SECRET_KEY_FILE 指向的文件不存在: $key_file"
-  fi
-
-  if [[ -f config/.secret_master_key ]]; then
-    ok "检测到密文主密钥文件: config/.secret_master_key"
-    return 0
-  fi
-
-  fail "检测到 enc:v1 密文，但缺少主密钥。首次部署加密 .env 时，请同时把生成密文那台机器上的 config/.secret_master_key 放到服务器；或设置 SMARTASK_SECRET_MASTER_KEY / SMARTASK_SECRET_KEY_FILE。"
-}
-
-is_root() {
-  [[ "$(id -u)" -eq 0 ]]
-}
-
-command_exists() {
-  command -v "$1" >/dev/null 2>&1
-}
-
-render_progress_bar() {
-  local current="$1"
-  local total="$2"
-  local message="${3:-}"
-  local width=30
-  local percent=$((current * 100 / total))
-  local filled=$((current * width / total))
-  local empty=$((width - filled))
-  local bar_done bar_left
-
-  bar_done="$(printf "%${filled}s" "" | tr ' ' '#')"
-  bar_left="$(printf "%${empty}s" "" | tr ' ' '-')"
-  printf "\r  [%s%s] %3d%% %ds/%ds %s" "$bar_done" "$bar_left" "$percent" "$((current * 2))" "$((total * 2))" "$message"
-}
-
-backend_container_health() {
-  docker inspect smartask-backend \
-    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
-    2>/dev/null || true
-}
-
-dump_backend_diagnostics() {
-  local url="$1"
-
-  echo ""
-  warn "后端健康检查失败，开始输出诊断信息"
-  echo ""
-  echo "---- docker compose ps ----"
-  docker compose ps || true
-  echo ""
-  echo "---- backend container state ----"
-  docker inspect smartask-backend \
-    --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} exit={{.State.ExitCode}} error={{.State.Error}}' \
-    2>/dev/null || true
-  echo ""
-  echo "---- curl health ----"
-  curl -vS --max-time 8 "$url" || true
-  echo ""
-  echo "---- backend logs tail 180 ----"
-  docker compose logs --tail=180 backend || true
-  echo ""
-}
-
-wait_for_backend_health() {
-  local port="$1"
-  local attempts="${2:-120}"
-  local url="http://127.0.0.1:${port}/api/health"
-  local attempt status
-
-  command_exists curl || fail "未找到 curl，无法执行健康检查。请先安装 curl，或手动访问: $url"
-
-  echo "  健康检查地址: $url"
-  for attempt in $(seq 1 "$attempts"); do
-    if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
-      echo ""
-      ok "后端健康检查通过: $url"
-      return 0
-    fi
-
-    status="$(backend_container_health)"
-    render_progress_bar "$attempt" "$attempts" "backend=${status:-unknown}"
-
-    if [[ "$status" == "healthy" ]]; then
-      echo ""
-      warn "宿主机 $url 暂未返回成功，但 backend 容器健康检查已 healthy，继续执行后续自检。"
-      return 0
-    fi
-
-    sleep 2
-  done
-
-  echo ""
-  dump_backend_diagnostics "$url"
-  return 1
-}
-
-restart_docker_daemon() {
-  if command_exists systemctl; then
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl restart docker >/dev/null 2>&1 || {
-      warn "Docker 镜像源已写入，但 Docker 重启失败，请稍后手动执行: systemctl restart docker"
-      return 1
-    }
-    return 0
-  fi
-
-  if command_exists service; then
-    service docker restart >/dev/null 2>&1 || {
-      warn "Docker 镜像源已写入，但 Docker 重启失败，请稍后手动执行: service docker restart"
-      return 1
-    }
-    return 0
-  fi
-
-  warn "未找到 systemctl/service，Docker 镜像源已写入，请手动重启 Docker"
-  return 1
-}
-
-configure_docker_registry_mirror() {
-  if [[ "${SMARTASK_SKIP_DOCKER_MIRROR:-0}" == "1" ]]; then
-    warn "已跳过 Docker 镜像源配置: SMARTASK_SKIP_DOCKER_MIRROR=1"
-    return
-  fi
-
-  if ! is_root; then
-    warn "当前不是 root，跳过 Docker 镜像源配置。需要时请用 sudo/root 执行 deploy.sh"
-    return
-  fi
-
-  local mirrors
-  mirrors="$(read_env SMARTASK_DOCKER_REGISTRY_MIRRORS "${SMARTASK_DOCKER_REGISTRY_MIRRORS:-https://docker.m.daocloud.io,https://docker.1ms.run,https://hub-mirror.c.163.com,https://mirror.baidubce.com}")"
-
-  mkdir -p /etc/docker
-
-  local python_bin=""
-  if command_exists python3; then
-    python_bin="python3"
-  elif command_exists python; then
-    python_bin="python"
-  fi
-
-  if [[ -z "$python_bin" && -f /etc/docker/daemon.json ]]; then
-    warn "未找到 python，且 daemon.json 已存在；为避免覆盖已有 Docker 配置，跳过自动合并。"
-    return
-  fi
-
-  local backup=""
-  if [[ -f /etc/docker/daemon.json ]]; then
-    backup="/etc/docker/daemon.json.smartask.bak.$(date +%Y%m%d%H%M%S)"
-    cp -a /etc/docker/daemon.json "$backup"
-  fi
-
-  if [[ -n "$python_bin" ]]; then
-    SMARTASK_DOCKER_REGISTRY_MIRRORS="$mirrors" "$python_bin" <<'PY'
-import json
-import os
-from pathlib import Path
-
-path = Path("/etc/docker/daemon.json")
-raw = path.read_text(encoding="utf-8").strip() if path.exists() else ""
-data = {}
-if raw:
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        data = {}
-
-mirrors = [
-    item.strip()
-    for item in os.environ.get("SMARTASK_DOCKER_REGISTRY_MIRRORS", "").replace("\n", ",").split(",")
-    if item.strip()
-]
-data["registry-mirrors"] = mirrors
-path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
-  else
-    cat >/etc/docker/daemon.json <<EOF
-{
-  "registry-mirrors": [
-    "https://docker.m.daocloud.io",
-    "https://docker.1ms.run",
-    "https://hub-mirror.c.163.com",
-    "https://mirror.baidubce.com"
-  ]
-}
-EOF
-  fi
-
-  restart_docker_daemon || true
-  if [[ -n "$backup" ]]; then
-    ok "Docker 镜像源已更新，原配置备份: $backup"
-  else
-    ok "Docker 镜像源已更新"
-  fi
-}
-
-write_ubuntu_apt_sources() {
-  local codename="$1"
-  local mirror="$2"
-  local target="$3"
-
-  if [[ "$target" == *.sources ]]; then
-    cat >"$target" <<EOF
-Types: deb
-URIs: ${mirror}/ubuntu/
-Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
-Components: main restricted universe multiverse
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
-  else
-    cat >"$target" <<EOF
-deb ${mirror}/ubuntu/ ${codename} main restricted universe multiverse
-deb ${mirror}/ubuntu/ ${codename}-updates main restricted universe multiverse
-deb ${mirror}/ubuntu/ ${codename}-backports main restricted universe multiverse
-deb ${mirror}/ubuntu/ ${codename}-security main restricted universe multiverse
-EOF
-  fi
-}
-
-write_debian_apt_sources() {
-  local codename="$1"
-  local mirror="$2"
-  local target="$3"
-  local components="main contrib non-free"
-
-  case "$codename" in
-    bookworm|trixie|forky|sid)
-      components="main contrib non-free non-free-firmware"
-      ;;
-  esac
-
-  if [[ "$target" == *.sources ]]; then
-    cat >"$target" <<EOF
-Types: deb
-URIs: ${mirror}/debian/
-Suites: ${codename} ${codename}-updates
-Components: ${components}
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: ${mirror}/debian-security/
-Suites: ${codename}-security
-Components: ${components}
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
-  else
-    cat >"$target" <<EOF
-deb ${mirror}/debian/ ${codename} ${components}
-deb ${mirror}/debian/ ${codename}-updates ${components}
-deb ${mirror}/debian-security/ ${codename}-security ${components}
-EOF
-  fi
-}
-
-configure_apt_mirror() {
-  local skip_flag
-  local configure_flag
-  skip_flag="$(read_env SMARTASK_SKIP_APT_MIRROR "${SMARTASK_SKIP_APT_MIRROR:-0}")"
-  configure_flag="$(read_env SMARTASK_CONFIGURE_APT_MIRROR "${SMARTASK_CONFIGURE_APT_MIRROR:-0}")"
-
-  if [[ "$skip_flag" == "1" ]]; then
-    warn "已跳过 APT 镜像源配置: SMARTASK_SKIP_APT_MIRROR=1"
-    return
-  fi
-
-  if [[ "$configure_flag" != "1" ]]; then
-    warn "默认不改写宿主机 APT 源。如确需改写，请在 .env 设置 SMARTASK_CONFIGURE_APT_MIRROR=1"
-    return
-  fi
-
-  if ! command_exists apt-get; then
-    warn "当前系统不是 apt 系，跳过 APT 镜像源配置"
-    return
-  fi
-
-  if ! is_root; then
-    warn "当前不是 root，跳过 APT 镜像源配置。需要时请用 sudo/root 执行 deploy.sh"
-    return
-  fi
-
-  [[ -r /etc/os-release ]] || {
-    warn "未找到 /etc/os-release，跳过 APT 镜像源配置"
-    return
-  }
-
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  local os_id="${ID:-}"
-  local codename="${VERSION_CODENAME:-}"
-  local mirror
-  mirror="$(read_env SMARTASK_APT_MIRROR "${SMARTASK_APT_MIRROR:-https://mirrors.aliyun.com}")"
-
-  if [[ -z "$codename" ]] && command_exists lsb_release; then
-    codename="$(lsb_release -cs 2>/dev/null || true)"
-  fi
-
-  if [[ -z "$codename" ]]; then
-    warn "未识别系统代号，跳过 APT 镜像源配置"
-    return
-  fi
-
-  local target="/etc/apt/sources.list"
-  if [[ "$os_id" == "ubuntu" && -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
-    target="/etc/apt/sources.list.d/ubuntu.sources"
-  elif [[ "$os_id" == "debian" && -f /etc/apt/sources.list.d/debian.sources ]]; then
-    target="/etc/apt/sources.list.d/debian.sources"
-  fi
-
-  local backup="${target}.smartask.bak.$(date +%Y%m%d%H%M%S)"
-  [[ -f "$target" ]] && cp -a "$target" "$backup"
-
-  case "$os_id" in
-    ubuntu)
-      write_ubuntu_apt_sources "$codename" "$mirror" "$target"
-      ;;
-    debian)
-      write_debian_apt_sources "$codename" "$mirror" "$target"
-      ;;
-    *)
-      warn "暂不自动改写 $os_id 的 APT 源，已跳过"
-      return
-      ;;
-  esac
-
-  apt-get update || warn "APT 源已写入，但 apt-get update 失败；如网络受限，可稍后手动重试。备份: $backup"
-  ok "APT 镜像源已更新: $mirror，原配置备份: $backup"
-}
-
-info "1/8 检查 Docker"
-command -v docker >/dev/null 2>&1 || fail "未找到 docker 命令"
-docker info >/dev/null 2>&1 || fail "Docker 未启动或当前用户无权限访问 Docker"
-docker compose version >/dev/null 2>&1 || fail "未找到 Docker Compose Plugin"
-ok "Docker 可用"
-
-info "2/8 配置 Linux 镜像源"
-configure_apt_mirror
-configure_docker_registry_mirror
-docker info >/dev/null 2>&1 || fail "Docker 镜像源配置后 Docker 不可用，请执行: bash doctor.sh"
-ok "镜像源检查完成"
-
-info "3/8 检查 .env"
-mkdir -p config backups backend/logs backend/imports
-if [[ ! -f .env ]]; then
-  if [[ -f .env.example ]]; then
-    cp .env.example .env
-    warn "已从 .env.example 复制 .env。请填写真实配置后重新执行 bash deploy.sh"
-    exit 1
-  fi
-  fail "缺少 .env，且未找到 .env.example"
-fi
-require_env "SMARTASK_SECRET_KEY"
-require_env "SMARTASK_AI_API_KEY"
-require_env "SMARTASK_ADMIN_PASSWORD"
-ok ".env 已存在且关键项不是占位符"
-validate_secret_master_key
-
-FRONTEND_PORT="$(read_env SMARTASK_FRONTEND_PORT 8888)"
-BACKEND_PORT="$(read_env SMARTASK_BACKEND_PORT 5002)"
-PG_PORT="$(read_env SMARTASK_DOCKER_PG_PORT 5433)"
-
-if ss -lnt 2>/dev/null | grep -q ":${FRONTEND_PORT} "; then
-  warn "前端端口 $FRONTEND_PORT 已监听。如果不是旧 SmartAsk 容器，请调整 .env 端口。"
-fi
-if ss -lnt 2>/dev/null | grep -q ":${BACKEND_PORT} "; then
-  warn "后端端口 $BACKEND_PORT 已监听。如果不是旧 SmartAsk 容器，请调整 .env 端口。"
-fi
-if ss -lnt 2>/dev/null | grep -q ":${PG_PORT} "; then
-  warn "PostgreSQL 映射端口 $PG_PORT 已监听。如果不是旧 SmartAsk 容器，请调整 .env 端口。"
-fi
-
-if [[ "$FORCE_IMPORT" -eq 1 ]]; then
-  export SMARTASK_BOOTSTRAP_FORCE_IMPORT=1
-  warn "--force-import 已开启，将强制重新导入元数据/业务数据"
-fi
-if [[ "$FORCE_CONFIG" -eq 1 ]]; then
-  export SMARTASK_BOOTSTRAP_FORCE_CONFIG=1
-  warn "--force-config 已开启，将覆盖 config JSON"
-fi
-
-info "4/8 校验 docker compose"
-docker compose config >/dev/null
-ok "docker-compose.yml 有效"
-
-info "5/8 构建并启动容器"
-if [[ "$NO_BUILD" -eq 1 ]]; then
-  docker compose up -d
-else
-  docker compose up -d --build
-fi
-ok "后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
-
-info "6/8 等待后端健康检查"
-wait_for_backend_health "$BACKEND_PORT" 120 || fail "后端健康检查失败。请执行: bash doctor.sh"
-docker compose ps
-
-if [[ "$SKIP_VERIFY" -eq 0 ]]; then
-  info "7/8 运行容器内自检"
-  docker compose exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
-else
-  warn "已跳过容器内自检: --skip-verify"
-fi
-
-info "8/8 部署完成"
-echo "  Frontend: http://服务器IP:${FRONTEND_PORT}"
-echo "  Backend:  http://服务器IP:${BACKEND_PORT}/api/health"
-echo "  Postgres: 服务器IP:${PG_PORT} (容器内 5432)"
-
-if [[ "$RUN_TESTS" -eq 1 ]]; then
-  info "运行集成测试"
-  STREAM_ARGS=()
-  if [[ "$RUN_STREAM_TESTS" -eq 1 ]]; then
-    STREAM_ARGS+=(--with-stream)
-  fi
-  docker compose exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
-  docker compose exec -T backend python /app/scripts/integration_test.py \
-    --base-url "http://localhost:5002" \
-    --frontend-url "http://frontend" \
-    --no-wait "${STREAM_ARGS[@]}"
-fi
-
-echo ""
-echo "常用命令："
-echo "  日志：bash doctor.sh 或 docker compose logs -f backend"
-echo "  更新：bash update.sh --remote github"
-echo "  备份：bash backup.sh"
-echo "  停止：docker compose stop"
+        echo -e "\n${RED}未知命令: $1${NC}\n"
+        echo -e "用法：$0 {local|production|proxy|status|--help}${NC}\n"
+        echo -e "  ${BLUE}local${NC}       - 本地开发模式（端口直连）"
+        echo -e "  ${BLUE}production${NC}  - 生产环境模式（Docker内Nginx）"
+        echo -e "  ${BLUE}proxy${NC}      - 外部代理模式（服务器推荐 ⭐）"
+        echo -e "  ${BLUE}status${NC}      - 查看当前模式和容器状态"
+        echo -e "  ${BLUE}(无参数)${NC}    - 自动检测环境并推荐"
+        echo ""
+        exit 1
+        ;;
+esac

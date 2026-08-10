@@ -1,3 +1,12 @@
+# =========================
+# SmartAsk Docker Compose
+# 支持双模式：local（本地开发） / production（生产环境）
+#
+# 使用方式：
+#   本地开发：cp .env.local .env && docker-compose up -d
+#   生产部署：cp .env.production .env && docker-compose up -d
+# =========================
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,16 +15,12 @@ services:
     environment:
       POSTGRES_DB: ${SMARTASK_DB_DATABASE:-postgres}
       POSTGRES_USER: ${SMARTASK_DB_USERNAME:-postgres}
-      # Postgres entrypoint cannot decrypt enc:v1 secrets. Keep this value
-      # plain and aligned with the decrypted SMARTASK_DB_PASSWORD.
       POSTGRES_PASSWORD: ${SMARTASK_POSTGRES_PASSWORD:-${SMARTASK_DB_PASSWORD:-postgres}}
       TZ: Asia/Shanghai
     ports:
       - "${SMARTASK_DOCKER_PG_PORT:-5433}:5432"
     volumes:
       - smartask_pg_data:/var/lib/postgresql/data
-      # Directory mount: every *.sql in docker/postgres/init runs in alphabetical order
-      # ONLY the first time the data volume is empty (i.e. fresh DB).
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SMARTASK_DB_USERNAME:-postgres} -d ${SMARTASK_DB_DATABASE:-postgres}"]
@@ -28,8 +33,6 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       args:
-        # Use ${VAR-default} instead of ${VAR:-default} so users can set
-        # SMARTASK_APT_MIRROR= to keep the official Debian image sources.
         APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
         PIP_INDEX_URL: ${SMARTASK_PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}
         PIP_TRUSTED_HOST: ${SMARTASK_PIP_TRUSTED_HOST-mirrors.aliyun.com}
@@ -53,14 +56,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # === 端口暴露（local 模式启用，production 模式注释掉）===
     ports:
       - "${SMARTASK_BACKEND_PORT:-5002}:5002"
     volumes:
       - smartask_chroma:/app/chroma_db
       - ./logs:/app/logs
       - ./backend/logs:/app/backend/logs
-      # Runtime JSON configs live here, including smartask_report_history.json.
-      # Keep this bind mount when rebuilding so generated report history survives updates.
       - ./config:/app/config
       - ./backend/imports:/app/backend/imports
       - ./backups:/app/backups
@@ -70,6 +72,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    networks:
+      - smartask-internal
 
   frontend:
     build:
@@ -82,6 +86,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # === 端口暴露（local 模式启用，production 模式注释掉）===
     ports:
       - "${SMARTASK_FRONTEND_PORT:-8888}:80"
     healthcheck:
@@ -90,9 +95,36 @@ services:
       timeout: 5s
       retries: 12
       start_period: 10s
+    networks:
+      - smartask-internal
+
+  # === Nginx 反向代理（仅生产模式启用）===
+  nginx:
+    image: nginx:alpine
+    container_name: smartask-nginx
+    restart: unless-stopped
+    # 仅在 DEPLOY_MODE=production 时启动
+    profiles: ["production"]
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      # 如果用 HTTPS，取消注释下面这行
+      # - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # SSL 证书（如果用 HTTPS）
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - smartask-internal
 
 volumes:
   smartask_pg_data:
     name: smartask_pg_data
   smartask_chroma:
     name: smartask_chroma
+
+networks:
+  smartask-internal:
+    driver: bridge

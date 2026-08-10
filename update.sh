@@ -1,14 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# =========================
+# SmartAsk 更新脚本（支持自动环境检测）
+# 用途：自动备份 → 拉取代码 → 重建容器 → 健康检查
+#
+# 环境检测：
+#   Linux   → 自动使用外部代理模式（proxy）重建
+#   Windows → 自动使用本地模式（local）重建
+#
+# 使用方式：
+#   bash update.sh                    # 标准更新（自动检测环境）
+#   bash update.sh --no-build         # 不重新构建镜像
+#   bash update.sh --skip-backup      # 跳过备份（不推荐生产环境）
+#   bash update.sh --run-tests        # 更新后运行测试
+# =========================
+
 NO_BUILD=0
 NO_PULL=0
 SKIP_BACKUP=0
 RUN_TESTS=0
 RUN_STREAM_TESTS=0
-BRANCH="docker-setup"
+# 默认分支：使用 docker-setup 分支（与远程仓库保持一致）
+# 如果需要切换到其他分支，可通过 --branch 参数指定或设置环境变量 SMARTASK_GIT_BRANCH
+BRANCH="${SMARTASK_GIT_BRANCH:-docker-setup}"
 REMOTE="${SMARTASK_GIT_REMOTE_NAME:-}"
 SKIP_VERIFY=0
+
+# =========================
+# 自动环境检测（与 deploy.sh 保持一致）
+# =========================
+detect_environment() {
+  local os_name os_type recommend_mode
+
+  case "$(uname -s)" in
+    Linux*)
+      os_name="Linux"
+      os_type="server"
+      if [[ -f /proc/version ]] && grep -qi "microsoft\|wsl" /proc/version 2>/dev/null; then
+        os_name="WSL (Windows Subsystem for Linux)"
+        os_type="windows"
+        recommend_mode="local"
+      else
+        recommend_mode="proxy"
+      fi
+      ;;
+    Darwin*)
+      os_name="macOS"
+      os_type="development"
+      recommend_mode="local"
+      ;;
+    MINGW*|CYGWIN*|MSYS*)
+      os_name="Windows (Git Bash/MSYS2)"
+      os_type="windows"
+        recommend_mode="local"
+      ;;
+    *)
+      os_name="$(uname -s) (未知系统)"
+      os_type="unknown"
+      recommend_mode="local"
+      ;;
+  esac
+
+  echo "${os_name}|${os_type}|${recommend_mode}"
+}
+
+# 获取环境信息
+IFS='|' read -r OS_NAME OS_TYPE RECOMMEND_MODE <<< "$(detect_environment)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,7 +96,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --branch)
-      BRANCH="${2:-docker-setup}"
+      BRANCH="${2:-docker-setup}"  # 默认使用 docker-setup 分支
       shift 2
       ;;
     --remote)
@@ -47,22 +105,25 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-SmartAsk 更新脚本（兼容 Linux / macOS）
+SmartAsk 更新脚本（支持自动环境检测 + 智能分支管理）
 
 用法：
-  bash update.sh
-  bash update.sh --run-tests
-  bash update.sh --remote github --run-tests
-  bash update.sh --no-pull
-  bash update.sh --pip-index-url https://mirrors.aliyun.com/pypi/simple/
+  bash update.sh                          # 标准更新（自动检测环境+使用main分支）
+  bash update.sh --branch docker-setup    # 指定拉取 docker-setup 分支
+  bash update.sh --run-tests              # 更新后运行测试
+  bash update.sh --remote github          # 指定远程仓库名
+  bash update.sh --no-pull                # 不拉取Git，仅重建容器
+  bash update.sh --skip-backup            # 跳过备份（不推荐生产环境）
+  bash update.sh --no-build               # 不重新构建镜像
 
 参数：
-  --branch NAME        指定更新分支，默认 docker-setup。
+  --branch NAME        指定更新分支（默认: main，与本地开发保持一致）。
+                       示例: --branch main 或 --branch docker-setup
   --remote NAME        指定 Git 远端名，例如 github；未指定时使用当前分支 upstream。
-  --no-build          不重新构建镜像，只重启容器。
-  --no-pull           不拉取 Git，仅用当前代码重建。
-  --skip-backup       跳过更新前备份，不建议生产环境使用。
-  --run-tests         更新后运行接口测试。
+  --no-build           不重新构建镜像，只重启容器。
+  --no-pull            不拉取 Git，仅用当前代码重建。
+  --skip-backup        跳过更新前备份，不建议生产环境使用。
+  --run-tests          更新后运行接口测试。
   --run-stream-tests  额外运行流式问数测试，需要真实 AI Key。
   --skip-verify       跳过容器内自检，仅做健康检查。
   --pip-index-url URL  指定 Docker 构建时的 pip 镜像源，默认读取 .env 或使用阿里云源。
@@ -181,10 +242,23 @@ save_local_git_changes() {
 
   warn "检测到服务器存在本地改动或未跟踪文件，已保存到: $local_dir"
   warn "这些改动会先进入 git stash，避免 git pull 被本地文件阻断。"
-  git stash push --include-untracked -m "smartask-update-${timestamp}"
-  LOCAL_STASH_CREATED=1
-  LOCAL_STASH_NOTE="本地 tracked/untracked 改动已暂存到 git stash: smartask-update-${timestamp}；备份目录: $local_dir"
-  echo "  Git local changes: stashed"
+
+  # 兼容旧版Git（CentOS 7等系统的Git 1.x/2.x）
+  local git_stash_cmd
+  if git stash --help 2>&1 | grep -q "push"; then
+    git_stash_cmd="git stash push --include-untracked -m"
+  else
+    git_stash_cmd="git stash save --include-untracked"
+  fi
+
+  $git_stash_cmd "smartask-update-${timestamp}" || {
+    warn "git stash 失败（可能是空stash或Git版本问题），尝试继续更新..."
+    LOCAL_STASH_CREATED=0
+  }
+  if [[ "$LOCAL_STASH_CREATED" -eq 1 ]]; then
+    LOCAL_STASH_NOTE="本地 tracked/untracked 改动已暂存到 git stash: smartask-update-${timestamp}；备份目录: $local_dir"
+    echo "  Git local changes: stashed"
+  fi
 }
 
 render_progress_bar() {
@@ -550,31 +624,50 @@ if [[ "$NO_BUILD" -eq 0 ]]; then
 fi
 
 info "校验 docker compose"
-docker compose config >/dev/null
+
+# 根据环境自动选择docker-compose配置文件
+DOCKER_COMPOSE_FILES=("docker-compose.yml")
+case "${RECOMMEND_MODE}" in
+  proxy)
+    # Linux服务器：使用外部代理模式（禁用Docker内Nginx）
+    DOCKER_COMPOSE_FILES+=("docker-compose.proxy.yml")
+    warn "检测到服务器环境，将使用外部代理模式（proxy）启动..."
+    echo "  配置文件：${DOCKER_COMPOSE_FILES[*]}"
+    ;;
+  local|*)
+    # Windows/macOS/其他：使用本地开发模式
+    # 不需要额外的override文件，直接使用默认的docker-compose.yml
+    echo "检测到${OS_NAME}环境，将使用本地模式启动..."
+    echo "  配置文件：${DOCKER_COMPOSE_FILES[*]}"
+    ;;
+esac
+
+# 使用选定的配置文件进行校验和启动
+docker compose "${DOCKER_COMPOSE_FILES[@]}" config >/dev/null
 cleanup_compose_recreate_leftovers
 
 info "重建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
-  docker compose up -d
+  docker compose "${DOCKER_COMPOSE_FILES[@]}" up -d
 else
-  docker compose up -d --build
+  docker compose "${DOCKER_COMPOSE_FILES[@]}" up -d --build
 fi
 echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
-docker compose ps
+docker compose "${DOCKER_COMPOSE_FILES[@]}" ps
 
 info "同步内置数据集模板"
-if docker compose exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
+if docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
   echo "  [OK] 内置数据集模板已同步"
 else
-  warn "内置数据集模板同步失败，不影响容器运行；请执行: docker compose logs --tail=120 backend"
+  warn "内置数据集模板同步失败，不影响容器运行；请执行: docker compose \"${DOCKER_COMPOSE_FILES[@]}\" logs --tail=120 backend"
 fi
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"
-  docker compose exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
+  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
 else
   warn "已跳过容器内自检: --skip-verify"
 fi
@@ -593,9 +686,38 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   if [[ "$RUN_STREAM_TESTS" -eq 1 ]]; then
     STREAM_ARGS+=(--with-stream)
   fi
-  docker compose exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
-  docker compose exec -T backend python /app/scripts/integration_test.py \
+  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
+  docker compose "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/integration_test.py \
     --base-url "http://localhost:5002" \
     --frontend-url "http://frontend" \
     --no-wait "${STREAM_ARGS[@]}"
+fi
+
+# =========================
+# 更新完成提示（包含环境信息）
+# =========================
+echo ""
+echo "[OK] 更新完成。页面如仍旧，请浏览器 Ctrl+F5。"
+echo ""
+echo "📌 环境信息："
+echo "  操作系统: ${OS_NAME}"
+echo "  环境类型: ${OS_TYPE}"
+echo "  使用模式: ${RECOMMEND_MODE}"
+
+case "${RECOMMEND_MODE}" in
+  proxy)
+    echo ""
+    echo "用户访问地址: ${FRONTEND_URL:-https://bifine.angelgroup.com.cn:10899/smart-ask}"
+    echo "后端API地址: http://服务器IP:${BACKEND_PORT:-5002}/api/health"
+    ;;
+  local|*)
+    echo ""
+    echo "前端访问地址: http://localhost:${FRONTEND_PORT:-8888}"
+    echo "后端API地址: http://localhost:${BACKEND_PORT:-5002}/api/health"
+    ;;
+esac
+
+if [[ "$LOCAL_STASH_CREATED" -eq 1 ]]; then
+  warn "$LOCAL_STASH_NOTE"
+  warn "如需查看: git stash list；如需恢复单个文件，请先确认新版本配置后再执行: git checkout 'stash@{0}' -- 文件路径"
 fi

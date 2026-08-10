@@ -1,0 +1,49 @@
+# =========================
+# SmartAsk 外部代理模式 Override 配置
+# 用途：适用于已有外部Nginx/负载均衡的场景
+#
+# 你的场景：
+#   公网地址：https://bifine.angelgroup.com.cn:10899/smart-ask
+#   外部代理：已处理 HTTPS + 端口10899 + /smart-ask 路径转发
+#   Docker容器：只需暴露内部服务给宿主机
+#
+# 使用方式：
+#   cp .env.production .env
+#   docker-compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+#
+# 外部Nginx配置示例（供参考）：
+#   location /smart-ask/ {
+#       proxy_pass http://localhost:8888/;
+#       proxy_set_header Host $host;
+#       proxy_set_header X-Forwarded-Proto $scheme;
+#       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#   }
+#   location /smart-ask/api/ {
+#       proxy_pass http://localhost:5002/api/;
+#       proxy_buffering off;  # SSE支持
+#       proxy_read_timeout 300s;
+#   }
+# =========================
+
+services:
+  backend:
+    # === 对外暴露端口（供外部Nginx转发）===
+    ports:
+      - "${SMARTASK_BACKEND_PORT:-5002}:5002"
+    # 禁用Docker内部nginx（使用外部代理）
+    profiles: []
+
+  frontend:
+    # === 对外暴露端口（供外部Nginx转发）===
+    ports:
+      - "${SMARTASK_FRONTEND_PORT:-8888}:80"
+    profiles: []
+
+  # === 完全禁用Docker内部Nginx（因为外部已有）===
+  nginx:
+    profiles: []  # 不启动此服务
+
+# 注意：
+# 1. 此配置会覆盖主docker-compose.yml中的ports和profiles设置
+# 2. backend/frontend端口对外暴露，但只绑定到localhost（或Docker网络）
+# 3. 外部Nginx/负载均衡负责公网访问、HTTPS、路径前缀处理
