@@ -88,7 +88,7 @@ def _datasource_kwargs() -> dict:
     )
 
 
-def _wait_for_postgres(max_wait_seconds: int = 120) -> bool:
+def _wait_for_postgres(max_wait_seconds: int = 180) -> bool:
     try:
         import psycopg2
     except Exception as exc:
@@ -97,17 +97,23 @@ def _wait_for_postgres(max_wait_seconds: int = 120) -> bool:
 
     start = time.time()
     last_error: Optional[str] = None
+    attempt = 0
+    log(f"等待 PostgreSQL 就绪（最长{max_wait_seconds}秒）...")
     while time.time() - start < max_wait_seconds:
+        attempt += 1
         try:
-            conn = psycopg2.connect(**_datasource_kwargs())
+            conn_kwargs = _datasource_kwargs()
+            conn_kwargs['connect_timeout'] = 10
+            conn = psycopg2.connect(**conn_kwargs)
             conn.close()
-            kw = _datasource_kwargs()
-            log(f"PostgreSQL 已就绪 ({kw['host']}:{kw['port']}/{kw['database']})")
+            log(f"PostgreSQL 已就绪 ({conn_kwargs['host']}:{conn_kwargs['port']}/{conn_kwargs['database']})，共尝试{attempt}次")
             return True
         except Exception as exc:
             last_error = str(exc)
-            time.sleep(2)
-    log(f"等待 PostgreSQL 超时: {last_error}")
+            if attempt % 10 == 0:
+                log(f"PostgreSQL 等待中... (已尝试{attempt}次, 错误: {last_error})")
+            time.sleep(3)
+    log(f"等待 PostgreSQL 超时（共尝试{attempt}次）: {last_error}")
     return False
 
 
