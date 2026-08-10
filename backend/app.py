@@ -75,6 +75,27 @@ app.json.sort_keys = False
 app.json.ensure_ascii = False
 app.secret_key = str(APP_CONFIG.get("secret_key") or decrypt_secret_value(os.getenv("SMARTASK_SECRET_KEY", "vanna-local-secret-2026")))
 
+# 路径前缀中间件：自动剥离 /smart-ask 前缀，兼容反向代理子路径部署
+class PrefixMiddleware:
+    def __init__(self, wsgi_app, prefix='/smart-ask'):
+        self.wsgi_app = wsgi_app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        # 如果请求路径以 /smart-ask 开头，自动剥离前缀
+        path = environ.get('PATH_INFO', '')
+        if path.startswith(self.prefix):
+            environ['PATH_INFO'] = path[len(self.prefix):] or '/'
+            # 保存原始前缀供重定向使用
+            environ['HTTP_X_FORWARDED_PREFIX'] = self.prefix
+        return self.wsgi_app(environ, start_response)
+
+# 读取BASE_PATH配置，默认空，配置了/smart-ask就自动加上前缀
+base_path = os.getenv("BASE_PATH", "").rstrip("/")
+if base_path:
+    app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=base_path)
+    print(f"✅ 已启用路径前缀支持: {base_path}")
+
 CORS_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:5174",

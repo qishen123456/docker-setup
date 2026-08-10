@@ -842,9 +842,16 @@ def feishu_callback():
         _log_auth_event("feishu_login_success", "info", "飞书网页登录成功", user=user_info, status_code=200)
         
         # 返回HTML页面自动跳转，兼容任何反向代理路径配置
-        # 优先使用配置的FRONTEND_URL，否则用相对路径根，确保适配子路径部署
+        # 优先使用配置的FRONTEND_URL，否则用X-Forwarded-Prefix前缀（Nginx传递），再兜底用根路径
+        from flask import request
+        forwarded_prefix = request.headers.get('X-Forwarded-Prefix', '') or os.getenv('BASE_PATH', '')
         frontend_url = (cfg.get("frontend_url") or "").rstrip("/")
-        redirect_target = f"{frontend_url}/?token={session_token}" if frontend_url else f"/?token={session_token}"
+        if not frontend_url:
+            # 没有配置FRONTEND_URL时，自动使用当前域名+前缀
+            scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+            host = request.headers.get('X-Forwarded-Host', request.host)
+            frontend_url = f"{scheme}://{host}{forwarded_prefix}".rstrip("/")
+        redirect_target = f"{frontend_url}/?token={session_token}"
         
         html = f"""<!DOCTYPE html>
 <html>
