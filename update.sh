@@ -304,8 +304,8 @@ dump_backend_diagnostics() {
   echo ""
   warn "后端健康检查失败，开始输出诊断信息"
   echo ""
-  echo "---- ${DOCKER_COMPOSE_CMD} ps ----"
-  ${DOCKER_COMPOSE_CMD} ps || true
+  echo "---- docker compose ps ----"
+  dc ps || true
   echo ""
   echo "---- backend container state ----"
   docker inspect smartask-backend \
@@ -316,7 +316,7 @@ dump_backend_diagnostics() {
   curl -vS --max-time 8 "$url" || true
   echo ""
   echo "---- backend logs tail 180 ----"
-  ${DOCKER_COMPOSE_CMD} logs --tail=180 backend || true
+  dc logs --tail=180 backend || true
   echo ""
 }
 
@@ -644,49 +644,52 @@ fi
 
 info "校验 ${DOCKER_COMPOSE_CMD}"
 
-# 根据环境自动选择docker-compose配置文件
-DOCKER_COMPOSE_FILES=("docker-compose.yml")
+# 根据环境自动选择docker-compose配置文件（兼容 v1/v2）
+COMPOSE_FILE_ARGS="-f docker-compose.yml"
 case "${RECOMMEND_MODE}" in
   proxy)
     # Linux服务器：使用外部代理模式（禁用Docker内Nginx）
-    DOCKER_COMPOSE_FILES+=("docker-compose.proxy.yml")
+    COMPOSE_FILE_ARGS="-f docker-compose.yml -f docker-compose.proxy.yml"
     warn "检测到服务器环境，将使用外部代理模式（proxy）启动..."
-    echo "  配置文件：${DOCKER_COMPOSE_FILES[*]}"
+    echo "  配置文件：docker-compose.yml docker-compose.proxy.yml"
     ;;
   local|*)
-    # Windows/macOS/其他：使用本地开发模式
-    # 不需要额外的override文件，直接使用默认的docker-compose.yml
     echo "检测到${OS_NAME}环境，将使用本地模式启动..."
-    echo "  配置文件：${DOCKER_COMPOSE_FILES[*]}"
+    echo "  配置文件：docker-compose.yml"
     ;;
 esac
 
+# 统一的 docker compose 执行函数（解决参数传递兼容性问题）
+dc() {
+  ${DOCKER_COMPOSE_CMD} ${COMPOSE_FILE_ARGS} "$@"
+}
+
 # 使用选定的配置文件进行校验和启动
-${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" config >/dev/null
+dc config >/dev/null
 cleanup_compose_recreate_leftovers
 
 info "重建并启动容器"
 if [[ "$NO_BUILD" -eq 1 ]]; then
-  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" up -d
+  dc up -d
 else
-  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" up -d --build
+  dc up -d --build
 fi
 echo "  [OK] 后端启动时会自动应用 backend/migrations，包括报告阈值与模板配置更新"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
-${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" ps
+dc ps
 
 info "同步内置数据集模板"
-if ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
+if dc exec -T backend python /app/backend/create_consumer_standard_dataset.py --direct; then
   echo "  [OK] 内置数据集模板已同步"
 else
-  warn "内置数据集模板同步失败，不影响容器运行；请执行: ${DOCKER_COMPOSE_CMD} \"${DOCKER_COMPOSE_FILES[@]}\" logs --tail=120 backend"
+  warn "内置数据集模板同步失败，不影响容器运行；请执行: ${DOCKER_COMPOSE_CMD} ${COMPOSE_FILE_ARGS} logs --tail=120 backend"
 fi
 
 if [[ "$SKIP_VERIFY" -eq 0 ]]; then
   info "运行容器内自检"
-  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
+  dc exec -T backend python /app/scripts/verify_deployment.py || fail "容器内自检失败。请执行: bash doctor.sh"
 else
   warn "已跳过容器内自检: --skip-verify"
 fi
@@ -705,8 +708,8 @@ if [[ "$RUN_TESTS" -eq 1 ]]; then
   if [[ "$RUN_STREAM_TESTS" -eq 1 ]]; then
     STREAM_ARGS+=(--with-stream)
   fi
-  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
-  ${DOCKER_COMPOSE_CMD} "${DOCKER_COMPOSE_FILES[@]}" exec -T backend python /app/scripts/integration_test.py \
+  dc exec -T backend python -m pip install --quiet --disable-pip-version-check requests || true
+  dc exec -T backend python /app/scripts/integration_test.py \
     --base-url "http://localhost:5002" \
     --frontend-url "http://frontend" \
     --no-wait "${STREAM_ARGS[@]}"
