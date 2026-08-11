@@ -66,7 +66,6 @@
         "dataset_synonym_create",
         "dataset_synonym_delete",
         "dataset_synonym_update",
-        "dataset_transform_edit",
         "datasource_create",
         "datasource_delete",
         "datasource_edit",
@@ -209,7 +208,6 @@
         "dataset_synonym_create",
         "dataset_synonym_delete",
         "dataset_synonym_update",
-        "dataset_transform_edit",
         "datasource_create",
         "datasource_delete",
         "datasource_edit",
@@ -353,7 +351,6 @@
         "smart_confirm_scope",
         "smart_dataset_select",
         "smart_field_dataset_hit",
-        "smart_model_select",
         "smart_new_chat",
         "smart_question_copy",
         "smart_question_edit",
@@ -413,6 +410,6 @@
       "user_ids": []
     }
   ],
-  "updated_at": "2026-08-09 00:34:35",
+  "updated_at": "2026-05-21 09:24:34",
   "updated_by": "admin"
 }

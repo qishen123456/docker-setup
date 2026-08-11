@@ -839,39 +839,11 @@ def feishu_callback():
             _log_auth_event("feishu_login_disabled", "warning", "飞书用户已停用", status_code=403)
             return jsonify({"success": False, "error": "账号已停用，请联系超级管理员"}), 403
         session_token = create_session_token(user_info)
-        _log_auth_event("feishu_login_success", "info", "飞书网页登录成功", user=user_info, status_code=200)
-        
-        # 返回HTML页面自动跳转，兼容任何反向代理路径配置
-        # 优先使用配置的FRONTEND_URL，否则用X-Forwarded-Prefix前缀（Nginx传递），再兜底用根路径
-        from flask import request
-        forwarded_prefix = request.headers.get('X-Forwarded-Prefix', '') or os.getenv('BASE_PATH', '')
-        frontend_url = (cfg.get("frontend_url") or "").rstrip("/")
-        if not frontend_url:
-            # 没有配置FRONTEND_URL时，自动使用当前域名+前缀
-            scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
-            host = request.headers.get('X-Forwarded-Host', request.host)
-            frontend_url = f"{scheme}://{host}{forwarded_prefix}".rstrip("/")
-        redirect_target = f"{frontend_url}/auth/callback?token={session_token}"
-        
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>登录成功，正在跳转...</title>
-    <script>
-        window.location.href = '{redirect_target}';
-    </script>
-    <meta http-equiv="refresh" content="0;url={redirect_target}">
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 100px; }}
-    </style>
-</head>
-<body>
-    <h2>登录成功，正在跳转...</h2>
-    <p>如果没有自动跳转，请<a href="{redirect_target}">点击这里</a></p>
-</body>
-</html>"""
-        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+        frontend_base_url = (cfg["frontend_url"] or "").rstrip("/")
+        frontend_url = cfg["frontend_callback_url"] or frontend_base_url or "/"
+        _log_auth_event("feishu_login_success", "info", "飞书网页登录成功", user=user_info, status_code=302)
+        separator = "&" if "?" in frontend_url else "?"
+        return redirect(f"{frontend_url}/{separator}token={session_token}")
     except Exception as exc:
         _log_auth_event("feishu_login_failed", "error", "飞书网页登录失败", error=str(exc), status_code=500)
         return jsonify({"success": False, "error": f"飞书登录失败: {exc}"}), 500

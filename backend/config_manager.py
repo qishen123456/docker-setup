@@ -111,11 +111,7 @@ def decode_secret(encoded: str) -> str:
     if not encoded:
         return ''
     if is_encrypted_secret(encoded):
-        try:
-            return decrypt_secret_value(encoded)
-        except Exception:
-            # 密文解密失败（主密钥不匹配）时，直接返回原始值，避免启动崩溃
-            return encoded
+        return decrypt_secret_value(encoded)
     try:
         return base64.b64decode(encoded.encode('utf-8')).decode('utf-8')
     except Exception:
@@ -647,7 +643,7 @@ def get_ai_model_by_id(model_id: int) -> Optional[Dict]:
     for m in get_ai_models():
         if m['id'] == model_id:
             m_copy = dict(m)
-            m_copy['api_key'] = decode_secret(m_copy.pop('api_key_b64', ''))
+            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
             return m_copy
     return None
 
@@ -731,22 +727,13 @@ def get_default_ai_model() -> Optional[Dict]:
     for m in get_ai_models():
         if m.get('is_default') and m.get('is_active'):
             m_copy = dict(m)
-            # 优先解密 api_key_b64，解密失败直接使用明文 api_key，兜底不崩溃
-            encrypted_key = m_copy.pop('api_key_b64', '') or ''
-            try:
-                m_copy['api_key'] = decode_secret(encrypted_key) if encrypted_key else m_copy.get('api_key', '')
-            except Exception:
-                m_copy['api_key'] = m_copy.get('api_key', '')
+            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
             return m_copy
     # 没有默认，取第一个活跃的
     for m in get_ai_models():
         if m.get('is_active'):
             m_copy = dict(m)
-            encrypted_key = m_copy.pop('api_key_b64', '') or ''
-            try:
-                m_copy['api_key'] = decode_secret(encrypted_key) if encrypted_key else m_copy.get('api_key', '')
-            except Exception:
-                m_copy['api_key'] = m_copy.get('api_key', '')
+            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
             return m_copy
     return None
 

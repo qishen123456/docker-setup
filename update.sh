@@ -599,8 +599,8 @@ if [[ "$NO_PULL" -eq 0 ]]; then
       fail "从远端 $REMOTE 拉取分支 $BRANCH 失败"
     }
   else
-    echo "  Git fetch: --all"
-    git fetch --all
+    echo "  Git fetch: origin/$BRANCH"
+    git fetch origin "$BRANCH"
   fi
   echo "  Git local changes check"
   save_local_git_changes
