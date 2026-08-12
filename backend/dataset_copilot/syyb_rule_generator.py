@@ -134,24 +134,6 @@ flattened_tree AS (
         总任务金额,
         年度开单金额
     FROM raw_data
-    UNION ALL
-    -- 修复：数据集中“分公司”字段同时存放区域分公司和行业业务部。
-    -- 当用户按“分公司”口径查询时，额外输出一行业务部叶子节点作为分公司层级，
-    -- 避免“达成率超过80%的分公司”因公共办公业务部被归类为业务部而漏掉。
-    SELECT
-        '分公司' AS 层级,
-        '商用事业部' AS 上级名称,
-        分公司 AS 节点名称,
-        '行业条线' AS 条线,
-        '商用事业部' AS 事业部,
-        分公司,
-        '' AS 代表处,
-        分公司 AS 业务部,
-        '' AS 业务代表,
-        总任务金额,
-        年度开单金额
-    FROM raw_data
-    WHERE 分公司 <> '' AND 分公司 LIKE '%业务部' AND 代表处 = '' AND 业务代表 = ''
 ),
 summarized_nodes AS (
     SELECT
@@ -169,23 +151,6 @@ summarized_nodes AS (
     FROM flattened_tree
     WHERE 节点名称 <> ''
     GROUP BY 条线, 层级, 上级名称, 节点名称
-    UNION ALL
-    SELECT
-        '事业部层级' AS 条线,
-        '事业部' AS 层级,
-        NULL AS 上级名称,
-        '商用事业部' AS 节点名称,
-        '商用事业部' AS 事业部,
-        '' AS 分公司,
-        '' AS 代表处,
-        '' AS 业务部,
-        '' AS 业务代表,
-        SUM(总任务金额) AS 总任务金额,
-        SUM(年度开单金额) AS 年度开单金额
-    FROM flattened_tree
-    WHERE 上级名称 = '商用事业部'
-      AND 层级 IN ('分公司', '业务部')
-      AND NOT (条线 = '行业条线' AND 层级 = '分公司')
 )
 SELECT
     条线,
