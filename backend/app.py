@@ -270,6 +270,37 @@ def internal_error(error):
     return jsonify({"error": "Internal server error", "detail": str(error)}), 500
 
 
+def _ensure_dataset_node_index():
+    """冷启动兜底：如果dataset_node_index.json不存在或为空，自动重建索引，避免语义层空转"""
+    import os
+    index_path = os.path.join(os.path.dirname(__file__), "..", "config", "dataset_node_index.json")
+    need_rebuild = False
+    
+    if not os.path.exists(index_path):
+        print("检测到dataset_node_index.json不存在，自动重建节点索引...")
+        need_rebuild = True
+    else:
+        try:
+            import json
+            with open(index_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or not data.get("datasets"):
+                print("dataset_node_index.json为空或格式无效，自动重建节点索引...")
+                need_rebuild = True
+        except Exception:
+            print("dataset_node_index.json损坏，自动重建节点索引...")
+            need_rebuild = True
+    
+    if need_rebuild:
+        try:
+            from build_dataset_node_index import build_dataset_node_index, write_dataset_node_index
+            payload = build_dataset_node_index()
+            write_dataset_node_index(payload)
+            print(f"节点索引重建完成，共{len(payload.get('datasets', []))}个数据集")
+        except Exception as e:
+            print(f"节点索引自动重建失败（不影响服务启动，将在飞书同步后自动增量构建）: {e}")
+
+
 def _start_feishu_sync_scheduler():
     """后台守护线程启动飞书同步调度器，不阻塞Flask主线程"""
     try:
@@ -283,6 +314,9 @@ def _start_feishu_sync_scheduler():
 
 
 if __name__ == "__main__":
+    # 冷启动：自动检查并重建数据集节点索引，避免全新部署时语义层空转
+    _ensure_dataset_node_index()
+    
     # 启动飞书同步后台调度线程（守护线程，随Flask进程退出）
     feishu_sync_thread = threading.Thread(target=_start_feishu_sync_scheduler, daemon=True)
     feishu_sync_thread.start()
