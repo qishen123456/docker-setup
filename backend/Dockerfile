@@ -51,10 +51,10 @@ CMD ["python", "app.py"]
 
 
 # ---- migrate one-shot image (build with `--target migrate`) ----
-# Builds an image whose default command is `python migrate.py`. The
-# default backend image above is reused by both the "backend" and
-# "migrate" Compose services via a `command:` override, so this stage
-# only matters when someone wants a free-standing migrator image.
+# Builds an image whose default command is `python migrate.py`.
+# This stage is used by the docker-compose `migrate` service to run
+# database schema migrations automatically before backend startup,
+# and can also be used standalone for manual migration operations.
 FROM python:3.11-slim AS migrate
 
 ARG APT_MIRROR=https://mirrors.aliyun.com

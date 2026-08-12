@@ -27,6 +27,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    networks:
+      - smartask-internal
+      - default
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: migrate
+      args:
+        APT_MIRROR: ${SMARTASK_APT_MIRROR-https://mirrors.aliyun.com}
+        PIP_INDEX_URL: ${SMARTASK_PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}
+        PIP_TRUSTED_HOST: ${SMARTASK_PIP_TRUSTED_HOST-mirrors.aliyun.com}
+        PIP_TIMEOUT: ${SMARTASK_PIP_TIMEOUT-120}
+        PIP_RETRIES: ${SMARTASK_PIP_RETRIES-8}
+    container_name: smartask-migrate
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      SMARTASK_DB_HOST: postgres
+      SMARTASK_DB_PORT: 5432
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+    networks:
+      - smartask-internal
+      - default
 
   backend:
     build:
@@ -58,6 +90,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # === 端口暴露（local 模式启用，production 模式注释掉）===
     ports:
       - "${SMARTASK_BACKEND_PORT:-5002}:5002"

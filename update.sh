@@ -674,7 +674,7 @@ if [[ "$NO_BUILD" -eq 1 ]]; then
 else
   dc up -d --build
 fi
-echo "  [OK] migrate 服务已先应用 backend/migrations（含报告阈值与模板配置），backend 直接起 Flask"
+echo "  [OK] migrate 服务已自动执行数据库迁移（backend/migrations），迁移成功后启动 Flask 服务"
 
 info "等待后端健康检查"
 wait_for_backend_health "$BACKEND_PORT" 90 || fail "后端健康检查失败。请执行: bash doctor.sh"
