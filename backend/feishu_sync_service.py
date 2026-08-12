@@ -2,6 +2,7 @@
 飞书多维表格数据同步服务
 """
 
+import os
 import requests
 import json
 import psycopg2
@@ -484,6 +485,28 @@ class FeishuSyncService:
         row = cursor.fetchone()
         return bool(row and row[0])
 
+    def _table_has_data(self, conn: psycopg2.extensions.connection, table_name: str) -> bool:
+        """检查表是否存在且有数据，异常时返回False（保守认为需要同步）"""
+        try:
+            normalized_table = self.normalize_table_name(table_name)
+            # 先用to_regclass检查表是否存在，不存在返回NULL
+            cursor = conn.cursor()
+            cursor.execute("SELECT to_regclass(%s) IS NOT NULL AS exists", (f"public.{normalized_table}",))
+            exists_row = cursor.fetchone()
+            if not exists_row or not exists_row[0]:
+                return False
+            # 表存在，检查是否有数据，LIMIT 1快速返回
+            cursor.execute(
+                sql.SQL("SELECT EXISTS(SELECT 1 FROM {table} LIMIT 1)").format(
+                    table=sql.Identifier(normalized_table)
+                )
+            )
+            row = cursor.fetchone()
+            return bool(row and row[0])
+        except Exception as e:
+            print(f"[WARNING] 检查表 {table_name} 数据存在性失败，按需要同步处理: {e}")
+            return False
+
     def get_existing_field_names(self, conn: psycopg2.extensions.connection, table_name: str) -> List[str]:
         """从已落库 JSONB 数据中识别历史字段。"""
         if not self.table_exists(conn, table_name):
@@ -884,16 +907,72 @@ class FeishuSyncService:
         
         # 配置定时任务
         configs = get_feishu_configs()
+        active_configs = []
         for config in configs:
             if config.get('is_active'):
+                active_configs.append(config)
                 frequency = int(config.get('sync_frequency', 30))  # 分钟
                 # 传入 config_id 而不是 config 对象，确保每次执行都读取最新配置
                 schedule.every(frequency).minutes.do(
                     self.sync_single_config, config['id']
                 ).tag(f"feishu_sync_{config['id']}")
         
-        # 立即执行一次同步
-        self.sync_all_active_configs()
+        # 读取启动同步模式环境变量
+        sync_on_startup = str(os.getenv('SMARTASK_FEISHU_SYNC_ON_STARTUP', 'auto')).strip().lower()
+        print(f"飞书同步启动模式: {sync_on_startup}")
+        
+        if sync_on_startup in ('force', '1', 'true', 'yes'):
+            # 强制模式：立即同步所有启用配置
+            print("强制启动同步模式：立即同步所有活跃配置")
+            self.sync_all_active_configs()
+        elif sync_on_startup in ('skip', '0', 'false', 'no'):
+            # 跳过模式：不执行启动同步
+            print("跳过启动同步模式：仅启动定时任务调度器，等待定时执行或手动触发")
+            for config in active_configs:
+                print(f"  - 跳过启动同步: {config.get('name')} -> {config.get('target_table')}")
+        else:
+            # 默认auto模式：智能判断，空表才同步
+            if sync_on_startup != 'auto':
+                print(f"[WARNING] 未识别的 SMARTASK_FEISHU_SYNC_ON_STARTUP 值 '{sync_on_startup}'，按 auto 模式处理")
+            print("智能启动同步模式：仅同步空表/新表，已有数据表跳过启动同步")
+            
+            if not active_configs:
+                print("没有活跃的飞书同步配置")
+            else:
+                # 获取一个数据库连接用于检查数据是否存在
+                # 复用第一个活跃配置获取连接，所有配置默认走同一个PG库
+                conn = self.get_postgres_connection(active_configs[0])
+                need_sync_configs = []
+                skip_configs = []
+                
+                if conn:
+                    try:
+                        for config in active_configs:
+                            target_table = config.get('target_table', '')
+                            if self._table_has_data(conn, target_table):
+                                skip_configs.append(config)
+                            else:
+                                need_sync_configs.append(config)
+                    finally:
+                        conn.close()
+                else:
+                    # 连接失败，保守处理：全部同步
+                    print("[WARNING] 无法连接数据库检查表数据，按全量启动同步处理")
+                    need_sync_configs = active_configs
+                    skip_configs = []
+                
+                # 打印跳过的配置
+                for config in skip_configs:
+                    print(f"  - 跳过启动同步: {config.get('name')} -> {config.get('target_table')} (已有数据)")
+                
+                # 只同步需要初始化的空表/新表
+                if need_sync_configs:
+                    print(f"开始同步 {len(need_sync_configs)} 个需要初始化的配置:")
+                    for config in need_sync_configs:
+                        print(f"  - 执行首次同步: {config.get('name')} -> {config.get('target_table')}")
+                        self.sync_single_config(config['id'])
+                else:
+                    print("所有配置均已有数据，跳过启动同步")
         
         # 启动调度器
         self.running = True

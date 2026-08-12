@@ -270,22 +270,53 @@ def _apply_env_datasource_overrides(databases: list) -> list:
         result = [_build_default_datasource()]
 
     target = next((db for db in result if db.get('is_default')), None) or result[0]
-    target.update({
-        "name": _env_text('SMARTASK_DB_LABEL', target.get('name', '默认数据源')),
-        "type": _env_text('SMARTASK_DB_TYPE', target.get('type', 'sqlite')),
-        "sqlite_path": _env_text('SMARTASK_DB_SQLITE_PATH', target.get('sqlite_path', './test.db')),
-        "host": _env_text('SMARTASK_DB_HOST', target.get('host', '')),
-        "port": _env_int('SMARTASK_DB_PORT', int(target.get('port', 0) or 0)),
-        "database_name": _env_text('SMARTASK_DB_DATABASE', target.get('database_name', '')),
-        "username": _env_text('SMARTASK_DB_USERNAME', target.get('username', '')),
-        "driver": _env_text('SMARTASK_DB_DRIVER', target.get('driver', '')),
-        "is_active": True,
-        "is_default": True,
-        "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-    })
+    
+    # Type-guard: 防止SQLite被错误注入PG连接参数形成畸形配置
+    original_type = target.get('type', 'sqlite')
+    env_type = _env_text('SMARTASK_DB_TYPE', None)
+    env_host = _env_text('SMARTASK_DB_HOST', '')
+    env_port = _env_int('SMARTASK_DB_PORT', None)
+    final_type = env_type or original_type
+    
+    # 如果配置了host但没配置type，且原类型是sqlite，自动修正为postgresql
+    if not env_type and env_host and original_type == 'sqlite':
+        print(f"[WARNING] 检测到环境变量配置了数据库host={env_host}但未指定type，默认数据源原类型为sqlite，自动修正为postgresql")
+        final_type = 'postgresql'
+    
+    # SQLite类型强制忽略PG连接参数，防止畸形配置
+    if final_type == 'sqlite':
+        if env_host or env_port:
+            print(f"[WARNING] 数据源类型为sqlite，忽略环境变量中设置的host/port/database/username等PG连接参数")
+        target.update({
+            "name": _env_text('SMARTASK_DB_LABEL', target.get('name', '默认数据源')),
+            "type": "sqlite",
+            "sqlite_path": _env_text('SMARTASK_DB_SQLITE_PATH', target.get('sqlite_path', './test.db')),
+            "host": "",
+            "port": 0,
+            "database_name": "",
+            "username": "",
+            "driver": "",
+            "is_active": True,
+            "is_default": True,
+            "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        })
+    else:
+        target.update({
+            "name": _env_text('SMARTASK_DB_LABEL', target.get('name', '默认数据源')),
+            "type": final_type,
+            "sqlite_path": "",
+            "host": env_host if env_host else target.get('host', 'localhost'),
+            "port": env_port if env_port is not None else int(target.get('port', 5432) or 5432),
+            "database_name": _env_text('SMARTASK_DB_DATABASE', target.get('database_name', 'postgres')),
+            "username": _env_text('SMARTASK_DB_USERNAME', target.get('username', 'postgres')),
+            "driver": _env_text('SMARTASK_DB_DRIVER', target.get('driver', 'psycopg2')),
+            "is_active": True,
+            "is_default": True,
+            "updated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        })
 
     env_password = _env_secret('SMARTASK_DB_PASSWORD', '')
-    if env_password:
+    if env_password and final_type != 'sqlite':
         target['password_b64'] = encode_secret(env_password)
 
     for item in result:
