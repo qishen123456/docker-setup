@@ -97,6 +97,7 @@ config/rbac_permissions.json
 config/query_history.json
 config/smartask_report_history.json
 config/sql_prompts.json
+config/dataset_node_index.json
 
 # Frontend build output / caches
 dist/
