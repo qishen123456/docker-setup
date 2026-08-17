@@ -8384,15 +8384,19 @@ Agent3 复核结果：
                     }
             refined_question = str(route.get("refined_query") or question or "").strip()
             raw_question = str(route.get("raw_question") or question or "").strip()
+            # bug#14/#17：confirm_by_boss 会把 confirmation_notes 追加到 refined_query（如"补充确认：...；输出方式：先汇总后分析"），
+            # 导致 intent 解析时"后"被 negativeTriggers 命中、或"排名"等关键词被覆盖。
+            # 意图解析前剥离确认后缀，保留原始问题语义。
+            refined_for_intent = re.sub(r"\n补充确认：.*$", "", refined_question, flags=re.S)
             resolved_subject = self._safe_dict(context.get("resolved_subject"))
             if resolved_subject.get("subject_name"):
                 # 主体已纠正（如"商用事业部丁杰"→"丁杰"）：以 refined_query 为主体，避免原始问题里的事业部层级词误导 target_level
-                intent_question = refined_question or raw_question
+                intent_question = refined_for_intent or raw_question
             else:
                 # 否则以原始问题为主体，保住 aggregate/ranking/compare 信号
-                intent_question = raw_question or refined_question
-            if refined_question and refined_question not in intent_question:
-                intent_question = f"{intent_question}\n{refined_question}"
+                intent_question = raw_question or refined_for_intent
+            if refined_for_intent and refined_for_intent not in intent_question:
+                intent_question = f"{intent_question}\n{refined_for_intent}"
             query_intent = self._resolve_query_intent(intent_question, context)
             if resolved_subject.get("subject_name"):
                 query_intent["subject_name"] = resolved_subject.get("subject_name")
@@ -9331,8 +9335,15 @@ Agent3 复核结果：
                         conversation_context=[],
                     ) or {}
                     original_subject_name = str(org_subject_resolution.get("subject_name") or "").strip()
+                # bug#17：original_subject_name 是纯层级词（如"分公司"）时不做替换，
+                # 否则会把"各分公司业绩排名"重写成"各消费者事业部业绩排名"，丢失 ranking 信号。
+                _GENERIC_LEVEL_WORDS = {"分公司", "代表处", "业务部", "事业部", "城市分公司", "城市公司", "业务代表", "业务员"}
+                _original_is_generic_level = original_subject_name in _GENERIC_LEVEL_WORDS
                 if base_query:
-                    if original_subject_name and original_subject_name in base_query:
+                    if _original_is_generic_level:
+                        # 保留原始问题，只把 resolved_subject_name 作为确认节点记录，不覆盖 refined_query
+                        pass
+                    elif original_subject_name and original_subject_name in base_query:
                         route["refined_query"] = base_query.replace(original_subject_name, resolved_subject_name)
                     elif resolved_subject_name not in base_query:
                         route["refined_query"] = f"{resolved_subject_name}的业绩"
@@ -9341,15 +9352,19 @@ Agent3 复核结果：
                     lambda m: next(group for group in m.groups() if group),
                     str(route.get("refined_query") or "").strip(),
                 )
-                # 清理确认后 refined_query 中残留的口语词，避免 SQL 生成被干扰
-                route["refined_query"] = self._clean_org_subject_candidate(
-                    str(route.get("refined_query") or "").strip()
-                )
-                route["refined_query"] = re.sub(
-                    r"(城市分公司)分公司|(代表处)代表处|(业务部)业务部|(分公司)分公司",
-                    lambda m: next(group for group in m.groups() if group),
-                    str(route.get("refined_query") or "").strip(),
-                )
+                # bug#17：仅在做了主体替换的场景下才做口语清理；
+                # 保留原始问题（如"各分公司业绩排名"）时不能调 _clean_org_subject_candidate，
+                # 否则会把"业绩排名"剥成"各分公司"，丢失 ranking 信号。
+                if not _original_is_generic_level:
+                    # 清理确认后 refined_query 中残留的口语词，避免 SQL 生成被干扰
+                    route["refined_query"] = self._clean_org_subject_candidate(
+                        str(route.get("refined_query") or "").strip()
+                    )
+                    route["refined_query"] = re.sub(
+                        r"(城市分公司)分公司|(代表处)代表处|(业务部)业务部|(分公司)分公司",
+                        lambda m: next(group for group in m.groups() if group),
+                        str(route.get("refined_query") or "").strip(),
+                    )
                 confirmation_notes.append(f"确认组织节点：{resolved_subject_name}")
             resolved_members = [str(item).strip() for item in (selected_option_item.get("resolved_members") or []) if str(item).strip()]
             if resolved_members:
