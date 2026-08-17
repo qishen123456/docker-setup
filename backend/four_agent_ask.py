@@ -5154,10 +5154,11 @@ LIMIT 10000
                 normalized_target_level = ""
 
             where_clause = "TRUE"
+            # 优先使用数量词事实验证后设置的target_level
+            verified_level = query_intent.get("target_level") if query_intent.get("_quantity_verified") else None
             # bug#3 修复：根节点整体 overview 优先三层返回
             if _is_root_overview:
                 where_clause = root_overview_where
-            # 优先使用数量词事实验证后设置的target_level
             elif verified_level:
                 # 通过node_index验证的层级，精确过滤+名称匹配
                 if verified_level == "分公司":
