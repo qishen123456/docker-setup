@@ -8335,8 +8335,10 @@ Agent3 复核结果：
             preserved_ranking_params = (context.get("resolved_entities") or {}).get("ranking_params")
             # 如果问题含并列多个人名（如“赵标和靳锋的业绩”），优先用规则提取的多人，
             # 避免 Agent1 单主体解析把其中一个人覆盖掉。
+            # bug#6：必须用 raw_question 提取，refined_query 可能已被 Agent1 重写为单主体（如"赵标的业绩"）。
+            raw_question_for_coordinated = str(route.get("raw_question") or question or "").strip()
             coordinated_names = self._question_subject_names(
-                route.get("refined_query", question), context, include_resolved=False
+                raw_question_for_coordinated, context, include_resolved=False
             )
             if len(coordinated_names) > 1:
                 context["resolved_entities"] = {
