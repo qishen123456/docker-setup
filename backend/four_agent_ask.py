@@ -5933,6 +5933,33 @@ LIMIT 10000
                 return "事业部"
             return "业务承接角色"
 
+        # 修复：电商侧处理“X和电商的对比”这类跨条线对比时，query_intent 会把
+        # comparison_left/right 带成“X/电商”。这两个词是当前 dataset 自己的条线别名
+        # （含在 dataset_name 里，如“电商事业部开单金额”含“电商”），并不是承接人。
+        # 如果继续走 comparison 分支，会被 is_likely_person_name 兜底误认为“人名对比”
+        # 而拼出 负责人 IN ('X','电商') 的 SQL，导致电商侧 row_count=0。
+        # 正确做法：识别为“自己条线的整体数据”场景，关闭 comparison 标记，让代码走
+        # “电商事业部根节点问法”的默认路径（聚焦事业部 → 返回业务部下钻列表）。
+        # 必须在 infer_user_level 之前执行，否则 user_level 已被 comparison 意图固化。
+        if is_comparison and intent == "comparison":
+            _self_ref_left = clean_cmp_text(query_intent.get("comparison_left") or "")
+            _self_ref_right = clean_cmp_text(query_intent.get("comparison_right") or "")
+            _self_ref_ds_name = str(dataset.get("dataset_name") or "")
+            _is_self_reference = bool(
+                _self_ref_ds_name
+                and (
+                    (_self_ref_left and _self_ref_left in _self_ref_ds_name)
+                    or (_self_ref_right and _self_ref_right in _self_ref_ds_name)
+                )
+            )
+            if _is_self_reference and not all_members:
+                is_comparison = False
+                intent = "drilldown"
+                query_intent["intent"] = "drilldown"
+                # 清空 left/right 避免下游误用
+                query_intent["comparison_left"] = ""
+                query_intent["comparison_right"] = ""
+
         user_level = infer_user_level()
         level_cfg = USER_LEVELS.get(user_level, {"actual": "业务经理", "mode": "segment"})
         actual_level = level_cfg["actual"]
