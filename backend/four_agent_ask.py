@@ -1414,8 +1414,38 @@ class FourAgentAskService:
             asks_city_level = "层级='城市分公司'" in compact_sql or '层级="城市分公司"' in compact_sql
             return asks_branch_level and not asks_city_level
 
+        # bug#1 Golden 样本层级词 LIKE 劫持守卫：样本 SQL 用 LIKE '%层级词%' 匹配层级，
+        # 但问题点名的是具体节点（如"河南代表处"）且节点名不含该层级词，则不采样本。
+        # 反例：样本 LIKE '%代表处%' 命中"河南代表处业绩"，会拉来 95 行所有代表处，应弃样本走规则 SQL。
+        _LEVEL_LIKE_PATTERN = re.compile(
+            r"(?:节点名称|上级名称|分公司|代表处|业务部)\s+LIKE\s+'%([^%]+)%'",
+            re.IGNORECASE,
+        )
+
+        def sample_level_like_hijacks_question(sql: str) -> bool:
+            text = str(sql or "")
+            like_levels = [m.group(1) for m in _LEVEL_LIKE_PATTERN.finditer(text)]
+            if not like_levels:
+                return False
+            requested = self._question_subject_names(question, context)
+            if not requested:
+                return False
+            # 问题点名的节点本身含有该层级词（如"河南代表处"含"代表处"），
+            # 说明问题想要的是精确节点，而样本是层级模糊匹配 → 冲突。
+            for level in like_levels:
+                level_text = str(level or "").strip()
+                if not level_text:
+                    continue
+                for name in requested:
+                    name_text = str(name or "").strip()
+                    if name_text and level_text in name_text:
+                        return True
+            return False
+
         def direct_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
             if sample_conflicts_requested_level(sql):
+                return None
+            if sample_level_like_hijacks_question(sql):
                 return None
             prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
             if prepared.get("conflict"):
@@ -1430,6 +1460,8 @@ class FourAgentAskService:
 
         def template_sample(sql: str, sample_id: Any, sample_score: int) -> Optional[Dict[str, Any]]:
             if sample_conflicts_requested_level(sql):
+                return None
+            if sample_level_like_hijacks_question(sql):
                 return None
             prepared = self._prepare_subject_safe_sample_sql(question, context, sql)
             if prepared.get("conflict"):
@@ -5948,7 +5980,7 @@ LIMIT 10000
 
         # 对比：取 resolved 实体或 query_intent 的 left/right
         if intent == "comparison" or is_comparison:
-            root_nodes = set(profile.get("root_nodes") or [])
+            root_nodes = set((profile or {}).get("root_nodes") or [])
             compare_members = [m for m in all_members if m not in root_nodes] or list(all_members)
             compare_dimension = ""
             if not compare_members and intent == "comparison":
