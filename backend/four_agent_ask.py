@@ -4606,6 +4606,17 @@ ranking_params 说明：
                 return raw * 10000
             return raw
 
+        def format_syyb_threshold(value: float) -> str:
+            """格式化阈值，避免大数值被 Python :g 转成科学计数法（如 5e+07），
+            导致断言/日志/SQL 可读性失败。"""
+            try:
+                f = float(value)
+            except (TypeError, ValueError):
+                return str(value)
+            if f == int(f):
+                return str(int(f))
+            return f"{f:g}"
+
         syyb_metric_map = {
             "总任务金额": "总任务金额",
             "总任务": "总任务金额",
@@ -4671,7 +4682,7 @@ LIMIT 200
 
         if intent_is_filter and filter_metric_column in allowed_filter_columns and filter_operator in {"<", "<=", ">", ">=", "=", "between"} and filter_value is not None:
             try:
-                filter_value_sql = f"{float(filter_value):g}"
+                filter_value_sql = format_syyb_threshold(filter_value)
             except (TypeError, ValueError):
                 filter_value_sql = ""
             if filter_value_sql:
@@ -4688,13 +4699,13 @@ LIMIT 200
                         continue
                     try:
                         scaled_val = normalize_syyb_threshold_value(float(val), col)
-                        val_sql = f"{scaled_val:g}"
+                        val_sql = format_syyb_threshold(scaled_val)
                     except (TypeError, ValueError):
                         continue
                     if op == "between":
                         try:
                             scaled_val2 = normalize_syyb_threshold_value(float(val2), col) if val2 is not None else scaled_val
-                            val2_sql = f"{scaled_val2:g}"
+                            val2_sql = format_syyb_threshold(scaled_val2)
                         except (TypeError, ValueError):
                             val2_sql = ""
                         if val2_sql:
@@ -4706,7 +4717,7 @@ LIMIT 200
                 if not where_parts:
                     try:
                         scaled_filter_value = normalize_syyb_threshold_value(float(filter_value), filter_metric_column)
-                        filter_value_sql = f"{scaled_filter_value:g}"
+                        filter_value_sql = format_syyb_threshold(scaled_filter_value)
                     except (TypeError, ValueError):
                         filter_value_sql = ""
                     if filter_value_sql:
@@ -8388,16 +8399,56 @@ Agent3 复核结果：
             # 导致 intent 解析时"后"被 negativeTriggers 命中、或"排名"等关键词被覆盖。
             # 意图解析前剥离确认后缀，保留原始问题语义。
             refined_for_intent = re.sub(r"\n补充确认：.*$", "", refined_question, flags=re.S)
+            # bug#12：追问场景下 refined_query 会被 short_term_memory.resolve_followup 改写成
+            # "新问题：X\n基于上一轮...\n上一轮 SQL 供参考（不要保留其筛选条件）：\n<SQL>"，
+            # 其中 SQL 里的数值/指标会被 resolver 的 _metric_pattern 误匹配，污染 filter_conditions。
+            # 追问场景直接用 raw_question（用户真实问题）作为意图解析主体，不拼 refined。
+            is_followup_rewritten = "基于上一轮的数据集和统计层级" in refined_question or "本轮追问" in refined_question
             resolved_subject = self._safe_dict(context.get("resolved_subject"))
-            if resolved_subject.get("subject_name"):
+            if is_followup_rewritten and raw_question:
+                intent_question = raw_question
+            elif resolved_subject.get("subject_name"):
                 # 主体已纠正（如"商用事业部丁杰"→"丁杰"）：以 refined_query 为主体，避免原始问题里的事业部层级词误导 target_level
                 intent_question = refined_for_intent or raw_question
             else:
                 # 否则以原始问题为主体，保住 aggregate/ranking/compare 信号
                 intent_question = raw_question or refined_for_intent
-            if refined_for_intent and refined_for_intent not in intent_question:
+            if not is_followup_rewritten and refined_for_intent and refined_for_intent not in intent_question:
                 intent_question = f"{intent_question}\n{refined_for_intent}"
             query_intent = self._resolve_query_intent(intent_question, context)
+            # bug#12：追问场景（如"大于5000万的呢"）题干没有指标名和层级词，resolver 只能给出 unknown。
+            # 从 short_term_memory 的上一轮 query_intent 继承 target_level/filter_metric_key 等关键口径，
+            # 让追问独立成 filter intent，而不是被 intent=unknown 兜底或污染旧 SQL 条件。
+            if is_followup_rewritten:
+                conversation_session_id_for_followup = str(route.get("conversation_session_id") or "").strip()
+                memory_items = self.short_term_memory.get(conversation_session_id_for_followup) if conversation_session_id_for_followup else []
+                last_query_intent = self._safe_dict((memory_items[-1] if memory_items else {}).get("query_intent"))
+                if last_query_intent:
+                    inherit_keys = ("target_level", "filter_metric_key", "filter_metric_column", "subject_name", "subject_level")
+                    for key in inherit_keys:
+                        if not query_intent.get(key) and last_query_intent.get(key):
+                            query_intent[key] = last_query_intent[key]
+                # 裸条件追问（含"大于/小于/高于/低于/超过/不足"）+ 题干含数值 → 强制 filter intent
+                if query_intent.get("intent") in ("", "unknown") and re.search(r"大于|小于|高于|低于|超过|不足|不少于|不超过", raw_question) and re.search(r"\d", raw_question):
+                    query_intent["intent"] = "filter"
+                    # 从题干解析操作符和数值
+                    op_map = {"大于": ">", "小于": "<", "高于": ">", "低于": "<", "超过": ">", "不足": "<", "不少于": ">=", "不超过": "<="}
+                    for token, op in op_map.items():
+                        if token in raw_question:
+                            query_intent["filter_operator"] = op
+                            break
+                    value_match = re.search(r"(\d+(?:\.\d+)?)\s*(万|亿)?", raw_question)
+                    if value_match:
+                        raw_val = float(value_match.group(1))
+                        unit = value_match.group(2) or ""
+                        query_intent["filter_value"] = raw_val
+                        query_intent["filter_unit"] = unit
+                    # 如果没有继承到 filter_metric_column，默认用"年度开单金额"
+                    if not query_intent.get("filter_metric_column"):
+                        query_intent["filter_metric_key"] = "actual"
+                        query_intent["filter_metric_column"] = "年度开单金额"
+                    query_intent["direction"] = "asc" if query_intent.get("filter_operator") in {"<", "<="} else "desc"
+                    query_intent["matched_triggers"] = ["filter"]
             if resolved_subject.get("subject_name"):
                 query_intent["subject_name"] = resolved_subject.get("subject_name")
             if resolved_subject.get("subject_level"):
@@ -9178,6 +9229,7 @@ Agent3 复核结果：
                 self._flush_trace(trace, result)
                 return result
 
+            route["conversation_session_id"] = conversation_session_id
             result = self._run_pipeline(effective_question, route, started, steps, trace=trace, current_user=current_user)
             result["question"] = question
             result["effective_question"] = effective_question

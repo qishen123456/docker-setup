@@ -66,6 +66,8 @@ class ShortTermMemoryStore:
             "brief_result": self._brief_rows(rows),
             "analysis_summary": self._brief_text(result.get("analysis") or primary.get("analysis") or ""),
             "amount_unit": amount_unit,
+            # bug#12：保存上一轮的 query_intent 关键字段，供追问时继承 target_level/filter_metric 等口径
+            "query_intent": primary.get("query_intent") or {},
         }
         self._append(session_id, item)
 
