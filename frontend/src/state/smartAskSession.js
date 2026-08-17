@@ -1091,7 +1091,11 @@ const normalizeSelectedDatasetIds = (selectedDatasetInput) => {
 }
 
 const EXPLICIT_DATASET_SCOPE_RE = /消费者(?:事业部)?|商用(?:事业部)?|电商(?:事业部)?/
-const ORG_LEVEL_TERMS = ['分公司', '城市分公司', '城市公司', '业务部', '代表处', '业务代表', '业务员']
+const ORG_LEVEL_TERMS = ['分公司', '城市分公司', '城市公司', '业务部', '代表处']
+// 个人层词：消费者数据集只有机构层（事业部/分公司/城市分公司），
+// “业务代表/业务员”这类个人层仅存在于商用数据集。
+// 追问点名个人层时，目标数据集可能已切换到商用，不能再沿用上一轮确认的数据集。
+const PERSON_LEVEL_TERMS = ['业务代表', '业务员']
 const ORG_GENERIC_TERMS = [
   '看下', '看一下', '查下', '查一下', '问下', '问一下', '业绩', '排名', '排行', '情况',
   '怎么样', '如何', '达成率', '完成率', '完成情况', '表现', '数据', '呢', '吗', '呀', '吧',
@@ -1105,6 +1109,7 @@ const shouldReuseConfirmedDatasetForQuestion = (question, selectedDatasetId) => 
   const rawQuestion = String(question || '').trim()
   if (!rawQuestion) return false
   if (EXPLICIT_DATASET_SCOPE_RE.test(rawQuestion)) return false
+  if (PERSON_LEVEL_TERMS.some(term => rawQuestion.includes(term))) return false
   if (!ORG_LEVEL_TERMS.some(term => rawQuestion.includes(term))) return false
 
   let normalized = rawQuestion.replace(/\s+/g, '')
