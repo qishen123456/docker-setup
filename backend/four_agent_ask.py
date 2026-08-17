@@ -6531,12 +6531,13 @@ WITH 字段提取 AS (
             if rank_limit <= 0 and asks_best_branch:
                 rank_limit = 1
             if rank_limit <= 0:
-                # 用户仅说"排名/排行"但没给数量时，默认返回最多20条；明确带数量才用配置的 Top3
+                # bug#15：无数量排名（如"消费者城市分公司排名"）应返回全量，而非截断20条。
+                # 明确带数量词（前3/后5/TopN）才用配置的 Top3；仅说"排名/排行"时返回全部。
                 if explicit_rank_count_requested:
                     rank_limit = 3
                 elif intent_is_ranking:
-                    # 识别为排名意图但无具体数量，默认返回最多20条（maxTopN）
-                    rank_limit = 20
+                    # 识别为排名意图但无具体数量：rank_limit=0 表示不加 LIMIT，返回全量
+                    rank_limit = 0
                 else:
                     rank_limit = 0
             return max(0, min(20, rank_limit))
