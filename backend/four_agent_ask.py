@@ -21,7 +21,7 @@ from agent_registry import get_agent
 import ask_engine_utils
 from bookshelf_repository import BookshelfConfigurationError, BookshelfRepository
 from config_manager import decode_secret, get_ai_models, get_default_ai_model
-from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL
+from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL, _sql_with_filter
 from disambiguation import DisambiguationArbiter
 from datasource_router import router as datasource_router
 from data_permission_store import apply_row_level_filter, load_data_permissions, org_mention_permission_check, user_org_scope_for_rule
@@ -4518,11 +4518,46 @@ ranking_params 说明：
 
         syyb_base_sql = self._build_syyb_base_sql(context)
 
-        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "事业部"}
+        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "事业部", "城市分公司"}
 
         intent_is_filter = query_intent.get("intent") == "filter"
         intent_is_comparison = query_intent.get("intent") == "comparison"
         intent_is_aggregate = query_intent.get("intent") == "aggregate"
+
+        # [数量词修复-优先级最高] 在所有分支判断之前，从原始问题中提取数量词+层级词，直接设置target_level
+        # 解决"商用四个分公司的业绩"这种事实陈述被误判为ranking/混合层级的问题
+        _quantity_verified_fact = False  # 标记：数量词事实验证通过，跳过ranking分支
+        quantity_match_global = re.search(r"(三|四|五|六|七|八|九|十|两|\d+)(?:个|大|家|名|位)(代表处|分公司|业务部|业务代表|事业部|城市分公司)", normalized_question)
+        if quantity_match_global:
+            try:
+                user_quantity = self._parse_cn_int(quantity_match_global.group(1))
+                target_level_from_question = quantity_match_global.group(2)
+                
+                # 对消费者数据集，分公司层级实际是"城市分公司"
+                if target_level_from_question == "分公司" and "消费者" in dataset_name:
+                    target_level_from_question = "城市分公司"
+                
+                if user_quantity and user_quantity > 0 and target_level_from_question:
+                    logging.info(f"[数量词修复] 全局检测: {user_quantity}个{target_level_from_question}")
+                    
+                    # 查询node_index中该层级的实际节点数
+                    actual_nodes = self._node_index_members_by_level(context, {target_level_from_question})
+                    actual_count = len(actual_nodes)
+                    logging.info(f"[数量词修复] node_index实际: {actual_count}个 -> {list(actual_nodes)}")
+                    
+                    # 如果用户说的数量与实际节点数匹配 → 事实陈述，设置为aggregate + 精确层级过滤
+                    if actual_count == user_quantity:
+                        query_intent["intent"] = "aggregate"
+                        query_intent["target_level"] = target_level_from_question
+                        query_intent["_quantity_verified"] = True
+                        query_intent["_verified_count"] = user_quantity
+                        intent_is_aggregate = True  # 更新局部变量，覆盖之前的值
+                        intent_is_filter = False
+                        _quantity_verified_fact = True  # 跳过后续ranking分支判断
+                        logging.info(f"[数量词修复] ✓ 数量匹配！设置为事实陈述: target_level={target_level_from_question}")
+            except Exception as e:
+                logging.error(f"[数量词修复] 全局验证异常: {e}", exc_info=True)
+                pass
         filter_metric_column = str(query_intent.get("filter_metric_column") or "").strip()
         filter_operator = str(query_intent.get("filter_operator") or "").strip()
         filter_value = query_intent.get("filter_value")
@@ -4735,6 +4770,53 @@ LIMIT 200
                 else:
                     group_level = "分公司"
 
+            # 数量词事实验证通过（如"四个分公司"），直接返回明细数据+整体汇总行，供顶部KPI使用
+            if _quantity_verified_fact:
+                where_conditions = [f"层级 = '{group_level}'"]
+                # 分公司层级额外过滤名称含"分公司"，排除业务部
+                if group_level == "分公司":
+                    where_conditions.append("节点名称 LIKE '%分公司'")
+                where_clause = " AND ".join(where_conditions)
+                dataset_display_name = dataset_name.replace("开单金额","").replace("（阶段一升级版）","").strip()
+                # 第一行返回整体汇总行（供顶部KPI展示），后面跟着各分公司明细
+                return f"""
+WITH 明细结果 AS (
+{syyb_base_sql}
+WHERE {where_clause}
+)
+SELECT * FROM (
+    SELECT
+        MAX(条线) AS 条线,
+        '事业部' AS 层级,
+        '商用事业部' AS 上级名称,
+        '{dataset_display_name}' AS 节点名称,
+        '{dataset_display_name}' AS 事业部,
+        '' AS 分公司,
+        '' AS 代表处,
+        '' AS 业务部,
+        '' AS 业务代表,
+        SUM(总任务金额) AS 总任务金额,
+        SUM(年度开单金额) AS 年度开单金额,
+        CASE WHEN SUM(总任务金额) = 0 THEN 0 ELSE ROUND((SUM(年度开单金额)/SUM(总任务金额))*100, 2) END AS 达成率,
+        ROUND(SUM(总任务金额)-SUM(年度开单金额), 2) AS 剩余任务金额
+    FROM 明细结果
+    UNION ALL
+    SELECT * FROM 明细结果
+) t
+ORDER BY
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '业务部' THEN 1
+    WHEN '代表处' THEN 2
+    WHEN '业务代表' THEN 3
+    ELSE 9
+  END,
+  达成率 DESC NULLS LAST,
+  节点名称
+LIMIT 100
+""".strip()
+
             group_by_field = "节点名称"
             where_level = f"层级 = '{group_level}'"
             if group_level == "条线":
@@ -4789,6 +4871,9 @@ LIMIT 200
             intent_name == "ranking"
             or any(token in normalized_question for token in ranking_tokens)
         )
+        # 数量词事实验证通过的事实陈述，跳过ranking分支
+        if _quantity_verified_fact:
+            has_ranking_intent = False
         if is_phase1_dataset and has_ranking_intent:
             rank_spec = self._rank_request_spec(normalized_question, default_limit=0, max_limit=20)
             # 优先使用 intent 层已解析的 top_n（含 LLM 补漏、最X默认1 等后处理），再用规则兜底
@@ -5058,11 +5143,25 @@ LIMIT 10000
                 normalized_target_level = ""
 
             where_clause = "TRUE"
-            if normalized_target_level:
+            # 优先使用数量词事实验证后设置的target_level
+            verified_level = query_intent.get("target_level") if query_intent.get("_quantity_verified") else None
+            if verified_level:
+                # 通过node_index验证的层级，精确过滤+名称匹配
+                if verified_level == "分公司":
+                    where_clause = "层级 = '分公司' AND 节点名称 LIKE '%分公司'"
+                elif verified_level == "城市分公司":
+                    where_clause = "层级 = '城市分公司'"
+                else:
+                    where_clause = f"层级 = '{verified_level}'"
+            elif normalized_target_level:
                 where_clause = f"层级 = '{normalized_target_level}'"
             elif "代表处" in normalized_question:
                 where_clause = "层级 = '代表处'"
-            elif "分公司" in normalized_question or "业务部" in normalized_question:
+            elif "分公司" in normalized_question and "业务部" not in normalized_question:
+                where_clause = "层级 = '分公司' AND 节点名称 LIKE '%分公司'"
+            elif "业务部" in normalized_question and "分公司" not in normalized_question:
+                where_clause = "层级 = '业务部'"
+            elif "分公司" in normalized_question and "业务部" in normalized_question:
                 where_clause = "层级 IN ('分公司', '业务部')"
             elif "业务代表" in normalized_question or "人" in normalized_question:
                 where_clause = "层级 = '业务代表'"
@@ -5126,12 +5225,53 @@ LIMIT 50
                     continue
                 if is_phase1_dataset and cleaned in {"哪些代表处", "各代表处", "所有代表处", "哪些分公司", "各分公司", "所有分公司", "哪些业务部", "各业务部"}:
                     continue
-                if re.search(r"^(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大)?", cleaned):
+                if re.search(r"(?:三|四|五|六|七|八|九|十|两|\d+)(?:个|大|家|名|位)", cleaned):
                     continue
                 if any(token in cleaned for token in ["哪些", "所有", "各", "每个", "业务线", "任务完成", "最好", "最高", "最低", "哪个"]):
                     continue
                 if cleaned and cleaned not in entity_names:
                     entity_names.append(cleaned)
+
+        # P1防御性修复：实体合法性校验，只过滤明确的伪实体（前缀+层级词拼接，如"商用分公司"），
+        # 保留所有其他实体（包括跨数据集真实实体，交给后续路由逻辑自动切换数据集）
+        # 修复：取所有数据集节点并集，避免多轮hint沿用导致跨数据集合法实体被误剔
+        if entity_names:
+            valid_node_names = set()
+            try:
+                node_index = getattr(self, "_dataset_node_index", None)
+                if not isinstance(node_index, dict):
+                    node_index = self._load_dataset_node_index()
+                    self._dataset_node_index = node_index
+                for ds_item in node_index.get("datasets") or []:
+                    for node in ds_item.get("nodes") or []:
+                        if isinstance(node, dict):
+                            _n = str(node.get("node_name") or "").strip()
+                            if _n:
+                                valid_node_names.add(_n)
+                                for alias in node.get("aliases") or []:
+                                    valid_node_names.add(str(alias).strip())
+                valid_node_names.update(generic_level_terms)
+            except Exception:
+                valid_node_names = set(generic_level_terms)
+            if valid_node_names:
+                filtered_entities = []
+                for name in entity_names:
+                    # 剥离前缀事业部名称（如"商用分公司"→"分公司"）
+                    stripped_name = name
+                    for prefix in ["商用", "消费者", "电商"]:
+                        if name.startswith(prefix) and name != prefix:
+                            stripped_name = name[len(prefix):]
+                            break
+                    # 仅过滤伪实体：剥离前缀后刚好是纯层级词，且原始名称不在当前数据集节点中
+                    # （保留：当前数据集真实节点 / 纯层级词 / 其他数据集的真实实体）
+                    is_pseudo_entity = (
+                        stripped_name in generic_level_terms
+                        and name not in valid_node_names
+                        and len(name) > len(stripped_name)
+                    )
+                    if not is_pseudo_entity:
+                        filtered_entities.append(name)
+                entity_names = filtered_entities
         if not entity_names:
             entity_names = self._question_subject_names(normalized_question, context)
 
@@ -5150,7 +5290,16 @@ LIMIT 50
             # 即使解析出多个组织实体，也应优先走明细下钻，不走对比。
             drilldown_tokens = ["下", "下辖", "下属", "明细", "详情", "有哪些"]
             has_explicit_compare = bool(re.search(r"对比|比较|哪个|谁更|差异|分别|各自|相比|和.+比|跟.+比|与.+比|\bvs\b", normalized_question, re.I))
-            asks_child_level = any(level_word in normalized_question for level_word in ["代表处", "业务部", "业务代表", "业务员"])
+            # 修复：实体名本身就以层级词结尾时，不算"询问下级层级"
+            # 例如"河南代表处的业绩"中的"代表处"是实体名一部分，不是要查询下级业务代表
+            asks_child_level = False
+            for level_word in ["代表处", "业务部", "业务代表", "业务员"]:
+                if level_word in normalized_question:
+                    # 检查所有实体名是否以该层级词结尾，如果是则不算询问下级
+                    entity_endswith_level = any(e.endswith(level_word) for e in entity_names)
+                    if not entity_endswith_level:
+                        asks_child_level = True
+                        break
             is_drilldown_question = (
                 (any(token in normalized_question for token in drilldown_tokens) and not has_explicit_compare)
                 or (asks_child_level and not has_explicit_compare)
@@ -5390,16 +5539,16 @@ LIMIT 10000
 """.strip()
 
             return f"""
-WITH RECURSIVE 汇总结 果 AS (
+WITH RECURSIVE 汇总结果 AS (
 {syyb_base_sql}
 ),
 命中链路 AS (
     SELECT *, 1 AS _depth
-    FROM 汇总结 果
+    FROM 汇总结果
     WHERE 节点名称 IN ({quoted_entities})
     UNION ALL
     SELECT 子节点.*, 父节点._depth + 1
-    FROM 汇总结 果 子节点
+    FROM 汇总结果 子节点
     JOIN 命中链路 父节点
       ON 子节点.上级名称 = 父节点.节点名称
     WHERE 父节点._depth < 2
@@ -5503,12 +5652,16 @@ LIMIT 100
 """.strip()
 
         # 兜底：纯通用层级词（如"分公司"）按层级返回所有节点
-        if generic_level_only and intent_target_level:
+        actual_target_level = query_intent.get("target_level") if query_intent.get("_quantity_verified") else intent_target_level
+        if generic_level_only and actual_target_level:
+            where_clause = f"层级 = '{actual_target_level}'"
+            if actual_target_level == "分公司":
+                where_clause = "层级 = '分公司' AND 节点名称 LIKE '%分公司'"
             return f"""
 {syyb_base_sql}
 SELECT *
 FROM 汇总结果
-WHERE 层级 = '{intent_target_level}'
+WHERE {where_clause}
 ORDER BY 条线 DESC,
   CASE 层级
     WHEN '事业部' THEN 0
@@ -5948,7 +6101,7 @@ LIMIT 10000
         city_field_expr = f"COALESCE(NULLIF(TRIM(fields->>'{city_field_key}'), ''), '')"
         query_intent = self._safe_dict(context.get("query_intent"))
         generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "城市分公司", "城市公司", "事业部"}
-        intent_is_ranking = query_intent.get("intent") == "ranking"
+        intent_is_ranking = query_intent.get("intent") == "ranking" or self._looks_like_ranking_question(normalized_question)
         intent_target_level = str(query_intent.get("target_level") or "")
         if intent_target_level in {"城市公司", "城市分公司"}:
             intent_target_level = "城市分公司"
@@ -5962,7 +6115,7 @@ LIMIT 10000
             text = str(value or "").strip()
             if not text:
                 return ""
-            text = re.sub(r"^(看下|看一下|查下|查一下|查询|看看|请看下|请查下)", "", text)
+            text = re.sub(r"^(看下|看一下|查下|查一下|查询|看看|请看下|请查下|哪个|哪些)", "", text)
             text = re.sub(r"(业绩如何了|业绩如何|业绩情况|完成的怎么样|完成情况|完成咋样|怎么样|如何了)$", "", text)
             text = text.strip("，,、 和与及的")
             if text in {"城市公司", "城市分公司", "分公司", "事业部"}:
@@ -5982,9 +6135,53 @@ LIMIT 10000
                 normalized = normalize_consumer_entity_name(cleaned)
                 if re.search(r"\d|万", normalized):
                     continue
+                # ranking 修饰词不是实体名，跳过，避免"看下前三的城市分公司"被当成实体触发空结果防御
+                if re.search(r"前|后|排名|排行|最高|最低|最好|最差|top|第", normalized, flags=re.I):
+                    continue
                 if normalized and normalized not in {"哪些分公司", "各分公司", "所有分公司", "哪些城市公司", "各城市公司", "所有城市公司"}:
                     entity_names.append(normalized)
         entity_names = list(dict.fromkeys(entity_names))
+
+        # P1防御性修复：实体合法性校验，只过滤明确的伪实体（前缀+层级词拼接，如"消费者分公司"），
+        # 保留所有其他实体（包括跨数据集真实实体，交给后续路由逻辑自动切换数据集）
+        # 修复：取所有数据集节点并集，避免多轮hint沿用导致跨数据集合法实体被误剔
+        if entity_names:
+            valid_node_names = set()
+            try:
+                node_index = getattr(self, "_dataset_node_index", None)
+                if not isinstance(node_index, dict):
+                    node_index = self._load_dataset_node_index()
+                    self._dataset_node_index = node_index
+                for ds_item in node_index.get("datasets") or []:
+                    for node in ds_item.get("nodes") or []:
+                        if isinstance(node, dict):
+                            _n = str(node.get("node_name") or "").strip()
+                            if _n:
+                                valid_node_names.add(_n)
+                                for alias in node.get("aliases") or []:
+                                    valid_node_names.add(str(alias).strip())
+                valid_node_names.update(generic_level_terms)
+            except Exception:
+                valid_node_names = set(generic_level_terms)
+            if valid_node_names:
+                filtered_entities = []
+                for name in entity_names:
+                    # 剥离前缀事业部名称（如"消费者分公司"→"分公司"）
+                    stripped_name = name
+                    for prefix in ["商用", "消费者", "电商"]:
+                        if name.startswith(prefix) and name != prefix:
+                            stripped_name = name[len(prefix):]
+                            break
+                    # 仅过滤伪实体：剥离前缀后刚好是纯层级词，且原始名称不在当前数据集节点中
+                    # （保留：当前数据集真实节点 / 纯层级词 / 其他数据集的真实实体）
+                    is_pseudo_entity = (
+                        stripped_name in generic_level_terms
+                        and name not in valid_node_names
+                        and len(name) > len(stripped_name)
+                    )
+                    if not is_pseudo_entity:
+                        filtered_entities.append(name)
+                entity_names = filtered_entities
 
         # 如果实体名只是通用层级词（如"分公司"），按该层级过滤而不是按节点名过滤
         resolved_subject_name = str(query_intent.get("subject_name") or "").strip()
@@ -5994,6 +6191,20 @@ LIMIT 10000
         )
         if generic_level_only:
             entity_names = []
+
+        # 防御：所有实体都不属于当前数据集时返回0行，防止跨数据集误匹配（如"东部分公司"在消费数据集被误转"山东分公司"）
+        if entity_names and not generic_level_only:
+            try:
+                current_ds_id = int(self._safe_dict(context.get("dataset")).get("id") or 0)
+            except Exception:
+                current_ds_id = 0
+            if current_ds_id and not any(self._is_entity_in_dataset(n, current_ds_id) for n in entity_names):
+                return ("SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, "
+                        "NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, "
+                        "0 AS 总任务金额, 0 AS 年度开单金额, 0 AS 达成率, 0 AS 剩余任务金额, "
+                        "0 AS 线下任务_万元, 0 AS 新零售任务_万元, 0 AS 燃气定制任务_万元, 0 AS 地产任务_万元, "
+                        "0 AS 线下实际_万元, 0 AS 新零售实际_万元, 0 AS 燃气定制实际_万元, 0 AS 地产实际_万元 "
+                        "FROM public.feishu_tbl_xioafeizhe WHERE 1=0 LIMIT 0")
 
         scope_filter = ""
         if entity_names:
@@ -6250,10 +6461,15 @@ WITH 字段提取 AS (
                     (context.get("report_config") or {}).get("intentPolicies")
                 ).get("ranking")
                 rank_limit = self._safe_int(ds_ranking_policy.get("defaultTopN"), 0)
+            if rank_limit <= 0 and asks_best_branch:
+                rank_limit = 1
             if rank_limit <= 0:
-                # 用户仅说“排名/排行”但没给数量时，返回全部；只有明确带 Top/前/后/倒数 才默认取 Top3
+                # 用户仅说"排名/排行"但没给数量时，默认返回最多20条；明确带数量才用配置的 Top3
                 if explicit_rank_count_requested:
                     rank_limit = 3
+                elif intent_is_ranking:
+                    # 识别为排名意图但无具体数量，默认返回最多20条（maxTopN）
+                    rank_limit = 20
                 else:
                     rank_limit = 0
             return max(0, min(20, rank_limit))
@@ -6372,6 +6588,63 @@ LIMIT 200
                     group_level = "城市分公司"
                 else:
                     group_level = "分公司"
+
+            # 数量词事实验证通过（如"四个分公司"），直接返回明细数据+整体汇总行，供顶部KPI使用
+            if query_intent.get("_quantity_verified"):
+                where_conditions = [f"层级 = '{group_level}'"]
+                # 城市分公司层级额外过滤名称含"分公司"
+                if group_level == "城市分公司" or group_level == "分公司":
+                    where_conditions.append("节点名称 LIKE '%分公司'")
+                where_clause = " AND ".join(where_conditions)
+                dataset_display_name = dataset_name.replace("开单业绩","").replace("（阶段一升级版）","").strip()
+                return f"""
+{base_sql},
+明细结果 AS (
+SELECT *
+FROM 汇总结果
+WHERE {where_clause}
+)
+SELECT * FROM (
+    SELECT
+        MAX(条线) AS 条线,
+        '事业部' AS 层级,
+        '消费者事业部' AS 上级名称,
+        '{dataset_display_name}' AS 节点名称,
+        '{dataset_display_name}' AS 事业部,
+        '' AS 分公司,
+        '' AS 城市分公司,
+        '' AS 代表处,
+        '' AS 业务代表,
+        SUM(总任务金额) AS 总任务金额,
+        SUM(年度开单金额) AS 年度开单金额,
+        CASE WHEN SUM(总任务金额) = 0 THEN 0 ELSE ROUND((SUM(年度开单金额)/SUM(总任务金额))*100, 2) END AS 达成率,
+        ROUND(SUM(总任务金额)-SUM(年度开单金额), 2) AS 剩余任务金额,
+        SUM(线下任务_万元) AS 线下任务_万元,
+        SUM(新零售任务_万元) AS 新零售任务_万元,
+        SUM(燃气定制任务_万元) AS 燃气定制任务_万元,
+        SUM(地产任务_万元) AS 地产任务_万元,
+        SUM(线下实际_万元) AS 线下实际_万元,
+        SUM(新零售实际_万元) AS 新零售实际_万元,
+        SUM(燃气定制实际_万元) AS 燃气定制实际_万元,
+        SUM(地产实际_万元) AS 地产实际_万元
+    FROM 明细结果
+    UNION ALL
+    SELECT * FROM 明细结果
+) t
+ORDER BY
+  CASE 层级
+    WHEN '事业部' THEN 0
+    WHEN '分公司' THEN 1
+    WHEN '城市分公司' THEN 2
+    WHEN '代表处' THEN 3
+    WHEN '业务代表' THEN 4
+    ELSE 9
+  END,
+  达成率 DESC NULLS LAST,
+  节点名称
+LIMIT 100
+""".strip()
+
             group_by_field = "节点名称"
             where_level = f"层级 = '{group_level}'"
             if "下属" in normalized_question and "城市分公司" in normalized_question:
@@ -6495,12 +6768,19 @@ LIMIT 200
 )
 SELECT r.*
 FROM 汇总结果 r
-JOIN 排名分公司 b
+INNER JOIN (
+    -- 只取目标层级（一级）和它的直接子层级（二级）
+    SELECT DISTINCT 节点名称, 层级, 上级名称 FROM 汇总结果
+    WHERE 层级 = '分公司'
+       OR 上级名称 IN (SELECT 节点名称 FROM 汇总结果 WHERE 层级 = '分公司')
+) allowed_nodes
+  ON r.节点名称 = allowed_nodes.节点名称 AND r.层级 = allowed_nodes.层级
+LEFT JOIN 排名分公司 b
   ON (r.层级 = '分公司' AND r.节点名称 = b.节点名称)
-  OR (r.层级 = '城市分公司' AND r.上级名称 = b.节点名称)
 ORDER BY
+    CASE WHEN b.排名序号 IS NOT NULL THEN 0 ELSE 1 END,
     b.排名序号,
-    CASE r.层级 WHEN '分公司' THEN 1 WHEN '城市分公司' THEN 2 ELSE 9 END,
+    CASE r.层级 WHEN '分公司' THEN 1 ELSE 2 END,
     r.{sort_column} {order_direction},
     r.年度开单金额 DESC,
     r.剩余任务金额 DESC,
@@ -6890,7 +7170,11 @@ Agent1 路由结果：
 
         target_name = self._extract_followup_org_target(question)
         if target_name:
-            return [latest_dataset_id]
+            # 修复：实体不属于 hint 数据集时释放 hint，让系统重新路由
+            # 例如 Q1=消费者, Q2=东部分公司 → "东部分公司"只属于商用 → 返回[]释放hint
+            if self._is_entity_in_dataset(target_name, latest_dataset_id):
+                return [latest_dataset_id]
+            return []
 
         profile = get_dataset_profile(target_dataset.get("dataset_code"), target_dataset.get("dataset_name"))
         if not self._profile_supports_level(profile, "分公司"):
@@ -6936,6 +7220,11 @@ Agent1 路由结果：
         if not target_name:
             return False
 
+        # 修复：实体不属于 hint 数据集时释放 hint，让系统重新路由
+        # 例如 Q1=消费者, Q2=东部分公司 → "东部分公司"只属于商用 → 释放hint
+        if not self._is_entity_in_dataset(target_name, selected_ids[0]):
+            return False
+
         catalog = [
             item for item in self.repository.get_agent1_catalog()
             if int(item.get("id") or 0) == selected_ids[0]
@@ -6960,6 +7249,30 @@ Agent1 路由结果：
             return True
         fallback_subjects = self._question_subject_names(question, dataset_context or {}, include_resolved=False)
         return bool(fallback_subjects)
+
+    def _is_entity_in_dataset(self, name: str, dataset_id: int) -> bool:
+        """检查实体名（节点名/别名）是否在指定 dataset 的 node_index 中。
+        出错时保守返回 True（避免误释放 hint 影响正常多轮对话）。
+        """
+        try:
+            node_index = getattr(self, "_dataset_node_index", None)
+            if not isinstance(node_index, dict):
+                node_index = self._load_dataset_node_index()
+                self._dataset_node_index = node_index
+            target_id = int(dataset_id)
+            for ds_item in node_index.get("datasets") or []:
+                if int(ds_item.get("dataset_id") or 0) != target_id:
+                    continue
+                for node in ds_item.get("nodes") or []:
+                    if str(node.get("node_name") or "").strip() == name:
+                        return True
+                    for alias in node.get("aliases") or []:
+                        if str(alias).strip() == name:
+                            return True
+                return False
+            return True
+        except Exception:
+            return True
 
     def _extract_followup_org_target(self, question: str) -> str:
         """追问链路主体提取。原实现有独立正则+level_terms 处理，但正则比 _clean_org_subject_candidate
@@ -8023,13 +8336,18 @@ Agent3 复核结果：
                         "source": "question_subject_fallback",
                         "ranking_params": preserved_ranking_params,
                     }
-            refined_question = str(route.get("refined_query") or question or "")
-            original_question = str(route.get("original_question") or question or "").strip()
-            intent_question = original_question or refined_question
+            refined_question = str(route.get("refined_query") or question or "").strip()
+            raw_question = str(route.get("raw_question") or question or "").strip()
+            resolved_subject = self._safe_dict(context.get("resolved_subject"))
+            if resolved_subject.get("subject_name"):
+                # 主体已纠正（如"商用事业部丁杰"→"丁杰"）：以 refined_query 为主体，避免原始问题里的事业部层级词误导 target_level
+                intent_question = refined_question or raw_question
+            else:
+                # 否则以原始问题为主体，保住 aggregate/ranking/compare 信号
+                intent_question = raw_question or refined_question
             if refined_question and refined_question not in intent_question:
                 intent_question = f"{intent_question}\n{refined_question}"
             query_intent = self._resolve_query_intent(intent_question, context)
-            resolved_subject = self._safe_dict(context.get("resolved_subject"))
             if resolved_subject.get("subject_name"):
                 query_intent["subject_name"] = resolved_subject.get("subject_name")
             if resolved_subject.get("subject_level"):
@@ -8471,6 +8789,7 @@ Agent3 复核结果：
         self._preferred_model_id = model_id
         trace = self._new_trace(question, "ask", live_callback=live_callback)
         memory_history = conversation_history or self.short_term_memory.get(conversation_session_id)
+        raw_question = question
         effective_question = self.short_term_memory.resolve_followup(question, memory_history) or question
         org_subject_resolution = None
         if self._looks_like_org_subject_question(question):
@@ -8687,6 +9006,8 @@ Agent3 复核结果：
                     "dataset_ids": selected_dataset_ids,
                     "intent": "detail",
                     "refined_query": effective_question,
+                    "raw_question": question,
+                    "resolved_subject_name": str((org_subject_resolution or {}).get("subject_name") or "").strip(),
                     "requires_confirmation": False,
                     "decision": "generate_sql",
                     "match_score": 100,
@@ -8715,6 +9036,7 @@ Agent3 复核结果：
                     allowed_dataset_ids=allowed_dataset_ids,
                     current_question=effective_question or question,
                 )
+                route["raw_question"] = question
                 full_catalog = self.repository.get_agent1_catalog()
                 self._append_trace(
                     trace,

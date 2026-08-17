@@ -1,0 +1,204 @@
+---
+name: smartask-qa-regression
+description: >
+  SmartAsk 问数功能的一键自动化回归测试。适用于：用户反馈问数效果异常、
+  改完代码后要验证有没有"挖东墙补西墙"、要还原某段历史修复效果、
+  或想快速确认某个问法（单点/总览/对比/筛选/排名/聚合/多轮）当前是否正常时。
+  解决"手写 diag_*.py 脚本 + docker cp + grep 过滤 SQL 噪音"太慢、太不准的痛点：
+  内置环境自检（PG 探活/代码可导入）、声明式用例、自动断言、
+  干净报告，一条命令跑完所有基线回归。
+  当用户说"测一下这个问法""回归一下基线""帮我验证有没有破坏别的问题""跑一遍测试清单"时触发使用。
+---
+
+# SmartAsk 问数回归测试技能
+
+一条命令跑完问数功能回归，自动判 PASS/FAIL，随代码和 baseline 一起演进。
+
+## 为什么需要它（历史痛点）
+
+手写临时脚本测试有三个坑，本技能全部规避：
+
+| 痛点 | 根因 | 本技能对策 |
+|---|---|---|
+| 慢 | 每次写 `diag_*.py` + `docker cp` + `docker exec` + grep 过滤 SQL 噪音 | runner 常驻容器，直接 import 最新代码，秒级 |
+| 不准确 | token 截断 403 假象、Flask 进程跑旧代码、独立进程≠HTTP、SQL 污染断言、靠人肉看 | preflight 两道闸自检 + md5 报告头 + 自动断言 + 干净报告 |
+| 不可维护 | 诊断脚本散落几十个、baseline 变了用例不更新 | 声明式 JSON 用例，`source` 锚定 baseline §X / bug #N |
+
+## 核心决策：容器内直接 import 跑
+
+`four_agent_ask_service.ask()` 是 HTTP handler 与诊断脚本共用的**同一函数**，容器内 import 调用即与生产同代码路径，且无 HTTP 鉴权（彻底消灭 token 截断 403 假象）。拿到的是完整 Python 对象而非序列化 JSON，断言面更小。
+
+**权限声明**：runner 恒以 super_admin 跑（可用例级 `user` 字段覆盖，见下），权限过滤路径默认不覆盖。
+
+## 快速开始
+
+```bash
+# Windows Git Bash 注意：docker cp/exec 的容器路径会被 MSYS 路径转换吃掉，
+# 必须加 MSYS_NO_PATHCONV=1 前缀（cmd/PowerShell 不需要）。
+
+# 1. 同步 runner + 用例到容器
+MSYS_NO_PATHCONV=1 docker cp .agents/skills/smartask-qa-regression/runner/qa_runner.py smartask-backend:/app/backend/qa_runner.py
+MSYS_NO_PATHCONV=1 docker cp .agents/skills/smartask-qa-regression/cases smartask-backend:/app/backend/qa_cases
+
+# 2. 跑用例库（baseline 和 bugs 是两个文件，分别跑，或用 && 串联）
+MSYS_NO_PATHCONV=1 docker exec smartask-backend python /app/backend/qa_runner.py /app/backend/qa_cases/baseline.json
+MSYS_NO_PATHCONV=1 docker exec smartask-backend python /app/backend/qa_runner.py /app/backend/qa_cases/bugs.json
+# 串联：MSYS_NO_PATHCONV=1 docker exec smartask-backend bash -c "python /app/backend/qa_runner.py /app/backend/qa_cases/baseline.json && python /app/backend/qa_runner.py /app/backend/qa_cases/bugs.json"
+
+# 3. 只跑某个用例（按 id 前缀过滤）
+MSYS_NO_PATHCONV=1 docker exec smartask-backend python /app/backend/qa_runner.py /app/backend/qa_cases/bugs.json B15
+```
+
+## 环境自检（preflight 两道闸：PG 全灭或代码不可导入才中止，绝不跑出错误结果）
+
+1. **PG 探活（分级）** — 遍历 `config/datasources.json` 里全部 `is_active` 的 PostgreSQL 源逐一 `SELECT 1`（跳过 `is_active=false` 的源），每个源的连通结果（数据源名 + OK/失败原因）打印到报告头。**全部不可达**才 `ENV-FAIL` 中止（此时跑下去必是全假"没结果"）；**至少一个可达即放行**，不可达的源降级为警告、不阻断
+2. **代码可导入** — `import four_agent_ask` 失败即中止
+
+自检失败输出 `ENV-FAIL`，与用例 FAIL 严格分离，杜绝误报。
+
+### 报告头 md5 自检（报告项，不是阻断闸）
+
+runner 启动时在报告头部打印三个文件的 **md5 + mtime**：容器内 `/app/backend/four_agent_ask.py`、runner 自身、用例文件。用于肉眼发现"容器跑的不是本地这份代码"的漂移，**只报告不拦截**（容器内无 .git，不打 git hash）。宿主机比对：
+
+```bash
+md5sum backend/four_agent_ask.py
+```
+
+## 用例格式（声明式，非工程师可加）
+
+在 `cases/*.json` 里加一个对象即可：
+
+```json
+{
+  "id": "R1",
+  "question": "消费者城市分公司排名",
+  "source": "baseline §2.1",
+  "asserts": [
+    {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+    {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0},
+    {"path": "dataset_results.0.row_count", "op": "eq", "expect": 69}
+  ]
+}
+```
+
+多轮（同 session 连续问）用 `turns`：
+
+```json
+{
+  "id": "M5",
+  "source": "baseline §8.3",
+  "turns": [
+    {"question": "消费者事业部业绩"},
+    {"question": "东部分公司业绩",
+     "asserts": [{"path": "route.dataset_ids", "op": "eq", "expect": [3]}]}
+  ]
+}
+```
+
+**弹确认要「走完」**（用 `confirm` 数组，每个候选数据集都测一遍）：
+
+```json
+{
+  "id": "R-bottom3-confirm",
+  "source": "baseline §2.6/bug#18",
+  "question": "垫底的三个分公司",
+  "asserts": [{"path": "requires_confirmation", "op": "allow_confirm"}],
+  "confirm": [
+    {"select": {"dataset_ids": [2]},
+     "asserts": [
+       {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+       {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3},
+       {"path": "dataset_results.0.query_intent.direction", "op": "eq", "expect": "asc"},
+       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3}
+     ]},
+    {"select": {"dataset_ids": [3]},
+     "asserts": [
+       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3}
+     ]}
+  ]
+}
+```
+
+`select.dataset_ids` 指定选哪个数据集，runner 会从 `confirmation_options` 找到对应选项，真正调 `confirm_by_boss` 走完流程，再对确认后的结果跑 `asserts`。**只有 3 个数据集（消费者2/商用3/电商62），弹确认的场景务必把每个候选数据集都写一个分支走完。**
+
+**用例级身份覆盖**（可选 `user` 字段，缺省字段回退默认 super_admin）：
+
+```json
+{
+  "id": "P1-perm",
+  "source": "bug#13 权限路径后端半边",
+  "question": "各分公司业绩排名",
+  "user": {"role": "user", "id": 88888, "username": "qa-user", "organization_codes": [], "organization_node_ids": []},
+  "asserts": [{"path": "requires_confirmation", "op": "eq", "expect": true}]
+}
+```
+
+**error 特判**：ask/confirm 结果被服务吞成 `{"error": "..."}` 时，该 turn 记一行 `error ... EXC` 并跳过其余断言（避免一片 None FAIL 噪音）；EXC 计入失败数。
+
+### 可断言的路径（path）
+
+- `route.dataset_ids` / `route.decision` / `route.requires_confirmation`
+- `requires_confirmation`（顶层，与 `route.requires_confirmation` 区分：弹确认判断建议用顶层键）
+- `dataset_results.0.query_intent.intent` / `.top_n` / `.direction` / `.rank_sides` / `.sort_metric_column` / `.target_level`
+- `dataset_results.0.row_count`
+- `dataset_results.0.sql`（断言用 contains / not_contains，匹配**完整 SQL 文本**；报告展示才用截断摘要）
+- `dataset_results.0.rows.0.节点名称`（第一个节点名）
+- `dataset_results[ds=N].row_count`（**数据集选择器**：在 list 中按 `dataset_id==N` 选元素再取子路径，不按索引——多数据集顺序不保证；找不到返回 None）
+
+### 断言操作符（op）
+
+| op | 含义 |
+|---|---|
+| `eq` | 精确等于（intent/dataset_ids/top_n/direction/rank_sides 用这个） |
+| `contains` | 字符串包含（节点名、SQL 片段；对 `.sql` 路径匹配的是**完整 SQL**，不是摘要） |
+| `not_contains` | 字符串不含（抓 top_n 丢失回归；`.sql` 同样对完整 SQL 匹配） |
+| `gt` / `gte` / `lt` / `lte` | 数值比较（row_count）；got 非数值（含 None/字符串）判 False 不抛异常 |
+| `range` | `[min, max]` 范围（容忍数据抖动）；got 非数值判 False |
+| `nonempty` | 非空（rows>0、analysis 非空） |
+| `allow_confirm` | 该问题弹确认是**正确行为**（跨数据集歧义），弹确认记 CONFIRM（不算失败）、不弹判 FAIL |
+
+### "合理弹确认"白名单
+
+以下问题命中多个数据集的真实层级/裸节点，弹确认是**正确行为**（用 `allow_confirm` 标记）：
+
+- 「分公司」层级词：`各分公司业绩排名`/`分公司业绩排名`/`前3的分公司`/`垫底的三个分公司`/`业绩最好的分公司`
+- 「业务部」层级词：`业务部业绩排名`/`业务部的业绩情况`（商用+电商都有）
+- 裸节点：`上海那边业绩如何了`（上海城市公司 vs 上海代表处）
+
+**反例**（弹确认 = FAIL）：带明确前缀的 `看下前三的商用分公司`、唯一命中的 `看下上海代表处的业绩咋样了`。
+
+## 随代码演进（可持续更新）
+
+1. **每个用例必须写 `source`**：锚定 `baseline §X.Y` 或 `bug #N`（隐性锚定也要显式写出，如 `baseline §2.3/bug#16`）
+2. **改 baseline 前**：`grep "§2.1" cases/` 找出该节全部用例，同步更新期望值
+3. **修好一个 bug**：把 `bugs.json` 里对应用例的 `source` 从 `bug #N` 改成 `baseline §X`，升格为永久回归；若 baseline 已有等价用例（source 锚定同一 bug），直接删除 bugs.json 里的重复条
+4. **新增问法**：从 `config/confirmed_behaviors_baseline.md` 的代表问题里取，按本格式加进对应 `cases/*.json`
+
+## 二期 backlog（已知缺口，暂不做）
+
+- `turns` 内支持 confirm（当前多轮与弹确认互斥）
+- `set_eq` / `len_eq` 操作符（集合相等、长度相等）
+- 报告中文列宽对齐（`east_asian_width`）
+- 用例 schema 校验（启动时校验 cases/*.json 结构）
+- 业务部 confirm 族 + 电商 ds=62 用例密度补强
+
+## 目录结构
+
+```
+.agents/skills/smartask-qa-regression/
+├── SKILL.md                  # 本文件
+├── runner/qa_runner.py       # 容器内 runner（preflight + md5 报告头 + 断言 + 报告 + 多轮 + user 覆盖）
+└── cases/
+    ├── baseline.json         # 基线用例库（21 条：baseline 文档 §1-§8 代表问题）
+    └── bugs.json             # bug 验收用例（9 条：修复后期望，对应 bug-backlog）
+```
+
+## 关键文件索引
+
+- `config/confirmed_behaviors_baseline.md` — 已确认行为基线（唯一事实源）
+- `.workbuddy/artifacts/bug-backlog-2026-08-14.md` — 待修复问题清单 + 分组
+- `backend/four_agent_ask.py` — 意图解析、SQL 生成、confirm 流程（上帝文件）
+- `backend/smartask_engine/intent/resolver.py` — IntentResolver
+- `backend/memory/short_term_memory.py` — 多轮追问记忆
+- 三个数据集：商用 id=3、消费者 id=2、电商 id=62

@@ -275,30 +275,45 @@ def _ensure_dataset_node_index():
     import os
     index_path = os.path.join(os.path.dirname(__file__), "..", "config", "dataset_node_index.json")
     need_rebuild = False
-    
+
     if not os.path.exists(index_path):
-        print("检测到dataset_node_index.json不存在，自动重建节点索引...")
+        print("[dataset_node_index] 文件不存在，自动重建")
         need_rebuild = True
     else:
         try:
             import json
             with open(index_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if not isinstance(data, dict) or not data.get("datasets"):
-                print("dataset_node_index.json为空或格式无效，自动重建节点索引...")
+            if not isinstance(data, dict):
+                raise ValueError("root not dict")
+            datasets = data.get("datasets") or []
+            flat_alias = data.get("flat_alias_index") or []
+            if not datasets:
+                print("[dataset_node_index] datasets 为空，自动重建")
                 need_rebuild = True
-        except Exception:
-            print("dataset_node_index.json损坏，自动重建节点索引...")
+            elif len(flat_alias) < 50:
+                # datasets 看似完整但 flat_alias_index 损坏（截断/写一半）
+                print(
+                    f"[dataset_node_index] datasets={len(datasets)} 但 "
+                    f"flat_alias_index={len(flat_alias)} 过小，自动重建"
+                )
+                need_rebuild = True
+        except Exception as e:
+            print(f"[dataset_node_index] 文件损坏 ({e})，自动重建")
             need_rebuild = True
-    
+
     if need_rebuild:
         try:
             from build_dataset_node_index import build_dataset_node_index, write_dataset_node_index
             payload = build_dataset_node_index()
             write_dataset_node_index(payload)
-            print(f"节点索引重建完成，共{len(payload.get('datasets', []))}个数据集")
+            flat_size = len(payload.get("flat_alias_index", []))
+            print(
+                f"[dataset_node_index] 重建完成：{len(payload.get('datasets', []))} 数据集，"
+                f"flat_alias_index={flat_size} 条"
+            )
         except Exception as e:
-            print(f"节点索引自动重建失败（不影响服务启动，将在飞书同步后自动增量构建）: {e}")
+            print(f"[dataset_node_index] 自动重建失败（不影响启动，飞书同步后会增量构建）: {e}")
 
 
 def _start_feishu_sync_scheduler():

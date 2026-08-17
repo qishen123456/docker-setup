@@ -1166,6 +1166,9 @@ body,
   padding: 14px 12px;
   transition: width var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
   overflow-x: hidden;
+  overflow-y: auto;
+  height: 100vh;
+  box-sizing: border-box;
   border-right: none !important;
   box-shadow: 8px 0 32px rgba(0, 0, 0, 0.08) !important;
 }
@@ -1638,8 +1641,8 @@ body,
   position: relative;
   margin: 12px 0 12px;
   padding: 14px 12px 12px;
-  min-height: 260px;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1764,9 +1767,10 @@ body,
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: none;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 2px;
 }
 

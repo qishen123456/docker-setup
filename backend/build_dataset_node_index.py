@@ -433,6 +433,18 @@ def build_dataset_node_index(
     repository = BookshelfRepository()
     router = DataSourceRouter()
 
+    # 自动获取默认数据源ID，用于source_id无效时的fallback
+    default_source_id = None
+    try:
+        for ds_id, ds_config in router.data_sources.items():
+            if ds_config.get("config", {}).get("is_default"):
+                default_source_id = ds_id
+                break
+    except Exception:
+        # 获取失败时fallback到5（PostgreSQL默认ID）
+        default_source_id = 5
+    valid_source_ids = set(router.data_sources.keys())
+
     target_codes = list(dict.fromkeys([
         code for code in (dataset_codes or SUPPORTED_DATASET_CODES)
         if str(code).strip() in SUPPORTED_DATASET_CODES
@@ -449,12 +461,18 @@ def build_dataset_node_index(
             continue
         context = repository.get_dataset_context(dataset_id, "节点索引构建")
         dataset_meta = context.get("dataset") or {}
+        
+        # 解析source_id，无效时自动fallback到默认数据源
+        source_id = int(dataset_meta.get("source_id") or row.get("source_id") or 0)
+        if source_id not in valid_source_ids:
+            source_id = default_source_id
+            
         rebuilt_datasets.append(
             _build_dataset_nodes(
                 dataset_id=dataset_id,
                 dataset_code=dataset_code,
                 dataset_name=str(dataset_meta.get("dataset_name") or row.get("dataset_name") or ""),
-                source_id=int(dataset_meta.get("source_id") or row.get("source_id") or 0),
+                source_id=source_id,
                 sql=_build_sql_for_dataset(dataset_code, context),
                 router=router,
             )

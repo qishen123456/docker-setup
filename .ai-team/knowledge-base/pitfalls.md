@@ -80,3 +80,15 @@
 根因：31 个调用点（four_agent_ask.py 23 处 + disambiguation/llm_arbiter.py 4 处）全部拿到 None，路由层级判定和实体消解全部退化，无任何日志告警
 解法：产出 dataset_dimension_profiles.json 激活 31 个已写好的调用点。注意：补的文件只含同义词映射和集合口径增强，不含节点层级关系定义（节点关系以 dataset_node_index.json 为唯一事实源）
 影响范围：全项目投入产出比最高的单点动作——补一个文件激活 294 行已实现的语义匹配代码
+
+[2026-08-17] 测试工具自身三坑：文档造假 / 哑 FAIL / 结构性恒 FAIL
+上下文：smartask-qa-regression 技能首版，SKILL.md 宣称"preflight 四道闸"实际只实现两道；B5 用例 `row_count gte 0` 被判"恒真"实为"哑 FAIL"；B14 对弹确认问题直接断言 query_intent
+根因：① 文档先行实现未跟上，契约偏离无人核对；② `_matches` 对 None 返回 False，异常被 ask() 吞成 {"error":...} 而 runner 不检查 error 键，失败只剩一片 None FAIL 无根因文本；③ 弹确认时 ask() 提前返回、结果无 dataset_results 键，直查断言必然全 FAIL，且与同问题的 confirm 用例自相矛盾（套件永远不可能全绿）
+解法：runner 加 error 字段特判（记 EXC 带错误文本并跳过该 turn 其余断言）；弹确认用例一律走 confirm 走完格式；SKILL.md 与实现逐条对齐纳入复审清单；"看起来恒真"的断言要区分"成功时恒过"与"失败时哑 FAIL"两种形态
+影响范围：.agents/skills/smartask-qa-regression/，后续所有测试工具/技能的文档-实现对账
+
+[2026-08-17] 容器内回归必须先对齐代码漂移再判 FAIL
+上下文：QA 首轮 baseline 28 个 FAIL 聚集为消费者 ranking 意图全线 unknown，险些全判成源码缺陷
+根因：宿主机 5 个意图识别修复 commit（8ace601~1de4311，6 文件）未同步进容器，容器跑的是 08-13 旧代码；runner 是容器内即时 import，测的其实是旧码
+解法：报告头打印关键文件 md5+mtime（four_agent_ask.py md5 99dd vs 宿主机 6da5 当场现形）；漂移 FAIL 先 docker cp 对齐再重跑复核，复核不过的才路由 Engineer-BE
+影响范围：qa_runner.py 报告头、所有容器内测试流程的 FAIL 判读顺序

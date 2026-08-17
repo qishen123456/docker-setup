@@ -119,6 +119,12 @@ class ShortTermMemoryStore:
         compact = text.replace(" ", "")
         if len(compact) <= 12 and any(token in compact for token in ("那", "也", "呢", "对比", "相比", "继续", "这个", "它")):
             return True
+        # 纯指标追问（达成率/完成率/多少/咋样）需沿用上轮主体，识别为追问；
+        # 排除带组织层级词的新问法，避免"各分公司业绩咋样"被误判为追问。
+        metric_tokens = ("达成率", "完成率", "进度", "多少", "咋样", "怎么样", "如何", "怎样")
+        org_level_tokens = ("事业部", "分公司", "代表处", "业务部", "城市公司", "业务代表")
+        if any(token in compact for token in metric_tokens) and len(compact) <= 12 and not any(t in compact for t in org_level_tokens):
+            return True
         # 比较/筛选类条件追问也需要上文语境（如数据集、层级），视为追问
         if any(token in compact for token in ("大于", "小于", "高于", "低于", "超过", "不足", "等于", "不少于", "不多于")):
             return True

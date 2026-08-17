@@ -45,3 +45,18 @@
 理由：两套迁移体系已分叉（docker init 6 个 vs migrations 7 个，各有独有内容），5 份 _ensure_optional_tables 副本 md5 全不同已分叉，表结构取决于环境历史上先跑过哪个脚本
 被否方案：保留两套并行 -> CREATE TABLE IF NOT EXISTS 让先跑者定义结构，后者静默跳过，不可预测
 影响范围：docker/postgres/init/ 只保留数据库/用户初始化；bootstrap 迁移失败必须阻断启动
+
+[2026-08-17] preflight 环境自检做"报告项"而非"阻断闸"（md5 第三解）
+理由：宿主机侧脚本（docker inspect + md5sum 比对 + 进程 mtime）在 Windows + Docker Desktop + Git Bash 下跨平台维护贵；纯文档降级又等于放弃。容器内自给自足打印关键文件 md5+mtime 到报告头 + SKILL.md 配一行宿主机 md5sum 供肉眼比对，首次实战即立功（当场抓住容器代码漂移）
+被否方案：A 宿主机四道闸脚本（维护贵）；B 文档降级为两道闸（放弃防护）
+影响范围：qa_runner.py print_drift_header、SKILL.md 报告头 md5 自检小节
+
+[2026-08-17] 行数断言 eq vs range 按"语义是否负载"切分，不全量改
+理由：`eq 69`（B15/R1/O1）是截断检测器——抓"无数量排名被 LIMIT 20 截断"回归，放松成 range 会降低敏感度；`eq 3/13/4`（D5/B2/R2-confirm）是层级节点数，飞书同步一抖就误报，改 range。切分标准是"这个数值是不是该用例要抓的回归信号本身"
+被否方案：全量改 range ±15%（截断检测器失灵）；全量保 eq（数据漂移误报）
+影响范围：cases/*.json 行数断言规范
+
+[2026-08-17] 多数据集结果断言按 dataset_id 匹配，不按数组索引
+理由：对比场景 dataset_results 顺序不保证固定（可能按 dataset_id 排序或路由顺序），`dataset_results.1` 会看岔；元素自带 dataset_id 字段（four_agent_ask.py:1220），选择器 `dataset_results[ds=62]` 稳定
+被否方案：按索引取第二个（顺序敏感）
+影响范围：qa_runner.py get_path 选择器语法、B5 等跨数据集用例

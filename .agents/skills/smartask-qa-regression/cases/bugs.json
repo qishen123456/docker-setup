@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {"id": "B1", "source": "bug#1 河南代表处Golden样本劫持", "question": "河南代表处业绩",
+     "asserts": [
+       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+       {"path": "dataset_results.0.row_count", "op": "range", "expect": [4, 6]},
+       {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIKE '%代表处%'"}
+     ]},
+    {"id": "B2", "source": "bug#2 业务部汇总只显示第一个（实测校准2026-08-17：业务部层级词真实命中商用+电商，弹确认属白名单正确行为，改为走完确认后断言汇总行数）", "question": "业务部的业绩",
+     "asserts": [{"path": "requires_confirmation", "op": "allow_confirm"}],
+     "confirm": [
+       {"select": {"dataset_ids": [3]},
+        "asserts": [
+          {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+          {"path": "dataset_results.0.row_count", "op": "range", "expect": [2, 5]}
+        ]},
+       {"select": {"dataset_ids": [62]},
+        "asserts": [
+          {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+          {"path": "dataset_results.0.row_count", "op": "range", "expect": [2, 5]}
+        ]}
+     ]},
+    {"id": "B4", "source": "bug#4 消费者商用对比汇总", "question": "消费者和商用的对比",
+     "asserts": [
+       {"path": "dataset_results.0.row_count", "op": "gt", "expect": 0}
+     ]},
+    {"id": "B5", "source": "bug#5 商用电商对比崩溃", "question": "商用和电商的对比",
+     "asserts": [
+       {"path": "dataset_results[ds=62].row_count", "op": "gt", "expect": 0}
+     ]},
+    {"id": "B6", "source": "bug#6 赵标靳锋并列折叠", "question": "赵标和靳锋的业绩",
+     "asserts": [
+       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+       {"path": "dataset_results.0.row_count", "op": "gte", "expect": 2}
+     ]},
+    {"id": "B11", "source": "bug#11 商用前缀弹确认", "question": "看下前三的商用分公司",
+     "asserts": [
+       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+       {"path": "requires_confirmation", "op": "eq", "expect": false},
+       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3}
+     ]},
+    {"id": "B12", "source": "bug#12 金额阈值追问污染",
+     "turns": [
+       {"question": "开单金额超过一个亿的代表处"},
+       {"question": "大于5000万的呢",
+        "asserts": [
+          {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "filter"},
+          {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "代表处"},
+          {"path": "dataset_results.0.sql", "op": "contains", "expect": "50000000"}
+        ]}
+     ]},
+    {"id": "B15", "source": "bug#15 无数量排名被截成20", "question": "消费者城市分公司排名",
+     "asserts": [
+       {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0},
+       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 69},
+       {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIMIT 20"}
+     ]},
+    {"id": "P1-perm", "source": "bug#13 权限路径后端半边（实测校准2026-08-17：空权限用户仍弹确认，符合先确认后鉴权顺序，草案预期与实测一致）", "question": "各分公司业绩排名",
+     "user": {"role": "user", "id": 88888, "username": "qa-user", "organization_codes": [], "organization_node_ids": []},
+     "asserts": [{"path": "requires_confirmation", "op": "eq", "expect": true}]}
+  ]
+}

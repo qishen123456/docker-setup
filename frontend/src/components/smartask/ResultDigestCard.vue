@@ -1321,11 +1321,22 @@ const insightCards = computed(() => {
     const singleBestLeaderLabel = rankDirection.value === 'asc' ? '最低对象' : '最高对象'
     const isRankingMulti = primaryAnswerMode.value === 'ranking' && !isSingleBest && collectionRows.length > 1
     const tailRankLabel = `第${collectionRows.length}名`
+    // 单聚焦下钻场景：排除聚焦节点本身，只统计下级节点
+    const focus = singleFocusName.value
+    const useDrillView = Boolean(focus) && !isLeafFocus.value
+    const displayRows = useDrillView ? collectionRows.filter(item => item?.name && item.name !== focus) : collectionRows
+    const counts = new Map()
+    displayRows.forEach((item) => {
+      if (!item?.name) return
+      const key = item.level || '明细'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    })
+    const levelDesc = Array.from(counts.entries()).map(([level, count]) => `${level}${count}个`).join('、')
     return [
       {
         label: '数据覆盖',
-        value: `${collectionRows.length}行`,
-        desc: `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`,
+        value: `${displayRows.length}行`,
+        desc: useDrillView ? (levelDesc || '下级节点结果') : `${isRankingQuestion.value ? rankingLevelLabel.value : (secondaryLevelLabel.value || comparisonLevelLabel.value || '对象')}结果集合`,
         tone: 'info',
       },
       leader ? {
@@ -1929,9 +1940,10 @@ const secondaryDrillRows = computed(() => {
   // 不再用"二级拆解"重复展示同一批节点，避免与排序表双重渲染。
   // 返回空后 drill 区 v-if 不渲染，adviceStartIndex 依赖 length 自动续号（重点发现→四、建议动作→五），不断号。
   if (showFilterRateChart.value) return []
-  const rows = isRankingQuestion.value && managementLayerRows.value.length
+  let rows = isRankingQuestion.value && managementLayerRows.value.length
     ? managementLayerRows.value
     : secondaryDrillAllRows.value
+
   if (!isRankingQuestion.value) return rows
   const limit = explicitRequestedRankLimit.value || rows.length || requestedRankLimit.value || 3
   if (rankSides.value === 'both') return twoSidedRankRows(rows)

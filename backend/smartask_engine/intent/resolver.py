@@ -264,6 +264,7 @@ class IntentResolver:
             target_level = "业务代表"
         overview_tokens = ["业绩", "表现", "情况", "咋样", "怎样", "如何"]
         has_ranking_token = bool(re.search(r"(?:前|后|倒数)\s*(?:\d+|[一二两三四五六七八九十]+)|排名|排行|top\s*\d*|最高|最低|最好|最差|最大|最小", text, flags=re.I))
+        has_comparison_token = any(token in text for token in ("对比", "比较", "相比", "谁更", "哪个更"))
         # 过滤掉数据集根节点别名，避免把“商用事业部”本身也当成查询对象
         dataset = self.ports.safe_dict(context.get("dataset"))
         filtered_specific_names = [
@@ -278,6 +279,7 @@ class IntentResolver:
             and not asks_aggregate
             and not has_ranking_token
             and any(token in text for token in overview_tokens)
+            and not has_comparison_token
             and intent.get("intent") == "unknown"
         ):
             person_levels = {"业务代表", "业务员", "承接人", "负责人", "个人"}
@@ -602,9 +604,6 @@ class IntentResolver:
             })
             return intent
 
-        if ranking_policy.get("enabled") is False:
-            return intent
-
         triggers = [str(item) for item in (ranking_policy.get("triggers") or []) if str(item).strip()]
 
         def metric_match_score(metric_item: Dict[str, Any]) -> int:
@@ -676,11 +675,15 @@ class IntentResolver:
                 if resolved_names:
                     level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}
                     target_aliases = {target_level} | set(str(item) for item in (ranking_policy.get("targetLevelAliases", {}).get(target_level) or []) if item)
+                    # 根节点（事业部）问题：仅当用户明确带"整体/总体/总览/汇总/全部"时才走整体概览；
+                    # 不带这些词（如"电商事业部的业绩"）应走 §1.4 根节点默认带下级，不能被 level_overview 拦截。
+                    overview_markers = ("整体", "总体", "总览", "汇总", "全部", "全局")
+                    has_explicit_overview = any(kw in text for kw in overview_markers)
                     if any(
                         name and name not in level_like_values
                         and any(name.endswith(alias) for alias in target_aliases)
                         for name in resolved_names
-                    ):
+                    ) and not has_explicit_overview:
                         is_level_overview = False
                     # 如果 resolved 的是具体业务员成员，也不按层级概览处理，而是按单点查询
                     if is_level_overview:

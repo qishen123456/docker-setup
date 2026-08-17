@@ -539,3 +539,65 @@
 - 用户明确接受了新的展示方式
 - 某个旧行为不再需要保护
 - 某个新修复已经稳定通过，需要纳入基线
+
+## 8. 实体合法性与冷启动索引健康度（2026-08-13 增补）
+
+### 8.1 跨数据集实体校验必须取所有数据集节点并集
+
+适用范围：
+- 多轮对话（short_term_memory 已有 hint）
+- hint 涉及的 dataset 与当前 question 字面命中的 dataset 不一致
+
+代表问题：
+- Q1: `商用事业部业绩如何`，Q2: `其他消费者事业部业绩`
+- Q1: `商用分公司业绩`，Q2: `看下消费者事业部`
+
+已确认行为：
+- entity validation 应取所有数据集的节点并集作为合法实体集合
+- 不应仅查当前 dataset context，否则多轮 hint 跨数据集时合法实体被误剔
+
+不允许行为：
+- 把其他数据集中的合法实体当成伪实体剔除
+- 仅使用 `self._node_index_members_by_level(context, ...)` 单 dataset 逻辑做跨数据集校验
+
+当前修复点：
+- `backend/four_agent_ask.py` 的 entity validation 段（商用 `_build_rule_based_sql` + 消费者 `_build_consumer_business_sql`）
+
+### 8.2 冷启动索引健康度必须同时验证 datasets 与 flat_alias_index
+
+适用范围：
+- 服务冷启动
+- 索引文件被截断 / 部分损坏
+
+已确认行为：
+- `_ensure_dataset_node_index()` 必须同时验证 `datasets` 非空 + `flat_alias_index` 长度健康（≥50 条）
+- 不应仅验证 `datasets`，否则磁盘半损坏会导致运行时加载坏数据
+
+不允许行为：
+- 磁盘 datasets 有数据但 flat_alias_index=0 时仍接受为健康索引
+
+当前修复点：
+- `backend/app.py` 的 `_ensure_dataset_node_index()` 函数
+
+### 8.3 多轮对话hint必须检测跨数据集实体冲突
+
+适用范围：
+- 多轮对话（short_term_memory 有历史）
+- Q2 的实体属于与 Q1 不同的数据集
+
+代表问题：
+- Q1: `消费者事业部业绩`，Q2: `东部分公司业绩`
+- Q1: `商用事业部业绩`，Q2: `云贵渝分公司业绩`
+
+已确认行为：
+- `_followup_dataset_hint_from_memory` 在返回 hint 前，必须检查 `target_name` 是否属于 hint 数据集
+- 不属于时返回 `[]`（释放 hint），让系统重新路由到正确数据集
+- `_should_keep_followup_dataset_hint` 同步增加 `_is_entity_in_dataset` 检查
+- 消费者 SQL 生成器在所有实体都不属于当前数据集时返回 0 行（兜底防线）
+
+不允许行为：
+- Q1=消费者，Q2=东部分公司 → 沿用消费者 hint，在消费者数据集误匹配"山东分公司"返回 6 行错误数据
+- 实体不属于当前数据集时仍继续执行 SQL，返回"看起来合理但完全错误"的数据
+
+当前修复点：
+- `backend/four_agent_ask.py` 的 `_followup_dataset_hint_from_memory()` + `_is_entity_in_dataset()` + `_build_consumer_business_sql()`

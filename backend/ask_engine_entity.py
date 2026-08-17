@@ -95,6 +95,27 @@ def _looks_like_org_subject_question(question: str) -> bool:
     )
     if has_numeric_threshold:
         return False
+    # aggregate 类问题不应被当作组织主体追问处理，
+    # 否则"每个/各/平均/总和/总额"等聚合信号会被重写时丢掉。
+    aggregate_tokens = ["每个", "各", "分别", "平均", "总和", "总额", "总量", "总数",
+                       "数量", "个数", "合计", "统计", "总计", "总计值"]
+    has_aggregate = bool(any(token in text for token in aggregate_tokens))
+    if has_aggregate:
+        return False
+    # comparison 类问题不应被当作组织主体追问处理，
+    # 否则"对比/比较/相比/差异"等比较信号会被重写时丢掉。
+    comparison_tokens = ["对比", "比较", "相比", "vs", "哪个更好", "哪个更差",
+                        "差异", "差距", "优劣", "胜出"]
+    has_comparison = bool(any(token in text for token in comparison_tokens))
+    if has_comparison:
+        return False
+    # overview 类问题（整体/总体/总览/汇总/全部/全局）不应被重写为"XX的业绩"，
+    # 否则会丢失总览语义，导致返回全量数据而非聚合结果。
+    overview_tokens = ["整体", "总体", "全部", "汇总", "总览", "全局", "整体情况",
+                      "总体情况", "全部数据"]
+    has_overview = bool(any(token in text for token in overview_tokens))
+    if has_overview:
+        return False
     # 具体节点 + 目标子层级（如"江浙沪分公司的城市分公司"）应直接走 drilldown 规则，
     # 不要经过 Agent1 改写，避免子层级信息被丢失。
     level_like_values = {"事业部", "分公司", "业务部", "代表处", "业务代表", "城市分公司", "城市公司", "区域条线", "行业条线"}

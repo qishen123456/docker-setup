@@ -235,3 +235,10 @@ backend/controllers/training.py
 # .workbuddy/ is per-user AI workspace data (memory, sessions) — do not commit
 .workbuddy/
 .ai-team/checkpoints/
+
+# 临时诊断脚本与容器副本（勿提交）
+backend/four_agent_ask_container.py
+backend/scripts/
+test_debug_quantity.py
+test_execute_sql.py
+test_final_verification.py
