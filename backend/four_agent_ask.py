@@ -5131,21 +5131,34 @@ LIMIT 10000
             bottom_rank_limit_fallback = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec_fallback.get("bottom_limit") or 0))
             order_direction_fallback = "ASC" if rank_sides_fallback == "bottom" else "DESC"
 
-            # 修复：目标层级如果匹配到 analysisDimensions 的根节点名称（如“商用事业部”），
-            # 不能直接按层级字段过滤（层级字段值是“事业部”），应清空后按问题中的其他层级词兜底。
+            # 修复：目标层级如果匹配到 analysisDimensions 的根节点名称（如"商用事业部"），
+            # 不能直接按层级字段过滤（层级字段值是"事业部"），应清空后按问题中的其他层级词兜底。
             report_config = self._safe_dict(context.get("report_config")) or {}
             root_level_values = {
                 str(dimension.get("path")[0]).strip()
                 for dimension in (report_config.get("analysisDimensions") or [])
                 if isinstance(dimension.get("path") or [], list) and (dimension.get("path") or [])
             }
-            if normalized_target_level in root_level_values:
+            # bug#3 修复：根节点 + 整体/总体/汇总/全部 词 → level_overview 应返回"事业部+分公司+业务部"三层
+            _matched_triggers = set(query_intent.get("matched_triggers") or [])
+            _is_root_overview = (
+                normalized_target_level in root_level_values
+                and (
+                    "level_overview" in _matched_triggers
+                    or any(t in normalized_question for t in ("整体", "总体", "总览", "汇总", "全部"))
+                )
+            )
+            if _is_root_overview:
+                root_overview_where = "层级 IN ('事业部','分公司','业务部')"
+            elif normalized_target_level in root_level_values:
                 normalized_target_level = ""
 
             where_clause = "TRUE"
+            # bug#3 修复：根节点整体 overview 优先三层返回
+            if _is_root_overview:
+                where_clause = root_overview_where
             # 优先使用数量词事实验证后设置的target_level
-            verified_level = query_intent.get("target_level") if query_intent.get("_quantity_verified") else None
-            if verified_level:
+            elif verified_level:
                 # 通过node_index验证的层级，精确过滤+名称匹配
                 if verified_level == "分公司":
                     where_clause = "层级 = '分公司' AND 节点名称 LIKE '%分公司'"
