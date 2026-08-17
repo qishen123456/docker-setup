@@ -879,6 +879,29 @@ class FourAgentAskService:
                 top_names = "、".join(row_name(row) for row in shown_rows[: min(3, len(shown_rows))] if row_name(row))
                 level_label = target_level or (normalized_text(leader, level_col) if leader else "") or "对象"
                 is_asc = ranking_direction == "asc"
+                # top_n=0 表示未指定数量、输出全部节点时，核心结论先给 SUM 汇总口径，
+                # 避免只展示第一个节点（榜首）被误读为整体汇总
+                aggregate_summary_text = ""
+                if rank_limit == 0 and len(shown_rows) > 1:
+                    agg_task = sum_col(shown_rows, task_col) if task_col else None
+                    agg_actual = sum_col(shown_rows, actual_col) if actual_col else None
+                    agg_remain = sum_col(shown_rows, remain_col) if remain_col else None
+                    agg_rate = weighted_rate(shown_rows)
+                    agg_parts = []
+                    if agg_task is not None:
+                        agg_parts.append(f"总任务金额{format_metric_value(agg_task, task_metric)}")
+                    if agg_actual is not None:
+                        agg_parts.append(f"已完成金额{format_metric_value(agg_actual, actual_metric)}")
+                    if agg_rate is not None:
+                        agg_parts.append(f"整体达成率{self._format_metric(agg_rate, '%')}")
+                    if agg_remain is not None:
+                        agg_parts.append(f"剩余缺口{format_metric_value(agg_remain, remain_metric)}")
+                    if agg_parts:
+                        aggregate_summary_text = (
+                            f"全部 {len(shown_rows)} 个{level_label}汇总："
+                            + "，".join(agg_parts)
+                            + "。"
+                        )
                 if rank_limit == 1:
                     extreme_label = "最低" if is_asc else "最高"
                     lines = [
@@ -914,6 +937,7 @@ class FourAgentAskService:
                         "## 业绩分析报告",
                         "",
                         "### 核心结论",
+                        *([aggregate_summary_text] if aggregate_summary_text else []),
                         (
                             f"本次已按{ranking_metric_label}输出 {len(shown_rows)} 个{level_label}的排名结果："
                             f"{row_name(leader)}位列第1（{first_label}），{ranking_metric_label}{leader_metric_text}；"

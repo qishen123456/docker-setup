@@ -1665,6 +1665,39 @@ def build_report_spec(
             "childCount": child_count,
             "text": answer_text,
         }
+    elif mode == "comparative" and not answer_summary and len(comparison_nodes) >= 2:
+        # 对比场景：answerSummary 取各对比节点的汇总行（如消费者/商用事业部），
+        # 便于前端/摘要在对比双方维度直接展示任务、开单、达成率、缺口
+        compare_sides = [
+            {
+                "name": node.get("name"),
+                "kpis": [
+                    kpi_payload(metric, node.get("raw") or {})
+                    for metric in [task_metric, actual_metric, rate_metric, remain_metric]
+                    if metric
+                ],
+            }
+            for node in comparison_nodes[:2]
+        ]
+        side_text_parts = []
+        for side in compare_sides:
+            kpi_map = {str(kpi.get("label") or ""): kpi.get("displayValue") for kpi in (side.get("kpis") or [])}
+            task_text = kpi_map.get(metric_label(task_metric, "总任务金额")) if task_metric else None
+            rate_text = kpi_map.get(metric_label(rate_metric, "达成率")) if rate_metric else None
+            bit = str(side.get("name") or "")
+            if task_text:
+                bit += f" {task_text}"
+            if rate_text:
+                bit += f" / {rate_text}"
+            side_text_parts.append(bit.strip())
+        answer_summary = {
+            "mode": "comparative",
+            "title": "对比结果",
+            "targetLevel": compare_label,
+            "matchedCount": len(comparison_nodes),
+            "text": "；".join(part for part in side_text_parts if part),
+            "sides": compare_sides,
+        }
 
     # 单点最高/最低问题，默认把答案节点作为聚焦节点，让前端展示其下级明细
     if (
