@@ -3250,9 +3250,19 @@ ranking_params 说明：
                 continue
             if normalized_alias in generic_aliases or normalized_alias in metric_only_aliases:
                 continue
-            if alias_type == "synonym" and is_org_member_alias(alias):
+            # bug#11：synonym 为"商用事业部"时，问题"看下前三的商用分公司"中的"商用"
+            # 无法命中完整别名。对以"事业部"结尾的 synonym 增加前缀匹配：
+            # 尝试匹配去掉"事业部"的前缀（如"商用"），但前缀长度需 >= 2 且不在 generic_aliases 中。
+            matched = normalized_alias in normalized_question
+            prefix_matched = False
+            if not matched and normalized_alias.endswith("事业部"):
+                prefix = normalized_alias[:-3]
+                if len(prefix) >= 2 and prefix not in generic_aliases and prefix in normalized_question:
+                    matched = True
+                    prefix_matched = True
+            if alias_type == "synonym" and is_org_member_alias(alias) and not prefix_matched:
                 continue
-            if normalized_alias not in normalized_question:
+            if not matched:
                 continue
             if alias_type == "dataset_name":
                 score = max(score, 100)
