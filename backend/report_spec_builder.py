@@ -1647,6 +1647,13 @@ def build_report_spec(
             "topNames": [node.get("name") for node in top_nodes],
             "bottomNames": [node.get("name") for node in bottom_nodes],
         }
+        # top_n=0（未指定数量、输出全部节点）且多行时，顶部 KPI 补 SUM 汇总口径，
+        # 避免 kpis 为空导致前端 KPI 卡片缺失
+        if rank_limit == 0 and len(ranked_nodes) > 1:
+            add_kpi("rank-total-task", f"累计{metric_label(task_metric, '总任务金额')}", sum_metric(task_metric), task_metric)
+            add_kpi("rank-total-actual", f"累计{metric_label(actual_metric, '年度开单金额')}", sum_metric(actual_metric), actual_metric)
+            add_kpi("rank-overall-rate", "整体达成率", overall_rate_value(), rate_metric)
+            add_kpi("rank-total-remain", f"累计{metric_label(remain_metric, '剩余缺口')}", sum_metric(remain_metric), remain_metric)
     elif answer_mode == "drilldown" and not answer_summary:
         focus_name = focus_node.get("name") if focus_node else ""
         child_count = len(comparison_nodes)
@@ -1667,7 +1674,15 @@ def build_report_spec(
         }
     elif mode == "comparative" and not answer_summary and len(comparison_nodes) >= 2:
         # 对比场景：answerSummary 取各对比节点的汇总行（如消费者/商用事业部），
-        # 便于前端/摘要在对比双方维度直接展示任务、开单、达成率、缺口
+        # 便于前端/摘要在对比双方维度直接展示任务、开单、达成率、缺口。
+        # 显式对比且路由层已识别出被点名节点（如"消费者和商用的对比"）时，
+        # sides 必须取 matched_nodes 本身（两个事业部总体行），
+        # 而不是 focus 节点下级的 comparison_nodes[:2]（会错选成消费者下属分公司）。
+        side_source_nodes = (
+            matched_nodes[:2]
+            if explicit_comparative and matched_nodes
+            else comparison_nodes[:2]
+        )
         compare_sides = [
             {
                 "name": node.get("name"),
@@ -1677,7 +1692,7 @@ def build_report_spec(
                     if metric
                 ],
             }
-            for node in comparison_nodes[:2]
+            for node in side_source_nodes
         ]
         side_text_parts = []
         for side in compare_sides:

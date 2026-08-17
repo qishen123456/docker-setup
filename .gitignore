@@ -242,3 +242,4 @@ backend/scripts/
 test_debug_quantity.py
 test_execute_sql.py
 test_final_verification.py
+_qa_g4_probe*.py
