@@ -91,7 +91,7 @@ def _route_entity_resolution(route: Dict[str, Any]) -> Dict[str, Any]:
 
 def _matched_org_level_terms(question: str) -> List[str]:
     text = str(question or "")
-    ordered_terms = ["业务承接人", "承接人", "城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "条线"]
+    ordered_terms = ["业务承接人", "任务承接人", "承接人", "负责人", "城市分公司", "城市公司", "业务代表", "业务员", "代表处", "业务部", "分公司", "条线"]
     matched: List[str] = []
     for term in ordered_terms:
         if term not in text:

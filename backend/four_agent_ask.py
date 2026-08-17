@@ -2014,6 +2014,8 @@ class FourAgentAskService:
     # 口语/显示层级词 -> 节点索引中标准化的 node_level
     _GENERIC_LEVEL_ALIAS_NORMALIZATION = {
         "业务承接人": "承接人",
+        "任务承接人": "承接人",
+        "负责人": "承接人",
     }
 
     def _generic_level_dataset_matches(
@@ -3006,6 +3008,8 @@ ranking_params 说明：
         normalized_target = self._normalize_compact_text(target_level)
         if not normalized_target:
             return False
+        # 承接人家族口语词归一化到节点索引标准层级“承接人”
+        normalized_target = self._GENERIC_LEVEL_ALIAS_NORMALIZATION.get(normalized_target, normalized_target)
         try:
             dataset_id = int(dataset.get("id") or 0)
         except Exception:
@@ -6154,6 +6158,7 @@ LIMIT 10000
                 where_parts.append(f"细分业务 = {quote(focus_member)}")
             elif focus_dimension in {"承接人", "任务承接人", "负责人", "业务经理"}:
                 where_parts.append(f"负责人 = {quote(focus_member)}")
+                where_parts.append("层级级别 = '业务经理'")
             else:
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%' + focus_member + '%')}")
 
