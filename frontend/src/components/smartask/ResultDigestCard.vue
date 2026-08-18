@@ -1812,6 +1812,65 @@ const usefulReportLines = computed(() => (
     .slice(0, 4)
 ))
 
+// 通用：从 Agent4 analysis 中提取指定小节的正文条目（剥离 think/markdown/子标题，只留完整中文句）
+// sectionNames：小节名数组（如 ['改进建议'] 或 ['问题诊断','亮点分析']）；maxItems：最多返回条数
+const extractAnalysisSectionItems = (reportText, sectionNames, maxItems = 5) => {
+  // 先剥离 LLM 思考块，避免把 <think> 里的英文分析误判为正文
+  const text = String(reportText || '').replace(/<think>[\s\S]*?<\/think>/gi, '')
+  if (!text) return []
+  // 已知小节名全集：覆盖单体布局（核心结论/亮点分析/问题诊断/改进建议）
+  // 与对比/排名布局（关键指标对标/层级差异核心看点/业务线贡献/风险提示/落地建议）两套结构，
+  // 用于正确识别段落边界，避免跨小节串读
+  const knownSections = '核心结论|亮点分析|问题诊断|重点发现|排名结果|关键指标|关键指标对标|结构看板|改进建议|层级差异核心看点|层级差异|核心看点|业务线贡献|风险提示|落地建议|对比结论'
+  const items = []
+  for (const name of sectionNames) {
+    // 定位小节标题（兼容 `## 【问题诊断】` / `## 【问题诊断 •】` / `问题诊断` / `**问题诊断**` 等写法）；
+    // 段落终止只认已知小节名或文档结尾，不因小节内部的 ### 子标题提前截断
+    const re = new RegExp(`#{0,6}\\s*[【\\[]?\\s*${name}[^\\n]*?\\n([\\s\\S]*?)(?=\\n#{0,6}\\s*[【\\[]?\\s*(?:${knownSections})[^\\n]*\\n|$)`, 'i')
+    const m = text.match(re)
+    if (!m) continue
+    const lines = m[1]
+      .split('\n')
+      // 剥离行首 markdown 标题符/列表符/序号/加粗，避免 `### 立即行动` 这类子标题混入
+      .map(line => line.replace(/^#{1,6}\s*/, '').replace(/^[-*•\d.、\s]+/, '').replace(/\*\*/g, '').trim())
+      // 只保留含中文、且为完整句（带冒号/逗号/句号等展开的实质内容）；纯短标题行不算
+      .filter(line => line && line.length >= 6 && /[一-龥]/.test(line) && /[：:，,。；;]/.test(line))
+    items.push(...lines)
+  }
+  return items.slice(0, maxItems)
+}
+
+// 从 Agent4 analysis 中提取【改进建议】段（LLM 已生成的真实建议，优先于前端硬编码模板）
+const llmActionItems = computed(() => extractAnalysisSectionItems(props.report, ['改进建议'], 5))
+
+// 从 Agent4 analysis 中提取"重点发现"等价小节（LLM 已生成的真实发现，优先于前端硬编码模板）。
+// Agent4 有两套布局：单体用【问题诊断】+【亮点分析】；对比/排名用【层级差异核心看点】+【风险提示】。
+// 按优先级取先命中的布局，避免不同问法输出结构不同导致漏提。
+const llmSupportItems = computed(() => {
+  // 单体布局：问题诊断 + 亮点分析
+  const singleItems = [
+    ...extractAnalysisSectionItems(props.report, ['问题诊断'], 3),
+    ...extractAnalysisSectionItems(props.report, ['亮点分析'], 2),
+  ]
+  if (singleItems.length) return singleItems.slice(0, 3)
+  // 对比/排名布局：层级差异核心看点 + 风险提示
+  const compareItems = [
+    ...extractAnalysisSectionItems(props.report, ['层级差异核心看点'], 3),
+    ...extractAnalysisSectionItems(props.report, ['风险提示'], 1),
+  ]
+  if (compareItems.length) return compareItems.slice(0, 3)
+  return []
+})
+
+// 判定本轮报告正文是否有效：剥离 think 后无任何已知小节内容，说明 Agent4 正文为空/异常（如 token 被思考耗尽）。
+// 此时不再回退到会误导方向的硬编码模板，而是给明确提示。
+const isReportBodyInvalid = computed(() => {
+  const text = String(props.report || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  if (!text) return true
+  // 剥离 think 后只剩标题/极短内容，视为无效
+  return !/(核心结论|问题诊断|亮点分析|改进建议|层级差异|风险提示|落地建议|关键指标)/.test(text)
+})
+
 const getPrimaryKpiText = (matcher) => (
   primaryKpiCards.value.find(item => matcher.test(item.label || ''))?.value || ''
 )
@@ -2495,6 +2554,14 @@ const coreConclusionText = computed(() => (
 ))
 
 const supportLines = computed(() => {
+  // 优先使用 Agent4 已生成的【问题诊断】+【亮点分析】（基于真实数据、方向正确），仅在缺失时回退前端模板
+  if (llmSupportItems.value.length) {
+    return llmSupportItems.value
+  }
+  // 报告正文无效（如 LLM token 被思考耗尽）时给明确提示，不回退到会误导方向的硬编码模板
+  if (isReportBodyInvalid.value) {
+    return ['本轮分析正文生成不完整，可能因模型思考占用过多输出额度，建议重新发起提问。']
+  }
   if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {
     const detailRows = normalizedRows.value.filter(item => item.parent && comparisonDigestRows.value.some(row => row.name === item.parent))
     const sortedDetails = [...detailRows].filter(item => item.rate !== null).sort((a, b) => b.rate - a.rate)
@@ -2621,25 +2688,51 @@ const supportLines = computed(() => {
 })
 
 const actionItems = computed(() => {
+  // 优先使用 Agent4 已生成的【改进建议】（基于真实数据、方向正确），仅在缺失时回退前端模板
+  if (llmActionItems.value.length) {
+    return llmActionItems.value.slice(0, 3)
+  }
+  // 报告正文无效（如 LLM token 被思考耗尽）时不回退模板，避免给出与数据脱节的动作建议
+  if (isReportBodyInvalid.value) {
+    return []
+  }
   const actions = []
   if (isRankingAnswerMode.value && rankedCollectionRows.value.length) {
+    const isAsc = rankDirection.value === 'asc'
     // 单点“哪个最高/最低”给出针对性建议
     if (isSingleBestQuestion.value && answerSummaryLeaderRow.value) {
       const leader = answerSummaryLeaderRow.value
       const children = rankedCollectionRows.value.filter(r => r.name !== leader.name)
-      const directionText = rankDirection.value === 'asc' ? '最低' : '最高'
-      actions.push(`已定位${rankingLevelLabel.value}中${rankingMetricMeta.value.label}${directionText}的${nodeNameWithUndertaker(leader)}，建议优先复盘其任务缺口、项目阶段和下级节点推进。`)
-      if (children.length) {
-        actions.push(`继续下钻${leader.name}下属的${secondaryLevelLabel.value || '明细'}，识别内部薄弱环节并制定周度推进清单。`)
+      const directionText = isAsc ? '最低' : '最高'
+      if (isAsc) {
+        // 升序（垫底/最差）：leader 是最需帮扶对象
+        actions.push(`已定位${rankingLevelLabel.value}中${rankingMetricMeta.value.label}${directionText}的${nodeNameWithUndertaker(leader)}，建议优先下钻定位其任务缺口与推进梗阻，形成限期整改清单。`)
+        if (children.length) {
+          actions.push(`对照同层级相对靠前节点，拆解${leader.name}与其在目标拆解、项目推进上的差距，明确补短板动作。`)
+        }
+        actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，对${rankingMetricMeta.value.label}靠后节点设置预警与周度跟进。`)
+      } else {
+        actions.push(`已定位${rankingLevelLabel.value}中${rankingMetricMeta.value.label}${directionText}的${nodeNameWithUndertaker(leader)}，建议优先复盘其任务缺口、项目阶段和下级节点推进。`)
+        if (children.length) {
+          actions.push(`继续下钻${leader.name}下属的${secondaryLevelLabel.value || '明细'}，识别内部薄弱环节并制定周度推进清单。`)
+        }
+        actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，避免只看${rankingMetricMeta.value.label}而忽略达成率和缺口。`)
       }
-      actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，避免只看${rankingMetricMeta.value.label}而忽略达成率和缺口。`)
       return actions.slice(0, 3)
     }
-    const leader = rankedCollectionRows.value[0]
+    const head = rankedCollectionRows.value[0]
     const tail = rankedCollectionRows.value[rankedCollectionRows.value.length - 1]
-    if (leader) actions.push(`复盘${nodeNameWithUndertaker(leader)}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
-    if (tail && tail.name !== leader?.name) actions.push(`对${nodeNameWithUndertaker(tail)}继续下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
-    actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，排名看${rankingMetricMeta.value.label}，风险继续看达成率和缺口。`)
+    if (isAsc) {
+      // 升序（垫底/最差集合）：head 是最差、tail 是相对最好
+      if (head) actions.push(`重点帮扶${nodeNameWithUndertaker(head)}，由业务负责人牵头定位${rankingMetricMeta.value.label}垫底的根因（任务体量、项目阶段或推进梗阻），形成限期整改清单。`)
+      if (tail && tail.name !== head?.name) actions.push(`对照本组相对最好的${nodeNameWithUndertaker(tail)}，拆解其可复用动作，向垫底节点推广。`)
+      actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，对${rankingMetricMeta.value.label}靠后节点设置预警，周度跟进达成率与缺口收敛。`)
+    } else {
+      // 降序（领先/最优集合）：head 是领先、tail 是相对承压
+      if (head) actions.push(`复盘${nodeNameWithUndertaker(head)}在${rankingMetricMeta.value.label}上的领先动作，拆出目标拆解、项目推进和客户转化清单。`)
+      if (tail && tail.name !== head?.name) actions.push(`对${nodeNameWithUndertaker(tail)}继续下钻，由业务负责人和经营分析共同确认是任务体量、项目阶段滞后还是客户转化不足。`)
+      actions.push(`按${rankingLevelLabel.value}建立排名与健康度双看板，排名看${rankingMetricMeta.value.label}，风险继续看达成率和缺口。`)
+    }
     return actions.slice(0, 3)
   }
   if (!isRankingAnswerMode.value && comparisonDigestRows.value.length >= 2) {

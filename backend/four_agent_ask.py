@@ -933,6 +933,34 @@ class FourAgentAskService:
                 else:
                     first_label = "末位" if is_asc else "榜首"
                     last_label = "榜首" if is_asc else "末位"
+                    # asc（垫底/最差集合）下，第1名是最差、末名是相对最好，措辞需按方向区分，
+                    # 避免把最差当"复盘样本"、把相对最好误标"榜首"
+                    if is_asc:
+                        highlight_line = (
+                            f"• **相对最好对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
+                            f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 在本组垫底集合中表现相对靠前，可提炼其有效动作向其他节点推广。"
+                        )
+                        diagnosis_head_line = (
+                            f"• **重点整改对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
+                            f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 达成垫底，建议优先核对其任务缺口、项目推进与资源投入。"
+                        )
+                        top_list_label = "垫底结果"
+                        top_list_hint = " -> 先看本组最差样本，再结合完整排名表定位差距来源。"
+                    else:
+                        highlight_line = (
+                            f"• **{first_label}对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
+                            f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 可作为当前口径的优先复盘样本。"
+                        )
+                        diagnosis_head_line = (
+                            f"• **{last_label}对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
+                            f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
+                            " -> 建议优先核对任务缺口、项目推进和资源投入。"
+                        )
+                        top_list_label = "前三结果"
+                        top_list_hint = " -> 先看头部样本，再结合完整排名表继续核对差距来源。"
                     lines = [
                         "## 业绩分析报告",
                         "",
@@ -946,30 +974,27 @@ class FourAgentAskService:
                         ),
                         "",
                         "### 亮点分析",
-                        (
-                            f"• **{first_label}对象：** {row_name(leader)} -> {ranking_metric_label} {leader_metric_text}"
-                            f"{f' -> 达成率 {leader_rate_text}' if leader_rate is not None and ranking_metric.get('format') != 'percent' else ''}"
-                            " -> 可作为当前口径的优先复盘样本。"
-                        ),
-                        (
-                            f"• **前三结果：** {top_names or row_name(leader)}"
-                            " -> 先看头部样本，再结合完整排名表继续核对差距来源。"
-                        ),
+                        highlight_line,
+                        f"• **{top_list_label}：** {top_names or row_name(leader)}{top_list_hint}",
                         "",
                         "### 问题诊断",
-                        (
-                            f"• **{last_label}对象：** {row_name(tail)} -> {ranking_metric_label} {tail_metric_text}"
-                            f"{f' -> 达成率 {tail_rate_text}' if tail_rate_value is not None and ranking_metric.get('format') != 'percent' else ''}"
-                            " -> 建议优先核对任务缺口、项目推进和资源投入。"
-                        ),
+                        diagnosis_head_line,
                         (
                             f"• **风险提示：** 当前结果内低于20%风险线的节点 {len(risk_rows)} 个"
                             + (f"，重点关注 {format_rank(risk_rows[:3])}。" if risk_rows else "，暂无明显低于20%的节点。")
                         ),
                         "",
                         "### 改进建议",
-                        f"• 先按{ranking_metric_label}复盘{first_label}与{last_label}对象的差距来源，避免继续按默认达成率口径解释本轮排序。",
-                        f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；如需继续拆因，优先下钻{last_label}对象的下级明细。",
+                        (
+                            f"• 优先帮扶{row_name(leader)}等{first_label}对象，定位{ranking_metric_label}垫底根因（任务体量、项目阶段或推进梗阻），形成限期整改清单。"
+                            if is_asc else
+                            f"• 先按{ranking_metric_label}复盘{first_label}与{last_label}对象的差距来源，避免继续按默认达成率口径解释本轮排序。"
+                        ),
+                        (
+                            f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；可对照相对最好的{row_name(tail)}拆解可复用动作。"
+                            if is_asc else
+                            f"• 完整 {len(shown_rows)} 个{level_label}名单以排名表为准；如需继续拆因，优先下钻{last_label}对象的下级明细。"
+                        ),
                         "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
                     ]
                 if review_summary:
@@ -6351,6 +6376,14 @@ LIMIT 10000
         if intent_target_level in {"城市公司", "城市分公司"}:
             intent_target_level = "城市分公司"
             query_intent["target_level"] = "城市分公司"
+        # ranking top1 时若 target_level 是 root level（事业部级）或为空，自动降到「分公司」
+        # 产品约定：单个对象除非是最末端，默认都要带下级
+        if intent_is_ranking and self._safe_dict(context.get("query_intent")).get("top_n") == 1:
+            _q_rank_limit = self._safe_dict(context.get("query_intent")).get("top_n")
+            root_levels = {"消费者事业部", "商用事业部", "电商事业部", "事业部", "事业部总体", ""}
+            if intent_target_level in root_levels or not intent_target_level.strip():
+                intent_target_level = "分公司"
+                query_intent["target_level"] = "分公司"
         asks_branch_extremes = (
             "分公司" in normalized_question
             and any(token in normalized_question for token in ["最高", "最好", "最低", "最差", "头尾", "首尾"])
@@ -6452,6 +6485,9 @@ LIMIT 10000
                         "FROM public.feishu_tbl_xioafeizhe WHERE 1=0 LIMIT 0")
 
         scope_filter = ""
+        # 关键修复：ranking 意图不应被实体 scope_filter 污染（避免"谁业绩最好"被"消费者事业部"实体带成全量）
+        if entity_names and query_intent.get("intent") == "ranking":
+            entity_names = []
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             include_root = any(name == "消费者事业部" for name in entity_names)
@@ -6971,8 +7007,48 @@ LIMIT 200
             rank_limit = consumer_rank_limit()
             order_direction = consumer_order_direction()
             sort_column = consumer_sort_column()
-            # 关键修复：如果用户明确指定了 target_level，只返回该层级，不要带上下级
+            # 关键修复：如果用户明确指定了 target_level
+            # top1（rank_limit==1）时：返回「榜首 + 它的直接下级」（产品约定：单个对象除非是最末端，默认都要带下级）
+            # 其他场景（top_n>=2 或 sides=both）：保持原有行为，只返回该层级单层
+            # ranking top1 时，若 target_level 是 root level（事业部级）或为空，自动降到「分公司」
+            root_levels = {"消费者事业部", "商用事业部", "电商事业部", "事业部", "事业部总体"}
+            if rank_limit == 1 and rank_sides != "both" and (intent_target_level in root_levels or not intent_target_level):
+                intent_target_level = "分公司"
             explicit_target = intent_target_level in ["分公司", "城市分公司"]
+            if explicit_target and rank_limit == 1 and rank_sides != "both":
+                # 两段式 SQL：先取该层级榜首，再带出它的直接下级
+                target_level_for_top = intent_target_level
+                return f"""
+{base_sql},
+排名{intent_target_level} AS (
+    SELECT
+        节点名称,
+        ROW_NUMBER() OVER (ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称) AS 排名序号
+    FROM 汇总结果
+    WHERE 层级 = '{target_level_for_top}'
+    LIMIT 1
+)
+SELECT r.*
+FROM 汇总结果 r
+INNER JOIN (
+    -- 榜首节点本身 + 它的直接下级
+    SELECT DISTINCT 节点名称, 层级, 上级名称 FROM 汇总结果
+    WHERE 节点名称 IN (SELECT 节点名称 FROM 排名{target_level_for_top} WHERE 排名序号 = 1)
+       OR 上级名称 IN (SELECT 节点名称 FROM 排名{target_level_for_top} WHERE 排名序号 = 1)
+) allowed_nodes
+  ON r.节点名称 = allowed_nodes.节点名称 AND r.层级 = allowed_nodes.层级
+LEFT JOIN 排名{target_level_for_top} b
+  ON (r.层级 = '{target_level_for_top}' AND r.节点名称 = b.节点名称)
+ORDER BY
+    CASE WHEN b.排名序号 IS NOT NULL THEN 0 ELSE 1 END,
+    b.排名序号,
+    CASE r.层级 WHEN '{target_level_for_top}' THEN 1 ELSE 2 END,
+    r.{sort_column} {order_direction},
+    r.年度开单金额 DESC,
+    r.剩余任务金额 DESC,
+    r.节点名称
+LIMIT 10000
+""".strip()
             if explicit_target:
                 return self._build_ranked_select_sql(
                     source_cte=base_sql,
@@ -8379,14 +8455,28 @@ Agent3 复核结果：
 {json.dumps(context.get("query_intent") or {}, ensure_ascii=False)}
 """
         try:
-            return self._chat(
+            # reasoning 类模型（如 MiniMax-M3）会先产出大段 <think> 思考，max_tokens 太小会被思考烧光导致正文为空，
+            # 这里放宽到 4096 给"思考 + 正文"留足空间。
+            content = self._chat(
                 system_prompt,
                 user_prompt,
-                max_tokens=1600,
+                max_tokens=4096,
                 trace=trace,
                 stage="agent4.analysis",
                 agent_name="Agent4",
             )
+            # 兜底：剥离 <think> 思考块后若正文为空（token 被思考耗尽），改用规则化 fallback 报告，
+            # 避免把"只有思考没有结论"的文本透传给前端导致重点发现/建议动作显示异常。
+            body = re.sub(r"<think>[\s\S]*?</think>", "", str(content or "")).strip()
+            if not body:
+                self._append_trace(
+                    trace,
+                    "agent4.analysis.empty_body",
+                    "warning",
+                    analysis_preview="Agent4 返回内容剥离思考块后为空，改用规则化兜底报告。",
+                )
+                return self._build_fallback_analysis(question, context, review, result, "empty_body_after_think")
+            return content
         except Exception as exc:
             self._append_trace(
                 trace,

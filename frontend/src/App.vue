@@ -105,8 +105,9 @@
                 @click="handleRunningTaskClick"
               >
                 <div class="history-item-main">
-                  <div class="history-item-top">
-                    <div class="history-item-title">{{ currentRunningTask.title }}</div>
+                  <div class="history-item-title">{{ currentRunningTask.title }}</div>
+                  <div class="history-item-bottom">
+                    <div class="history-item-time">刚刚发起</div>
                     <div class="history-item-status">
                       <TaskStatusIndicator
                         :variant="currentRunningTask.status"
@@ -114,8 +115,6 @@
                       />
                     </div>
                   </div>
-                  <div class="history-item-meta">{{ currentRunningTask.datasetName }}</div>
-                  <div class="history-item-time">刚刚发起</div>
                 </div>
               </article>
 
@@ -127,8 +126,9 @@
                 @click="openHistorySession(item)"
               >
                 <div class="history-item-main">
-                  <div class="history-item-top">
-                    <div class="history-item-title">{{ item.title }}</div>
+                  <div class="history-item-title">{{ item.title }}</div>
+                  <div class="history-item-bottom">
+                    <div class="history-item-time">{{ item.updatedAt }}</div>
                     <div class="history-item-status">
                       <TaskStatusIndicator
                         :variant="inferTaskVariant(item)"
@@ -137,8 +137,6 @@
                       <span v-if="item.id === activeHistoryId" class="history-item-badge">当前</span>
                     </div>
                   </div>
-                  <div class="history-item-meta">{{ item.datasetName || '自动路由数据集' }}</div>
-                  <div class="history-item-time">{{ item.updatedAt }}</div>
                 </div>
                 <button
                   v-if="appFeatureAccess.app_history_delete"
@@ -591,7 +589,7 @@ const managementDefaultOpeneds = computed(() => (
 const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析工作台')
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
-const historyPreviewList = computed(() => historySessions.value.slice(0, 5))
+const historyPreviewList = computed(() => historySessions.value.slice(0, 4))
 const showHistorySidebar = computed(() => route.path === '/smart-ask' && !collapsed.value)
 // 虚拟"当前执行/待确认任务"：session 在跑或待确认时显示在历史列表顶部，不持久化
 const currentRunningTask = computed(() => {
@@ -1165,8 +1163,7 @@ body,
   flex-direction: column;
   padding: 14px 12px;
   transition: width var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   height: 100vh;
   box-sizing: border-box;
   border-right: none !important;
@@ -1778,6 +1775,9 @@ body,
   position: relative;
   display: flex;
   align-items: flex-start;
+  /* 卡片均分列表剩余高度，填满面板不留底部空白 */
+  flex: 1 1 0;
+  min-height: 0;
   gap: 10px;
   width: 100%;
   padding: 12px 14px;
@@ -1827,6 +1827,21 @@ body,
 .history-item-main {
   min-width: 0;
   flex: 1;
+  /* 卡片内容垂直居中：标题在上，底行(时间+状态)在下 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  gap: 6px;
+}
+
+/* 卡片底行：时间靠左，状态靠右 */
+.history-item-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 
 .history-item-top {
@@ -1848,7 +1863,10 @@ body,
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-width: 0;
-  flex: 1;
+  /* 标题只占自然高度，不拉伸，由 main 垂直居中 */
+  flex: 0 0 auto;
+  /* 避免两行标题贴到右侧删除按钮 */
+  padding-right: 4px;
 }
 
 .history-item-badge {
@@ -2074,6 +2092,8 @@ body,
   position: relative;
   margin: 0;
   align-items: center;
+  /* 抽屉内卡片保持自然高度，不参与侧栏卡片的均分拉伸 */
+  flex: 0 0 auto;
   gap: 14px;
   min-height: 94px;
   padding: 18px 46px 18px 18px;
@@ -2136,6 +2156,14 @@ body,
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
+}
+
+/* 抽屉内 main 恢复默认块布局，不继承侧栏卡片的垂直居中 */
+.history-drawer-item .history-item-main {
+  display: block;
+  height: auto;
+  justify-content: normal;
+  gap: 0;
 }
 
 .history-drawer-dataset {
