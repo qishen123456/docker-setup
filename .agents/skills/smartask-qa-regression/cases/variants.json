@@ -1,0 +1,66 @@
+{
+  "version": "2.0",
+  "purpose": "问法变体回归矩阵；每条给出最小可执行断言，覆盖同一业务意图的常见说法。",
+  "groups": [
+    {
+      "category": "时间词",
+      "variants": [
+        {"id": "time-1", "question": "去年的业绩", "assert": {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}, "expect": "解析为上一年度并返回非空业绩"},
+        {"id": "time-2", "question": "今年的业绩", "assert": {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "今年"}, "expect": "时间词不进入实体名或错误年份条件"},
+        {"id": "time-3", "question": "前年的业绩", "assert": {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}, "expect": "前年被解析为相对时间"},
+        {"id": "time-4", "question": "往年的业绩", "assert": {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}, "expect": "时间范围不静默落到当前年份"},
+        {"id": "time-5", "question": "2025年的业绩", "assert": {"path": "dataset_results.0.sql", "op": "contains", "expect": "2025"}, "expect": "明确年份必须进入过滤条件"}
+      ]
+    },
+    {
+      "category": "不存在节点",
+      "variants": [
+        {"id": "missing-1", "question": "西藏分公司的业绩", "assert": {"path": "dataset_results.0", "op": "entity_exists", "expect": "西藏分公司"}, "expect": "不存在节点不得返回非空伪造数据"},
+        {"id": "missing-2", "question": "纽约分公司的业绩", "assert": {"path": "dataset_results.0", "op": "entity_exists", "expect": "纽约分公司"}, "expect": "不存在节点时提示未找到或返回空结果"},
+        {"id": "missing-3", "question": "火星代表处的业绩", "assert": {"path": "dataset_results.0", "op": "rows_semantic_check", "expect": "node_match_range"}, "expect": "节点语义校验阻止幽灵行"}
+      ]
+    },
+    {
+      "category": "各X的句式",
+      "variants": [
+        {"id": "each-1", "question": "各代表处的业绩", "assert": {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "代表处"}, "expect": "各代表处按代表处层级汇总"},
+        {"id": "each-2", "question": "各分公司的业绩", "assert": {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "分公司"}, "expect": "各分公司不被当作一个节点"},
+        {"id": "each-3", "question": "各业务部的业绩", "assert": {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "业务部"}, "expect": "各业务部按业务部层级汇总"},
+        {"id": "each-4", "question": "每个城市公司的业绩", "assert": {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "城市公司"}, "expect": "每个城市公司是集合范围问法"}
+      ]
+    },
+    {
+      "category": "口语化",
+      "variants": [
+        {"id": "colloquial-1", "question": "业绩咋样了", "assert": {"path": "requires_confirmation", "op": "allow_confirm"}, "expect": "多数据集歧义先确认，确认后必须有结果"},
+        {"id": "colloquial-2", "question": "排名", "assert": {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"}, "expect": "单字排名保留 ranking 意图"},
+        {"id": "colloquial-3", "question": "条线的业绩", "assert": {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}, "expect": "条线问法不可返回零行桩 SQL"},
+        {"id": "colloquial-4", "question": "最近怎么样", "assert": {"path": "dataset_results.0.row_count", "op": "range", "expect": [1, 200]}, "expect": "口语追问落到业绩数据而非空结果"}
+      ]
+    },
+    {
+      "category": "who/which",
+      "variants": [
+        {"id": "who-1", "question": "谁业绩最好", "assert": {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"}, "expect": "who 问法确认后仍为 ranking"},
+        {"id": "who-2", "question": "哪个最好", "assert": {"path": "dataset_results.0.row_count", "op": "eq", "expect": 1}, "expect": "返回唯一最优对象"},
+        {"id": "who-3", "question": "谁最差", "assert": {"path": "dataset_results.0.query_intent.direction", "op": "eq", "expect": "asc"}, "expect": "最差问法使用升序排名"}
+      ]
+    },
+    {
+      "category": "缩略/复合",
+      "variants": [
+        {"id": "compound-1", "question": "四大分公司区域业绩整体盘点", "assert": {"path": "dataset_results.0.row_count", "op": "eq", "expect": 29}, "expect": "四大分公司区域盘点只返回29行，不展开101行瀑布"},
+        {"id": "compound-2", "question": "四大分公司业绩盘点", "assert": {"path": "dataset_results.0.row_count", "op": "range", "expect": [25, 35]}, "expect": "缩略复合问法稳定命中四分公司层级"},
+        {"id": "compound-3", "question": "各区域整体业绩咋样了", "assert": {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}, "expect": "区域+整体+口语组合不产生空结果"}
+      ]
+    },
+    {
+      "category": "排序数量",
+      "variants": [
+        {"id": "bottom5-1", "question": "垫底的5个城市分公司", "assert": {"path": "dataset_results.0.row_count", "op": "eq", "expect": 5}, "expect": "底部5条"},
+        {"id": "bottom5-2", "question": "业绩最差的五个城市分公司", "assert": {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}, "expect": "识别五个对象"},
+        {"id": "bottom5-3", "question": "后5个城市分公司", "assert": {"path": "dataset_results.0.query_intent.direction", "op": "eq", "expect": "asc"}, "expect": "后5名按升序"}
+      ]
+    }
+  ]
+}

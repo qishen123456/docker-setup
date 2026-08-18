@@ -1,62 +1,611 @@
 {
   "cases": [
-    {"id": "B1", "source": "bug#1 河南代表处Golden样本劫持", "question": "河南代表处业绩",
-     "asserts": [
-       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
-       {"path": "dataset_results.0.row_count", "op": "range", "expect": [4, 6]},
-       {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIKE '%代表处%'"}
-     ]},
-    {"id": "B2", "source": "bug#2 业务部汇总只显示第一个（实测校准2026-08-17：业务部层级词真实命中商用+电商，弹确认属白名单正确行为，改为走完确认后断言汇总行数）", "question": "业务部的业绩",
-     "asserts": [{"path": "requires_confirmation", "op": "allow_confirm"}],
-     "confirm": [
-       {"select": {"dataset_ids": [3]},
-        "asserts": [
-          {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
-          {"path": "dataset_results.0.row_count", "op": "range", "expect": [2, 5]}
-        ]},
-       {"select": {"dataset_ids": [62]},
-        "asserts": [
-          {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
-          {"path": "dataset_results.0.row_count", "op": "range", "expect": [2, 5]}
-        ]}
-     ]},
-    {"id": "B4", "source": "bug#4 消费者商用对比汇总", "question": "消费者和商用的对比",
-     "asserts": [
-       {"path": "dataset_results.0.row_count", "op": "gt", "expect": 0}
-     ]},
-    {"id": "B5", "source": "bug#5 商用电商对比崩溃", "question": "商用和电商的对比",
-     "asserts": [
-       {"path": "dataset_results[ds=62].row_count", "op": "gt", "expect": 0}
-     ]},
-    {"id": "B6", "source": "bug#6 赵标靳锋并列折叠", "question": "赵标和靳锋的业绩",
-     "asserts": [
-       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
-       {"path": "dataset_results.0.row_count", "op": "gte", "expect": 2}
-     ]},
-    {"id": "B11", "source": "bug#11 商用前缀弹确认", "question": "看下前三的商用分公司",
-     "asserts": [
-       {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
-       {"path": "requires_confirmation", "op": "eq", "expect": false},
-       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3}
-     ]},
-    {"id": "B12", "source": "bug#12 金额阈值追问污染",
-     "turns": [
-       {"question": "开单金额超过一个亿的代表处"},
-       {"question": "大于5000万的呢",
-        "asserts": [
-          {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "filter"},
-          {"path": "dataset_results.0.query_intent.target_level", "op": "eq", "expect": "代表处"},
-          {"path": "dataset_results.0.sql", "op": "contains", "expect": "50000000"}
-        ]}
-     ]},
-    {"id": "B15", "source": "bug#15 无数量排名被截成20", "question": "消费者城市分公司排名",
-     "asserts": [
-       {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0},
-       {"path": "dataset_results.0.row_count", "op": "eq", "expect": 69},
-       {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIMIT 20"}
-     ]},
-    {"id": "P1-perm", "source": "bug#13 权限路径后端半边（实测校准2026-08-17：空权限用户仍弹确认，符合先确认后鉴权顺序，草案预期与实测一致）", "question": "各分公司业绩排名",
-     "user": {"role": "user", "id": 88888, "username": "qa-user", "organization_codes": [], "organization_node_ids": []},
-     "asserts": [{"path": "requires_confirmation", "op": "eq", "expect": true}]}
+    {
+      "id": "G4-ranktop1-kpi",
+      "source": "bug#19 用户实测ranking top1报告单薄",
+      "question": "业绩最好的分公司",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              2
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                2
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "ranking"
+            },
+            {
+              "path": "dataset_results.0.query_intent.top_n",
+              "op": "eq",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 2
+            },
+            {
+              "path": "dataset_results.0.rows.0.节点名称",
+              "op": "eq",
+              "expect": "豫晋分公司"
+            },
+            {
+              "path": "dataset_results.0.rows.0.总任务金额",
+              "op": "gt",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.rows.0.年度开单金额",
+              "op": "gt",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.rows.0.达成率",
+              "op": "gt",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.rows.0.剩余任务金额",
+              "op": "gte",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.report_spec.kpis",
+              "op": "nonempty"
+            },
+            {
+              "path": "dataset_results.0.report_spec.answerSummary.leader",
+              "op": "eq",
+              "expect": "豫晋分公司"
+            },
+            {
+              "path": "dataset_results.0.report_spec.accordions",
+              "op": "nonempty"
+            },
+            {
+              "path": "dataset_results.0.report_spec.charts",
+              "op": "nonempty"
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "contains",
+              "expect": "ROW_NUMBER"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "G4-ranktop3-city-kpi",
+      "source": "bug#19 对照组 top_n=3 城市分公司",
+      "question": "看下前三的城市分公司",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            2
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "ranking"
+        },
+        {
+          "path": "dataset_results.0.query_intent.top_n",
+          "op": "eq",
+          "expect": 3
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 3
+        },
+        {
+          "path": "dataset_results.0.rows.0.节点名称",
+          "op": "eq",
+          "expect": "郑州城市公司"
+        },
+        {
+          "path": "dataset_results.0.report_spec.kpis",
+          "op": "nonempty"
+        },
+        {
+          "path": "dataset_results.0.report_spec.answerSummary.topN",
+          "op": "eq",
+          "expect": 3
+        }
+      ]
+    },
+    {
+      "id": "G4-detail-4branch",
+      "source": "bug#19/bug#20 商用四分公司 detail + 层级颠倒",
+      "question": "商用的四个分公司",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "aggregate"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "range",
+          "expect": [
+            4,
+            6
+          ]
+        },
+        {
+          "path": "dataset_results.0.report_spec.kpis",
+          "op": "nonempty"
+        },
+        {
+          "path": "dataset_results.0.report_spec.answerMode",
+          "op": "eq",
+          "expect": "comparative"
+        },
+        {
+          "path": "dataset_results.0.rows.1.层级",
+          "op": "eq",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.rows.1.节点名称",
+          "op": "contains",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.rows.1.上级名称",
+          "op": "eq",
+          "expect": "商用事业部"
+        },
+        {
+          "path": "dataset_results.0.rows.2.节点名称",
+          "op": "contains",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.rows.3.节点名称",
+          "op": "contains",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.rows.4.节点名称",
+          "op": "contains",
+          "expect": "分公司"
+        }
+      ]
+    },
+    {
+      "id": "G4-followup-5000w-level",
+      "source": "bug#21 大于5000万的呢 层级错乱(bug#12修复不完整)",
+      "turns": [
+        {
+          "question": "开单金额超过一个亿的代表处"
+        },
+        {
+          "question": "大于5000万的呢",
+          "asserts": [
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "filter"
+            },
+            {
+              "path": "dataset_results.0.query_intent.target_level",
+              "op": "eq",
+              "expect": "代表处"
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "contains",
+              "expect": "层级 = '代表处'"
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "not_contains",
+              "expect": "层级 = '分公司'"
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "not_contains",
+              "expect": "层级 IN ('分公司', '业务部')"
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N1",
+      "source": "2.0 手测回归：时间词不应被当节点名；修复后解析去年并返回上一年度业绩",
+      "question": "去年的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 1
+        },
+        {
+          "path": "dataset_results.0.sql",
+          "op": "not_contains",
+          "expect": "去年"
+        }
+      ]
+    },
+    {
+      "id": "N2",
+      "source": "2.0 手测回归：各代表处是集合范围而非单一节点；修复后按代表处层级返回",
+      "question": "各代表处的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.target_level",
+          "op": "eq",
+          "expect": "代表处"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 1
+        },
+        {
+          "path": "dataset_results.0.sql",
+          "op": "not_contains",
+          "expect": "各代表处"
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "source": "2.0 手测回归：口语问法确认后不能产生零行桩 SQL；修复后走完确认并有数据",
+      "question": "业绩咋样了",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              2
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                2
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "not_contains",
+              "expect": "stub"
+            }
+          ]
+        },
+        {
+          "select": {
+            "dataset_ids": [
+              3
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                3
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.sql",
+              "op": "not_contains",
+              "expect": "stub"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N4",
+      "source": "2.0 手测回归：明确年份2025必须查询2025而不是静默2026；修复后SQL含2025",
+      "question": "2025年的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 1
+        },
+        {
+          "path": "dataset_results.0.sql",
+          "op": "contains",
+          "expect": "2025"
+        },
+        {
+          "path": "dataset_results.0.sql",
+          "op": "not_contains",
+          "expect": "2026"
+        }
+      ]
+    },
+    {
+      "id": "N5",
+      "source": "2.0 手测回归：不存在节点不得静默返回82行；修复后提示未找到或空结果",
+      "question": "西藏分公司的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "contains",
+          "expect": 2
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0",
+          "op": "entity_exists",
+          "expect": "西藏分公司"
+        },
+        {
+          "path": "dataset_results.0",
+          "op": "rows_semantic_check",
+          "expect": "node_match_range"
+        }
+      ]
+    },
+    {
+      "id": "N6",
+      "source": "2.0 手测回归：who问法确认后不能丢失ranking意图；修复后排名结果保留",
+      "question": "谁业绩最好",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              2
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                2
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "ranking"
+            },
+            {
+              "path": "dataset_results.0.query_intent.top_n",
+              "op": "eq",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 2
+            }
+          ]
+        },
+        {
+          "select": {
+            "dataset_ids": [
+              3
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                3
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "ranking"
+            },
+            {
+              "path": "dataset_results.0.query_intent.top_n",
+              "op": "eq",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N7",
+      "source": "2.0 手测回归：电商KPI卡不得张冠李戴；修复后KPI等于明细总任务金额",
+      "question": "电商的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            62
+          ]
+        },
+        {
+          "path": "dataset_results.0",
+          "op": "kpi_equals_sum",
+          "expect": "总任务金额"
+        }
+      ]
+    },
+    {
+      "id": "N8",
+      "source": "2.0 手测回归：四大分公司区域整体盘点应29行；修复后不展开101行瀑布",
+      "question": "四大分公司区域业绩整体盘点",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.target_level",
+          "op": "eq",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 29
+        }
+      ]
+    },
+    {
+      "id": "N8B",
+      "source": "2.0 手测回归：复合问法必须稳定命中四分公司层级",
+      "question": "四大分公司业绩盘点",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "contains",
+          "expect": 3
+        },
+        {
+          "path": "dataset_results.0.query_intent.target_level",
+          "op": "eq",
+          "expect": "分公司"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "range",
+          "expect": [
+            25,
+            35
+          ]
+        }
+      ]
+    },
+    {
+      "id": "THINK-LEAK",
+      "source": "2.0 文本卫生：LLM解读不得输出think标签",
+      "question": "东部分公司的业绩怎么样了",
+      "asserts": [
+        {
+          "path": "analysis",
+          "op": "analysis_not_contains",
+          "expect": "<think"
+        }
+      ]
+    },
+    {
+      "id": "R-bottom5-v2",
+      "source": "2.0 R-bottom5：垫底的5个城市分公司必须返回5行",
+      "question": "垫底的5个城市分公司",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            2
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "ranking"
+        },
+        {
+          "path": "dataset_results.0.query_intent.top_n",
+          "op": "eq",
+          "expect": 5
+        },
+        {
+          "path": "dataset_results.0.query_intent.direction",
+          "op": "eq",
+          "expect": "asc"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 5
+        }
+      ]
+    }
   ]
 }

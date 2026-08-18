@@ -127,7 +127,147 @@ def get_path(obj, path):
     return obj
 
 
-def _matches(got, op, expect):
+def _dataset_for_assert(result, path):
+    """从 dataset_results.0 或 dataset_results[ds=N] 取当前结果。"""
+    return get_path(result, path) if isinstance(result, dict) else None
+
+
+def _rows_for_assert(result, path):
+    dataset = _dataset_for_assert(result, path)
+    if not isinstance(dataset, dict):
+        return None
+    rows = dataset.get("rows")
+    return rows if isinstance(rows, list) else []
+
+
+def _analysis_text(result, path):
+    """analysis 断言允许简写 ``analysis``，默认检查首个数据集解读。"""
+    if path in ("analysis", "dataset_results.0.analysis"):
+        dataset = _dataset_for_assert(result, "dataset_results.0")
+        return dataset.get("analysis") if isinstance(dataset, dict) else None
+    return get_path(result, path)
+
+
+def _node_hint(question):
+    """提取题干的显式节点名，过滤时间、意图和层级词。"""
+    if not question:
+        return ""
+    text = re.sub(r"去年|今年|前年|往年|20\d{2}年", "", str(question))
+    candidates = re.findall(r"[\u4e00-\u9fff\d]{1,12}(?:分公司|代表处|业务部|城市公司)", text)
+    if not candidates:
+        return ""
+    hint = max(candidates, key=len)
+    hint = re.sub(r"^(?:各|每个)", "", hint)
+    hint = re.sub(r"(?:业绩|排名|条线|区域|整体|盘点|咋样|怎么样|最近|的)", "", hint)
+    return hint.strip()
+
+
+def _parse_number(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    multiplier = 1.0
+    if "亿" in text:
+        multiplier = 1e8
+        text = text.replace("亿", "")
+    elif "万" in text:
+        multiplier = 1e4
+        text = text.replace("万", "")
+    elif "千" in text:
+        multiplier = 1e3
+        text = text.replace("千", "")
+    if "%" in text:
+        text = text.replace("%", "")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        return float(match.group(0)) * multiplier
+    except (TypeError, ValueError):
+        return None
+
+
+def _kpi_value(kpi):
+    if not isinstance(kpi, dict):
+        return None
+    for key in ("value", "displayValue", "display_value", "raw", "number"):
+        if kpi.get(key) not in (None, ""):
+            parsed = _parse_number(kpi.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _kpi_label(kpi):
+    if not isinstance(kpi, dict):
+        return ""
+    return "".join(str(kpi.get(k) or "") for k in ("label", "name", "title", "key", "column"))
+
+
+def _find_kpi(report_spec, metric):
+    kpis = report_spec.get("kpis") or [] if isinstance(report_spec, dict) else []
+    aliases = [str(metric), "任务金额" if metric == "总任务金额" else metric]
+    for kpi in kpis:
+        if not isinstance(kpi, dict):
+            continue
+        label = _kpi_label(kpi)
+        if any(alias and alias in label for alias in aliases):
+            return kpi
+    return None
+
+
+def _matches(got, op, expect, question=None, result=None, path=None):
+    if op in ("entity_exists", "rows_semantic_check"):
+        rows = _rows_for_assert(result, path) if result is not None and path else []
+        if op == "entity_exists":
+            if not rows:
+                return True
+            expected = str(expect or "").strip()
+            return any(expected and expected in str(row.get("节点名称") or "") for row in rows if isinstance(row, dict))
+        hint = _node_hint(question)
+        if not rows:
+            # 空结果只有在解读明确提示“未找到”才算通过。
+            analyses = []
+            if isinstance(result, dict):
+                for item in result.get("dataset_results") or []:
+                    if isinstance(item, dict):
+                        analyses.append(str(item.get("analysis") or ""))
+            return "未找到" in "".join(analyses)
+        if not hint:
+            return True
+        return any(hint in str(row.get("节点名称") or "") for row in rows if isinstance(row, dict))
+    if op == "kpi_equals_sum":
+        dataset = _dataset_for_assert(result, path) if result is not None and path else {}
+        if not isinstance(dataset, dict):
+            return False
+        kpi = _find_kpi(dataset.get("report_spec") or {}, str(expect or ""))
+        if not kpi:
+            return False
+        total = _kpi_value(kpi)
+        if total is None:
+            return False
+        metric = str(expect or "")
+        row_values = []
+        for row in dataset.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            value = row.get(metric)
+            if value is None and metric == "总任务金额":
+                value = row.get("任务金额")
+            parsed = _parse_number(value)
+            if parsed is not None:
+                row_values.append(parsed)
+        if not row_values:
+            return False
+        return abs(total - sum(row_values)) <= max(abs(total), 1.0) * 0.01
+    if op == "analysis_contains":
+        return str(expect) in str(got or "")
+    if op == "analysis_not_contains":
+        return str(expect) not in str(got or "")
     if op == "eq":
         return got == expect
     if op == "contains":
@@ -176,9 +316,13 @@ def _run_assert(r, a):
             return ("requires_confirmation", confirm,
                     "CONFIRM" if confirm else "FAIL(未弹确认)")
 
-        # .sql 的 contains/not_contains 对完整 SQL 文本匹配（sql_summary 仅供展示）
-        got = get_path(r, path)
-        ok = _matches(got, op, expect)
+        # .sql 的 contains/not_contains 对完整 SQL 文本匹配；analysis 支持显式 analysis_* 操作符，
+        # 也兼容 path=analysis + contains/not_contains 的简写。
+        analysis_ops = {"contains": "analysis_contains", "not_contains": "analysis_not_contains"}
+        effective_op = analysis_ops.get(op, op) if path in ("analysis", "dataset_results.0.analysis") else op
+        got = _analysis_text(r, path) if effective_op in ("analysis_contains", "analysis_not_contains") else get_path(r, path)
+        ok = _matches(got, effective_op, expect, question=r.get("question") if isinstance(r, dict) else None,
+                       result=r, path=path)
         return (path, got, "PASS" if ok else "FAIL")
     except Exception as e:  # 单条断言崩溃不许炸掉整个 runner
         return (path, repr(e), "EXC")
@@ -357,6 +501,17 @@ def main():
         print("✗ 用例文件不可读或 JSON 非法: %s (%s)" % (case_path, e))
         sys.exit(2)
     cases = data.get("cases", [])
+    # variants.json 是矩阵而不是 cases 数组：自动展平为可执行 case，保留每组 source 锚点。
+    if not cases and data.get("groups"):
+        cases = []
+        for group in data.get("groups", []):
+            category = group.get("category", "未分类")
+            for variant in group.get("variants", []):
+                case = dict(variant)
+                case["source"] = "variants.json category=" + category
+                if "assert" in case:
+                    case["asserts"] = [case.pop("assert")]
+                cases.append(case)
     if id_filter:
         cases = [c for c in cases if str(c.get("id", "")).startswith(id_filter)]
         print(f"过滤后 {len(cases)} 个用例（前缀 {id_filter}）")

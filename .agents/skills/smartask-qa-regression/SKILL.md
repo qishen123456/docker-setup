@@ -37,7 +37,11 @@ description: >
 # 必须加 MSYS_NO_PATHCONV=1 前缀（cmd/PowerShell 不需要）。
 
 # 1. 同步 runner + 用例到容器
+# 注意：docker cp 目录时若容器内 qa_cases 已存在，会嵌套成 qa_cases/cases/ 导致跑到旧用例
+# （2026-08-18 实测踩坑：容器内 21 条旧用例 vs 本地 29 条，报告却显示全 PASS 的假象）。
+# 稳妥做法：先删容器内旧目录再 cp，或 cp 后用 md5sum 比对容器/宿主机文件。
 MSYS_NO_PATHCONV=1 docker cp .agents/skills/smartask-qa-regression/runner/qa_runner.py smartask-backend:/app/backend/qa_runner.py
+MSYS_NO_PATHCONV=1 docker exec smartask-backend rm -rf /app/backend/qa_cases
 MSYS_NO_PATHCONV=1 docker cp .agents/skills/smartask-qa-regression/cases smartask-backend:/app/backend/qa_cases
 
 # 2. 跑用例库（baseline 和 bugs 是两个文件，分别跑，或用 && 串联）
@@ -53,6 +57,10 @@ MSYS_NO_PATHCONV=1 docker exec smartask-backend python /app/backend/qa_runner.py
 
 1. **PG 探活（分级）** — 遍历 `config/datasources.json` 里全部 `is_active` 的 PostgreSQL 源逐一 `SELECT 1`（跳过 `is_active=false` 的源），每个源的连通结果（数据源名 + OK/失败原因）打印到报告头。**全部不可达**才 `ENV-FAIL` 中止（此时跑下去必是全假"没结果"）；**至少一个可达即放行**，不可达的源降级为警告、不阻断
 2. **代码可导入** — `import four_agent_ask` 失败即中止
+
+### 同步完整性自检（防"跑到旧用例"假象）
+
+`docker cp` 目录到已存在的容器路径会嵌套（见快速开始注意）。跑完后建议比对用例数：报告头"加载 N 个用例"应与本地 `cases/*.json` 条数一致；不一致即同步失败，重跑同步步骤。
 
 自检失败输出 `ENV-FAIL`，与用例 FAIL 严格分离，杜绝误报。
 
@@ -136,12 +144,31 @@ md5sum backend/four_agent_ask.py
 
 **error 特判**：ask/confirm 结果被服务吞成 `{"error": "..."}` 时，该 turn 记一行 `error ... EXC` 并跳过其余断言（避免一片 None FAIL 噪音）；EXC 计入失败数。
 
+## 2.0 新增能力
+
+2.0 将“已知问法回归”扩展为“问法变体 + 语义 + 数据一致性 + 前端渲染 + 文本卫生”回归：
+
+- `entity_exists`：检查题干实体是否真实出现在返回明细节点中，防止不存在节点静默返回大量幽灵行。
+- `rows_semantic_check`：按题干显式节点检查返回行，节点不存在且有数据时失败；空结果必须显式提示“未找到”。
+- `kpi_equals_sum`：从 `report_spec.kpis` 找指定 KPI，与明细对应列求和比较，允许 1% 浮点误差。
+- `analysis_contains` / `analysis_not_contains`：针对 `dataset_results.0.analysis` 做文本卫生检查，例如拦截 `<think` 标签泄漏；也支持简写 `path: "analysis"`，此时可继续使用 `contains` / `not_contains`。
+- 前端关键场景独立使用 `runner/front_render_check.js`，通过 Puppeteer + 现有 Chrome 截图并检查报告/卡片 DOM，不在 runner 中强耦合浏览器环境。
+
+```bash
+CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe" node .agents/skills/smartask-qa-regression/runner/front_render_check.js http://localhost:5173 "业绩最好的分公司" qa-front.png
+```
+
+脚本执行输入、提交、等待报告 DOM，并输出 `qa-front.png`；若项目未安装 Puppeteer，先在项目依赖中执行 `npm install puppeteer`。
+
+N1-N8、think 标签泄漏和 R-bottom5 详见 `cases/bugs.json`；完整问法变体矩阵详见 `cases/variants.json`。runner 会将 `variants.json` 的 `groups[].variants[]` 自动展平为可执行用例并输出 PASS/FAIL/CONFIRM/EXC 报告。
 ### 可断言的路径（path）
 
 - `route.dataset_ids` / `route.decision` / `route.requires_confirmation`
 - `requires_confirmation`（顶层，与 `route.requires_confirmation` 区分：弹确认判断建议用顶层键）
 - `dataset_results.0.query_intent.intent` / `.top_n` / `.direction` / `.rank_sides` / `.sort_metric_column` / `.target_level`
 - `dataset_results.0.row_count`
+- `dataset_results.0.analysis`（LLM 解读；用 `analysis_contains` / `analysis_not_contains` 做文本卫生断言）
+- `analysis`（analysis 断言的简写，等价于首个数据集的 `dataset_results.0.analysis`）
 - `dataset_results.0.sql`（断言用 contains / not_contains，匹配**完整 SQL 文本**；报告展示才用截断摘要）
 - `dataset_results.0.rows.0.节点名称`（第一个节点名）
 - `dataset_results[ds=N].row_count`（**数据集选择器**：在 list 中按 `dataset_id==N` 选元素再取子路径，不按索引——多数据集顺序不保证；找不到返回 None）
@@ -156,6 +183,10 @@ md5sum backend/four_agent_ask.py
 | `gt` / `gte` / `lt` / `lte` | 数值比较（row_count）；got 非数值（含 None/字符串）判 False 不抛异常 |
 | `range` | `[min, max]` 范围（容忍数据抖动）；got 非数值判 False |
 | `nonempty` | 非空（rows>0、analysis 非空） |
+| `entity_exists` | 题干节点名必须出现在数据集明细中；空结果可返回，但非空幽灵行会 FAIL |
+| `rows_semantic_check` | 按题干节点检查返回行；非空但不含节点，或空结果未提示“未找到”都会 FAIL |
+| `kpi_equals_sum` | 指定 KPI 卡值与所有明细行同名列合计一致，允许 1% 浮点误差 |
+| `analysis_contains` / `analysis_not_contains` | 检查 `dataset_results.0.analysis` 文本；用于拦截 `<think` 等泄漏 |
 | `allow_confirm` | 该问题弹确认是**正确行为**（跨数据集歧义），弹确认记 CONFIRM（不算失败）、不弹判 FAIL |
 
 ### "合理弹确认"白名单
@@ -188,17 +219,23 @@ md5sum backend/four_agent_ask.py
 ```
 .agents/skills/smartask-qa-regression/
 ├── SKILL.md                  # 本文件
-├── runner/qa_runner.py       # 容器内 runner（preflight + md5 报告头 + 断言 + 报告 + 多轮 + user 覆盖）
+├── runner/
+│   ├── qa_runner.py          # 容器内 runner（preflight + md5 报告头 + 断言 + 报告 + 多轮 + user 覆盖）
+│   └── front_render_check.js # 可选 Puppeteer 前端关键场景 DOM/截图检查
 └── cases/
-    ├── baseline.json         # 基线用例库（21 条：baseline 文档 §1-§8 代表问题）
-    └── bugs.json             # bug 验收用例（9 条：修复后期望，对应 bug-backlog）
+    ├── baseline.json         # 已知基线用例
+    ├── bugs.json             # N1-N8、think 泄漏等 2.0 红色验收用例
+    └── variants.json         # 时间、节点、口语、who/which、复合问法变体矩阵
 ```
 
 ## 关键文件索引
 
 - `config/confirmed_behaviors_baseline.md` — 已确认行为基线（唯一事实源）
-- `.workbuddy/artifacts/bug-backlog-2026-08-14.md` — 待修复问题清单 + 分组
+- `.workbuddy/artifacts/bug-backlog-2026-08-14.md` — 待修复问题清单 + 分组（#1-6/#11-18 已于 2026-08-13~17 全部修复，验收用例已迁入 baseline.json）
 - `backend/four_agent_ask.py` — 意图解析、SQL 生成、confirm 流程（上帝文件）
 - `backend/smartask_engine/intent/resolver.py` — IntentResolver
+- `backend/ask_engine_route.py` — 层级词路由（bug#16 承接人层级词登记处）
 - `backend/memory/short_term_memory.py` — 多轮追问记忆
+- `backend/report_spec_builder.py` — 报告 spec（bug#2/#4 汇总口径修复处）
+- `frontend/src/state/smartAskSession.js` — 前端多轮会话状态（bug#13 修复处；QA runner 只覆盖后端半边）
 - 三个数据集：商用 id=3、消费者 id=2、电商 id=62
