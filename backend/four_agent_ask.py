@@ -2534,6 +2534,8 @@ class FourAgentAskService:
             "排名", "排行", "排序", "名次", "榜", "最高", "最低", "最好", "最差",
             "最多", "最少", "最大", "最小", "垫底", "倒数", "落后", "领先",
             "从高到低", "从低到高",
+            # 口语化 who/which 问法（"谁业绩最好"/"哪个业绩最高"）也属 ranking
+            "谁", "哪个", "哪位", "谁最", "哪个最",
         ]
         if any(token in text for token in semantic_tokens):
             return True
@@ -8609,9 +8611,14 @@ Agent3 复核结果：
             # 追问场景直接用 raw_question（用户真实问题）作为意图解析主体，不拼 refined。
             is_followup_rewritten = "基于上一轮的数据集和统计层级" in refined_question or "本轮追问" in refined_question
             resolved_subject = self._safe_dict(context.get("resolved_subject"))
+            # G7：原始问题带 ranking/who 信号时 raw_question 优先，避免 confirm 后 refined_query
+            # 把"谁业绩最好"剥成"消费者事业部"而丢失"最好"这个 ranking 信号。
+            raw_ranking_signal = self._looks_like_ranking_question(raw_question or question or "") or bool(
+                re.search(r"谁|哪个|哪位", raw_question or question or "")
+            )
             if is_followup_rewritten and raw_question:
                 intent_question = raw_question
-            elif resolved_subject.get("subject_name"):
+            elif resolved_subject.get("subject_name") and not raw_ranking_signal:
                 # 主体已纠正（如"商用事业部丁杰"→"丁杰"）：以 refined_query 为主体，避免原始问题里的事业部层级词误导 target_level
                 intent_question = refined_for_intent or raw_question
             else:
