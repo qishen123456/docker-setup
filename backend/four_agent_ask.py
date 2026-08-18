@@ -4735,7 +4735,7 @@ ranking_params 说明：
 
         syyb_base_sql = self._build_syyb_base_sql(context)
 
-        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "事业部", "城市分公司"}
+        generic_level_terms = {"分公司", "代表处", "业务部", "业务代表", "业务员", "事业部", "城市分公司", "消费者事业部", "商用事业部", "电商事业部"}
 
         intent_is_filter = query_intent.get("intent") == "filter"
         intent_is_comparison = query_intent.get("intent") == "comparison"
@@ -5379,7 +5379,8 @@ LIMIT 10000
                 )
             )
             if _is_root_overview:
-                root_overview_where = "层级 IN ('事业部','分公司','业务部')"
+                # 消费者数据集层级值是"消费者事业部总体"而非"事业部"，需映射
+                root_overview_where = "层级 IN ('消费者事业部总体','分公司','业务部')"
             elif normalized_target_level in root_level_values:
                 normalized_target_level = ""
 
@@ -6380,7 +6381,7 @@ LIMIT 10000
             query_intent["target_level"] = "城市分公司"
         # ranking top1 时若 target_level 是 root level（事业部级）或为空，自动降到「分公司」
         # 产品约定：单个对象除非是最末端，默认都要带下级
-        if intent_is_ranking and self._safe_dict(context.get("query_intent")).get("top_n") == 1:
+        if (intent_is_ranking or query_intent.get("intent") == "ranking") and self._safe_dict(context.get("query_intent")).get("top_n") == 1:
             _q_rank_limit = self._safe_dict(context.get("query_intent")).get("top_n")
             root_levels = {"消费者事业部", "商用事业部", "电商事业部", "事业部", "事业部总体", ""}
             if intent_target_level in root_levels or not intent_target_level.strip():
@@ -6507,8 +6508,12 @@ WHERE {root_clause}节点名称 IN ({quoted_entities})
             scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
         # 兜底：即使识别规则没命中，只要 target_level 明确，默认 SQL 也只返回该层级
+        # 消费者数据集根节点层级值是"消费者事业部总体"而非"消费者事业部"，需映射
         if not scope_filter and intent_target_level:
-            scope_filter = f"WHERE 层级 = '{intent_target_level}'"
+            if intent_target_level == "消费者事业部":
+                scope_filter = "WHERE 层级 = '消费者事业部总体'"
+            else:
+                scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
         intent_is_comparison = query_intent.get("intent") == "comparison"
         intent_is_aggregate = query_intent.get("intent") == "aggregate"
