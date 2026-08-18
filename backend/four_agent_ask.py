@@ -1681,6 +1681,10 @@ class FourAgentAskService:
             "销售", "整体", "当前", "今年", "本年", "业绩", "绩效", "开单", "达成",
             "完成", "情况", "表现", "排名", "最高", "最低", "最好", "最差",
             "各", "每个", "哪些", "所有",
+            "去年", "前年", "明年", "明后年", "年初", "年底",
+            "上个月", "上季度", "前几月", "去年底", "去年年底", "去年初", "前几年",
+            "本季度", "本月初", "本年底",
+            "2025年", "2024年", "2023年", "2022年", "2021年", "2020年",
         ]
         return any(token in text for token in blocked)
 
@@ -1700,6 +1704,74 @@ class FourAgentAskService:
         if re.match(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", text):
             return True
         return False
+
+    @classmethod
+    def _resolve_question_year(
+        cls,
+        question: str,
+        default_year: str = "2026",
+    ) -> Dict[str, Any]:
+        """解析题干中的年份/时间词，仅做解析层，不改 SQL（Step 9 才改 WHERE 当前年）。
+
+        返回:
+            {
+                "year": "2025",            # 解析后的年份字符串（4 位）
+                "token": "去年",            # 命中的时间词原文（空表示未命中/默认）
+                "source": "explicit_year"|"timeword"|"default",
+                "mismatch": True/False,    # 与 default_year 不一致时为 True（提示用）
+            }
+
+        调用方可以根据 mismatch 决定是否给前端/日志提示。
+        SQL 生成路径由 Step 9 接管，不在本方法内触发。
+        """
+        text = str(question or "").strip()
+        # 1) 显式数字年份优先：2025年 / 2025 年 / 2025
+        m = re.search(r"(20\d{2})\s*年?", text)
+        if m:
+            year = m.group(1)
+            return {
+                "year": year,
+                "token": f"{year}年",
+                "source": "explicit_year",
+                "mismatch": year != default_year,
+            }
+        # 2) 相对时间词（长词优先，避免「去年底」被「去年」先命中）
+        try:
+            base_year = int(default_year)
+        except Exception:
+            base_year = 2026
+        timeword_table = [
+            ("去年年底", base_year - 1),
+            ("去年底", base_year - 1),
+            ("去年初", base_year - 1),
+            ("明后年", base_year + 2),
+            ("去年", base_year - 1),
+            ("前年", base_year - 2),
+            ("前几年", base_year - 1),
+            ("前几月", base_year - 1),
+            ("明年", base_year + 1),
+            ("上季度", base_year - 1),
+            ("上个月", base_year - 1),
+            ("年底", base_year),
+            ("年初", base_year),
+            ("本季度", base_year),
+            ("本月初", base_year),
+            ("本年底", base_year),
+        ]
+        for token, year_int in timeword_table:
+            if token in text:
+                return {
+                    "year": str(year_int),
+                    "token": token,
+                    "source": "timeword",
+                    "mismatch": str(year_int) != default_year,
+                }
+        return {
+            "year": default_year,
+            "token": "",
+            "source": "default",
+            "mismatch": False,
+        }
 
     @classmethod
     def _expand_coordinated_subject_names(cls, value: str) -> List[str]:
@@ -8377,6 +8449,11 @@ Agent3 复核结果：
                 trace=trace,
             ) or {}
             resolved_entities = dict(route_entities)
+            # 保留 LLM 的语义判定标记（不覆盖 route 实体，仅补语义元数据），
+            # 供后续"是否走正则兜底"判断：LLM 明确判定纯层级/ranking 无具体节点时应尊重其留空决定
+            for _semantic_key in ("intent", "scope_mode", "has_specific_node", "confidence"):
+                if _semantic_key not in resolved_entities and llm_entities.get(_semantic_key) is not None:
+                    resolved_entities[_semantic_key] = llm_entities[_semantic_key]
             if llm_entities.get("ranking_params"):
                 resolved_entities["ranking_params"] = llm_entities["ranking_params"]
             context["resolved_entities"] = resolved_entities or llm_entities
@@ -8444,8 +8521,14 @@ Agent3 复核结果：
                             "confidence": 1.0,
                             "source": f"validated_subject:{validated_subject.get('source')}",
                         }
-            # Agent1 解析结果优先；仅当 Agent1 完全未解析出实体时，才用本地规则兜底
-            if not self._resolved_entity_names(context):
+            # Agent1 解析结果优先；仅当 Agent1 完全未解析出实体、且未明确判定"纯层级/ranking 无具体节点"时，才用本地规则兜底
+            # （LLM 判定 has_specific_node=false / scope_mode=ranking 时 entities 留空是有意为之，不应用正则把整句当实体名）
+            _llm_entities_meta = context.get("resolved_entities") or {}
+            _llm_said_no_specific_node = (
+                _llm_entities_meta.get("has_specific_node") is False
+                or _llm_entities_meta.get("scope_mode") in {"ranking", "aggregate"}
+            )
+            if not self._resolved_entity_names(context) and not _llm_said_no_specific_node:
                 subject_names = self._question_subject_names(route.get("refined_query", question), context)
                 if subject_names:
                     context["resolved_entities"] = {

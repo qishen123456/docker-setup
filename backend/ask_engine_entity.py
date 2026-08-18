@@ -133,6 +133,18 @@ def _looks_like_org_subject_question(question: str) -> bool:
     has_generic_org_metric = bool(
         re.search(r"^[\u4e00-\u9fa5]{2,}(?:业绩|表现|情况|咋样|怎样)", text)
     )
+    # 时间词守卫（G3 解析层 Step 2）：当 generic_org_metric 命中但主体是时间词
+    # （如「去年的业绩」「2025年的业绩」），不应被当作组织主体追问处理。
+    # 时间词由 G3 解析层（_resolve_question_year）专门识别，避免被误当节点名。
+    # 仅在 generic_org_metric 路径上拦截，has_org_level / has_spoken_style 不受影响。
+    _timeword_guard = bool(
+        re.match(
+            r"^(?:20\d{2}\s*年?|去年|前年|明年|明后年|年初|年底|上个月|上季度|去年底|去年初|前几年|本季度|本月初|本年底)",
+            text,
+        )
+    )
+    if has_generic_org_metric and _timeword_guard:
+        return False
     return has_org_level or has_spoken_style or has_generic_org_metric
 
 
