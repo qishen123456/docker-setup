@@ -539,7 +539,7 @@ class FourAgentAskService:
                 "## 业绩分析报告",
                 "",
                 "### 核心结论",
-                f"本次围绕“{question or dataset_name}”未查询到匹配数据，暂不能判断业绩好坏。",
+                f"本次围绕“{question or dataset_name}”未找到匹配数据，暂不能判断业绩好坏。",
                 "",
                 "### 问题诊断",
                 "• **痛点：** 查询结果 -> 0 行 -> 可能是组织名称、时间范围或层级口径没有命中明细数据。",
@@ -2102,9 +2102,12 @@ class FourAgentAskService:
         for raw in names or []:
             cleaned = self._clean_org_subject_candidate(raw)
             if unique_candidates and cleaned not in unique_candidates:
-                matches = get_close_matches(cleaned, unique_candidates, n=1, cutoff=0.72)
-                if matches:
-                    cleaned = matches[0]
+                # 具体节点名（已带层级后缀）不做模糊匹配，避免"西藏分公司"被误配成"西北分公司"，
+                # 导致查无此节点时静默返回其它节点的数据（N5：不存在节点不得静默返回总览）。
+                if not self._infer_subject_level_from_name(cleaned):
+                    matches = get_close_matches(cleaned, unique_candidates, n=1, cutoff=0.72)
+                    if matches:
+                        cleaned = matches[0]
             if cleaned and cleaned not in normalized:
                 normalized.append(cleaned)
         return normalized
@@ -4040,6 +4043,44 @@ ranking_params 说明：
                             "confirmation_options": deduped_options,
                             "candidate_dataset_ids": matched_dataset_ids,
                             "arbiter_reason": "node_index_dataset_ambiguous",
+                        }
+                # G4 节点存在性校验（首问）：subject 是具体节点名（含层级后缀、非泛称层级词），
+                # 但 node_index 查无此节点时，直接路由到支持该层级的单个数据集，
+                # 让下游返回 0 行 + "未找到"提示，避免被当成"分公司"泛称口径弹确认或静默降级总览。
+                if (
+                    not distinct_matches
+                    and subject_name not in self._GENERIC_LEVEL_ALIASES
+                    and self._infer_subject_level_from_name(subject_name)
+                ):
+                    subject_level = self._infer_subject_level_from_name(subject_name)
+                    fallback_dataset_id = None
+                    for _ds in catalog:
+                        _profile = get_dataset_profile(_ds.get("dataset_code"), _ds.get("dataset_name"))
+                        if (
+                            self._profile_supports_level(_profile, subject_level)
+                            or self._dataset_node_index_supports_level(_ds, subject_level)
+                            or self._dataset_alias_supports_level(_ds, subject_level)
+                        ):
+                            fallback_dataset_id = int(_ds.get("id") or 0)
+                            break
+                    if not fallback_dataset_id and catalog:
+                        fallback_dataset_id = int(catalog[0].get("id") or 0)
+                    if fallback_dataset_id:
+                        return {
+                            "dataset_ids": [fallback_dataset_id],
+                            "intent": "detail",
+                            "refined_query": question,
+                            "requires_confirmation": False,
+                            "decision": "generate_sql",
+                            "match_score": 100,
+                            "route_margin": 100,
+                            "candidate_dataset_ids": [fallback_dataset_id],
+                            "arbiter_reason": "org_subject_node_not_found",
+                            "resolved_subject_name": subject_name,
+                            "resolved_subject_level": subject_level,
+                            "split_queries": [
+                                {"dataset_id": fallback_dataset_id, "sub_query": question}
+                            ],
                         }
 
         # 当用户只有一个可访问数据集时，直接命中该数据集，不再走任何歧义确认
@@ -8274,6 +8315,10 @@ LLD：
         result: Dict[str, Any],
         trace: Optional[Dict[str, Any]] = None,
     ) -> str:
+        # 0 行结果统一走确定性"未找到"提示，避免 LLM 生成不稳定文案
+        # （N5：查无此节点时不得静默返回总览，须明确提示未找到）。
+        if not (result.get("rows") or []):
+            return self._build_fallback_analysis(question, context, review, result)
         dataset = self._safe_dict(context.get("dataset"))
         if dataset.get("dataset_code") in {"angel_business_2026", "angel_business_2026_phase1"} or dataset.get("dataset_name") in {
             "商用事业部",
