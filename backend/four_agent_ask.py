@@ -1697,9 +1697,14 @@ class FourAgentAskService:
             "第一", "第二", "第三", "倒数", "前三", "后三", "前十", "后十",
             "最高", "最低", "最好", "最差", "低于", "高于", "超过", "不足",
             "排名", "top", "bottom", "全部", "所有", "哪些", "哪个", "几个",
-            "各", "每个",
+            "各", "每个", "垫底",
         ]
         if any(token in text for token in structural_tokens):
+            return True
+        # 数量词（5个/三个/四大/前3）+ 层级词组合是"带数量的层级 ranking"，
+        # 不是具体节点名，避免"垫底的5个城市分公司"被当成节点名实体，
+        # 导致 SQL WHERE 走错主体、返回 0 行。
+        if re.search(r"(?:[一二两三四五六七八九十]+|\d+)\s*(?:个|大|家|者|位|名|项)", text):
             return True
         if re.match(r"^(看下|看一下|查一下|查询|分析一下|分析|看看|了解一下|了解|问下|问一下)", text):
             return True
