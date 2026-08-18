@@ -1127,10 +1127,22 @@ def build_report_spec(
             if top_rate is not None and bottom_rate is not None:
                 add_kpi("compare-rate-gap", "首尾差距", abs(top_rate - bottom_rate), rate_metric)
     elif root_source:
-        for metric in metrics[:6]:
-            value = _row_value(root_source["raw"], metric)
-            if value is not None:
-                add_kpi(metric.get("key"), metric_label(metric, "指标"), value, metric)
+        # 多行集合结果时 KPI 应取合计（如电商 3 行业务部合计 14.96 亿），不是单节点值
+        # 用全部 nodes 判定（comparison_nodes 可能为空，如 intent=unknown 的 detail 场景）
+        if len(nodes) > 1:
+            # 临时把 nodes 塞进 comparison_nodes 让 sum_metric 工作
+            saved_comparison_nodes = comparison_nodes
+            comparison_nodes = nodes
+            add_kpi("root-total-task", f"累计{metric_label(task_metric, '总任务金额')}", sum_metric(task_metric), task_metric)
+            add_kpi("root-total-actual", f"累计{metric_label(actual_metric, '年度开单金额')}", sum_metric(actual_metric), actual_metric)
+            add_kpi("root-overall-rate", "整体达成率", overall_rate_value(), rate_metric)
+            add_kpi("root-total-remain", f"累计{metric_label(remain_metric, '剩余任务金额')}", sum_metric(remain_metric), remain_metric)
+            comparison_nodes = saved_comparison_nodes
+        else:
+            for metric in metrics[:6]:
+                value = _row_value(root_source["raw"], metric)
+                if value is not None:
+                    add_kpi(metric.get("key"), metric_label(metric, "指标"), value, metric)
 
     accordions = []
     thresholds = _effective_thresholds(config)
