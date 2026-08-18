@@ -1680,6 +1680,7 @@ class FourAgentAskService:
             "商用", "消费者", "事业部", "分公司", "代表处", "业务部", "业务员", "业务代表",
             "销售", "整体", "当前", "今年", "本年", "业绩", "绩效", "开单", "达成",
             "完成", "情况", "表现", "排名", "最高", "最低", "最好", "最差",
+            "各", "每个", "哪些", "所有",
         ]
         return any(token in text for token in blocked)
 
@@ -1692,6 +1693,7 @@ class FourAgentAskService:
             "第一", "第二", "第三", "倒数", "前三", "后三", "前十", "后十",
             "最高", "最低", "最好", "最差", "低于", "高于", "超过", "不足",
             "排名", "top", "bottom", "全部", "所有", "哪些", "哪个", "几个",
+            "各", "每个",
         ]
         if any(token in text for token in structural_tokens):
             return True
