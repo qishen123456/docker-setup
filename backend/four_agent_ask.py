@@ -5264,6 +5264,8 @@ LIMIT {rank_limit}
                     )
                 if configured_limit > 0 or asks_extreme_rank:
                     rank_where = f"全局排名 <= {rank_limit}" if rank_limit > 0 else "TRUE"
+                else:
+                    rank_where = "TRUE"
                 rank_limit_clause = f"LIMIT {rank_limit}" if rank_limit > 0 else "LIMIT 10000"
                 return f"""
 WITH 汇总结果 AS (
