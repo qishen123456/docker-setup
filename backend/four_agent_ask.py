@@ -5012,12 +5012,12 @@ WITH 明细结果 AS (
 {syyb_base_sql}
 WHERE {where_clause}
 )
-SELECT * FROM (
+SELECT 条线, 层级, 节点名称, 上级名称, 事业部, 分公司, 代表处, 业务部, 业务代表, 总任务金额, 年度开单金额, 达成率, 剩余任务金额 FROM (
     SELECT
         MAX(条线) AS 条线,
         '事业部' AS 层级,
-        '商用事业部' AS 上级名称,
         '{dataset_display_name}' AS 节点名称,
+        '商用事业部' AS 上级名称,
         '{dataset_display_name}' AS 事业部,
         '' AS 分公司,
         '' AS 代表处,
@@ -6886,17 +6886,13 @@ SELECT *
 FROM 汇总结果
 WHERE {where_clause}
 )
-SELECT * FROM (
+SELECT 条线, 分析口径, 层级, 节点名称, 上级名称, 总任务金额, 年度开单金额, 达成率, 剩余任务金额, 线下任务_万元, 新零售任务_万元, 燃气定制任务_万元, 地产任务_万元, 线下实际_万元, 新零售实际_万元, 燃气定制实际_万元, 地产实际_万元 FROM (
     SELECT
         MAX(条线) AS 条线,
+        MAX(分析口径) AS 分析口径,
         '事业部' AS 层级,
-        '消费者事业部' AS 上级名称,
         '{dataset_display_name}' AS 节点名称,
-        '{dataset_display_name}' AS 事业部,
-        '' AS 分公司,
-        '' AS 城市分公司,
-        '' AS 代表处,
-        '' AS 业务代表,
+        '消费者事业部' AS 上级名称,
         SUM(总任务金额) AS 总任务金额,
         SUM(年度开单金额) AS 年度开单金额,
         CASE WHEN SUM(总任务金额) = 0 THEN 0 ELSE ROUND((SUM(年度开单金额)/SUM(总任务金额))*100, 2) END AS 达成率,
