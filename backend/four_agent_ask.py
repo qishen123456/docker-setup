@@ -9769,7 +9769,8 @@ Agent3 复核结果：
         result["conversation_session_id"] = conversation_session_id
         if conversation_session_id and not result.get("error"):
             self.short_term_memory.remember_result(conversation_session_id, question, route, result)
-        self._pending_confirmations.pop(session_id, None)
+        # P0-1：确认会话不一次即焚——首次 confirm 成功后保留 pending payload，
+        # 允许用户在同一 session 下换选其他数据集（多分支对比场景）
         self._flush_trace(trace, result)
         return result
 
