@@ -5379,8 +5379,11 @@ LIMIT 10000
                 )
             )
             if _is_root_overview:
-                # 消费者数据集层级值是"消费者事业部总体"而非"事业部"，需映射
-                root_overview_where = "层级 IN ('消费者事业部总体','分公司','业务部')"
+                # 消费者数据集根节点层级值是"消费者事业部总体"，商用是"商用事业部"，需按数据集区分
+                if is_phase1_dataset or is_syyb_dataset:
+                    root_overview_where = "层级 IN ('事业部','分公司','业务部')"
+                else:
+                    root_overview_where = "层级 IN ('消费者事业部总体','分公司','业务部')"
             elif normalized_target_level in root_level_values:
                 normalized_target_level = ""
 
