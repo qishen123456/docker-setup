@@ -243,3 +243,6 @@ test_debug_quantity.py
 test_execute_sql.py
 test_final_verification.py
 _qa_g4_probe*.py
+
+# 参赛 PPT 材料（安吉尔先锋效率AI大赛，不入 git）
+deliverables/安吉尔先锋效率AI大赛/

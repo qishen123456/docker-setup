@@ -674,7 +674,7 @@ def get_ai_model_by_id(model_id: int) -> Optional[Dict]:
     for m in get_ai_models():
         if m['id'] == model_id:
             m_copy = dict(m)
-            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
+            m_copy['api_key'] = decode_secret(m_copy.get('api_key_b64', '')) or m_copy.get('api_key', '')
             return m_copy
     return None
 
@@ -758,13 +758,13 @@ def get_default_ai_model() -> Optional[Dict]:
     for m in get_ai_models():
         if m.get('is_default') and m.get('is_active'):
             m_copy = dict(m)
-            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
+            m_copy['api_key'] = decode_secret(m_copy.get('api_key_b64', '')) or m_copy.get('api_key', '')
             return m_copy
     # 没有默认，取第一个活跃的
     for m in get_ai_models():
         if m.get('is_active'):
             m_copy = dict(m)
-            m_copy['api_key'] = m_copy.get('api_key_b64', '') or m_copy.get('api_key', '')
+            m_copy['api_key'] = decode_secret(m_copy.get('api_key_b64', '')) or m_copy.get('api_key', '')
             return m_copy
     return None
 

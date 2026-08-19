@@ -1127,9 +1127,12 @@ def build_report_spec(
             if top_rate is not None and bottom_rate is not None:
                 add_kpi("compare-rate-gap", "首尾差距", abs(top_rate - bottom_rate), rate_metric)
     elif root_source:
-        # 多行集合结果时 KPI 应取合计（如电商 3 行业务部合计 14.96 亿），不是单节点值
+        # 多行集合结果时 KPI 取合计（如电商 3 行业务部合计 14.96 亿），不是单节点值；
+        # 但多层级结果集不能全行累加——父级行自身口径已含下级，再累加会翻倍。
+        # 仅当结果集为同一层级平铺（无根行）时才取合计，否则用根节点自身算好的口径。
         # 用全部 nodes 判定（comparison_nodes 可能为空，如 intent=unknown 的 detail 场景）
-        if len(nodes) > 1:
+        level_values = {str(node.get("levelValue") or node.get("levelName") or "") for node in nodes if node.get("name")}
+        if len(nodes) > 1 and len(level_values) <= 1:
             # 临时把 nodes 塞进 comparison_nodes 让 sum_metric 工作
             saved_comparison_nodes = comparison_nodes
             comparison_nodes = nodes

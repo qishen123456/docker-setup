@@ -1049,6 +1049,12 @@ const primaryKpiCards = computed(() => {
     return normalized.slice(0, isComparisonDigest.value ? 6 : 4)
   }
 
+  // 多行层级列表且未点名具体主体时，不拿首行伪造全局 KPI 卡（防误导）
+  if (!isComparisonDigest.value && normalizedRows.value.length > 1
+    && !cleanText(reportSpec.value?.scope?.focusNode || '')
+    && !normalizedRows.value.some(item => item.name && questionLabel.value.includes(item.name))) {
+    return []
+  }
   const focusRow = resolveFocusRow(normalizedRows.value)
   const source = isComparisonDigest.value ? comparisonDigestRows.value : [focusRow || sortedByRateDesc.value[0]].filter(Boolean)
   const first = source[0]

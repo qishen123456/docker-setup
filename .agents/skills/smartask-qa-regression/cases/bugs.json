@@ -606,6 +606,80 @@
           "expect": 5
         }
       ]
+    },
+    {
+      "id": "L-level-overview-dbd",
+      "source": "用户手测 各代表处的业绩 投影过薄(任务/缺口缺失+层级错标)",
+      "question": "各代表处的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "range",
+          "expect": [
+            20,
+            26
+          ]
+        },
+        {
+          "path": "dataset_results.0.rows.0.总任务金额",
+          "op": "gt",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0.rows.0.达成率",
+          "op": "gt",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0.rows.0.层级",
+          "op": "eq",
+          "expect": "代表处"
+        },
+        {
+          "path": "dataset_results.0.rows.0.上级名称",
+          "op": "nonempty"
+        }
+      ]
+    },
+    {
+      "id": "L-level-overview-city",
+      "source": "ds=2 对照 层级总览投影完整",
+      "question": "各城市分公司的业绩",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            2
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gt",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0.rows.0.总任务金额",
+          "op": "gt",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0.rows.0.达成率",
+          "op": "gt",
+          "expect": 0
+        },
+        {
+          "path": "dataset_results.0.rows.0.层级",
+          "op": "nonempty"
+        }
+      ]
     }
   ]
 }

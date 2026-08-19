@@ -92,3 +92,9 @@
 根因：宿主机 5 个意图识别修复 commit（8ace601~1de4311，6 文件）未同步进容器，容器跑的是 08-13 旧代码；runner 是容器内即时 import，测的其实是旧码
 解法：报告头打印关键文件 md5+mtime（four_agent_ask.py md5 99dd vs 宿主机 6da5 当场现形）；漂移 FAIL 先 docker cp 对齐再重跑复核，复核不过的才路由 Engineer-BE
 影响范围：qa_runner.py 报告头、所有容器内测试流程的 FAIL 判读顺序
+
+[2026-08-17] bug#3 根节点整体 overview 丢业务部层级行
+上下文：「商用事业部的整体业绩」基线 7-8 行（事业部+分公司+业务部三层），08-15 意图修复链后回退到 4 行；QA 回归 A1 用例当场抓到（旧码 8 行 vs 新码 4 行）
+根因：`_build_rule_based_sql` ranking 兜底分支里，根节点名（"商用事业部"）被当中间层级过滤词处理，WHERE 层级='商用事业部' 匹配不到任何行，只剩兜底行。另有半成品修复误删 `verified_level` 赋值行导致 NameError 隐患
+解法：`_is_root_overview` 判定（target_level 命中 analysisDimensions 根节点名 + level_overview 触发词或"整体/总体/总览/汇总/全部"词）→ WHERE 层级 IN ('事业部','分公司','业务部') 三层返回；verified_level 赋值行原样补回。硬编码三层仅作用于商用 phase1 分支（消费者/电商已提前 return），误判面收敛在"根节点名+整体类词"窄交集
+影响范围：four_agent_ask.py:5142-5162；验收用例 qa_cases/baseline.json A1（已实测 PASS，row_count=8）
