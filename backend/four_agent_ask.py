@@ -6504,27 +6504,43 @@ LIMIT 10000
                         "0 AS 线下实际_万元, 0 AS 新零售实际_万元, 0 AS 燃气定制实际_万元, 0 AS 地产实际_万元 "
                         "FROM public.feishu_tbl_xioafeizhe WHERE 1=0 LIMIT 0")
 
+        # 基线约定：根节点 level_overview 必须带一级下级（如「消费者事业部整体业绩」→1+13）
+        LEVEL_OVERVIEW_WITH_CHILDREN = {
+            "消费者事业部": ("消费者事业部总体", "分公司"),
+            "消费者事业部总体": ("消费者事业部总体", "分公司"),
+            "电商事业部": ("电商事业部总体", "业务部"),
+            "电商事业部总体": ("电商事业部总体", "业务部"),
+            "商用事业部": ("事业部", "分公司", "业务部"),
+            "事业部": ("事业部", "分公司", "业务部"),
+        }
+        is_root_overview = bool(query_intent.get("_level_overview")) and intent_target_level in LEVEL_OVERVIEW_WITH_CHILDREN
+
         scope_filter = ""
         # 关键修复：ranking 意图不应被实体 scope_filter 污染（避免"谁业绩最好"被"消费者事业部"实体带成全量）
         if entity_names and query_intent.get("intent") == "ranking":
             entity_names = []
         if entity_names:
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
-            include_root = any(name == "消费者事业部" for name in entity_names)
-            root_clause = "节点名称 = '消费者事业部' OR " if include_root else ""
-            # 关键修复：去掉递归子查询（6509-6513 旧版），避免"消费者事业部业绩"等根节点问题
-            # 被无限下钻到二级下级（如城市分公司），限制只带一级下级。
+            # 关键修复：限制只带一级下级（产品约定：除叶片节点外任何对象默认要带一级下级）
             scope_filter = f"""
-WHERE {root_clause}节点名称 IN ({quoted_entities})
+WHERE { '' if not any(name in LEVEL_OVERVIEW_WITH_CHILDREN for name in entity_names) else '' }节点名称 IN ({quoted_entities})
    OR 上级名称 IN ({quoted_entities})
 """
         elif generic_level_only and intent_target_level:
-            scope_filter = f"WHERE 层级 = '{intent_target_level}'"
+            if is_root_overview:
+                # 基线约定：根节点总览要带一级下级
+                _lvls = "','".join(LEVEL_OVERVIEW_WITH_CHILDREN[intent_target_level])
+                scope_filter = f"WHERE 层级 IN ('{_lvls}')"
+            else:
+                scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
         # 兜底：即使识别规则没命中，只要 target_level 明确，默认 SQL 也只返回该层级
         # 根节点别名 vs 实际层级值的映射：消费者/电商/阶段一用"事业部总体"，商用用"事业部"
         if not scope_filter and intent_target_level:
-            if intent_target_level == "消费者事业部":
+            if is_root_overview:
+                _lvls = "','".join(LEVEL_OVERVIEW_WITH_CHILDREN[intent_target_level])
+                scope_filter = f"WHERE 层级 IN ('{_lvls}')"
+            elif intent_target_level == "消费者事业部":
                 scope_filter = "WHERE 层级 = '消费者事业部总体'"
             elif intent_target_level == "商用事业部":
                 scope_filter = "WHERE 层级 = '事业部'"
