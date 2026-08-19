@@ -6884,7 +6884,7 @@ LIMIT 200
             if left_col and right_col:
                 where_parts = []
                 if intent_target_level:
-                    where_parts.append(f"层级 = '{actual_sy_level_value}'")
+                    where_parts.append(f"层级 = '{intent_target_level}'")
                 elif city_level_requested:
                     where_parts.append("层级 = '城市分公司'")
                 elif "分公司" in normalized_question and "城市分公司" not in normalized_question:
@@ -7094,7 +7094,7 @@ LIMIT 10000
                     source_cte=base_sql,
                     source_name="汇总结果",
                     output_cte="分公司排序",
-                    where_clause=f"层级 = '{actual_sy_level_value}'",
+                    where_clause=f"层级 = '{intent_target_level}'",
                     metric_column=sort_column,
                     direction=order_direction,
                     rank_limit=rank_limit,
@@ -9330,6 +9330,23 @@ Agent3 复核结果：
         try:
             step_started = time.time()
             allowed_set = {int(item) for item in allowed_dataset_ids} if allowed_dataset_ids is not None else None
+            # 修复：preferred_dataset_ids（如前端沿用的"上次数据集"）如果题干的 target_name 不在该数据集，
+            # 立即释放 hint，让 ask 重新路由到正确的节点所属数据集。
+            # 场景：消费者业绩 → 追问"东部分公司业绩"（东部分公司只在商用 ds=3），前端沿用 ds=2 会得到错结果。
+            if preferred_dataset_ids:
+                _target_name = self._extract_followup_org_target(question)
+                _selected_ids_set = {int(item) for item in preferred_dataset_ids}
+                if _target_name and len(_selected_ids_set) == 1:
+                    _sel_id = next(iter(_selected_ids_set))
+                    if not self._is_entity_in_dataset(_target_name, _sel_id):
+                        self._append_trace(
+                            trace,
+                            "agent1.preferred_dataset_released_by_node_mismatch",
+                            "info",
+                            reason=f"target_name={_target_name!r} not in dataset_id={_sel_id}",
+                            preferred_dataset_ids=list(preferred_dataset_ids),
+                        )
+                        preferred_dataset_ids = []
             if preferred_dataset_ids and self._preferred_dataset_conflicts_with_question(
                 question,
                 preferred_dataset_ids,
