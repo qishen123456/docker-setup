@@ -4713,6 +4713,15 @@ ranking_params 说明：
         intent_name = str(query_intent.get("intent") or "").strip()
         intent_target_level = str(query_intent.get("target_level") or "").strip()
         normalized_target_level = intent_target_level.replace(" ", "")
+        # 根节点别名 → 实际层级值映射（消费者/电商用"事业部总体"，商用/阶段一用"事业部"）
+        if intent_target_level == "消费者事业部":
+            actual_sy_level_value = "消费者事业部总体"
+        elif intent_target_level == "商用事业部":
+            actual_sy_level_value = "事业部"
+        elif intent_target_level == "电商事业部":
+            actual_sy_level_value = "电商事业部总体"
+        else:
+            actual_sy_level_value = intent_target_level
         is_consumer_dataset = (
             dataset_code in {"consumer_business_standard_v1", "public_feishu_tbl_xioafeizhe_609826"}
             or "消费者" in dataset_name
@@ -4829,7 +4838,7 @@ ranking_params 说明：
             where_parts = []
             # 多父节点 overview 需要同时返回父节点本身和直接下级，不能限制单一层级
             if intent_target_level and not is_multi_parent:
-                where_parts.append(f"层级 = '{intent_target_level}'")
+                where_parts.append(f"层级 = '{actual_sy_level_value}'")
             elif not is_multi_parent and "业务部" in normalized_question:
                 where_parts.append("层级 = '业务部'")
             elif not is_multi_parent and "代表处" in normalized_question:
@@ -4908,7 +4917,7 @@ LIMIT 200
                     if filter_value_sql:
                         where_parts = [f"{filter_metric_column} {filter_operator} {filter_value_sql}"]
                 if intent_target_level:
-                    where_parts.insert(0, f"层级 = '{intent_target_level}'")
+                    where_parts.insert(0, f"层级 = '{actual_sy_level_value}'")
                 if "行业条线" in normalized_question:
                     where_parts.append("条线 = '行业条线'")
                 elif "区域条线" in normalized_question:
@@ -4965,7 +4974,7 @@ LIMIT 200
             if left_col and right_col:
                 where_parts = [f"{left_col} {op} {right_col}"]
                 if intent_target_level:
-                    where_parts.insert(0, f"层级 = '{intent_target_level}'")
+                    where_parts.insert(0, f"层级 = '{actual_sy_level_value}'")
                 elif "代表处" in normalized_question:
                     where_parts.insert(0, "层级 = '代表处'")
                 elif "业务代表" in normalized_question:
@@ -5066,12 +5075,14 @@ LIMIT 100
             elif "数量" in normalized_question or "个数" in normalized_question or "多少个" in normalized_question:
                 agg_select = "COUNT(*) AS 节点数量"
             else:
-                if "任务" in normalized_question:
-                    agg_select = "SUM(总任务金额) AS 总任务金额, AVG(达成率) AS 平均达成率"
-                else:
-                    agg_select = "SUM(年度开单金额) AS 总开单金额, AVG(达成率) AS 平均达成率"
+                # 层级总览默认全量投影：任务/开单/加权达成率/剩余，供任务、缺口、目标对比渲染
+                agg_select = ("SUM(总任务金额) AS 总任务金额, SUM(年度开单金额) AS 年度开单金额, "
+                              "CASE WHEN SUM(总任务金额) = 0 THEN 0 ELSE ROUND(SUM(年度开单金额) / SUM(总任务金额) * 100, 2) END AS 达成率, "
+                              "SUM(剩余任务金额) AS 剩余任务金额")
 
-            if "总开单金额" in agg_select:
+            if "剩余任务金额" in agg_select:
+                order_by = "年度开单金额 DESC NULLS LAST"
+            elif "总开单金额" in agg_select:
                 order_by = "总开单金额 DESC NULLS LAST"
             elif "总任务金额" in agg_select:
                 order_by = "总任务金额 DESC NULLS LAST"
@@ -5080,12 +5091,15 @@ LIMIT 100
             else:
                 order_by = "分组名称"
 
+            node_name_col = "\n    节点名称," if group_by_field == "节点名称" else ""
             return f"""
 WITH 汇总结果 AS (
 {syyb_base_sql}
 )
 SELECT
-    {group_by_field} AS 分组名称,
+    {group_by_field} AS 分组名称,{node_name_col}
+    MAX(层级) AS 层级,
+    MAX(上级名称) AS 上级名称,
     {agg_select}
 FROM 汇总结果
 WHERE {where_level}
@@ -6498,23 +6512,22 @@ LIMIT 10000
             quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
             include_root = any(name == "消费者事业部" for name in entity_names)
             root_clause = "节点名称 = '消费者事业部' OR " if include_root else ""
+            # 关键修复：去掉递归子查询（6509-6513 旧版），避免"消费者事业部业绩"等根节点问题
+            # 被无限下钻到二级下级（如城市分公司），限制只带一级下级。
             scope_filter = f"""
 WHERE {root_clause}节点名称 IN ({quoted_entities})
    OR 上级名称 IN ({quoted_entities})
-   OR 上级名称 IN (
-       SELECT 节点名称
-       FROM 汇总结果
-       WHERE 节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})
-   )
 """
         elif generic_level_only and intent_target_level:
             scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
         # 兜底：即使识别规则没命中，只要 target_level 明确，默认 SQL 也只返回该层级
-        # 消费者数据集根节点层级值是"消费者事业部总体"而非"消费者事业部"，需映射
+        # 根节点别名 vs 实际层级值的映射：消费者/电商/阶段一用"事业部总体"，商用用"事业部"
         if not scope_filter and intent_target_level:
             if intent_target_level == "消费者事业部":
                 scope_filter = "WHERE 层级 = '消费者事业部总体'"
+            elif intent_target_level == "商用事业部":
+                scope_filter = "WHERE 层级 = '事业部'"
             else:
                 scope_filter = f"WHERE 层级 = '{intent_target_level}'"
 
@@ -6855,7 +6868,7 @@ LIMIT 200
             if left_col and right_col:
                 where_parts = []
                 if intent_target_level:
-                    where_parts.append(f"层级 = '{intent_target_level}'")
+                    where_parts.append(f"层级 = '{actual_sy_level_value}'")
                 elif city_level_requested:
                     where_parts.append("层级 = '城市分公司'")
                 elif "分公司" in normalized_question and "城市分公司" not in normalized_question:
@@ -6966,12 +6979,14 @@ LIMIT 100
             elif "数量" in normalized_question or "个数" in normalized_question or "多少个" in normalized_question:
                 agg_select = "COUNT(*) AS 节点数量"
             else:
-                if "任务" in normalized_question:
-                    agg_select = "SUM(总任务金额) AS 总任务金额, AVG(达成率) AS 平均达成率"
-                else:
-                    agg_select = "SUM(年度开单金额) AS 总实际金额, AVG(达成率) AS 平均达成率"
+                # 层级总览默认全量投影：任务/开单/加权达成率/剩余，供任务、缺口、目标对比渲染
+                agg_select = ("SUM(总任务金额) AS 总任务金额, SUM(年度开单金额) AS 年度开单金额, "
+                              "CASE WHEN SUM(总任务金额) = 0 THEN 0 ELSE ROUND(SUM(年度开单金额) / SUM(总任务金额) * 100, 2) END AS 达成率, "
+                              "SUM(剩余任务金额) AS 剩余任务金额")
 
-            if "总实际金额" in agg_select:
+            if "剩余任务金额" in agg_select:
+                order_by = "年度开单金额 DESC NULLS LAST"
+            elif "总实际金额" in agg_select:
                 order_by = "总实际金额 DESC NULLS LAST"
             elif "总任务金额" in agg_select:
                 order_by = "总任务金额 DESC NULLS LAST"
@@ -6980,10 +6995,13 @@ LIMIT 100
             else:
                 order_by = "分组名称"
 
+            node_name_col = "\n    节点名称," if group_by_field == "节点名称" else ""
             return f"""
 {base_sql}
 SELECT
-    {group_by_field} AS 分组名称,
+    {group_by_field} AS 分组名称,{node_name_col}
+    MAX(层级) AS 层级,
+    MAX(上级名称) AS 上级名称,
     {agg_select}
 FROM 汇总结果
 WHERE {where_level}
@@ -7060,7 +7078,7 @@ LIMIT 10000
                     source_cte=base_sql,
                     source_name="汇总结果",
                     output_cte="分公司排序",
-                    where_clause=f"层级 = '{intent_target_level}'",
+                    where_clause=f"层级 = '{actual_sy_level_value}'",
                     metric_column=sort_column,
                     direction=order_direction,
                     rank_limit=rank_limit,

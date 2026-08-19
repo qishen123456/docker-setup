@@ -679,11 +679,14 @@ class IntentResolver:
                     # 不带这些词（如"电商事业部的业绩"）应走 §1.4 根节点默认带下级，不能被 level_overview 拦截。
                     overview_markers = ("整体", "总体", "总览", "汇总", "全部", "全局")
                     has_explicit_overview = any(kw in text for kw in overview_markers)
+                    # 关键修复：根节点别名（消费者事业部/商用事业部/电商事业部）作为 target_level 时，
+                    # 即使没"整体"词也走 level_overview 路径，避免落到 entity scope_filter 全下级瀑布。
+                    is_root_level_target = target_level in {"消费者事业部", "商用事业部", "电商事业部"}
                     if any(
                         name and name not in level_like_values
                         and any(name.endswith(alias) for alias in target_aliases)
                         for name in resolved_names
-                    ) and not has_explicit_overview:
+                    ) and not has_explicit_overview and not is_root_level_target:
                         is_level_overview = False
                     # 如果 resolved 的是具体业务员成员，也不按层级概览处理，而是按单点查询
                     if is_level_overview:
