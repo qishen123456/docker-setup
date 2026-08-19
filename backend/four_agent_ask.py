@@ -6255,10 +6255,10 @@ LIMIT 10000
                     where_parts.append(f"层级级别 = '业务部'")
                 elif compare_dimension in {"承接人", "任务承接人", "负责人", "业务经理"} or projection_mode == "manager":
                     where_parts.append(f"负责人 IN ({quoted_members})")
-                    where_parts.append(f"层级级别 = '业务经理'")
+                    # 修复：电商数据集"负责人"实为业务部/事业部级的负责人，不能硬编码'业务经理'层级
                 elif compare_dimension in {"业务承接角色", "细分业务", "业务线"} or user_level in {"业务承接角色", "细分业务", "业务线"}:
                     where_parts.append(f"细分业务 IN ({quoted_members})")
-                    where_parts.append(f"层级级别 = '业务经理'")
+                    # 修复：去掉硬编码"层级级别='业务经理'"，避免与实际层级不一致
                 else:
                     # 兜底：在节点名称里匹配
                     where_parts.append(
@@ -6348,8 +6348,10 @@ LIMIT 10000
             elif focus_dimension in {"业务承接角色", "细分业务", "业务线"}:
                 where_parts.append(f"细分业务 = {quote(focus_member)}")
             elif focus_dimension in {"承接人", "任务承接人", "负责人", "业务经理"}:
+                # 修复：不能硬编码"层级级别='业务经理'"。黄超的节点索引 node_level='承接人'，
+                # 但数据库里黄超的层级级别='业务部'（业务部级的负责人）。
+                # 只按负责人字段过滤，让数据库按负责人自身在的层级返回。
                 where_parts.append(f"负责人 = {quote(focus_member)}")
-                where_parts.append("层级级别 = '业务经理'")
             else:
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%' + focus_member + '%')}")
 
