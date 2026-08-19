@@ -1436,6 +1436,9 @@ def build_report_spec(
 
     answer_mode = (
         "filter" if query_intent.get("intent") == "filter"
+        # _level_overview（如"商用事业部整体业绩"）虽然 intent=ranking（SQL 生成复用 ranking 路径），
+        # 但报告应走 detail 模式而非排名模式，避免前端标题显示"达成率排名"
+        else "detail" if query_intent.get("_level_overview")
         else "ranking" if query_intent.get("intent") == "ranking"
         else "drilldown" if query_intent.get("intent") == "drilldown"
         else mode
@@ -1682,6 +1685,22 @@ def build_report_spec(
             "targetLevel": compare_label,
             "focusNode": focus_name,
             "childCount": child_count,
+            "text": answer_text,
+        }
+    elif answer_mode == "detail" and not answer_summary:
+        # level_overview 场景（如"商用事业部整体业绩"）：显示层级结构总览，不是排名
+        node_count = len(nodes)
+        focus_name = focus_node.get("name") if focus_node else ""
+        if focus_node and comparison_nodes:
+            answer_text = f"共 {node_count} 个节点，聚焦 {focus_name} 及其下级 {len(comparison_nodes)} 个{compare_label}"
+        else:
+            answer_text = f"共 {node_count} 个节点，展示层级结构总览"
+        answer_summary = {
+            "mode": "detail",
+            "title": "层级总览",
+            "targetLevel": compare_label,
+            "focusNode": focus_name,
+            "nodeCount": node_count,
             "text": answer_text,
         }
     elif mode == "comparative" and not answer_summary and len(comparison_nodes) >= 2:
