@@ -1369,6 +1369,19 @@ def _materialize_imported_views(repo: BookshelfRepository) -> List[Dict[str, Any
                 except Exception as exc:
                     conn.rollback()
                     results.append({"type": "schema_ddl", "name": tname, "success": False, "message": str(exc)})
+
+            # 3. 核心标准业务视图保底执行 (如 migrations 中的 20260820_standard_all_views.sql)
+            migration_file = os.path.join(CURRENT_DIR, "migrations", "20260820_standard_all_views.sql")
+            if os.path.exists(migration_file):
+                try:
+                    with open(migration_file, "r", encoding="utf-8") as mf:
+                        all_views_sql = mf.read()
+                    cur.execute(all_views_sql)
+                    conn.commit()
+                    results.append({"type": "core_view_migration", "name": "v_angel_group_data", "success": True, "message": "Standard views initialized"})
+                except Exception as exc:
+                    conn.rollback()
+                    results.append({"type": "core_view_migration", "name": "v_angel_group_data", "success": False, "message": str(exc)})
     except Exception as exc:
         results.append({"type": "schema_ddl", "name": "schema_query", "success": False, "message": str(exc)})
 
