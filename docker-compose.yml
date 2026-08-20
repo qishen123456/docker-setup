@@ -96,6 +96,7 @@ services:
     ports:
       - "${SMARTASK_BACKEND_PORT:-5002}:5002"
     volumes:
+      - ./backend:/app/backend
       - smartask_chroma:/app/chroma_db
       - ./logs:/app/logs
       - ./backend/logs:/app/backend/logs

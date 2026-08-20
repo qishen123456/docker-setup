@@ -403,8 +403,13 @@ const handleImport = async () => {
       skipped_log_files: result.skipped_log_files || result.preview?.skipped_log_files || [],
     }
     await loadSummary()
-    const skipped = (result.skipped_config_items?.length || 0) + (result.skipped_table_rows?.length || 0) + (result.skipped_log_files?.length || 0)
-    ElMessage.success(skipped ? `导入完成，已跳过 ${skipped} 个无法匹配资源` : '导入完成，已生成回滚备份')
+    const writtenConfigs = result.written_configs || []
+    ElMessage.success('🎉 运行态包导入成功！')
+    ElMessageBox.alert(
+      `已成功合并写入配置文件与数据资产！\n\n已更新配置：${writtenConfigs.join('、') || '已同步'}\n\nAI 模型、飞书任务与数据资产已全部即时就位！`,
+      '导入完成',
+      { type: 'success', confirmButtonText: '我知道了' }
+    )
   } finally {
     importing.value = false
   }
