@@ -1,0 +1,81 @@
+[
+  {
+    "dataset_code": "feishu_tbldianshang",
+    "dataset_name": "电商事业部",
+    "view_name": "v_feishu_tbldianshang",
+    "name": "电商事业部标准视图",
+    "source_table": "feishu_tbldianshang",
+    "columns": [
+      "id",
+      "record_id",
+      "事业部",
+      "业务部",
+      "细分业务",
+      "层级级别",
+      "负责人",
+      "年度目标营收",
+      "年度开单金额",
+      "总任务达成率",
+      "月度阈值开单差额万",
+      "组织路径",
+      "当前年"
+    ],
+    "transform_sql": "SELECT\n  id,\n  record_id,\n  fields->>'事业部' AS 事业部,\n  NULLIF(fields->>'业务部','') AS 业务部,\n  NULLIF(fields->>'业务承接角色','') AS 细分业务,\n  fields->>'层级级别' AS 层级级别,\n  fields->>'任务承接人' AS 负责人,\n  NULLIF(trim(fields->>'总任务（金额）'),'')::numeric AS 年度目标营收,\n  NULLIF(trim(fields->>'年度开单金额'),'')::numeric AS 年度开单金额,\n  NULLIF(trim(fields->>'总任务达成率'),'')::numeric AS 总任务达成率,\n  ROUND((NULLIF(trim(fields->>'年度开单金额'),'')::numeric - NULLIF(trim(fields->>'总任务（金额）'),'')::numeric) / 12.0 / 10000.0, 2) AS 月度阈值开单差额万,\n  fields->>'链接字段(勿删)' AS 组织路径,\n  fields->>'当前年' AS 当前年\nFROM {{source_table}}\nWHERE fields IS NOT NULL AND fields <> '{}'::jsonb\n  AND NULLIF(fields->>'编号','') IS NOT NULL"
+  },
+  {
+    "dataset_code": "angel_business_2026",
+    "dataset_name": "商用事业部",
+    "view_name": "v_angel_group_data",
+    "name": "商用事业部标准视图",
+    "source_table": "angel_group_data",
+    "columns": [
+      "id",
+      "record_id",
+      "条线",
+      "层级级别",
+      "节点名称",
+      "上级名称",
+      "事业部",
+      "分公司",
+      "代表处",
+      "业务代表",
+      "负责人",
+      "年度目标营收",
+      "年度开单金额",
+      "剩余任务金额",
+      "总任务达成率",
+      "当前年",
+      "城市标签",
+      "fields"
+    ],
+    "transform_sql": "WITH base AS (\n    SELECT id, record_id,\n        CASE WHEN jsonb_typeof(fields->'事业部') = 'array' THEN fields->'事业部'->0->>'text' ELSE fields->>'事业部' END AS 事业部,\n        CASE WHEN jsonb_typeof(fields->'分公司') = 'array' THEN fields->'分公司'->0->>'text' ELSE fields->>'分公司' END AS 分公司,\n        CASE WHEN jsonb_typeof(fields->'代表处') = 'array' THEN fields->'代表处'->0->>'text' ELSE fields->>'代表处' END AS 代表处,\n        CASE WHEN jsonb_typeof(fields->'业务代表') = 'array' THEN fields->'业务代表'->0->>'text' ELSE fields->>'业务代表' END AS 业务代表,\n        COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务（金额）') = 'array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 年度目标营收,\n        COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'年度开单金额') = 'array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 年度开单金额,\n        COALESCE(NULLIF(regexp_replace(CASE WHEN jsonb_typeof(fields->'总任务达成率') = 'array' THEN fields->'总任务达成率'->0->>'text' ELSE fields->>'总任务达成率' END, '[^0-9.-]', '', 'g'), ''), '0')::NUMERIC AS 总任务达成率,\n        CASE WHEN jsonb_typeof(fields->'当前年') = 'array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年,\n        fields\n    FROM {{source_table}}\n    WHERE fields IS NOT NULL AND fields <> '{}'::jsonb\n)\nSELECT\n    id, record_id,\n    CASE\n        WHEN 分公司 LIKE '%分公司' THEN '区域条线'\n        WHEN 分公司 LIKE '%业务部' THEN '行业条线'\n        ELSE '全事业部'\n    END AS 条线,\n    CASE\n        WHEN 业务代表 IS NOT NULL AND 业务代表 <> '' THEN '业务经理'\n        WHEN 代表处 IS NOT NULL AND 代表处 <> '' THEN '代表处'\n        WHEN 分公司 IS NOT NULL AND 分公司 <> '' THEN (CASE WHEN 分公司 LIKE '%分公司' THEN '分公司' ELSE '业务部' END)\n        ELSE '事业部'\n    END AS 层级级别,\n    COALESCE(NULLIF(业务代表, ''), NULLIF(代表处, ''), NULLIF(分公司, ''), '商用事业部') AS 节点名称,\n    CASE\n        WHEN 业务代表 IS NOT NULL AND 业务代表 <> '' THEN 代表处\n        WHEN 代表处 IS NOT NULL AND 代表处 <> '' THEN 分公司\n        WHEN 分公司 IS NOT NULL AND 分公司 <> '' THEN '商用事业部'\n        ELSE NULL\n    END AS 上级名称,\n    事业部, 分公司, 代表处,\n    COALESCE(NULLIF(业务代表, ''), fields->>'总任务承接人', COALESCE(NULLIF(代表处, ''), NULLIF(分公司, ''), '商用事业部')) AS 业务代表,\n    COALESCE(NULLIF(业务代表, ''), fields->>'总任务承接人', COALESCE(NULLIF(代表处, ''), NULLIF(分公司, ''), '商用事业部')) AS 负责人,\n    年度目标营收, 年度开单金额,\n    (年度目标营收 - 年度开单金额) AS 剩余任务金额,\n    总任务达成率, 当前年,\n    CONCAT(\n        COALESCE(代表处, ''), ' ', COALESCE(分公司, ''), ' ',\n        CASE\n            WHEN 代表处 LIKE '%粤东%' THEN '广州 深圳 东莞 佛山 粤东'\n            WHEN 代表处 LIKE '%粤西%' THEN '粤西 南宁 广西 海南'\n            WHEN 代表处 LIKE '%江苏%' THEN '南京 江苏 苏州'\n            WHEN 代表处 LIKE '%浙江%' THEN '杭州 浙江 宁波'\n            WHEN 代表处 LIKE '%安徽%' THEN '合肥 安徽'\n            WHEN 代表处 LIKE '%湖北%' THEN '武汉 湖北'\n            WHEN 代表处 LIKE '%湖南%' THEN '长沙 湖南'\n            WHEN 代表处 LIKE '%江西%' THEN '南昌 江西'\n            WHEN 代表处 LIKE '%四川%' THEN '成都 四川'\n            WHEN 代表处 LIKE '%重庆%' THEN '重庆'\n            WHEN 代表处 LIKE '%云贵%' THEN '昆明 贵阳 云南 贵州'\n            WHEN 代表处 LIKE '%福建%' THEN '福建 福州 厦门'\n            WHEN 代表处 LIKE '%上海%' THEN '上海'\n            WHEN 代表处 LIKE '%北京%' THEN '北京'\n            WHEN 代表处 LIKE '%辽宁%' THEN '辽宁 沈阳'\n            WHEN 代表处 LIKE '%陕西%' THEN '陕西 西安'\n            WHEN 代表处 LIKE '%山东%' THEN '山东 济南 青岛'\n            WHEN 代表处 LIKE '%河南%' THEN '河南 郑州'\n            ELSE ''\n        END\n    ) AS 城市标签,\n    fields\nFROM base"
+  },
+  {
+    "dataset_code": "public_feishu_tbl_xioafeizhe_609826",
+    "dataset_name": "消费者事业部",
+    "view_name": "v_feishu_xiaofeizhe",
+    "name": "消费者事业部标准视图",
+    "source_table": "feishu_tbl_xioafeizhe",
+    "columns": [
+      "id",
+      "record_id",
+      "事业部",
+      "销售大区",
+      "城市公司",
+      "层级级别",
+      "负责人",
+      "年度目标营收",
+      "年度开单金额",
+      "总任务达成率",
+      "线下开单金额",
+      "新零售开单金额",
+      "燃气定制开单金额",
+      "地产开单金额",
+      "当前年",
+      "当前月",
+      "省份标签",
+      "fields"
+    ],
+    "transform_sql": "WITH base AS (\n    SELECT\n        id, record_id,\n        fields->>'事业部' AS 事业部,\n        COALESCE(NULLIF(fields->>'分公司', ''), split_part(fields->>'链接字段(勿删)', chr(59), 2)) AS 销售大区,\n        COALESCE(NULLIF(fields->>'城市公司', ''), split_part(fields->>'链接字段(勿删)', chr(59), 3)) AS 城市公司,\n        COALESCE(NULLIF(fields->>'层级级别', ''),\n            CASE\n                WHEN NULLIF(fields->>'城市公司', '') IS NOT NULL THEN '城市分公司'\n                WHEN NULLIF(fields->>'分公司', '') IS NOT NULL THEN '分公司'\n                ELSE '事业部'\n            END\n        ) AS 层级级别,\n        fields->>'总任务承接人' AS 负责人,\n        NULLIF(TRIM(fields->>'总任务（金额）'), '')::numeric AS 年度目标营收,\n        NULLIF(TRIM(fields->>'年度开单金额'), '')::numeric AS 年度开单金额,\n        NULLIF(TRIM(fields->>'总任务达成率'), '')::numeric AS 总任务达成率,\n        NULLIF(TRIM(fields->>'线下-年度开单金额'), '')::numeric AS 线下开单金额,\n        NULLIF(TRIM(fields->>'新零售-年度开单金额'), '')::numeric AS 新零售开单金额,\n        NULLIF(TRIM(fields->>'燃气定制-年度开单金额'), '')::numeric AS 燃气定制开单金额,\n        NULLIF(TRIM(fields->>'地产-年度开单金额'), '')::numeric AS 地产开单金额,\n        fields->>'当前年' AS 当前年,\n        fields->>'当前月' AS 当前月,\n        fields\n    FROM {{source_table}}\n    WHERE fields IS NOT NULL AND fields <> '{}'::jsonb\n)\nSELECT\n    id, record_id, 事业部, 销售大区, 城市公司, 层级级别, 负责人,\n    年度目标营收, 年度开单金额, 总任务达成率,\n    线下开单金额, 新零售开单金额, 燃气定制开单金额, 地产开单金额,\n    当前年, 当前月,\n    CONCAT(\n        销售大区, ' ', 城市公司, ' ',\n        CASE\n            WHEN 销售大区 LIKE '%粤桂琼%' THEN '广东 广西 海南'\n            WHEN 销售大区 LIKE '%豫晋%' THEN '河南 山西'\n            WHEN 销售大区 LIKE '%江浙沪%' THEN '江苏 浙江 上海'\n            WHEN 销售大区 LIKE '%鄂皖%' THEN '湖北 安徽'\n            WHEN 销售大区 LIKE '%川藏%' THEN '四川 西藏'\n            WHEN 销售大区 LIKE '%云贵渝%' THEN '云南 贵州 重庆'\n            WHEN 销售大区 LIKE '%赣闽%' THEN '江西 福建'\n            WHEN 销售大区 LIKE '%黑吉辽%' THEN '辽宁 吉林 黑龙江'\n            WHEN 销售大区 LIKE '%西北%' THEN '陕西 甘肃 宁夏'\n            WHEN 销售大区 LIKE '%京津%' THEN '北京 天津'\n            WHEN 销售大区 LIKE '%山东%' THEN '山东'\n            WHEN 销售大区 LIKE '%湖南%' THEN '湖南'\n            WHEN 销售大区 LIKE '%河北%' THEN '河北'\n            ELSE ''\n        END\n    ) AS 省份标签,\n    fields\nFROM base"
+  }
+]
