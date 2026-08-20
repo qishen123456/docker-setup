@@ -21,9 +21,9 @@ NO_PULL=0
 SKIP_BACKUP=0
 RUN_TESTS=0
 RUN_STREAM_TESTS=0
-# 默认分支：使用 QI20260820.v1.0 分支（与最新版本保持一致）
-# 如果需要切换到其他分支，可通过 --branch 参数指定或设置环境变量 SMARTASK_GIT_BRANCH
-BRANCH="${SMARTASK_GIT_BRANCH:-QI20260820.v1.0}"
+# 自动动态获取当前所在的分支，永不锁死特定分支
+CURRENT_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'docker-setup')"
+BRANCH="${SMARTASK_GIT_BRANCH:-$CURRENT_GIT_BRANCH}"
 REMOTE="${SMARTASK_GIT_REMOTE_NAME:-}"
 SKIP_VERIFY=0
 
