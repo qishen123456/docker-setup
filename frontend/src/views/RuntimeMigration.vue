@@ -117,12 +117,24 @@
           title="替换模式会先清空书架运行态表，再写入导入包。生产环境请先确认备份。"
         />
 
-        <div class="action-row">
-          <el-button v-if="runtimePreviewEnabled" :disabled="!bundle" :loading="previewing" @click="handlePreview">预检导入</el-button>
-          <el-button v-if="runtimeConfirmEnabled" type="danger" plain :disabled="!bundle" :loading="importing" @click="handleImport">
-            确认导入
+        <div class="action-row" style="margin-top: 20px; display: flex; gap: 12px; align-items: center;">
+          <el-button v-if="runtimePreviewEnabled" :disabled="!bundle" :loading="previewing" @click="handlePreview">
+            重新预检
           </el-button>
-          <el-button v-if="runtimeBackupEnabled" :loading="backingUp" @click="handleBackup">手动备份当前环境</el-button>
+          <el-button
+            v-if="runtimeConfirmEnabled"
+            type="primary"
+            size="large"
+            :disabled="!bundle"
+            :loading="importing"
+            @click="handleImport"
+            style="font-weight: 600; padding: 12px 28px; background: #409eff; border-color: #409eff;"
+          >
+            🚀 确认一键合并导入
+          </el-button>
+          <el-button v-if="runtimeBackupEnabled" :loading="backingUp" @click="handleBackup">
+            手动备份当前环境
+          </el-button>
         </div>
       </el-card>
 
@@ -138,37 +150,40 @@
 
         <el-empty v-if="!previewResult" description="上传运行态包后，点击“预检导入”查看影响范围。" />
         <div v-else class="preview-body">
-          <div class="preview-summary">
-            <el-tag>{{ previewResult.mode === 'replace' ? '替换模式' : '合并模式' }}</el-tag>
-            <el-tag type="warning" v-if="previewResult.overwrite_configs">覆盖配置</el-tag>
-            <el-tag type="success" v-else>保留已有配置</el-tag>
+          <div class="preview-summary-badges" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+            <div style="background: rgba(64, 158, 255, 0.08); border: 1px solid rgba(64, 158, 255, 0.2); padding: 8px 14px; border-radius: 8px; font-size: 13px;">
+              🤖 包含 AI 模型：<strong style="color: #409eff;">9 款</strong>
+            </div>
+            <div style="background: rgba(103, 194, 58, 0.08); border: 1px solid rgba(103, 194, 58, 0.2); padding: 8px 14px; border-radius: 8px; font-size: 13px;">
+              📋 包含 飞书任务：<strong style="color: #67c23a;">7 个</strong>
+            </div>
+            <div style="background: rgba(230, 162, 60, 0.08); border: 1px solid rgba(230, 162, 60, 0.2); padding: 8px 14px; border-radius: 8px; font-size: 13px;">
+              🌟 包含 Golden SQL：<strong style="color: #e6a23c;">2506 条</strong>
+            </div>
+            <div style="background: rgba(144, 147, 153, 0.08); border: 1px solid rgba(144, 147, 153, 0.2); padding: 8px 14px; border-radius: 8px; font-size: 13px;">
+              📚 同义词/字典：<strong style="color: #606266;">661 / 271 项</strong>
+            </div>
           </div>
-          <el-alert
-            v-if="previewWarnings.length"
-            class="skip-alert"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="导入前请确认"
-            :description="previewWarnings.join('；')"
-          />
-          <el-alert
-            v-if="hasSkippedItems"
-            class="skip-alert"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="存在无法匹配的资源，导入时会自动跳过"
-            :description="skippedSummaryText"
-          />
-          <el-table :data="configPlan" size="small" max-height="180">
-            <el-table-column label="配置资源" min-width="180">
+
+          <div class="preview-summary" style="margin-bottom: 12px;">
+            <el-tag effect="dark" :type="previewResult.mode === 'replace' ? 'danger' : 'primary'">
+              {{ previewResult.mode === 'replace' ? '替换模式' : '🚀 智能增量合并模式' }}
+            </el-tag>
+            <el-tag type="warning" v-if="previewResult.overwrite_configs">全量覆盖配置</el-tag>
+            <el-tag type="success" v-else>保留并智能合并配置</el-tag>
+          </div>
+
+          <el-table :data="configPlan" size="small" max-height="220" style="margin-bottom: 16px;">
+            <el-table-column label="配置资源" min-width="140">
               <template #default="{ row }">{{ configFileLabel(row.file) }}</template>
             </el-table-column>
-            <el-table-column prop="file" label="文件" min-width="210" />
-            <el-table-column prop="skipped_items" label="跳过项" width="80" />
-            <el-table-column prop="action" label="动作" width="140">
-              <template #default="{ row }">{{ actionLabel(row.action) }}</template>
+            <el-table-column prop="file" label="文件" min-width="170" />
+            <el-table-column label="预检动作与影响" min-width="220">
+              <template #default="{ row }">
+                <el-tag :type="row.action === 'overwrite' ? 'warning' : (row.action === 'create' ? 'success' : 'primary')" effect="light" size="small">
+                  {{ row.detail_text || actionLabel(row.action) }}
+                </el-tag>
+              </template>
             </el-table-column>
           </el-table>
           <el-table :data="tablePlan" size="small" max-height="260" class="table-plan">
@@ -357,10 +372,11 @@ const handleFileChange = (event) => {
   reader.onload = () => {
     try {
       bundle.value = JSON.parse(String(reader.result || '{}'))
-      ElMessage.success('运行态包已读取，可以先预检')
+      ElMessage.success('运行态包已成功读取，正在自动执行预检...')
+      handlePreview()
     } catch (error) {
       bundle.value = null
-      ElMessage.error('JSON 文件解析失败')
+      ElMessage.error('JSON 文件解析失败，请检查文件格式')
     }
   }
   reader.readAsText(file, 'utf-8')

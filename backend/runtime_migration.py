@@ -1093,10 +1093,27 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
                 continue
             _, config_skips = _sanitize_config_payload(filename, payload, valid_dataset_ids, dataset_id_map)
             skipped_config_items.extend(config_skips)
-            target_path = os.path.join(CONFIG_DIR, filename)
             exists = os.path.exists(target_path)
-            action = "overwrite" if exists and overwrite_configs else ("skip_existing" if exists else "create")
-            config_plan.append({"file": filename, "exists": exists, "action": action, "skipped_items": len(config_skips)})
+            if not exists:
+                action = "create"
+                detail_text = "全新创建"
+            elif overwrite_configs:
+                action = "overwrite"
+                detail_text = "全量覆盖"
+            else:
+                action = "merge"
+                # 计算预估增量项
+                existing_data = _read_json_file(target_path)
+                _, changes = _deep_merge_config(filename, existing_data, payload)
+                detail_text = f"智能合并 (新增/更新 {changes} 项)" if changes > 0 else "已有且一致"
+
+            config_plan.append({
+                "file": filename,
+                "exists": exists,
+                "action": action,
+                "detail_text": detail_text,
+                "skipped_items": len(config_skips),
+            })
         skipped_table_rows_preview = _preview_table_skips(tables, valid_dataset_ids, dataset_id_map)
         skipped_by_table: Dict[str, int] = {}
         for item in skipped_table_rows_preview:
