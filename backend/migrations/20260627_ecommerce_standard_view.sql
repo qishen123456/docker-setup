@@ -1,3 +1,14 @@
+CREATE TABLE IF NOT EXISTS public.feishu_tbldianshang (
+    id BIGSERIAL PRIMARY KEY,
+    record_id TEXT UNIQUE,
+    fields JSONB DEFAULT '{}'::jsonb,
+    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_feishu_tbldianshang_record_id ON public.feishu_tbldianshang(record_id);
+CREATE INDEX IF NOT EXISTS idx_feishu_tbldianshang_sync_time ON public.feishu_tbldianshang(sync_time);
+
 CREATE OR REPLACE VIEW public.v_feishu_tbldianshang AS
 WITH extracted AS (
   SELECT

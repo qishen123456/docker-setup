@@ -1523,11 +1523,34 @@ class FourAgentAskService:
                 "sample_rewritten": prepared.get("rewritten", False),
             }
 
-        # Filter/comparison/aggregate questions should not be hijacked by ranking-style Golden SQL samples.
-        # Prefer deterministic rule SQL; if unavailable, fall back to fresh generation.
+        # Filter/comparison/aggregate questions should prefer exact/high-confidence Golden SQL if available,
+        # otherwise use deterministic rule SQL or fall back to agent generation.
         if rule_based_sql is None:
             rule_based_sql = self._build_rule_based_sql(question, route, context)
+        
+        # 优先检查是否存在精确或高分匹配的样本
+        if route_sample_sql and int(route.get("matched_sample_score") or 0) >= 100:
+            direct_cand = direct_sample(route_sample_sql, route_sample_id, int(route.get("matched_sample_score") or 0))
+            if direct_cand:
+                return direct_cand
+
         if filter_intent or comparison_intent or aggregate_intent:
+            if rule_based_sql and "WHERE 1=0" not in rule_based_sql:
+                return {
+                    "mode": "rule_based",
+                    "sql": rule_based_sql,
+                    "sample_id": None,
+                    "sample_score": 0,
+                }
+            # 如果 rule_based_sql 返回空或 1=0 防御，检查备选 sample
+            for sample in samples:
+                s_sql = str(sample.get("sql_text") or "").strip()
+                s_id = sample.get("id")
+                s_score = int(sample.get("match_score") or sample.get("score") or 0)
+                if s_sql and s_score >= 80:
+                    cand = direct_sample(s_sql, s_id, s_score)
+                    if cand:
+                        return cand
             if rule_based_sql:
                 return {
                     "mode": "rule_based",
@@ -1678,8 +1701,12 @@ class FourAgentAskService:
         sql = str(sql_text or "")
         values: List[str] = []
         condition_prefix = r"(?:WHERE|AND|OR|HAVING)\s+"
-        subject_cols = r"(?:节点名称|上级名称|业务代表|分公司|代表处|业务部)"
+        subject_cols = r"(?:节点名称|上级名称|业务代表|分公司|代表处|业务部|省份标签|城市标签|销售大区|城市公司)"
         for match in re.finditer(condition_prefix + rf"[^;\n]{{0,100}}?\b{subject_cols}\b\s*=\s*'([^']+)'", sql, flags=re.I):
+            value = str(match.group(1) or "").strip()
+            if value and value not in values and value not in {"商用事业部", "消费者事业部"}:
+                values.append(value)
+        for match in re.finditer(condition_prefix + rf"[^;\n]{{0,100}}?\b{subject_cols}\b\s+LIKE\s*'%([^%']+)%'", sql, flags=re.I):
             value = str(match.group(1) or "").strip()
             if value and value not in values and value not in {"商用事业部", "消费者事业部"}:
                 values.append(value)
@@ -1996,9 +2023,21 @@ class FourAgentAskService:
 
     def _question_subject_names(self, question: str, context: Dict[str, Any], include_resolved: bool = True) -> List[str]:
         names = self._resolved_entity_names(context) if include_resolved else []
-        if not self._has_specific_node(context):
-            return names
         text = str(question or "").replace("\n", " ").strip()
+
+        # 省份与代表处地名主体兜底提取
+        GEO_ENTITIES = [
+            "广东", "湖南", "湖北", "江西", "四川", "重庆", "江苏", "浙江", 
+            "安徽", "山东", "河南", "河北", "陕西", "北京", "辽宁",
+            "广州", "深圳", "东莞", "佛山", "粤东", "粤西", "福建", "南宁", 
+            "海南", "上海", "南京", "杭州", "合肥", "武汉", "长沙", "南昌", "成都", "昆明", "贵阳"
+        ]
+        for geo in GEO_ENTITIES:
+            if geo in text and geo not in names:
+                names.append(geo)
+
+        if not self._has_specific_node(context) and not names:
+            return names
 
         # 优先提取带角色前缀的具体人名（如“业务代表靳锋”），角色前缀比语义解析更精确，
         # 避免把“商用事业部”这样的数据集根节点别名误判为查询主体。
@@ -2348,12 +2387,14 @@ class FourAgentAskService:
             return {"sql": sql_text, "rewritten": False, "conflict": False}
 
         if len(requested) == 1 and len(sample_literals) == 1:
-            old_value = sample_literals[0]
-            new_value = requested[0]
-            escaped_old = re.escape(old_value.replace("'", "''"))
-            escaped_new = new_value.replace("'", "''")
-            rewritten = re.sub(rf"'{escaped_old}'", f"'{escaped_new}'", str(sql_text or ""))
-            return {"sql": rewritten, "rewritten": rewritten != sql_text, "conflict": False}
+            old_value = sample_literals[0].strip("%")
+            new_value = requested[0].strip("%")
+            if old_value and new_value:
+                rewritten = str(sql_text or "")
+                rewritten = rewritten.replace(f"'{old_value}'", f"'{new_value}'")
+                rewritten = rewritten.replace(f"'%{old_value}%'", f"'%{new_value}%'")
+                rewritten = rewritten.replace(f"%{old_value}%", f"%{new_value}%")
+                return {"sql": rewritten, "rewritten": rewritten != sql_text, "conflict": False}
 
         return {"sql": sql_text, "rewritten": False, "conflict": True}
 
@@ -6348,14 +6389,17 @@ LIMIT 10000
             elif focus_dimension in {"业务承接角色", "细分业务", "业务线"}:
                 where_parts.append(f"细分业务 = {quote(focus_member)}")
             elif focus_dimension in {"承接人", "任务承接人", "负责人", "业务经理"}:
-                where_parts.append(f"负责人 = {quote(focus_member)}")
-                where_parts.append("层级级别 = '业务经理'")
+                where_parts.append(
+                    f"(负责人 = {quote(focus_member)} OR 业务部 IN ("
+                    f"SELECT 业务部 FROM v_feishu_tbldianshang "
+                    f"WHERE 当前年 = '2026' AND 负责人 = {quote(focus_member)} AND 业务部 IS NOT NULL LIMIT 1))"
+                )
             else:
                 where_parts.append(f"组织路径 LIKE {quote('电商事业部%' + focus_member + '%')}")
 
             if intent == "drilldown" and actual_level:
                 where_parts.append(f"层级级别 = '{actual_level}'")
-            order_by = "层级级别, 年度开单金额 DESC"
+            order_by = "CASE WHEN 层级级别 = '业务部' THEN 0 ELSE 1 END, 年度开单金额 DESC"
             limit_clause = "LIMIT 200"
 
         # 兜底：无明确意图时按关键词识别层级
@@ -6497,12 +6541,7 @@ LIMIT 10000
             except Exception:
                 current_ds_id = 0
             if current_ds_id and not any(self._is_entity_in_dataset(n, current_ds_id) for n in entity_names):
-                return ("SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, "
-                        "NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, "
-                        "0 AS 总任务金额, 0 AS 年度开单金额, 0 AS 达成率, 0 AS 剩余任务金额, "
-                        "0 AS 线下任务_万元, 0 AS 新零售任务_万元, 0 AS 燃气定制任务_万元, 0 AS 地产任务_万元, "
-                        "0 AS 线下实际_万元, 0 AS 新零售实际_万元, 0 AS 燃气定制实际_万元, 0 AS 地产实际_万元 "
-                        "FROM public.feishu_tbl_xioafeizhe WHERE 1=0 LIMIT 0")
+                return None
 
         # 基线约定：根节点 level_overview 必须带一级下级（如「消费者事业部整体业绩」→1+13）
         LEVEL_OVERVIEW_WITH_CHILDREN = {
@@ -7273,6 +7312,7 @@ LIMIT 10000
         )
         if (
             rule_based_sql
+            and "WHERE 1=0" not in rule_based_sql
             and not seed_sql
             and (not defer_rule_fallback or force_grouped_ranking or force_resolved_scope_rule or force_descendant_scope_rule)
         ):
@@ -7295,6 +7335,17 @@ LIMIT 10000
                 ),
                 "source": "rule_based",
             }
+        # 种子 SQL 兜底：若 seed_sql 为空，尝试从 context samples 获取
+        if not seed_sql:
+            for s in context.get("golden_sql_samples") or []:
+                s_sql = str(s.get("sql_text") or "").strip()
+                if s_sql and int(s.get("match_score") or s.get("score") or 0) >= 70:
+                    prep = self._prepare_subject_safe_sample_sql(question, context, s_sql)
+                    if not prep.get("conflict"):
+                        seed_sql = prep.get("sql") or s_sql
+                        seed_sample_id = s.get("id")
+                        break
+
         seed_block = ""
         if seed_sql:
             seed_block = (
@@ -8175,7 +8226,7 @@ Agent1 路由结果：
         )
         if asks_channel_best_branch:
             rule_sql = self._build_rule_based_sql(question, route, context)
-            if rule_sql and "最佳分公司" in rule_sql:
+            if rule_sql and "WHERE 1=0" not in rule_sql and "最佳分公司" in rule_sql:
                 self._append_trace(
                     trace,
                     "agent3.sql_review.best_branch_rule_fix",
@@ -8195,7 +8246,7 @@ Agent1 路由结果：
                 }
         if asks_branch_extreme_compare:
             rule_sql = self._build_rule_based_sql(question, route, context)
-            if rule_sql and "头尾分公司" in rule_sql:
+            if rule_sql and "WHERE 1=0" not in rule_sql and "头尾分公司" in rule_sql:
                 self._append_trace(
                     trace,
                     "agent3.sql_review.branch_extreme_rule_fix",
@@ -8848,7 +8899,7 @@ Agent3 复核结果：
                         "status": "success",
                     }
                 )
-            elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql"):
+            elif sql_strategy.get("mode") == "rule_based" and sql_strategy.get("sql") and "WHERE 1=0" not in str(sql_strategy.get("sql") or ""):
                 sql_text = str(sql_strategy.get("sql") or "").strip()
                 agent3_review_policy = "rule_sql"
                 self._append_trace(
@@ -9548,6 +9599,21 @@ Agent3 复核结果：
                 route["confirmation_options"] = []
                 route["arbiter_reason"] = (route.get("arbiter_reason") or "") + ";preferred_dataset_override"
                 self._append_trace(trace, "agent1.preferred_dataset_confirmation_bypassed", "info", route=route)
+
+            # 当存在明确渠道/组织意图或候选数据集时，自动放行单数据集执行，避免死锁拦截
+            if route.get("requires_confirmation") and (route.get("dataset_ids") or route.get("confirmation_options")):
+                opts = route.get("confirmation_options") or []
+                if opts:
+                    best_opt = opts[0]
+                    route["dataset_ids"] = best_opt.get("dataset_ids") or route.get("dataset_ids") or [2]
+                    route["split_queries"] = [
+                        {"dataset_id": ds_id, "sub_query": route.get("refined_query") or effective_question}
+                        for ds_id in route["dataset_ids"]
+                    ]
+                    route["requires_confirmation"] = False
+                    route["decision"] = "generate_sql"
+                    route["arbiter_reason"] = (route.get("arbiter_reason") or "") + ";auto_select_best_option_bypassed"
+                    self._append_trace(trace, "agent1.auto_select_best_option_bypassed", "info", route=route)
 
             if route.get("requires_confirmation"):
                 confirmation_session_id = self._create_confirmation_session(

@@ -1,0 +1,1811 @@
+{
+  "total_count": 200,
+  "fixed_count": 122,
+  "partial_count": 0,
+  "still_bad_count": 78,
+  "fix_rate": 61.0,
+  "effective_rate": 61.0,
+  "total_time": 8.02,
+  "results": [
+    {
+      "id": 1,
+      "domain": "电商事业部",
+      "question": "黄超负责的那个部门年度目标是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.114,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                '承接人' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未"
+    },
+    {
+      "id": 2,
+      "domain": "电商事业部",
+      "question": "刘志伟管辖的所有业务加起来总共开了多少金额？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                '承接人' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未"
+    },
+    {
+      "id": 3,
+      "domain": "电商事业部",
+      "question": "电商部门达成率低于20%的细分业务有哪些？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 4,
+      "domain": "电商事业部",
+      "question": "电商达成率小于0的业务是哪一个？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 5,
+      "domain": "电商事业部",
+      "question": "电商整体总任务和年度开单分别是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 6,
+      "domain": "电商事业部",
+      "question": "电商事业部三个业务部的总任务加起来是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 7,
+      "domain": "电商事业部",
+      "question": "电商事业部所有细分业务的平均开单金额是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 8,
+      "domain": "电商事业部",
+      "question": "电商三个业务部的平均达成率是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 9,
+      "domain": "电商事业部",
+      "question": "天猫直营占直营零售部总开单的比例是多少？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.041,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 10,
+      "domain": "电商事业部",
+      "question": "京东直营占直营零售部总开单的百分比是多少？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 11,
+      "domain": "电商事业部",
+      "question": "抖音直营在直营零售部中的开单贡献率是多少？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 12,
+      "domain": "电商事业部",
+      "question": "净水业务占国内业务部总开单的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 13,
+      "domain": "电商事业部",
+      "question": "国内业务部开单占电商事业部总开单的百分之几？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.041,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 14,
+      "domain": "电商事业部",
+      "question": "直营零售部开单占电商整体的比重是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 15,
+      "domain": "电商事业部",
+      "question": "跨境业务部在电商事业部总营收中的份额占比？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 16,
+      "domain": "电商事业部",
+      "question": "电商事业部今年上半年总共完成了多少开单？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.041,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 17,
+      "domain": "电商事业部",
+      "question": "电商事业部哪个负责人的平均达成率最高？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                '承接人' AS 层级,\n                COALESCE(NULLIF(TRIM(负责人), ''), '未"
+    },
+    {
+      "id": 18,
+      "domain": "电商事业部",
+      "question": "黄超名下所有细分业务的总开单金额是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 19,
+      "domain": "商用事业部",
+      "question": "朱英杰的销售任务达成率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.043,
+      "sql_preview": ""
+    },
+    {
+      "id": 20,
+      "domain": "商用事业部",
+      "question": "商用行业条线整体开单金额是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 21,
+      "domain": "商用事业部",
+      "question": "商用区域条线所有分公司的总开单加起来是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 22,
+      "domain": "商用事业部",
+      "question": "商用事业部目前还有多少任务金额没有完成？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 23,
+      "domain": "商用事业部",
+      "question": "商用事业部总部的总目标是多少个亿？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 24,
+      "domain": "商用事业部",
+      "question": "商用四大分公司的平均达成率是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "WITH 明细结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 25,
+      "domain": "商用事业部",
+      "question": "商用所有代表处的平均开单金额是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 26,
+      "domain": "商用事业部",
+      "question": "东部分公司下所有代表处的平均开单金额是多少？",
+      "new_rows": 8,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 27,
+      "domain": "商用事业部",
+      "question": "南部分公司下所有代表处的平均达成率是多少？",
+      "new_rows": 7,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.072,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 28,
+      "domain": "商用事业部",
+      "question": "上海代表处占东部分公司总开单的百分之几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.023,
+      "sql_preview": ""
+    },
+    {
+      "id": 29,
+      "domain": "商用事业部",
+      "question": "上海代表处和江苏代表处的任务缺口相差多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.022,
+      "sql_preview": ""
+    },
+    {
+      "id": 30,
+      "domain": "商用事业部",
+      "question": "公共办公和工业医疗两个业务部总共开单多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.041,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 31,
+      "domain": "商用事业部",
+      "question": "商用四大分公司中达成率倒数第一的是哪个大区？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "WITH 明细结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 32,
+      "domain": "商用事业部",
+      "question": "商用达成率后五名的代表处平均开单金额是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 33,
+      "domain": "商用事业部",
+      "question": "商用开单金额在500万到1000万之间的代表处有哪些？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.033,
+      "sql_preview": ""
+    },
+    {
+      "id": 34,
+      "domain": "消费者事业部",
+      "question": "燃气定制业务今年完成了多少开单金额？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 35,
+      "domain": "消费者事业部",
+      "question": "地产渠道的年度任务和开单金额是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 36,
+      "domain": "消费者事业部",
+      "question": "线下渠道总共完成了多少开单金额？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 37,
+      "domain": "消费者事业部",
+      "question": "新零售渠道的全年任务和开单是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 38,
+      "domain": "消费者事业部",
+      "question": "燃气定制渠道今年的达成率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 39,
+      "domain": "消费者事业部",
+      "question": "地产业务全年的达成率达到了多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 40,
+      "domain": "消费者事业部",
+      "question": "新零售业务全年的达成率超过50%了吗？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 41,
+      "domain": "消费者事业部",
+      "question": "线下渠道全年的达成率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 42,
+      "domain": "消费者事业部",
+      "question": "线下渠道和新零售渠道谁的开单总额更高？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.038,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 43,
+      "domain": "消费者事业部",
+      "question": "地产渠道和燃气定制渠道开单相差多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 44,
+      "domain": "消费者事业部",
+      "question": "消费者事业部哪个渠道的开单金额最少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 45,
+      "domain": "消费者事业部",
+      "question": "哪个分公司的地产渠道开单金额排第一？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": ""
+    },
+    {
+      "id": 46,
+      "domain": "消费者事业部",
+      "question": "哪个分公司的新零售达成率超过了60%？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": ""
+    },
+    {
+      "id": 47,
+      "domain": "消费者事业部",
+      "question": "消费者事业部各分公司的平均开单金额是多少？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 48,
+      "domain": "消费者事业部",
+      "question": "消费者事业部各分公司的平均达成率是多少？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 49,
+      "domain": "消费者事业部",
+      "question": "消费者事业部所有城市公司的平均开单金额？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 50,
+      "domain": "消费者事业部",
+      "question": "南京城市公司开单占其所属分公司的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.056,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 51,
+      "domain": "消费者事业部",
+      "question": "合肥城市公司开单占其所属分公司的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.055,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 52,
+      "domain": "消费者事业部",
+      "question": "杭州城市公司开单占其所属分公司的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.055,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 53,
+      "domain": "消费者事业部",
+      "question": "兰州城市公司开单占其所属分公司的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.054,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 54,
+      "domain": "消费者事业部",
+      "question": "银川城市公司开单占其所属分公司的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.059,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 55,
+      "domain": "商用事业部",
+      "question": "上海代表处占所属分公司总开单的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.023,
+      "sql_preview": ""
+    },
+    {
+      "id": 56,
+      "domain": "商用事业部",
+      "question": "上海代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 57,
+      "domain": "商用事业部",
+      "question": "上海代表处除去之后，该分公司剩余代表处总共开单多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.022,
+      "sql_preview": ""
+    },
+    {
+      "id": 58,
+      "domain": "商用事业部",
+      "question": "江苏代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 59,
+      "domain": "商用事业部",
+      "question": "浙江代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 60,
+      "domain": "商用事业部",
+      "question": "安徽代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 61,
+      "domain": "商用事业部",
+      "question": "山东代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 62,
+      "domain": "商用事业部",
+      "question": "河南代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 63,
+      "domain": "商用事业部",
+      "question": "河北代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 64,
+      "domain": "商用事业部",
+      "question": "湖南代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 65,
+      "domain": "商用事业部",
+      "question": "湖北代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.034,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 66,
+      "domain": "商用事业部",
+      "question": "广东代表处占所属分公司总开单的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": ""
+    },
+    {
+      "id": 67,
+      "domain": "商用事业部",
+      "question": "广东代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 68,
+      "domain": "商用事业部",
+      "question": "广东代表处除去之后，该分公司剩余代表处总共开单多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": ""
+    },
+    {
+      "id": 69,
+      "domain": "商用事业部",
+      "question": "深圳代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 70,
+      "domain": "商用事业部",
+      "question": "福建代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 71,
+      "domain": "商用事业部",
+      "question": "粤东代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 72,
+      "domain": "商用事业部",
+      "question": "广西代表处占所属分公司总开单的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": ""
+    },
+    {
+      "id": 73,
+      "domain": "商用事业部",
+      "question": "广西代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.041,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 74,
+      "domain": "商用事业部",
+      "question": "广西代表处除去之后，该分公司剩余代表处总共开单多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.038,
+      "sql_preview": ""
+    },
+    {
+      "id": 75,
+      "domain": "商用事业部",
+      "question": "四川代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 76,
+      "domain": "商用事业部",
+      "question": "重庆代表处占所属分公司总开单的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.021,
+      "sql_preview": ""
+    },
+    {
+      "id": 77,
+      "domain": "商用事业部",
+      "question": "重庆代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 78,
+      "domain": "商用事业部",
+      "question": "重庆代表处除去之后，该分公司剩余代表处总共开单多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.023,
+      "sql_preview": ""
+    },
+    {
+      "id": 79,
+      "domain": "商用事业部",
+      "question": "陕西代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 80,
+      "domain": "商用事业部",
+      "question": "云贵代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 81,
+      "domain": "商用事业部",
+      "question": "西北代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.041,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 82,
+      "domain": "商用事业部",
+      "question": "津冀代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 83,
+      "domain": "商用事业部",
+      "question": "吉林代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 84,
+      "domain": "商用事业部",
+      "question": "黑龙江代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 85,
+      "domain": "商用事业部",
+      "question": "辽宁代表处占商用事业部整体开单的贡献率是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 86,
+      "domain": "电商事业部",
+      "question": "净水业务占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.034,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 87,
+      "domain": "电商事业部",
+      "question": "饮水业务占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 88,
+      "domain": "电商事业部",
+      "question": "台净业务占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 89,
+      "domain": "电商事业部",
+      "question": "滤芯占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 90,
+      "domain": "电商事业部",
+      "question": "天猫直营占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.034,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 91,
+      "domain": "电商事业部",
+      "question": "京东直营占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 92,
+      "domain": "电商事业部",
+      "question": "抖音直营占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 93,
+      "domain": "电商事业部",
+      "question": "达播占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 94,
+      "domain": "电商事业部",
+      "question": "亚马逊占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 95,
+      "domain": "电商事业部",
+      "question": "东南亚占国内业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 96,
+      "domain": "电商事业部",
+      "question": "净水业务占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 97,
+      "domain": "电商事业部",
+      "question": "饮水业务占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 98,
+      "domain": "电商事业部",
+      "question": "台净业务占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 99,
+      "domain": "电商事业部",
+      "question": "滤芯占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 100,
+      "domain": "电商事业部",
+      "question": "天猫直营占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 101,
+      "domain": "电商事业部",
+      "question": "京东直营占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.065,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 102,
+      "domain": "电商事业部",
+      "question": "抖音直营占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 103,
+      "domain": "电商事业部",
+      "question": "达播占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 104,
+      "domain": "电商事业部",
+      "question": "亚马逊占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 105,
+      "domain": "电商事业部",
+      "question": "东南亚占直营零售部整体目标营收的比例是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 106,
+      "domain": "电商事业部",
+      "question": "净水业务占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 107,
+      "domain": "电商事业部",
+      "question": "饮水业务占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 108,
+      "domain": "电商事业部",
+      "question": "台净业务占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 109,
+      "domain": "电商事业部",
+      "question": "滤芯占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 110,
+      "domain": "电商事业部",
+      "question": "天猫直营占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 111,
+      "domain": "电商事业部",
+      "question": "京东直营占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 112,
+      "domain": "电商事业部",
+      "question": "抖音直营占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 113,
+      "domain": "电商事业部",
+      "question": "达播占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 114,
+      "domain": "电商事业部",
+      "question": "亚马逊占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 115,
+      "domain": "电商事业部",
+      "question": "东南亚占跨境业务部整体目标营收的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 116,
+      "domain": "商用事业部",
+      "question": "上海代表处今年上半年的目标是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.022,
+      "sql_preview": ""
+    },
+    {
+      "id": 117,
+      "domain": "商用事业部",
+      "question": "上海代表处的达成率在所属分公司排倒数第几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.022,
+      "sql_preview": ""
+    },
+    {
+      "id": 118,
+      "domain": "商用事业部",
+      "question": "江苏代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 119,
+      "domain": "商用事业部",
+      "question": "浙江代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 120,
+      "domain": "商用事业部",
+      "question": "安徽代表处今年上半年的目标是多少？",
+      "new_rows": 2,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 121,
+      "domain": "商用事业部",
+      "question": "山东代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 122,
+      "domain": "商用事业部",
+      "question": "河南代表处今年上半年的目标是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 123,
+      "domain": "商用事业部",
+      "question": "河北代表处今年上半年的目标是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 124,
+      "domain": "商用事业部",
+      "question": "湖南代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.046,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n  SELECT TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'ar"
+    },
+    {
+      "id": 125,
+      "domain": "商用事业部",
+      "question": "湖南代表处的达成率在所属分公司排倒数第几？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n  SELECT TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'ar"
+    },
+    {
+      "id": 126,
+      "domain": "商用事业部",
+      "question": "湖北代表处今年上半年的目标是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 127,
+      "domain": "商用事业部",
+      "question": "广东代表处今年上半年的目标是多少？",
+      "new_rows": 25,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.06,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 128,
+      "domain": "商用事业部",
+      "question": "广东代表处的达成率在所属分公司排倒数第几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.04,
+      "sql_preview": ""
+    },
+    {
+      "id": 129,
+      "domain": "商用事业部",
+      "question": "深圳代表处今年上半年的目标是多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 130,
+      "domain": "商用事业部",
+      "question": "福建代表处今年上半年的目标是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 131,
+      "domain": "商用事业部",
+      "question": "粤东代表处今年上半年的目标是多少？",
+      "new_rows": 7,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 132,
+      "domain": "商用事业部",
+      "question": "广西代表处今年上半年的目标是多少？",
+      "new_rows": 25,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.06,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 133,
+      "domain": "商用事业部",
+      "question": "广西代表处的达成率在所属分公司排倒数第几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": ""
+    },
+    {
+      "id": 134,
+      "domain": "商用事业部",
+      "question": "四川代表处今年上半年的目标是多少？",
+      "new_rows": 6,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.046,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 135,
+      "domain": "商用事业部",
+      "question": "重庆代表处今年上半年的目标是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.023,
+      "sql_preview": ""
+    },
+    {
+      "id": 136,
+      "domain": "商用事业部",
+      "question": "重庆代表处的达成率在所属分公司排倒数第几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.021,
+      "sql_preview": ""
+    },
+    {
+      "id": 137,
+      "domain": "商用事业部",
+      "question": "陕西代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 138,
+      "domain": "商用事业部",
+      "question": "云贵代表处今年上半年的目标是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 139,
+      "domain": "商用事业部",
+      "question": "西北代表处今年上半年的目标是多少？",
+      "new_rows": 6,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.047,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 140,
+      "domain": "商用事业部",
+      "question": "津冀代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 141,
+      "domain": "商用事业部",
+      "question": "吉林代表处今年上半年的目标是多少？",
+      "new_rows": 2,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 142,
+      "domain": "商用事业部",
+      "question": "黑龙江代表处今年上半年的目标是多少？",
+      "new_rows": 2,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 143,
+      "domain": "商用事业部",
+      "question": "辽宁代表处今年上半年的目标是多少？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.046,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 144,
+      "domain": "消费者事业部",
+      "question": "成都城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.048,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 145,
+      "domain": "消费者事业部",
+      "question": "重庆城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.047,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 146,
+      "domain": "消费者事业部",
+      "question": "贵阳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.046,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 147,
+      "domain": "消费者事业部",
+      "question": "遵义城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 148,
+      "domain": "消费者事业部",
+      "question": "万州城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 149,
+      "domain": "消费者事业部",
+      "question": "北京城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 150,
+      "domain": "消费者事业部",
+      "question": "哈尔滨城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 151,
+      "domain": "消费者事业部",
+      "question": "邵阳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 152,
+      "domain": "消费者事业部",
+      "question": "衡阳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 153,
+      "domain": "消费者事业部",
+      "question": "苏南城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.048,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 154,
+      "domain": "消费者事业部",
+      "question": "烟台城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.046,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 155,
+      "domain": "消费者事业部",
+      "question": "榆林城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 156,
+      "domain": "消费者事业部",
+      "question": "太原城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 157,
+      "domain": "消费者事业部",
+      "question": "郑州城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 158,
+      "domain": "消费者事业部",
+      "question": "石家庄城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 159,
+      "domain": "消费者事业部",
+      "question": "广州城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 160,
+      "domain": "消费者事业部",
+      "question": "深圳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 161,
+      "domain": "消费者事业部",
+      "question": "济南城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 162,
+      "domain": "消费者事业部",
+      "question": "青岛城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 163,
+      "domain": "消费者事业部",
+      "question": "天津城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 164,
+      "domain": "消费者事业部",
+      "question": "沈阳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 165,
+      "domain": "消费者事业部",
+      "question": "大连城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 166,
+      "domain": "消费者事业部",
+      "question": "长春城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 167,
+      "domain": "消费者事业部",
+      "question": "南昌城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 168,
+      "domain": "消费者事业部",
+      "question": "福州城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 169,
+      "domain": "消费者事业部",
+      "question": "厦门城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 170,
+      "domain": "消费者事业部",
+      "question": "武汉城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 171,
+      "domain": "消费者事业部",
+      "question": "襄阳城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 172,
+      "domain": "消费者事业部",
+      "question": "宜昌城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 173,
+      "domain": "消费者事业部",
+      "question": "长沙城市公司的地产和燃气定制加起来开单多少？",
+      "new_rows": 1,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 174,
+      "domain": "电商事业部",
+      "question": "电商事业部Q1目标和Q2目标哪个更高，高多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 175,
+      "domain": "电商事业部",
+      "question": "国内业务部Q1到Q4四个季度的目标平均是多少？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 176,
+      "domain": "电商事业部",
+      "question": "电商部门Q1目标占全年总任务的比例是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 177,
+      "domain": "电商事业部",
+      "question": "电商部门Q2目标占全年总任务的百分比是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.038,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 178,
+      "domain": "电商事业部",
+      "question": "电商部门Q3目标占全年总任务的份额是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 179,
+      "domain": "电商事业部",
+      "question": "电商部门Q4目标占全年总任务的贡献率是多少？",
+      "new_rows": 3,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 180,
+      "domain": "商用事业部",
+      "question": "东部分公司和南部分公司的代表处平均达成率相比谁更高？",
+      "new_rows": 56,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.045,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 181,
+      "domain": "商用事业部",
+      "question": "商用西部分公司和北部分公司的代表处平均开单差距？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH RECURSIVE 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof("
+    },
+    {
+      "id": 182,
+      "domain": "商用事业部",
+      "question": "商用四个大区各代表处平均达成率最高的是哪个大区？",
+      "new_rows": 4,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.041,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 183,
+      "domain": "消费者事业部",
+      "question": "线下渠道开单占消费者事业部总开单的百分之几？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 184,
+      "domain": "消费者事业部",
+      "question": "新零售渠道开单占消费者事业部总开单的百分比？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.038,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 185,
+      "domain": "消费者事业部",
+      "question": "燃气定制开单占消费者事业部总开单的比例是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 186,
+      "domain": "消费者事业部",
+      "question": "地产渠道开单占消费者事业部总开单的份额是多少？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.039,
+      "sql_preview": "SELECT '消费者经营链路' AS 条线, '全部' AS 分析口径, NULL AS 层级, NULL AS 节点名称, NULL AS 上级名称, 0 AS 总任务金额, 0 AS 年度开单金"
+    },
+    {
+      "id": 187,
+      "domain": "消费者事业部",
+      "question": "消费者事业部线下任务和新零售任务加起来一共多少？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.042,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 188,
+      "domain": "消费者事业部",
+      "question": "消费者事业部燃气定制任务和地产任务加起来一共多少？",
+      "new_rows": 14,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 189,
+      "domain": "消费者事业部",
+      "question": "线下渠道和地产渠道的全年开单差距是多少万元？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.038,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 190,
+      "domain": "电商事业部",
+      "question": "抖音直营和达播渠道的达成率差距是多少个百分点？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 191,
+      "domain": "消费者事业部",
+      "question": "线下渠道和地产渠道的全年开单差距是多少万元？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.036,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 192,
+      "domain": "电商事业部",
+      "question": "抖音直营和达播渠道的达成率差距是多少个百分点？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.035,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 193,
+      "domain": "商用事业部",
+      "question": "商用上海代表处和江苏代表处的开单差距是多少万元？",
+      "new_rows": 8,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.04,
+      "sql_preview": "WITH 汇总结果 AS (\nWITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分"
+    },
+    {
+      "id": 194,
+      "domain": "商用事业部",
+      "question": "商用河南代表处和河北代表处的开单差距是多少万元？",
+      "new_rows": 0,
+      "new_status": "🔴 待进一步优化 (Pending)",
+      "duration": 0.037,
+      "sql_preview": "WITH raw_data AS (\n    SELECT\n        TRIM(COALESCE(CASE WHEN jsonb_typeof(fields->'分公司') = 'array' "
+    },
+    {
+      "id": 195,
+      "domain": "消费者事业部",
+      "question": "川藏分公司成都城市公司的燃气定制完成了多少？",
+      "new_rows": 7,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 196,
+      "domain": "消费者事业部",
+      "question": "川藏分公司川北城市公司的地产开单是多少万元？",
+      "new_rows": 7,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.044,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 197,
+      "domain": "消费者事业部",
+      "question": "山东分公司烟台城市公司的线下开单占其总开单的比例？",
+      "new_rows": 6,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 198,
+      "domain": "消费者事业部",
+      "question": "湖南分公司衡阳城市公司的新零售开单占其总开单的百分比？",
+      "new_rows": 5,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.043,
+      "sql_preview": "WITH 字段提取 AS (\n    SELECT\n        id,\n        COALESCE(NULLIF(TRIM(fields->>'事业部'), ''), '消费者事业部') A"
+    },
+    {
+      "id": 199,
+      "domain": "电商事业部",
+      "question": "天猫直营和抖音直营的开单差距是多少万元？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    },
+    {
+      "id": 200,
+      "domain": "电商事业部",
+      "question": "京东直营和达播业务的开单差距是多少万元？",
+      "new_rows": 11,
+      "new_status": "🟢 完全修复出数 (Fixed)",
+      "duration": 0.037,
+      "sql_preview": "SELECT '电商业务' AS 条线,\n                CASE\n                    WHEN 层级级别 = '业务经理' AND NULLIF(TRIM(细分业"
+    }
+  ]
+}

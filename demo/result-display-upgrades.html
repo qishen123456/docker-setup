@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能问数 · 结果展示形态升级方案对比 Demo</title>
+<!-- ECharts CDN（加载失败时各图表容器会显示占位提示，不影响整体浏览） -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+/* ============ 设计规范 Tokens ============ */
+:root{
+  --bg:#F2EDE8;          /* 米白背景 */
+  --card:#FDFAF7;        /* 卡片底 */
+  --border:#DDD8D1;      /* 边框 */
+  --brand:#E61F24;       /* 品牌红（强调/激活/超额亮点） */
+  --brand-soft:rgba(230,31,36,.08);
+  --ink:#111827;         /* 标题 */
+  --body:#374151;        /* 正文 */
+  --muted:#6B7280;       /* 次要 / 落后弱化 */
+  --green:#10B981;       /* 良好达标 */
+  --green-soft:rgba(16,185,129,.1);
+  --radius:14px;
+  --shadow:0 2px 10px rgba(17,24,39,.05),0 1px 3px rgba(17,24,39,.04);
+  --shadow-lg:0 8px 28px rgba(17,24,39,.09);
+  --font:'HarmonyOS Sans SC','MiSans','Source Han Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--body);font-family:var(--font);font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{color:var(--ink);font-weight:700;line-height:1.4}
+button{font-family:var(--font);cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#CFC8BF;border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ============ 页面头部 ============ */
+.page-head{max-width:1280px;margin:0 auto;padding:36px 28px 18px}
+.page-head .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.12em;color:var(--brand);font-weight:700;text-transform:uppercase;margin-bottom:10px}
+.page-head .eyebrow::before{content:"";width:22px;height:2px;background:var(--brand);border-radius:2px}
+.page-head h1{font-size:26px;letter-spacing:.01em}
+.page-head .query{margin-top:12px;display:inline-flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:8px 18px;font-size:13px;color:var(--body);box-shadow:var(--shadow)}
+.page-head .query .q-icon{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none}
+.page-head .query b{color:var(--ink)}
+.page-head .meta{margin-top:10px;font-size:12px;color:var(--muted)}
+
+/* ============ 方案切换导航条（吸顶） ============ */
+.plan-nav{position:sticky;top:0;z-index:60;background:rgba(242,237,232,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.plan-nav-inner{max-width:1280px;margin:0 auto;padding:12px 28px;display:flex;gap:10px;flex-wrap:wrap}
+.plan-tab{display:flex;align-items:center;gap:10px;padding:10px 20px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--body);font-size:14px;font-weight:600;transition:all .22s ease;box-shadow:var(--shadow)}
+.plan-tab .badge{width:24px;height:24px;border-radius:8px;background:#EDE7E0;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;transition:all .22s ease}
+.plan-tab:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.plan-tab.active{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 6px 18px rgba(230,31,36,.3)}
+.plan-tab.active .badge{background:rgba(255,255,255,.2);color:#fff}
+.plan-tab small{font-weight:400;font-size:12px;opacity:.75}
+
+/* ============ 方案区块通用 ============ */
+.plan-section{display:none;max-width:1280px;margin:0 auto;padding:28px 28px 56px;animation:fadeUp .35s ease}
+.plan-section.show{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.plan-intro{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 22px;margin-bottom:22px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.plan-intro .pi-main{flex:1;min-width:260px}
+.plan-intro h2{font-size:18px;display:flex;align-items:center;gap:10px}
+.plan-intro h2 .pi-tag{font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);border:1px solid rgba(230,31,36,.25);padding:2px 10px;border-radius:999px;letter-spacing:.05em}
+.plan-intro .pi-pos{margin-top:6px;font-size:13px;color:var(--body)}
+.plan-intro .pi-pos b{color:var(--ink)}
+.plan-intro .pi-scene{margin-top:4px;font-size:12px;color:var(--muted)}
+.plan-intro ul{list-style:none;min-width:250px;flex:1}
+.plan-intro ul li{font-size:12.5px;color:var(--body);padding-left:18px;position:relative;margin-bottom:4px}
+.plan-intro ul li::before{content:"";position:absolute;left:2px;top:9px;width:7px;height:7px;border-radius:2px;background:var(--brand);opacity:.85}
+
+/* 通用卡片 */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-pad{padding:18px 20px}
+.card-title{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.card-title::before{content:"";width:4px;height:14px;border-radius:2px;background:var(--brand)}
+.card-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* 语义色工具类 */
+.up{color:var(--brand);font-weight:700}         /* 超额/亮点 → 红 */
+.good{color:var(--green);font-weight:700}       /* 达标 → 深绿 */
+.down{color:var(--muted);font-weight:600}       /* 落后 → 灰弱化 */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+.pill.up{background:var(--brand-soft);border:1px solid rgba(230,31,36,.25)}
+.pill.good{background:var(--green-soft);border:1px solid rgba(16,185,129,.3)}
+.pill.down{background:rgba(107,114,128,.1);border:1px solid rgba(107,114,128,.25)}
+
+/* 图表容器 & 占位 */
+.chart{width:100%;min-height:280px}
+.chart-fallback{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:280px;border:1.5px dashed var(--border);border-radius:12px;color:var(--muted);font-size:12.5px;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(221,216,209,.18) 10px,rgba(221,216,209,.18) 20px)}
+.chart-fallback .fb-icon{font-size:26px}
+
+/* 表格通用 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid #EDE7E0;color:var(--body);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .18s ease}
+tbody tr:hover{background:#F7F2EC}
+tr.row-hl{background:var(--brand-soft)!important;box-shadow:inset 3px 0 0 var(--brand)}
+tr.row-sub td{color:var(--muted);font-size:12.5px}
+tr.row-sub td:first-child{padding-left:34px}
+.bar-cell{display:flex;align-items:center;gap:8px}
+.bar-track{flex:1;min-width:70px;height:7px;border-radius:99px;background:#EDE7E0;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;background:var(--green)}
+.bar-fill.over{background:var(--brand)}
+.bar-fill.low{background:#B6B0A8}
+
+/* ============ 方案 A · BI 看板 ============ */
+.kpi-band{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px 12px;position:relative;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.kpi-card .k-label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.kpi-card .k-value{font-size:28px;font-weight:800;color:var(--ink);margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.kpi-card .k-value small{font-size:13px;font-weight:600;color:var(--muted);margin-left:2px}
+.kpi-card .k-value.accent{color:var(--brand)}
+.kpi-card .k-tags{display:flex;gap:6px;margin-top:6px}
+.kpi-card .k-tag{font-size:10.5px;padding:1px 8px;border-radius:999px;background:#F1ECE5;color:var(--muted);border:1px solid var(--border)}
+.kpi-card .k-tag b{font-weight:700}
+.kpi-card .spark{position:absolute;right:10px;bottom:8px;opacity:.9}
+.dash-grid{display:grid;grid-template-columns:250px 1fr 260px;gap:16px;margin-bottom:18px}
+.dash-col{display:flex;flex-direction:column;gap:0;min-width:0}
+/* 左：组织下钻树 */
+.tree{padding:12px 10px;font-size:13px}
+.tree-node{user-select:none}
+.tree-row{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:9px;cursor:pointer;transition:background .15s ease}
+.tree-row:hover{background:#F7F2EC}
+.tree-row.active{background:var(--brand-soft);box-shadow:inset 2.5px 0 0 var(--brand)}
+.tree-row .t-caret{width:14px;height:14px;flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);font-size:9px;transition:transform .2s ease}
+.tree-node.open > .tree-row .t-caret{transform:rotate(90deg)}
+.tree-row .t-name{color:var(--ink);font-weight:600;flex:1}
+.tree-row .t-val{font-size:11.5px;font-variant-numeric:tabular-nums}
+.tree-children{display:none;padding-left:20px;border-left:1px dashed var(--border);margin-left:16px}
+.tree-node.open > .tree-children{display:block}
+/* 右：排名列表 */
+.rank-list{padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.rank-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:background .15s ease}
+.rank-item:hover{background:#F7F2EC}
+.rank-item.active{background:var(--brand-soft)}
+.rank-item .r-no{width:22px;height:22px;border-radius:7px;background:#EDE7E0;color:var(--muted);font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.rank-item.top .r-no{background:var(--brand);color:#fff}
+.rank-item .r-name{flex:1;color:var(--ink);font-weight:600;font-size:13px}
+.rank-item .r-rate{font-size:13px;font-variant-numeric:tabular-nums}
+.dash-foot{overflow:hidden}
+.dash-foot .table-wrap{overflow-x:auto}
+
+/* ============ 方案 B · 报告文档 ============ */
+.report-shell{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
+.report-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 20px;margin-bottom:18px}
+.report-toolbar .rt-title{font-size:16px;font-weight:800;color:var(--ink);flex:1;min-width:220px;display:flex;align-items:center;gap:10px}
+.report-toolbar .rt-title .rt-badge{font-size:10.5px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:2px 9px;border-radius:999px;border:1px solid rgba(230,31,36,.25)}
+.rt-btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--body);background:#fff;border:1px solid var(--border);border-radius:9px;padding:7px 14px;transition:all .18s ease}
+.rt-btn:hover{border-color:var(--brand);color:var(--brand);box-shadow:var(--shadow)}
+.rt-btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.rt-btn.primary:hover{filter:brightness(1.05);color:#fff}
+.toc{position:sticky;top:86px;padding:14px 12px}
+.toc .toc-head{font-size:11px;letter-spacing:.14em;color:var(--muted);font-weight:700;padding:0 10px 8px}
+.toc a{display:block;padding:9px 12px;border-radius:9px;font-size:13px;color:var(--body);cursor:pointer;transition:all .15s ease;border-left:3px solid transparent}
+.toc a:hover{background:#F7F2EC}
+.toc a.active{color:var(--brand);font-weight:700;background:var(--brand-soft);border-left-color:var(--brand)}
+.report-doc{padding:34px 44px;position:relative}
+.report-doc .doc-eyebrow{font-size:12px;color:var(--muted);letter-spacing:.08em;margin-bottom:6px}
+.report-doc h1{font-size:24px;margin-bottom:4px}
+.report-doc .doc-meta{font-size:12px;color:var(--muted);padding-bottom:18px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.report-doc section{padding-top:26px}
+.report-doc h2{font-size:17px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.report-doc h2 .sec-no{width:26px;height:26px;border-radius:8px;background:var(--ink);color:#fff;font-size:12.5px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.report-doc p{margin-bottom:12px;font-size:13.5px;text-align:justify}
+.report-doc p .hl{color:var(--brand);font-weight:700;background:linear-gradient(transparent 62%,rgba(230,31,36,.14) 62%);padding:0 2px;border-radius:2px}
+.report-doc p .hl-g{color:var(--green);font-weight:700}
+.report-doc .callout{border-left:3px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:12px 16px;font-size:13px;margin:14px 0;color:var(--body)}
+.report-doc .callout b{color:var(--brand)}
+.report-doc .fig{margin:16px 0;border:1px solid var(--border);border-radius:12px;padding:14px;background:#fff}
+.report-doc .fig .fig-cap{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+/* 批注气泡 */
+.annot-mark{background:rgba(230,31,36,.16);border-bottom:1.5px dashed var(--brand);cursor:pointer;position:relative;padding:0 2px;border-radius:2px}
+.annot-bubble{display:none;position:absolute;z-index:20;width:250px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);padding:12px 14px;font-size:12px;line-height:1.6;left:0;top:calc(100% + 8px)}
+.annot-bubble.show{display:block;animation:fadeUp .2s ease}
+.annot-bubble .ab-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.annot-bubble .ab-avatar{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-size:10.5px;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.annot-bubble .ab-name{color:var(--ink);font-weight:700}
+.annot-bubble .ab-time{color:var(--muted);font-size:11px}
+.annot-bubble .ab-actions{margin-top:8px;display:flex;gap:8px}
+.annot-bubble .ab-actions button{font-size:11px;color:var(--brand);font-weight:600}
+
+/* ============ 方案 C · 交互卡片流 ============ */
+.feed{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.feed-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;position:relative;transition:box-shadow .2s ease}
+.feed-card:hover{box-shadow:var(--shadow-lg)}
+.feed-card .fc-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px}
+.fc-act{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s ease}
+.fc-act:hover{color:var(--brand);border-color:var(--brand);transform:translateY(-1px)}
+.feed-card .fc-label{font-size:11px;letter-spacing:.12em;font-weight:800;color:var(--muted);margin-bottom:8px}
+.feed-card h3{font-size:16px;margin-bottom:8px;padding-right:96px}
+/* 结论卡 */
+.concl-card{border-top:3px solid var(--brand)}
+.concl-card .big-concl{font-size:15px;color:var(--ink);font-weight:700;line-height:1.8}
+/* 指标对比卡 */
+.cmp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px}
+.cmp-item{background:#fff;border:1px solid var(--border);border-radius:11px;padding:12px 14px}
+.cmp-item .ci-label{font-size:11.5px;color:var(--muted)}
+.cmp-item .ci-val{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.cmp-item .ci-sub{font-size:11px;margin-top:2px}
+/* 下钻卡 */
+.drill-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:11px;margin-top:10px;cursor:pointer;transition:all .18s ease;background:#fff}
+.drill-row:hover{border-color:var(--brand);box-shadow:var(--shadow)}
+.drill-row.open{border-color:var(--brand);background:var(--brand-soft)}
+.drill-row .d-name{font-weight:700;color:var(--ink);flex:1}
+.drill-row .d-caret{color:var(--muted);font-size:11px;transition:transform .2s ease}
+.drill-row.open .d-caret{transform:rotate(90deg);color:var(--brand)}
+.drill-children{display:none;margin:8px 0 0 18px;padding-left:14px;border-left:2px dashed var(--border)}
+.drill-children.show{display:block;animation:fadeUp .25s ease}
+.drill-child{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;transition:background .15s ease;position:relative}
+.drill-child:hover{background:#F7F2EC}
+.drill-child .dc-name{flex:1;color:var(--body);font-weight:600;font-size:13px}
+/* 追问气泡 */
+.ask-pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:var(--ink);color:#fff;border-radius:12px;padding:10px 14px;font-size:12px;box-shadow:var(--shadow-lg);cursor:pointer;max-width:280px;line-height:1.5}
+.ask-pop.show{display:block;animation:fadeUp .2s ease}
+.ask-pop::before{content:"";position:absolute;top:-5px;right:24px;width:10px;height:10px;background:var(--ink);transform:rotate(45deg)}
+.ask-pop b{color:#FFD2D3}
+.ask-pop .ap-go{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#fff;background:var(--brand);border-radius:999px;padding:2px 10px}
+/* 行动建议卡 */
+.act-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.act-item{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:11px;padding:12px 14px}
+.act-item .a-no{width:24px;height:24px;border-radius:8px;background:var(--brand);color:#fff;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.act-item .a-text{font-size:13px}
+.act-item .a-text b{color:var(--ink)}
+
+/* ============ 方案 D · 多视图切换 ============ */
+.mv-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.mv-tabs{display:inline-flex;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:4px;box-shadow:var(--shadow)}
+.mv-tab{padding:8px 22px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--muted);transition:all .2s ease}
+.mv-tab.active{background:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(230,31,36,.3)}
+.mv-note{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:7px;background:var(--card);border:1px dashed var(--border);border-radius:999px;padding:6px 14px}
+.mv-note b{color:var(--brand)}
+.mv-view{display:none;animation:fadeUp .3s ease}
+.mv-view.show{display:block}
+.mv-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.mv-kpi .kpi-card{padding:14px 16px}
+.mv-kpi .kpi-card .k-value{font-size:23px}
+.mv-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mv-chart-grid .chart{min-height:250px}
+.mv-report p{margin-bottom:12px;font-size:13.5px;text-align:justify}
+
+/* ============ Toast ============ */
+.toast-wrap{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{background:var(--ink);color:#fff;font-size:13px;padding:11px 20px;border-radius:999px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:9px;animation:toastIn .3s ease}
+.toast .t-dot{width:8px;height:8px;border-radius:50%;background:var(--brand);flex:none}
+.toast.out{animation:toastOut .3s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateY(10px)}}
+
+/* ============ 响应式 ============ */
+@media (max-width:1080px){
+  .kpi-band{grid-template-columns:repeat(2,1fr)}
+  .dash-grid{grid-template-columns:1fr}
+  .report-shell{grid-template-columns:1fr}
+  .toc{position:static;display:flex;gap:6px;flex-wrap:wrap}
+  .mv-kpi{grid-template-columns:repeat(2,1fr)}
+  .mv-chart-grid{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .page-head,.plan-section{padding-left:16px;padding-right:16px}
+  .plan-nav-inner{padding-left:16px;padding-right:16px}
+  .kpi-band{grid-template-columns:1fr}
+  .cmp-grid{grid-template-columns:1fr}
+  .report-doc{padding:24px 20px}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= 页面头部 ================= -->
+<header class="page-head">
+  <div class="eyebrow">SmartAsk · 结果展示升级脑暴</div>
+  <h1>智能问数 · 结果展示形态升级方案对比</h1>
+  <div class="query">
+    <span class="q-icon">问</span>
+    <span><b>商用事业部</b>本月各分公司业绩达成情况如何？</span>
+  </div>
+  <div class="meta">数据语境：商用事业部 · 2026 年 8 月 ｜ 指标：总任务金额 / 年度开单金额 / 达成率 / 剩余任务金额 ｜ 层级：事业部 → 分公司 → 业务部 → 代表处</div>
+</header>
+
+<!-- ================= 方案切换导航（吸顶） ================= -->
+<nav class="plan-nav">
+  <div class="plan-nav-inner">
+    <button class="plan-tab active" data-plan="a"><span class="badge">A</span>BI 看板<small>Dashboard</small></button>
+    <button class="plan-tab" data-plan="b"><span class="badge">B</span>报告文档<small>Narrative</small></button>
+    <button class="plan-tab" data-plan="c"><span class="badge">C</span>交互卡片流<small>Card Feed</small></button>
+    <button class="plan-tab" data-plan="d"><span class="badge">D</span>多视图切换<small>Multi-View</small></button>
+  </div>
+</nav>
+
+<!-- ================================================================
+     方案 A · BI 看板式
+================================================================= -->
+<section class="plan-section show" id="plan-a">
+  <div class="plan-intro">
+    <div class="pi-main">
+      <h2>方案 A · BI 看板式 <span class="pi-tag">Dashboard</span></h2>
+      <div class="pi-pos"><b>一句话定位：</b>把一次问数结果沉淀为可下钻、可联动的经营驾驶舱，数据密度最高。</div>
+      <div class="pi-scene"><b>适用场景：</b>经营例会大屏、管理者日常盯盘、需要多维度交叉查看的业绩分析。</div>
+    </div>
+    <ul>
+      <li>KPI 指标带：大数字 + 迷你趋势线 + 环比/同比标签</li>
+      <li>组织树 / 图表 / 排名 / 表格四区联动，点哪亮哪</li>
+      <li>达成率红/绿/灰色阶，超额与风险一眼可辨</li>
+      <li>层级下钻：分公司 → 业务部 → 代表处逐层展开</li>
+    </ul>
+  </div>
+
+  <!-- KPI 指标带 -->
+  <div class="kpi-band">
+    <div class="kpi-card">
+      <div class="k-label">总任务金额 <span class="pill">年度</span></div>
+      <div class="k-value">3,030<small>万元</small></div>
+      <div class="k-tags"><span class="k-tag">环比 <b class="up">+2.1%</b></span><span class="k-tag">同比 <b class="up">+8.4%</b></span></div>
+      <svg class="spark" width="92" height="30" viewBox="0 0 92 30"><polyline points="2,22 15,20 28,21 41,17 54,15 67,12 80,10 90,8" fill="none" stroke="#B6B0A8" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div class="kpi-card">
+      <div class="k-label">年度开单金额 <span class="pill up">累计</span></div>
+      <div class="k-value">2,742<small>万元</small></div>
+      <div class="k-tags"><span class="k-tag">环比 <b class="up">+6.3%</b></span><span class="k-tag">同比 <b class="up">+12.7%</b></span></div>
+      <svg class="spark" width="92" height="30" viewBox="0 0 92 30"><polyline points="2,24 15,22 28,19 41,18 54,14 67,11 80,8 90,5" fill="none" stroke="#E61F24" stroke-width="2" stroke-linecap="round"/><circle cx="90" cy="5" r="2.6" fill="#E61F24"/></svg>
+    </div>
+    <div class="kpi-card">
+      <div class="k-label">整体达成率 <span class="pill good">接近达标</span></div>
+      <div class="k-value accent">90.5<small>%</small></div>
+      <div class="k-tags"><span class="k-tag">环比 <b class="up">+3.2pt</b></span><span class="k-tag">同比 <b class="up">+4.1pt</b></span></div>
+      <svg class="spark" width="92" height="30" viewBox="0 0 92 30"><polyline points="2,20 15,21 28,18 41,19 54,15 67,14 80,10 90,9" fill="none" stroke="#E61F24" stroke-width="2" stroke-linecap="round"/><circle cx="90" cy="9" r="2.6" fill="#E61F24"/></svg>
+    </div>
+    <div class="kpi-card">
+      <div class="k-label">剩余任务缺口 <span class="pill down">待冲刺</span></div>
+      <div class="k-value">288<small>万元</small></div>
+      <div class="k-tags"><span class="k-tag">环比 <b class="good">-18.6%</b></span><span class="k-tag">缺口集中在华北</span></div>
+      <svg class="spark" width="92" height="30" viewBox="0 0 92 30"><polyline points="2,8 15,10 28,9 41,13 54,15 67,18 80,21 90,23" fill="none" stroke="#B6B0A8" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+
+  <!-- 左中右三栏 -->
+  <div class="dash-grid">
+    <!-- 左：组织下钻树 -->
+    <div class="card dash-col">
+      <div class="card-pad" style="padding-bottom:6px">
+        <div class="card-title">组织下钻</div>
+        <div class="card-sub">点击节点联动右侧图表与表格</div>
+      </div>
+      <div class="tree" id="tree-a">
+        <div class="tree-node" data-branch="hd">
+          <div class="tree-row" data-branch="hd"><span class="t-caret">▶</span><span class="t-name">华东分公司</span><span class="t-val up">112.5%</span></div>
+          <div class="tree-children">
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">上海业务部</span><span class="t-val up">118%</span></div>
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">杭州业务部</span><span class="t-val good">95%</span></div>
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">南京业务部</span><span class="t-val down">88%</span></div>
+          </div>
+        </div>
+        <div class="tree-node" data-branch="hn">
+          <div class="tree-row" data-branch="hn"><span class="t-caret">▶</span><span class="t-name">华南分公司</span><span class="t-val good">90.0%</span></div>
+          <div class="tree-children">
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">广州业务部</span><span class="t-val good">93%</span></div>
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">深圳业务部</span><span class="t-val down">87%</span></div>
+          </div>
+        </div>
+        <div class="tree-node" data-branch="hb">
+          <div class="tree-row" data-branch="hb"><span class="t-caret">▶</span><span class="t-name">华北分公司</span><span class="t-val down">60.0%</span></div>
+          <div class="tree-children">
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">北京业务部</span><span class="t-val down">65%</span></div>
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">天津业务部</span><span class="t-val down">60%</span></div>
+            <div class="tree-row t-leaf"><span class="t-caret" style="visibility:hidden">▶</span><span class="t-name">石家庄业务部</span><span class="t-val down">50%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中：柱状图 -->
+    <div class="card dash-col">
+      <div class="card-pad" style="padding-bottom:0">
+        <div class="card-title">分公司业绩对比</div>
+        <div class="card-sub">任务 vs 开单（柱）与达成率（线）· 点击柱子可联动选中</div>
+      </div>
+      <div class="card-pad" style="padding-top:6px">
+        <div id="chart-a-main" class="chart" style="min-height:330px"></div>
+      </div>
+    </div>
+
+    <!-- 右：达成率排名 -->
+    <div class="card dash-col">
+      <div class="card-pad" style="padding-bottom:6px">
+        <div class="card-title">达成率排名</div>
+        <div class="card-sub">红色 = 超额亮点 · 灰色 = 落后风险</div>
+      </div>
+      <div class="rank-list" id="rank-a">
+        <div class="rank-item top" data-branch="hd"><span class="r-no">1</span><span class="r-name">华东分公司</span><span class="r-rate up">112.5%</span></div>
+        <div class="rank-item" data-branch="hn"><span class="r-no">2</span><span class="r-name">华南分公司</span><span class="r-rate good">90.0%</span></div>
+        <div class="rank-item" data-branch="hb"><span class="r-no">3</span><span class="r-name">华北分公司</span><span class="r-rate down">60.0%</span></div>
+      </div>
+      <div class="card-pad" style="border-top:1px dashed var(--border);font-size:12px;color:var(--muted)">
+        当前选中：<b id="a-selected" style="color:var(--brand)">全部</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部明细表 -->
+  <div class="card dash-foot">
+    <div class="card-pad" style="padding-bottom:4px">
+      <div class="card-title">业绩明细</div>
+      <div class="card-sub">分公司 / 业务部层级 · 与上方选择联动高亮</div>
+    </div>
+    <div class="table-wrap">
+      <table id="table-a">
+        <thead><tr><th>组织</th><th>总任务金额</th><th>年度开单金额</th><th>达成率</th><th style="width:26%">达成进度</th><th>剩余任务金额</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr data-branch="hd"><td><b style="color:var(--ink)">华东分公司</b></td><td>1,200 万</td><td>1,350 万</td><td class="up">112.5%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill over" style="width:100%"></div></div><span class="up" style="font-size:12px">超额</span></div></td><td>—</td><td><span class="pill up">超额完成</span></td></tr>
+          <tr class="row-sub" data-branch="hd"><td>上海业务部</td><td>950 万</td><td>1,121 万</td><td class="up">118.0%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill over" style="width:100%"></div></div></div></td><td>—</td><td><span class="pill up">超额</span></td></tr>
+          <tr class="row-sub" data-branch="hd"><td>杭州业务部</td><td>130 万</td><td>124 万</td><td class="good">95.4%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:95%"></div></div></div></td><td>6 万</td><td><span class="pill good">接近达标</span></td></tr>
+          <tr class="row-sub" data-branch="hd"><td>南京业务部</td><td>120 万</td><td>106 万</td><td class="down">88.3%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill low" style="width:88%"></div></div></div></td><td>14 万</td><td><span class="pill down">未达标</span></td></tr>
+          <tr data-branch="hn"><td><b style="color:var(--ink)">华南分公司</b></td><td>980 万</td><td>882 万</td><td class="good">90.0%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:90%"></div></div><span class="good" style="font-size:12px">接近</span></div></td><td>98 万</td><td><span class="pill good">接近达标</span></td></tr>
+          <tr data-branch="hb"><td><b style="color:var(--ink)">华北分公司</b></td><td>850 万</td><td>510 万</td><td class="down">60.0%</td><td><div class="bar-cell"><div class="bar-track"><div class="bar-fill low" style="width:60%"></div></div><span class="down" style="font-size:12px">落后</span></div></td><td>340 万</td><td><span class="pill down">明显落后</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     方案 B · 报告文档式
+================================================================= -->
+<section class="plan-section" id="plan-b">
+  <div class="plan-intro">
+    <div class="pi-main">
+      <h2>方案 B · 报告文档式 <span class="pi-tag">Narrative Report</span></h2>
+      <div class="pi-pos"><b>一句话定位：</b>把问数结果自动组织成一篇「结论先行」的经营分析报告，可直接归档与流转。</div>
+      <div class="pi-scene"><b>适用场景：</b>月度经营分析会材料、向上汇报、需要留痕与协作批注的正式场合。</div>
+    </div>
+    <ul>
+      <li>章节化叙事：整体结论 → 结构分析 → 风险点 → 行动建议</li>
+      <li>图文混排：每个章节内嵌图表 / 表格作数据支撑</li>
+      <li>左侧目录导航，支持滚动定位与高亮</li>
+      <li>导出 / 分享 / 批注协作，文中批注气泡示意</li>
+    </ul>
+  </div>
+
+  <!-- 工具条 -->
+  <div class="report-toolbar">
+    <div class="rt-title">商用事业部 8 月业绩经营分析报告 <span class="rt-badge">AI 自动生成</span></div>
+    <button class="rt-btn primary" onclick="toast('已模拟导出 PDF 报告')">⬇ 导出</button>
+    <button class="rt-btn" onclick="toast('分享链接已复制（模拟）')">↗ 分享</button>
+    <button class="rt-btn" onclick="toast('批注模式已开启（模拟）')">✎ 批注</button>
+  </div>
+
+  <div class="report-shell">
+    <!-- 目录 -->
+    <aside class="card toc" id="toc-b">
+      <div class="toc-head">目录 CONTENTS</div>
+      <a class="active" data-sec="sec-1">一、整体结论</a>
+      <a data-sec="sec-2">二、结构分析</a>
+      <a data-sec="sec-3">三、风险点</a>
+      <a data-sec="sec-4">四、行动建议</a>
+    </aside>
+
+    <!-- 正文 -->
+    <article class="card report-doc">
+      <div class="doc-eyebrow">经营分析报告 · 2026 年 8 月</div>
+      <h1>商用事业部 8 月业绩经营分析报告</h1>
+      <div class="doc-meta">生成时间：2026-09-01 09:30 ｜ 数据来源：智能问数 · 经营分析库 ｜ 口径：年度累计开单 / 年度总任务</div>
+
+      <section id="sec-1">
+        <h2><span class="sec-no">一</span>整体结论</h2>
+        <p>截至 8 月底，商用事业部年度总任务 <b>3,030 万元</b>，累计开单 <b>2,742 万元</b>，整体达成率 <span class="hl">90.5%</span>，环比提升 3.2 个百分点，同比提升 4.1 个百分点，整体进度符合预期、略优于去年同期。</p>
+        <p>核心结论：<b>总量接近达标，但结构分化明显</b>——华东分公司以 <span class="hl">112.5%</span> 的达成率超额完成，贡献了主要增量；华北分公司达成率仅 <b>60%</b>，剩余缺口 340 万元，是全年任务达成的主要风险敞口。</p>
+        <div class="callout"><b>一句话结论：</b>事业部大盘稳中向好，"东强北弱"格局加剧，三季度收官前需集中资源攻坚华北市场。</div>
+      </section>
+
+      <section id="sec-2">
+        <h2><span class="sec-no">二</span>结构分析</h2>
+        <p>从分公司结构看，三家分公司呈明显梯队分布：华东（112.5%）已进入超额区间，华南（90.0%）与事业部大盘持平、处于达标线边缘，华北（60.0%）显著落后。<span class="annot-mark" id="annot-mark">华东一家贡献了全事业部 49.2% 的开单金额<div class="annot-bubble" id="annot-bubble">
+          <div class="ab-head"><span class="ab-avatar">林</span><span class="ab-name">林经理</span><span class="ab-time">10 分钟前</span></div>
+          建议此处补充华东超额的驱动因素拆解（大客户集采 or 渠道放量？），方便会上讨论。
+          <div class="ab-actions"><button onclick="toast('已回复批注（模拟）')">回复</button><button onclick="toast('批注已标记解决（模拟）')">解决</button></div>
+        </div></span>，集中度进一步提升。</p>
+        <div class="fig">
+          <div id="chart-b-pie" class="chart" style="min-height:280px"></div>
+          <div class="fig-cap">图 1 · 各分公司开单金额占比（2026 年累计）</div>
+        </div>
+        <p>下钻至业务部层级，华东内部同样分化：上海业务部达成 118%，是绝对主力；南京业务部 88.3%，其下辖玄武（82%）、江宁（76%）两个代表处进度偏慢，需关注年末冲量节奏。</p>
+      </section>
+
+      <section id="sec-3">
+        <h2><span class="sec-no">三</span>风险点</h2>
+        <p><b style="color:var(--ink)">风险一：华北缺口 340 万元，占事业部总剩余缺口的 118%</b>（华东超额部分对冲后净缺口 288 万元）。华北三家业务部达成率均在 65% 以下，其中石家庄业务部仅 50%，若无专项动作，全年达标概率较低。</p>
+        <p><b style="color:var(--ink)">风险二：开单集中度上升。</b>华东占比近五成，单一区域波动对大盘影响放大；华南距达标线仅一步之遥，98 万元缺口存在滑入未达标区间的可能。</p>
+        <div class="fig">
+          <table>
+            <thead><tr><th>风险项</th><th>涉及组织</th><th>缺口金额</th><th>风险等级</th></tr></thead>
+            <tbody>
+              <tr><td>全年任务达成风险</td><td>华北分公司</td><td>340 万</td><td><span class="pill up">高</span></td></tr>
+              <tr><td>达标线滑落风险</td><td>华南分公司</td><td>98 万</td><td><span class="pill good">中</span></td></tr>
+              <tr><td>代表处进度偏慢</td><td>玄武 / 江宁代表处</td><td>31 万</td><td><span class="pill down">低</span></td></tr>
+            </tbody>
+          </table>
+          <div class="fig-cap">表 1 · 主要风险敞口清单</div>
+        </div>
+      </section>
+
+      <section id="sec-4">
+        <h2><span class="sec-no">四</span>行动建议</h2>
+        <p><b>1. 华北专项攻坚：</b>建议 9 月第一周启动华北专场经营复盘，按业务部拆解剩余 340 万缺口到具体商机与客户，明确周度开单里程碑。</p>
+        <p><b>2. 复制华东打法：</b>沉淀上海业务部大客户集采打法，向华南深圳业务部（87%）输出，优先补齐华南 98 万缺口，确保第二家分公司进入达标区间。</p>
+        <p><b>3. 盯防尾部单元：</b>对石家庄业务部（50%）与江宁代表处（76%）建立双周跟踪机制，必要时调整任务分解或增配渠道资源。</p>
+        <div class="callout" style="border-left-color:var(--green);background:var(--green-soft)"><b style="color:var(--green)">预期效果：</b>若华北达成率提升至 75%、华南达标，事业部全年达成率可望站上 100%。</div>
+      </section>
+    </article>
+  </div>
+</section>
+
+<!-- ================================================================
+     方案 C · 交互卡片流式
+================================================================= -->
+<section class="plan-section" id="plan-c">
+  <div class="plan-intro">
+    <div class="pi-main">
+      <h2>方案 C · 交互卡片流式 <span class="pi-tag">Interactive Card Feed</span></h2>
+      <div class="pi-pos"><b>一句话定位：</b>把一次问数的回答拆成一串可交互的「洞察卡片」，像刷信息流一样读完一份分析。</div>
+      <div class="pi-scene"><b>适用场景：</b>移动端 / 对话式问数场景，用户边问边看、随手追问，强调探索式消费。</div>
+    </div>
+    <ul>
+      <li>结论 → 指标 → 图表 → 下钻 → 建议，叙事顺序即阅读顺序</li>
+      <li>每张卡片自带追问 / 放大 / 分享操作</li>
+      <li>下钻卡点击展开明细，点明细行弹出「追问建议」气泡</li>
+      <li>点气泡即模拟发起新一轮问数，形成探索闭环</li>
+    </ul>
+  </div>
+
+  <div class="feed">
+    <!-- 卡 1：核心结论 -->
+    <div class="feed-card concl-card">
+      <div class="fc-actions">
+        <button class="fc-act" title="追问" onclick="toast('已基于此卡片生成追问建议（模拟）')">🔍</button>
+        <button class="fc-act" title="放大" onclick="toast('卡片已放大（模拟）')">⤢</button>
+        <button class="fc-act" title="分享" onclick="toast('卡片分享链接已复制（模拟）')">↗</button>
+      </div>
+      <div class="fc-label">核心结论</div>
+      <h3>整体接近达标，分化明显</h3>
+      <div class="big-concl">商用事业部 8 月整体达成率 <span class="up">90.5%</span>（开单 2,742 万 / 任务 3,030 万）。<span class="up">华东超额 12.5%</span> 是最大亮点，<span class="down">华北仅 60%</span> 是最大风险，"东强北弱"格局加剧。</div>
+    </div>
+
+    <!-- 卡 2：关键指标对比 -->
+    <div class="feed-card">
+      <div class="fc-actions">
+        <button class="fc-act" title="追问" onclick="toast('已基于此卡片生成追问建议（模拟）')">🔍</button>
+        <button class="fc-act" title="放大" onclick="toast('卡片已放大（模拟）')">⤢</button>
+        <button class="fc-act" title="分享" onclick="toast('卡片分享链接已复制（模拟）')">↗</button>
+      </div>
+      <div class="fc-label">关键指标</div>
+      <h3>三家分公司一览</h3>
+      <div class="cmp-grid">
+        <div class="cmp-item"><div class="ci-label">华东分公司</div><div class="ci-val up">112.5%</div><div class="ci-sub"><span class="up">1,350 / 1,200 万</span> · 超额 150 万</div></div>
+        <div class="cmp-item"><div class="ci-label">华南分公司</div><div class="ci-val good">90.0%</div><div class="ci-sub"><span class="good">882 / 980 万</span> · 缺口 98 万</div></div>
+        <div class="cmp-item"><div class="ci-label">华北分公司</div><div class="ci-val down">60.0%</div><div class="ci-sub"><span class="down">510 / 850 万</span> · 缺口 340 万</div></div>
+      </div>
+    </div>
+
+    <!-- 卡 3：达成率条形图 -->
+    <div class="feed-card">
+      <div class="fc-actions">
+        <button class="fc-act" title="追问" onclick="toast('已基于此卡片生成追问建议（模拟）')">🔍</button>
+        <button class="fc-act" title="放大" onclick="toast('卡片已放大（模拟）')">⤢</button>
+        <button class="fc-act" title="分享" onclick="toast('卡片分享链接已复制（模拟）')">↗</button>
+      </div>
+      <div class="fc-label">图表洞察</div>
+      <h3>达成率横向对比</h3>
+      <div id="chart-c-bar" class="chart" style="min-height:220px"></div>
+    </div>
+
+    <!-- 卡 4：下钻卡 -->
+    <div class="feed-card">
+      <div class="fc-actions">
+        <button class="fc-act" title="追问" onclick="toast('已基于此卡片生成追问建议（模拟）')">🔍</button>
+        <button class="fc-act" title="放大" onclick="toast('卡片已放大（模拟）')">⤢</button>
+        <button class="fc-act" title="分享" onclick="toast('卡片分享链接已复制（模拟）')">↗</button>
+      </div>
+      <div class="fc-label">下钻分析</div>
+      <h3>哪里拖了后腿？</h3>
+      <p style="font-size:13px;color:var(--muted)">点击「华北分公司」展开其业务部明细，再点击任意业务部试试追问 👇</p>
+      <div class="drill-row" id="drill-hb">
+        <span class="d-caret">▶</span>
+        <span class="d-name">华北分公司</span>
+        <span class="pill down">达成 60% · 缺口 340 万</span>
+      </div>
+      <div class="drill-children" id="drill-hb-children">
+        <div class="drill-child" data-ask="北京业务部 65% 的达成率，缺口主要在哪些客户？">
+          <span class="dc-name">北京业务部</span><span class="down" style="font-size:12.5px">260 / 400 万</span><span class="pill down">65%</span>
+          <div class="ask-pop">💡 追问建议：<b>北京业务部 65% 的达成率，缺口主要在哪些客户？</b><span class="ap-go">点击发起问数 →</span></div>
+        </div>
+        <div class="drill-child" data-ask="天津业务部本月环比为什么下滑？">
+          <span class="dc-name">天津业务部</span><span class="down" style="font-size:12.5px">150 / 250 万</span><span class="pill down">60%</span>
+          <div class="ask-pop">💡 追问建议：<b>天津业务部本月环比为什么下滑？</b><span class="ap-go">点击发起问数 →</span></div>
+        </div>
+        <div class="drill-child" data-ask="石家庄业务部 50% 达成率，全年还有达标可能吗？">
+          <span class="dc-name">石家庄业务部</span><span class="down" style="font-size:12.5px">100 / 200 万</span><span class="pill down">50%</span>
+          <div class="ask-pop">💡 追问建议：<b>石家庄业务部 50% 达成率，全年还有达标可能吗？</b><span class="ap-go">点击发起问数 →</span></div>
+        </div>
+      </div>
+      <div class="drill-row" onclick="toast('华东分公司下钻已在方案 A 演示（模拟）')">
+        <span class="d-caret" style="visibility:hidden">▶</span>
+        <span class="d-name">华东分公司</span>
+        <span class="pill up">达成 112.5% · 超额 150 万</span>
+      </div>
+    </div>
+
+    <!-- 卡 5：行动建议 -->
+    <div class="feed-card">
+      <div class="fc-actions">
+        <button class="fc-act" title="追问" onclick="toast('已基于此卡片生成追问建议（模拟）')">🔍</button>
+        <button class="fc-act" title="放大" onclick="toast('卡片已放大（模拟）')">⤢</button>
+        <button class="fc-act" title="分享" onclick="toast('卡片分享链接已复制（模拟）')">↗</button>
+      </div>
+      <div class="fc-label">行动建议</div>
+      <h3>接下来做什么？</h3>
+      <div class="act-list">
+        <div class="act-item"><span class="a-no">1</span><span class="a-text"><b>华北专项攻坚：</b>9 月第一周启动专场复盘，340 万缺口拆解到商机与客户。</span></div>
+        <div class="act-item"><span class="a-no">2</span><span class="a-text"><b>复制华东打法：</b>上海集采经验输出至深圳业务部，优先补齐华南 98 万缺口。</span></div>
+        <div class="act-item"><span class="a-no">3</span><span class="a-text"><b>盯防尾部单元：</b>石家庄（50%）、江宁代表处（76%）建立双周跟踪。</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================
+     方案 D · 多视图切换式
+================================================================= -->
+<section class="plan-section" id="plan-d">
+  <div class="plan-intro">
+    <div class="pi-main">
+      <h2>方案 D · 多视图切换式 <span class="pi-tag">Multi-View</span></h2>
+      <div class="pi-pos"><b>一句话定位：</b>同一份问数结果，一键切换看板 / 报告 / 表格 / 图表四种形态，适配不同角色与场合。</div>
+      <div class="pi-scene"><b>适用场景：</b>结果页作为统一入口，高管看看板、分析师读报告、财务对表格、汇报取图表。</div>
+    </div>
+    <ul>
+      <li>一个结果页承载四种消费形态，无需重复问数</li>
+      <li>各视图数据同源，切换即时、无加载感</li>
+      <li>可按角色默认不同视图，记住用户偏好</li>
+      <li>每个视图都是对应方案的「精简版」，实现成本低</li>
+    </ul>
+  </div>
+
+  <div class="mv-head">
+    <div class="mv-tabs" id="mv-tabs">
+      <button class="mv-tab active" data-view="dash">📊 看板</button>
+      <button class="mv-tab" data-view="report">📄 报告</button>
+      <button class="mv-tab" data-view="table">🧾 表格</button>
+      <button class="mv-tab" data-view="charts">📈 图表</button>
+    </div>
+    <span class="mv-note">✦ <b>同一份数据 · 四种视图</b>，切换视图无需重新查询</span>
+  </div>
+
+  <!-- 视图：看板（方案 A 精简版） -->
+  <div class="mv-view show" id="mv-dash">
+    <div class="mv-kpi">
+      <div class="kpi-card"><div class="k-label">总任务金额</div><div class="k-value">3,030<small>万元</small></div><div class="k-tags"><span class="k-tag">同比 <b class="up">+8.4%</b></span></div></div>
+      <div class="kpi-card"><div class="k-label">年度开单金额</div><div class="k-value">2,742<small>万元</small></div><div class="k-tags"><span class="k-tag">同比 <b class="up">+12.7%</b></span></div></div>
+      <div class="kpi-card"><div class="k-label">整体达成率</div><div class="k-value accent">90.5<small>%</small></div><div class="k-tags"><span class="k-tag">环比 <b class="up">+3.2pt</b></span></div></div>
+      <div class="kpi-card"><div class="k-label">剩余任务缺口</div><div class="k-value">288<small>万元</small></div><div class="k-tags"><span class="k-tag">集中在华北</span></div></div>
+    </div>
+    <div class="card">
+      <div class="card-pad" style="padding-bottom:0"><div class="card-title">分公司任务 vs 开单</div></div>
+      <div class="card-pad" style="padding-top:6px"><div id="chart-d-dash" class="chart" style="min-height:300px"></div></div>
+    </div>
+  </div>
+
+  <!-- 视图：报告（方案 B 精简版） -->
+  <div class="mv-view" id="mv-report">
+    <div class="card card-pad mv-report" style="padding:28px 34px">
+      <h2 style="font-size:19px;margin-bottom:14px">8 月业绩结论速览</h2>
+      <p>商用事业部 8 月整体达成率 <b class="up">90.5%</b>，累计开单 2,742 万元，剩余缺口 288 万元。总量接近达标，<b>结构分化为主要矛盾</b>：华东 112.5% 超额完成、贡献近五成开单；华南 90% 与大盘持平；华北仅 60%、缺口 340 万元，是全年达成的最大风险。</p>
+      <p>建议 9 月启动华北专项攻坚，将剩余缺口按业务部拆解至商机与客户；同步复制上海集采打法至深圳业务部，推动华南跨越达标线。若华北达成率提升至 75%，事业部全年有望站上 100%。</p>
+      <div class="callout" style="border-left:3px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:12px 16px;font-size:13px"><b style="color:var(--brand)">一句话结论：</b>大盘稳中向好，"东强北弱"加剧，攻坚华北是三季度收官关键。</div>
+    </div>
+  </div>
+
+  <!-- 视图：表格 -->
+  <div class="mv-view" id="mv-table">
+    <div class="card" style="overflow:hidden">
+      <div class="card-pad" style="padding-bottom:4px"><div class="card-title">业绩明细大表</div><div class="card-sub">分公司 → 业务部 全量明细</div></div>
+      <div class="table-wrap" style="overflow-x:auto">
+        <table>
+          <thead><tr><th>层级</th><th>组织</th><th>总任务金额</th><th>年度开单金额</th><th>达成率</th><th>剩余任务金额</th><th>环比</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>分公司</td><td><b style="color:var(--ink)">华东分公司</b></td><td>1,200 万</td><td>1,350 万</td><td class="up">112.5%</td><td>—</td><td class="up">+5.1pt</td><td><span class="pill up">超额完成</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>上海业务部</td><td>950 万</td><td>1,121 万</td><td class="up">118.0%</td><td>—</td><td class="up">+6.0pt</td><td><span class="pill up">超额</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>杭州业务部</td><td>130 万</td><td>124 万</td><td class="good">95.4%</td><td>6 万</td><td class="good">+1.2pt</td><td><span class="pill good">接近达标</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>南京业务部</td><td>120 万</td><td>106 万</td><td class="down">88.3%</td><td>14 万</td><td class="down">-0.8pt</td><td><span class="pill down">未达标</span></td></tr>
+            <tr class="row-sub"><td>代表处</td><td>玄武代表处</td><td>50 万</td><td>41 万</td><td class="down">82.0%</td><td>9 万</td><td class="down">-1.5pt</td><td><span class="pill down">未达标</span></td></tr>
+            <tr class="row-sub"><td>代表处</td><td>江宁代表处</td><td>45 万</td><td>34 万</td><td class="down">75.6%</td><td>11 万</td><td class="down">-2.3pt</td><td><span class="pill down">未达标</span></td></tr>
+            <tr><td>分公司</td><td><b style="color:var(--ink)">华南分公司</b></td><td>980 万</td><td>882 万</td><td class="good">90.0%</td><td>98 万</td><td class="good">+2.0pt</td><td><span class="pill good">接近达标</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>广州业务部</td><td>520 万</td><td>484 万</td><td class="good">93.1%</td><td>36 万</td><td class="good">+2.4pt</td><td><span class="pill good">接近达标</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>深圳业务部</td><td>460 万</td><td>398 万</td><td class="down">86.5%</td><td>62 万</td><td class="down">+1.5pt</td><td><span class="pill down">未达标</span></td></tr>
+            <tr><td>分公司</td><td><b style="color:var(--ink)">华北分公司</b></td><td>850 万</td><td>510 万</td><td class="down">60.0%</td><td>340 万</td><td class="down">-3.6pt</td><td><span class="pill down">明显落后</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>北京业务部</td><td>400 万</td><td>260 万</td><td class="down">65.0%</td><td>140 万</td><td class="down">-2.0pt</td><td><span class="pill down">落后</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>天津业务部</td><td>250 万</td><td>150 万</td><td class="down">60.0%</td><td>100 万</td><td class="down">-4.1pt</td><td><span class="pill down">落后</span></td></tr>
+            <tr class="row-sub"><td>业务部</td><td>石家庄业务部</td><td>200 万</td><td>100 万</td><td class="down">50.0%</td><td>100 万</td><td class="down">-5.0pt</td><td><span class="pill down">严重落后</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 视图：图表网格 -->
+  <div class="mv-view" id="mv-charts">
+    <div class="mv-chart-grid">
+      <div class="card"><div class="card-pad" style="padding-bottom:0"><div class="card-title">任务 vs 开单</div></div><div class="card-pad" style="padding-top:6px"><div id="chart-d-bar" class="chart"></div></div></div>
+      <div class="card"><div class="card-pad" style="padding-bottom:0"><div class="card-title">开单金额占比</div></div><div class="card-pad" style="padding-top:6px"><div id="chart-d-pie" class="chart"></div></div></div>
+      <div class="card" style="grid-column:1/-1"><div class="card-pad" style="padding-bottom:0"><div class="card-title">整体达成率仪表盘</div></div><div class="card-pad" style="padding-top:6px"><div id="chart-d-gauge" class="chart" style="min-height:240px"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Toast 容器 -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+/* ================================================================
+   全局工具
+================================================================= */
+// Toast 提示
+function toast(msg){
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = '<span class="t-dot"></span>' + msg;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(), 320); }, 2400);
+}
+
+// ECharts 可用性检测；不可用时渲染占位提示，保证结构完整
+const hasEcharts = typeof window.echarts !== 'undefined';
+function mountChart(elId, option){
+  const el = document.getElementById(elId);
+  if(!el) return null;
+  if(!hasEcharts){
+    el.outerHTML = '<div class="chart-fallback" style="min-height:'+el.style.minHeight+'">'
+      + '<span class="fb-icon">📊</span><span>图表加载失败（ECharts CDN 不可用）</span>'
+      + '<span style="opacity:.7">数据结构与页面布局不受影响，恢复网络后刷新即可查看图表</span></div>';
+    return null;
+  }
+  try{
+    const chart = echarts.init(el);
+    chart.setOption(option);
+    window.addEventListener('resize', ()=>chart.resize());
+    return chart;
+  }catch(e){
+    el.outerHTML = '<div class="chart-fallback"><span class="fb-icon">📊</span><span>图表渲染异常，已降级为占位</span></div>';
+    return null;
+  }
+}
+
+/* ================================================================
+   共用 Mock 数据 & 图表配色
+================================================================= */
+const BRANCHES = ['华东分公司','华南分公司','华北分公司'];
+const TASKS   = [1200, 980, 850];
+const BILLING = [1350, 882, 510];
+const RATES   = [112.5, 90.0, 60.0];
+const C = { brand:'#E61F24', green:'#10B981', muted:'#6B7280', bar:'#C9C2B8', ink:'#111827', body:'#374151', border:'#DDD8D1' };
+const baseAxis = {
+  axisLine:{lineStyle:{color:C.border}}, axisTick:{show:false},
+  axisLabel:{color:C.body,fontSize:12,fontFamily:'inherit'},
+  splitLine:{lineStyle:{color:'#EDE7E0'}}
+};
+const baseTooltip = {trigger:'axis', backgroundColor:'#111827', borderWidth:0, textStyle:{color:'#fff',fontSize:12}, axisPointer:{type:'shadow',shadowStyle:{color:'rgba(230,31,36,.06)'}}};
+
+/* ================================================================
+   顶部方案 Tab 切换（懒初始化各方案图表，切到时再渲染/resize）
+================================================================= */
+const planInited = { a:false, b:false, c:false, d:false };
+let chartA = null;
+
+function showPlan(key){
+  document.querySelectorAll('.plan-tab').forEach(t=>t.classList.toggle('active', t.dataset.plan===key));
+  document.querySelectorAll('.plan-section').forEach(s=>s.classList.toggle('show', s.id==='plan-'+key));
+  if(!planInited[key]){
+    planInited[key] = true;
+    ({ a:initPlanA, b:initPlanB, c:initPlanC, d:initPlanD })[key]();
+  }else{
+    // 已渲染的图表在容器从隐藏变为可见后需要 resize
+    setTimeout(()=>{ document.querySelectorAll('#plan-'+key+' .chart').forEach(el=>{
+      const inst = hasEcharts && echarts.getInstanceByDom(el); inst && inst.resize();
+    }); }, 30);
+  }
+  window.scrollTo({top:0});
+}
+document.querySelectorAll('.plan-tab').forEach(t=>t.addEventListener('click', ()=>showPlan(t.dataset.plan)));
+
+/* ================================================================
+   方案 A · BI 看板：图表 + 四区联动
+================================================================= */
+function rateColor(r){ return r>=100 ? C.brand : (r>=85 ? C.green : C.muted); }
+
+function initPlanA(){
+  // 中间柱状图：任务 vs 开单 + 达成率折线（副轴）
+  chartA = mountChart('chart-a-main', {
+    tooltip: baseTooltip,
+    legend:{data:['总任务金额','年度开单金额','达成率'], top:0, textStyle:{color:C.body,fontSize:12}, itemWidth:14, itemHeight:9},
+    grid:{left:10,right:10,top:40,bottom:6,containLabel:true},
+    xAxis:{type:'category', data:BRANCHES, ...baseAxis, splitLine:{show:false}},
+    yAxis:[
+      {type:'value', name:'万元', nameTextStyle:{color:C.muted,fontSize:11}, ...baseAxis},
+      {type:'value', name:'达成率', max:130, nameTextStyle:{color:C.muted,fontSize:11}, ...baseAxis, splitLine:{show:false}, axisLabel:{...baseAxis.axisLabel, formatter:'{value}%'}}
+    ],
+    series:[
+      {name:'总任务金额', type:'bar', data:TASKS, barWidth:26, itemStyle:{color:C.bar, borderRadius:[6,6,0,0]}},
+      {name:'年度开单金额', type:'bar', barWidth:26,
+        data:BILLING.map((v,i)=>({value:v, itemStyle:{color:rateColor(RATES[i]), borderRadius:[6,6,0,0]}}))},
+      {name:'达成率', type:'line', yAxisIndex:1, data:RATES, smooth:true, symbol:'circle', symbolSize:8,
+        lineStyle:{color:C.ink,width:2.5}, itemStyle:{color:C.ink},
+        label:{show:true, position:'top', formatter:'{c}%', color:C.ink, fontSize:11, fontWeight:700}}
+    ]
+  });
+
+  // 联动：树节点 / 柱子 / 排名项 点击 → 高亮 + 表格过滤高亮
+  function selectBranch(code, name){
+    // 左树高亮
+    document.querySelectorAll('#tree-a .tree-row').forEach(r=>r.classList.remove('active'));
+    const treeRow = document.querySelector('#tree-a .tree-row[data-branch="'+code+'"]');
+    if(treeRow){ treeRow.classList.add('active'); treeRow.closest('.tree-node').classList.add('open'); }
+    // 右排名高亮
+    document.querySelectorAll('#rank-a .rank-item').forEach(r=>r.classList.toggle('active', r.dataset.branch===code));
+    // 表格行高亮
+    document.querySelectorAll('#table-a tbody tr').forEach(r=>r.classList.toggle('row-hl', r.dataset.branch===code));
+    // 图表高亮（dispatchAction）
+    if(chartA){
+      const idx = BRANCHES.findIndex(n=>n.includes(name.slice(0,2)));
+      chartA.dispatchAction({type:'downplay', seriesIndex:[0,1]});
+      if(idx>=0) chartA.dispatchAction({type:'highlight', seriesIndex:1, dataIndex:idx});
+      if(idx>=0) chartA.dispatchAction({type:'showTip', seriesIndex:1, dataIndex:idx});
+    }
+    document.getElementById('a-selected').textContent = name;
+  }
+  const nameOf = {hd:'华东分公司', hn:'华南分公司', hb:'华北分公司'};
+
+  document.querySelectorAll('#tree-a .tree-row[data-branch]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const node = row.closest('.tree-node');
+      node.classList.toggle('open');           // 展开/收起
+      selectBranch(row.dataset.branch, nameOf[row.dataset.branch]);
+    });
+  });
+  document.querySelectorAll('#rank-a .rank-item').forEach(item=>{
+    item.addEventListener('click', ()=>selectBranch(item.dataset.branch, nameOf[item.dataset.branch]));
+  });
+  document.querySelectorAll('#table-a tbody tr[data-branch]').forEach(row=>{
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', ()=>selectBranch(row.dataset.branch, nameOf[row.dataset.branch]));
+  });
+  if(chartA){
+    chartA.on('click', p=>{
+      const idx = BRANCHES.indexOf(p.name);
+      if(idx>=0){ const code = ['hd','hn','hb'][idx]; selectBranch(code, BRANCHES[idx]); }
+    });
+  }
+}
+
+/* ================================================================
+   方案 B · 报告文档：目录导航 + 内嵌图表 + 批注气泡
+================================================================= */
+function initPlanB(){
+  // 内嵌饼图：开单金额占比
+  mountChart('chart-b-pie', {
+    tooltip:{trigger:'item', backgroundColor:'#111827', borderWidth:0, textStyle:{color:'#fff',fontSize:12}, formatter:'{b}<br/>开单 {c} 万（{d}%）'},
+    legend:{bottom:0, textStyle:{color:C.body,fontSize:12}, itemWidth:12, itemHeight:9},
+    series:[{
+      type:'pie', radius:['42%','68%'], center:['50%','46%'],
+      itemStyle:{borderColor:'#FDFAF7', borderWidth:3, borderRadius:6},
+      label:{color:C.body, fontSize:12, formatter:'{b}\n{d}%'},
+      data:[
+        {value:1350, name:'华东分公司', itemStyle:{color:C.brand}},
+        {value:882,  name:'华南分公司', itemStyle:{color:C.green}},
+        {value:510,  name:'华北分公司', itemStyle:{color:'#B6B0A8'}}
+      ]
+    }]
+  });
+
+  // 目录点击：高亮 + 滚动定位
+  document.querySelectorAll('#toc-b a').forEach(a=>{
+    a.addEventListener('click', ()=>{
+      document.querySelectorAll('#toc-b a').forEach(x=>x.classList.remove('active'));
+      a.classList.add('active');
+      const sec = document.getElementById(a.dataset.sec);
+      if(sec) sec.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+
+  // 批注气泡
+  const mark = document.getElementById('annot-mark');
+  const bubble = document.getElementById('annot-bubble');
+  mark.addEventListener('click', e=>{ e.stopPropagation(); bubble.classList.toggle('show'); });
+  document.addEventListener('click', e=>{ if(!bubble.contains(e.target)) bubble.classList.remove('show'); });
+}
+
+/* ================================================================
+   方案 C · 交互卡片流：图表 + 下钻 + 追问气泡
+================================================================= */
+function initPlanC(){
+  // 达成率横向条形图
+  mountChart('chart-c-bar', {
+    tooltip:{trigger:'axis', ...baseTooltip, axisPointer:{type:'shadow',shadowStyle:{color:'rgba(230,31,36,.06)'}}},
+    grid:{left:10,right:40,top:10,bottom:6,containLabel:true},
+    xAxis:{type:'value', max:130, ...baseAxis, axisLabel:{...baseAxis.axisLabel, formatter:'{value}%'}},
+    yAxis:{type:'category', data:[...BRANCHES].reverse(), ...baseAxis, splitLine:{show:false}},
+    series:[{
+      type:'bar', barWidth:22,
+      data:[...RATES].reverse().map(r=>({value:r, itemStyle:{color:rateColor(r), borderRadius:[0,8,8,0]}})),
+      label:{show:true, position:'right', formatter:'{c}%', fontWeight:700, fontSize:12,
+        color:C.body},
+      markLine:{symbol:'none', lineStyle:{color:C.ink, type:'dashed', width:1.2},
+        label:{formatter:'达标线 100%', color:C.muted, fontSize:11},
+        data:[{xAxis:100}]}
+    }]
+  });
+
+  // 下钻卡：展开华北业务部
+  const drillRow = document.getElementById('drill-hb');
+  const drillKids = document.getElementById('drill-hb-children');
+  drillRow.addEventListener('click', ()=>{
+    drillRow.classList.toggle('open');
+    drillKids.classList.toggle('show');
+  });
+
+  // 点击业务部行 → 追问气泡；点气泡 → 模拟发起新问数
+  document.querySelectorAll('.drill-child').forEach(child=>{
+    const pop = child.querySelector('.ask-pop');
+    child.addEventListener('click', e=>{
+      e.stopPropagation();
+      if(e.target.closest('.ask-pop')){          // 点击气泡本体 → 模拟新问数
+        pop.classList.remove('show');
+        toast('正在生成新问数：' + child.dataset.ask);
+        return;
+      }
+      document.querySelectorAll('.ask-pop').forEach(p=>p.classList.remove('show'));
+      pop.classList.add('show');
+    });
+  });
+  document.addEventListener('click', ()=>document.querySelectorAll('.ask-pop').forEach(p=>p.classList.remove('show')));
+}
+
+/* ================================================================
+   方案 D · 多视图切换
+================================================================= */
+const mvInited = { dash:false, report:true, table:true, charts:false };
+
+function initPlanD(){
+  // 默认渲染「看板」视图
+  initMvView('dash');
+  document.querySelectorAll('#mv-tabs .mv-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('#mv-tabs .mv-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      const v = tab.dataset.view;
+      document.querySelectorAll('.mv-view').forEach(s=>s.classList.toggle('show', s.id==='mv-'+v));
+      initMvView(v);
+      setTimeout(()=>{ document.querySelectorAll('#mv-'+v+' .chart').forEach(el=>{
+        const inst = hasEcharts && echarts.getInstanceByDom(el); inst && inst.resize();
+      }); }, 30);
+    });
+  });
+}
+
+function initMvView(v){
+  if(mvInited[v]) return;
+  mvInited[v] = true;
+  if(v==='dash'){
+    mountChart('chart-d-dash', {
+      tooltip: baseTooltip,
+      legend:{data:['总任务金额','年度开单金额'], top:0, textStyle:{color:C.body,fontSize:12}, itemWidth:14, itemHeight:9},
+      grid:{left:10,right:10,top:36,bottom:6,containLabel:true},
+      xAxis:{type:'category', data:BRANCHES, ...baseAxis, splitLine:{show:false}},
+      yAxis:{type:'value', name:'万元', nameTextStyle:{color:C.muted,fontSize:11}, ...baseAxis},
+      series:[
+        {name:'总任务金额', type:'bar', data:TASKS, barWidth:30, itemStyle:{color:C.bar, borderRadius:[6,6,0,0]}},
+        {name:'年度开单金额', type:'bar', barWidth:30, data:BILLING.map((b,i)=>({value:b, itemStyle:{color:rateColor(RATES[i]), borderRadius:[6,6,0,0]}}))}
+      ]
+    });
+  }
+  if(v==='charts'){
+    mountChart('chart-d-bar', {
+      tooltip: baseTooltip,
+      grid:{left:10,right:10,top:20,bottom:6,containLabel:true},
+      xAxis:{type:'category', data:BRANCHES, ...baseAxis, splitLine:{show:false}},
+      yAxis:{type:'value', ...baseAxis},
+      series:[
+        {name:'任务', type:'bar', data:TASKS, barWidth:24, itemStyle:{color:C.bar, borderRadius:[6,6,0,0]}},
+        {name:'开单', type:'bar', data:BILLING, barWidth:24, itemStyle:{color:C.brand, borderRadius:[6,6,0,0]}}
+      ]
+    });
+    mountChart('chart-d-pie', {
+      tooltip:{trigger:'item', backgroundColor:'#111827', borderWidth:0, textStyle:{color:'#fff',fontSize:12}, formatter:'{b}：{c} 万（{d}%）'},
+      series:[{type:'pie', radius:['38%','66%'], center:['50%','50%'],
+        itemStyle:{borderColor:'#FDFAF7', borderWidth:3, borderRadius:6},
+        label:{color:C.body, fontSize:12, formatter:'{b} {d}%'},
+        data:[
+          {value:1350, name:'华东', itemStyle:{color:C.brand}},
+          {value:882,  name:'华南', itemStyle:{color:C.green}},
+          {value:510,  name:'华北', itemStyle:{color:'#B6B0A8'}}
+        ]}]
+    });
+    mountChart('chart-d-gauge', {
+      series:[{
+        type:'gauge', startAngle:210, endAngle:-30, min:0, max:120,
+        radius:'95%', center:['50%','60%'],
+        progress:{show:true, width:16, itemStyle:{color:C.brand}},
+        axisLine:{lineStyle:{width:16, color:[[1,'#EDE7E0']]}},
+        axisTick:{show:false}, splitLine:{show:false}, axisLabel:{show:false},
+        pointer:{length:'58%', width:5, itemStyle:{color:C.ink}},
+        anchor:{show:true, size:14, itemStyle:{color:C.ink}},
+        title:{show:true, offsetCenter:[0,'32%'], fontSize:13, color:C.muted},
+        detail:{valueAnimation:true, offsetCenter:[0,'62%'], fontSize:34, fontWeight:800, color:C.ink, formatter:'{value}%'},
+        data:[{value:90.5, name:'整体达成率'}]
+      }]
+    });
+  }
+}
+
+/* ================================================================
+   启动：默认渲染方案 A
+================================================================= */
+planInited.a = true;
+initPlanA();
+</script>
+</body>
+</html>

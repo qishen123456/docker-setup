@@ -1,0 +1,3794 @@
+[
+  {
+    "id": 1,
+    "question": "广东省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 2,
+    "question": "广东零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 3,
+    "question": "广东省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 4,
+    "question": "广东省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 5,
+    "question": "广东家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 6,
+    "question": "广东省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 7,
+    "question": "广东省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 8,
+    "question": "广东KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 9,
+    "question": "广东省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 10,
+    "question": "广东省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 11,
+    "question": "广东工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 12,
+    "question": "广东省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 13,
+    "question": "广东省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 14,
+    "question": "广东有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 15,
+    "question": "广东各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 16,
+    "question": "湖北省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 17,
+    "question": "湖北零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 18,
+    "question": "湖北省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 19,
+    "question": "湖北省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 20,
+    "question": "湖北家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 21,
+    "question": "湖北省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 22,
+    "question": "湖北省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 23,
+    "question": "湖北KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 24,
+    "question": "湖北省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 25,
+    "question": "湖北省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 26,
+    "question": "湖北工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 27,
+    "question": "湖北省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 28,
+    "question": "湖北省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 29,
+    "question": "湖北有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 30,
+    "question": "湖北各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 31,
+    "question": "江西省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 32,
+    "question": "江西零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 33,
+    "question": "江西省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 34,
+    "question": "江西省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 35,
+    "question": "江西家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 36,
+    "question": "江西省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 37,
+    "question": "江西省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 38,
+    "question": "江西KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 39,
+    "question": "江西省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 40,
+    "question": "江西省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 41,
+    "question": "江西工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 42,
+    "question": "江西省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 43,
+    "question": "江西省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 44,
+    "question": "江西有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 45,
+    "question": "江西各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 46,
+    "question": "四川省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 47,
+    "question": "四川零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 48,
+    "question": "四川省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 49,
+    "question": "四川省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 50,
+    "question": "四川家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 51,
+    "question": "四川省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 52,
+    "question": "四川省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 53,
+    "question": "四川KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 54,
+    "question": "四川省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 55,
+    "question": "四川省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 56,
+    "question": "四川工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 57,
+    "question": "四川省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 58,
+    "question": "四川省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 59,
+    "question": "四川有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 60,
+    "question": "四川各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 61,
+    "question": "重庆省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 62,
+    "question": "重庆零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 63,
+    "question": "重庆省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 64,
+    "question": "重庆省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 65,
+    "question": "重庆家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 66,
+    "question": "重庆省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 67,
+    "question": "重庆省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 68,
+    "question": "重庆KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 69,
+    "question": "重庆省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 70,
+    "question": "重庆省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 71,
+    "question": "重庆工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 72,
+    "question": "重庆省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 73,
+    "question": "重庆省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 74,
+    "question": "江苏省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 75,
+    "question": "江苏零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 76,
+    "question": "江苏省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 77,
+    "question": "江苏省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 78,
+    "question": "江苏家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 79,
+    "question": "江苏省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 80,
+    "question": "江苏省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 81,
+    "question": "江苏KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 82,
+    "question": "江苏省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 83,
+    "question": "江苏省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 84,
+    "question": "江苏工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 85,
+    "question": "江苏省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 86,
+    "question": "江苏省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 87,
+    "question": "江苏有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 88,
+    "question": "江苏各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 89,
+    "question": "浙江省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 90,
+    "question": "浙江零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 91,
+    "question": "浙江省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 92,
+    "question": "浙江省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 93,
+    "question": "浙江家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 94,
+    "question": "浙江省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 95,
+    "question": "浙江省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 96,
+    "question": "浙江KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 97,
+    "question": "浙江省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 98,
+    "question": "浙江省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 99,
+    "question": "浙江工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 100,
+    "question": "浙江省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 101,
+    "question": "浙江省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 102,
+    "question": "浙江有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 103,
+    "question": "浙江各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 104,
+    "question": "安徽省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 105,
+    "question": "安徽零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 106,
+    "question": "安徽省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 107,
+    "question": "安徽省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 108,
+    "question": "安徽家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 109,
+    "question": "安徽省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 110,
+    "question": "安徽省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 111,
+    "question": "安徽KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 112,
+    "question": "安徽省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 113,
+    "question": "安徽省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 114,
+    "question": "安徽工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 115,
+    "question": "安徽省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 116,
+    "question": "安徽省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 117,
+    "question": "安徽有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 118,
+    "question": "安徽各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 119,
+    "question": "河南省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 120,
+    "question": "河南零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 121,
+    "question": "河南省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 122,
+    "question": "河南省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 123,
+    "question": "河南家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 124,
+    "question": "河南省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 125,
+    "question": "河南省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 126,
+    "question": "河南KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 127,
+    "question": "河南省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 128,
+    "question": "河南省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 129,
+    "question": "河南工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 130,
+    "question": "河南省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 131,
+    "question": "河南省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 132,
+    "question": "河南有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 133,
+    "question": "河南各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 134,
+    "question": "陕西省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 135,
+    "question": "陕西零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 136,
+    "question": "陕西省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 137,
+    "question": "陕西省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 138,
+    "question": "陕西家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 139,
+    "question": "陕西省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 140,
+    "question": "陕西省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 141,
+    "question": "陕西KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 142,
+    "question": "陕西省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 143,
+    "question": "陕西省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 144,
+    "question": "陕西工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 145,
+    "question": "陕西省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 146,
+    "question": "陕西省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 147,
+    "question": "陕西有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 148,
+    "question": "陕西各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 149,
+    "question": "北京省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 150,
+    "question": "北京零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 151,
+    "question": "北京省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 152,
+    "question": "北京省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 153,
+    "question": "北京家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 154,
+    "question": "北京省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 155,
+    "question": "北京省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 156,
+    "question": "北京KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 157,
+    "question": "北京省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 158,
+    "question": "北京省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 159,
+    "question": "北京工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 160,
+    "question": "北京省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 161,
+    "question": "北京省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 162,
+    "question": "辽宁省区零售渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 163,
+    "question": "辽宁零售渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 164,
+    "question": "辽宁省区零售渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 165,
+    "question": "辽宁省区家装渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 166,
+    "question": "辽宁家装渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 167,
+    "question": "辽宁省区家装渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 168,
+    "question": "辽宁省区KA渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 169,
+    "question": "辽宁KA渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 170,
+    "question": "辽宁省区KA渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 171,
+    "question": "辽宁省区工程渠道目前的累计开单是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 172,
+    "question": "辽宁工程渠道开单是否完成了全年目标的50%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 173,
+    "question": "辽宁省区工程渠道在整个大区的销售占比是多少？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 174,
+    "question": "辽宁省区所有城市公司中开单排名前三的是谁？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 175,
+    "question": "辽宁有哪些城市公司的达成率低于60%？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 176,
+    "question": "辽宁各城市公司的零售与家装开单差距有多大？",
+    "domain": "消费者事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 177,
+    "question": "广州代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 178,
+    "question": "广州代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 179,
+    "question": "深圳代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 180,
+    "question": "深圳代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 181,
+    "question": "东莞代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 182,
+    "question": "东莞代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 183,
+    "question": "佛山代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 184,
+    "question": "佛山代表处的开单金额占所属分公司的比例是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 185,
+    "question": "佛山代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 186,
+    "question": "粤东代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 187,
+    "question": "粤西代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 188,
+    "question": "粤西代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 189,
+    "question": "福建代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 190,
+    "question": "南宁代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 191,
+    "question": "南宁代表处的开单金额占所属分公司的比例是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 192,
+    "question": "南宁代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 193,
+    "question": "海南代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 194,
+    "question": "海南代表处的开单金额占所属分公司的比例是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 195,
+    "question": "海南代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 196,
+    "question": "上海代表处的开单金额占所属分公司的比例是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 197,
+    "question": "上海代表处目前的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 198,
+    "question": "上海代表处的达成率是否高过全国商用平均水平？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 199,
+    "question": "上海代表处在整个行业条线中排第几名？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 200,
+    "question": "南京代表处今年的总营收任务和已开单各是多少？",
+    "domain": "商用事业部",
+    "source": "round3_200"
+  },
+  {
+    "id": 201,
+    "question": "黄超负责的那个业务部今年目标是多少？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 202,
+    "question": "电商部门达成率低于20%的细分业务有哪些？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 203,
+    "question": "电商整体总任务和年度开单分别是多少？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 204,
+    "question": "电商事业部今年上半年总共完成了多少开单？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 205,
+    "question": "天猫直营和京东直营占直营零售部总开单的比例分别是多少？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 206,
+    "question": "电商事业部哪个负责人的平均达成率最高？",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 207,
+    "question": "直营零售部天猫、京东、抖音、达播四个渠道的开单贡献率排序",
+    "domain": "电商事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 208,
+    "question": "商用上海代表处的业绩怎么样？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 209,
+    "question": "朱英杰的销售任务达成率是多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 210,
+    "question": "商用行业条线整体开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 211,
+    "question": "商用事业部目前还有多少任务金额没有完成？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 212,
+    "question": "商用区域条线所有分公司的总开单加起来是多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 213,
+    "question": "商用四大分公司的平均达成率是多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 214,
+    "question": "商用达成率后五名的代表处平均开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 215,
+    "question": "商用公共办公和工业医疗两个业务部总共开单多少？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 216,
+    "question": "商用东部分公司和南部分公司哪个大区的代表处平均开单更高？",
+    "domain": "商用事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 217,
+    "question": "燃气定制业务今年完成了多少开单金额？",
+    "domain": "消费者事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 218,
+    "question": "地产渠道的年度任务和开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 219,
+    "question": "线下渠道和新零售渠道谁的开单总额更高？",
+    "domain": "消费者事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 220,
+    "question": "哪个分公司的新零售达成率超过了60%？",
+    "domain": "消费者事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 221,
+    "question": "消费者事业部各分公司的平均达成率是多少？",
+    "domain": "消费者事业部",
+    "source": "50_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 222,
+    "question": "黄超负责的那个部门年度目标是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 223,
+    "question": "刘志伟管辖的所有业务加起来总共开了多少金额？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 224,
+    "question": "电商达成率小于0的业务是哪一个？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 225,
+    "question": "电商事业部三个业务部的总任务加起来是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 226,
+    "question": "电商事业部所有细分业务的平均开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 227,
+    "question": "电商三个业务部的平均达成率是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 228,
+    "question": "天猫直营占直营零售部总开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 229,
+    "question": "京东直营占直营零售部总开单的百分比是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 230,
+    "question": "抖音直营在直营零售部中的开单贡献率是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 231,
+    "question": "净水业务占国内业务部总开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 232,
+    "question": "国内业务部开单占电商事业部总开单的百分之几？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 233,
+    "question": "直营零售部开单占电商整体的比重是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 234,
+    "question": "跨境业务部在电商事业部总营收中的份额占比？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 235,
+    "question": "黄超名下所有细分业务的总开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 236,
+    "question": "商用事业部总部的总目标是多少个亿？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 237,
+    "question": "商用所有代表处的平均开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 238,
+    "question": "东部分公司下所有代表处的平均开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 239,
+    "question": "南部分公司下所有代表处的平均达成率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 240,
+    "question": "上海代表处占东部分公司总开单的百分之几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 241,
+    "question": "上海代表处和江苏代表处的任务缺口相差多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 242,
+    "question": "公共办公和工业医疗两个业务部总共开单多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 243,
+    "question": "商用四大分公司中达成率倒数第一的是哪个大区？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 244,
+    "question": "商用开单金额在500万到1000万之间的代表处有哪些？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 245,
+    "question": "线下渠道总共完成了多少开单金额？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 246,
+    "question": "新零售渠道的全年任务和开单是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 247,
+    "question": "燃气定制渠道今年的达成率是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 248,
+    "question": "地产业务全年的达成率达到了多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 249,
+    "question": "新零售业务全年的达成率超过50%了吗？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 250,
+    "question": "线下渠道全年的达成率是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 251,
+    "question": "地产渠道和燃气定制渠道开单相差多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 252,
+    "question": "消费者事业部哪个渠道的开单金额最少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 253,
+    "question": "哪个分公司的地产渠道开单金额排第一？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 254,
+    "question": "消费者事业部各分公司的平均开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 255,
+    "question": "消费者事业部所有城市公司的平均开单金额？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 256,
+    "question": "南京城市公司开单占其所属分公司的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 257,
+    "question": "合肥城市公司开单占其所属分公司的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 258,
+    "question": "杭州城市公司开单占其所属分公司的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 259,
+    "question": "兰州城市公司开单占其所属分公司的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 260,
+    "question": "银川城市公司开单占其所属分公司的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 261,
+    "question": "上海代表处占所属分公司总开单的比例是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 262,
+    "question": "上海代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 263,
+    "question": "上海代表处除去之后，该分公司剩余代表处总共开单多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 264,
+    "question": "江苏代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 265,
+    "question": "浙江代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 266,
+    "question": "安徽代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 267,
+    "question": "山东代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 268,
+    "question": "河南代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 269,
+    "question": "河北代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 270,
+    "question": "湖南代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 271,
+    "question": "湖北代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 272,
+    "question": "广东代表处占所属分公司总开单的比例是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 273,
+    "question": "广东代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 274,
+    "question": "广东代表处除去之后，该分公司剩余代表处总共开单多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 275,
+    "question": "深圳代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 276,
+    "question": "福建代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 277,
+    "question": "粤东代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 278,
+    "question": "广西代表处占所属分公司总开单的比例是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 279,
+    "question": "广西代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 280,
+    "question": "广西代表处除去之后，该分公司剩余代表处总共开单多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 281,
+    "question": "四川代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 282,
+    "question": "重庆代表处占所属分公司总开单的比例是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 283,
+    "question": "重庆代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 284,
+    "question": "重庆代表处除去之后，该分公司剩余代表处总共开单多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 285,
+    "question": "陕西代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 286,
+    "question": "云贵代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 287,
+    "question": "西北代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 288,
+    "question": "津冀代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 289,
+    "question": "吉林代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 290,
+    "question": "黑龙江代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 291,
+    "question": "辽宁代表处占商用事业部整体开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 292,
+    "question": "净水业务占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 293,
+    "question": "饮水业务占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 294,
+    "question": "台净业务占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 295,
+    "question": "滤芯占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 296,
+    "question": "天猫直营占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 297,
+    "question": "京东直营占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 298,
+    "question": "抖音直营占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 299,
+    "question": "达播占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 300,
+    "question": "亚马逊占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 301,
+    "question": "东南亚占国内业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 302,
+    "question": "净水业务占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 303,
+    "question": "饮水业务占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 304,
+    "question": "台净业务占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 305,
+    "question": "滤芯占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 306,
+    "question": "天猫直营占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 307,
+    "question": "京东直营占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 308,
+    "question": "抖音直营占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 309,
+    "question": "达播占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 310,
+    "question": "亚马逊占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 311,
+    "question": "东南亚占直营零售部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 312,
+    "question": "净水业务占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 313,
+    "question": "饮水业务占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 314,
+    "question": "台净业务占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 315,
+    "question": "滤芯占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 316,
+    "question": "天猫直营占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 317,
+    "question": "京东直营占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 318,
+    "question": "抖音直营占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 319,
+    "question": "达播占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 320,
+    "question": "亚马逊占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 321,
+    "question": "东南亚占跨境业务部整体目标营收的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 322,
+    "question": "上海代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 323,
+    "question": "上海代表处的达成率在所属分公司排倒数第几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 324,
+    "question": "江苏代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 325,
+    "question": "浙江代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 326,
+    "question": "安徽代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 327,
+    "question": "山东代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 328,
+    "question": "河南代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 329,
+    "question": "河北代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 330,
+    "question": "湖南代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 331,
+    "question": "湖南代表处的达成率在所属分公司排倒数第几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 332,
+    "question": "湖北代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 333,
+    "question": "广东代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 334,
+    "question": "广东代表处的达成率在所属分公司排倒数第几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 335,
+    "question": "深圳代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 336,
+    "question": "福建代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 337,
+    "question": "粤东代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 338,
+    "question": "广西代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 339,
+    "question": "广西代表处的达成率在所属分公司排倒数第几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 340,
+    "question": "四川代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 341,
+    "question": "重庆代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 342,
+    "question": "重庆代表处的达成率在所属分公司排倒数第几？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 343,
+    "question": "陕西代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 344,
+    "question": "云贵代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 345,
+    "question": "西北代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 346,
+    "question": "津冀代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 347,
+    "question": "吉林代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 348,
+    "question": "黑龙江代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 349,
+    "question": "辽宁代表处今年上半年的目标是多少？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 350,
+    "question": "成都城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 351,
+    "question": "重庆城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 352,
+    "question": "贵阳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 353,
+    "question": "遵义城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 354,
+    "question": "万州城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 355,
+    "question": "北京城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 356,
+    "question": "哈尔滨城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 357,
+    "question": "邵阳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 358,
+    "question": "衡阳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 359,
+    "question": "苏南城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 360,
+    "question": "烟台城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 361,
+    "question": "榆林城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 362,
+    "question": "太原城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 363,
+    "question": "郑州城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 364,
+    "question": "石家庄城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 365,
+    "question": "广州城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 366,
+    "question": "深圳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 367,
+    "question": "济南城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 368,
+    "question": "青岛城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 369,
+    "question": "天津城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 370,
+    "question": "沈阳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 371,
+    "question": "大连城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 372,
+    "question": "长春城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 373,
+    "question": "南昌城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 374,
+    "question": "福州城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 375,
+    "question": "厦门城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 376,
+    "question": "武汉城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 377,
+    "question": "襄阳城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 378,
+    "question": "宜昌城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 379,
+    "question": "长沙城市公司的地产和燃气定制加起来开单多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 380,
+    "question": "电商事业部Q1目标和Q2目标哪个更高，高多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 381,
+    "question": "国内业务部Q1到Q4四个季度的目标平均是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 382,
+    "question": "电商部门Q1目标占全年总任务的比例是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 383,
+    "question": "电商部门Q2目标占全年总任务的百分比是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 384,
+    "question": "电商部门Q3目标占全年总任务的份额是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 385,
+    "question": "电商部门Q4目标占全年总任务的贡献率是多少？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 386,
+    "question": "东部分公司和南部分公司的代表处平均达成率相比谁更高？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 387,
+    "question": "商用西部分公司和北部分公司的代表处平均开单差距？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 388,
+    "question": "商用四个大区各代表处平均达成率最高的是哪个大区？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 389,
+    "question": "线下渠道开单占消费者事业部总开单的百分之几？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 390,
+    "question": "新零售渠道开单占消费者事业部总开单的百分比？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 391,
+    "question": "燃气定制开单占消费者事业部总开单的比例是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 392,
+    "question": "地产渠道开单占消费者事业部总开单的份额是多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 393,
+    "question": "消费者事业部线下任务和新零售任务加起来一共多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 394,
+    "question": "消费者事业部燃气定制任务和地产任务加起来一共多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 395,
+    "question": "线下渠道和地产渠道的全年开单差距是多少万元？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 396,
+    "question": "抖音直营和达播渠道的达成率差距是多少个百分点？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 397,
+    "question": "商用上海代表处和江苏代表处的开单差距是多少万元？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 398,
+    "question": "商用河南代表处和河北代表处的开单差距是多少万元？",
+    "domain": "商用事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 399,
+    "question": "川藏分公司成都城市公司的燃气定制完成了多少？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 400,
+    "question": "川藏分公司川北城市公司的地产开单是多少万元？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 401,
+    "question": "山东分公司烟台城市公司的线下开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 402,
+    "question": "湖南分公司衡阳城市公司的新零售开单占其总开单的百分比？",
+    "domain": "消费者事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 403,
+    "question": "天猫直营和抖音直营的开单差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 404,
+    "question": "京东直营和达播业务的开单差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "200_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 405,
+    "question": "黄超负责的业务今年的目标营收是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 406,
+    "question": "黄超管辖的区域目前开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 407,
+    "question": "黄超主导的业务线达成率如何？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 408,
+    "question": "黄超名下的任务缺口还有多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 409,
+    "question": "黄超分管的板块占整体任务的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 410,
+    "question": "陈小斌负责的业务今年的目标营收是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 411,
+    "question": "陈小斌管辖的区域目前开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 412,
+    "question": "陈小斌主导的业务线达成率如何？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 413,
+    "question": "陈小斌名下的任务缺口还有多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 414,
+    "question": "陈小斌分管的板块占整体任务的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 415,
+    "question": "刘志伟负责的业务今年的目标营收是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 416,
+    "question": "刘志伟管辖的区域目前开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 417,
+    "question": "刘志伟主导的业务线达成率如何？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 418,
+    "question": "刘志伟名下的任务缺口还有多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 419,
+    "question": "刘志伟分管的板块占整体任务的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 420,
+    "question": "张文负责的业务今年的目标营收是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 421,
+    "question": "张文管辖的区域目前开单金额是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 422,
+    "question": "张文主导的业务线达成率如何？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 423,
+    "question": "张文名下的任务缺口还有多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 424,
+    "question": "张文分管的板块占整体任务的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 425,
+    "question": "迟昊负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 426,
+    "question": "迟昊管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 427,
+    "question": "迟昊主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 428,
+    "question": "迟昊名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 429,
+    "question": "迟昊分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 430,
+    "question": "邹品德负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 431,
+    "question": "邹品德管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 432,
+    "question": "邹品德主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 433,
+    "question": "邹品德名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 434,
+    "question": "邹品德分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 435,
+    "question": "肖凌聪负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 436,
+    "question": "肖凌聪管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 437,
+    "question": "肖凌聪主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 438,
+    "question": "肖凌聪名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 439,
+    "question": "肖凌聪分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 440,
+    "question": "张定超负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 441,
+    "question": "张定超管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 442,
+    "question": "张定超主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 443,
+    "question": "张定超名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 444,
+    "question": "张定超分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 445,
+    "question": "朱英杰负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 446,
+    "question": "朱英杰管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 447,
+    "question": "朱英杰主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 448,
+    "question": "朱英杰名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 449,
+    "question": "朱英杰分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 450,
+    "question": "黄勇负责的业务今年的目标营收是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 451,
+    "question": "黄勇管辖的区域目前开单金额是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 452,
+    "question": "黄勇主导的业务线达成率如何？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 453,
+    "question": "黄勇名下的任务缺口还有多少万元？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 454,
+    "question": "黄勇分管的板块占整体任务的比例是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 455,
+    "question": "成都城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 456,
+    "question": "成都城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 457,
+    "question": "成都城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 458,
+    "question": "重庆城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 459,
+    "question": "重庆城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 460,
+    "question": "重庆城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 461,
+    "question": "贵阳城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 462,
+    "question": "贵阳城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 463,
+    "question": "贵阳城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 464,
+    "question": "遵义城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 465,
+    "question": "遵义城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 466,
+    "question": "遵义城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 467,
+    "question": "万州城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 468,
+    "question": "万州城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 469,
+    "question": "万州城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 470,
+    "question": "北京城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 471,
+    "question": "北京城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 472,
+    "question": "北京城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 473,
+    "question": "哈尔滨城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 474,
+    "question": "哈尔滨城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 475,
+    "question": "哈尔滨城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 476,
+    "question": "邵阳城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 477,
+    "question": "邵阳城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 478,
+    "question": "邵阳城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 479,
+    "question": "衡阳城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 480,
+    "question": "衡阳城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 481,
+    "question": "衡阳城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 482,
+    "question": "苏南城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 483,
+    "question": "苏南城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 484,
+    "question": "苏南城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 485,
+    "question": "烟台城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 486,
+    "question": "烟台城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 487,
+    "question": "烟台城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 488,
+    "question": "榆林城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 489,
+    "question": "榆林城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 490,
+    "question": "榆林城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 491,
+    "question": "太原城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 492,
+    "question": "太原城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 493,
+    "question": "太原城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 494,
+    "question": "郑州城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 495,
+    "question": "郑州城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 496,
+    "question": "郑州城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 497,
+    "question": "石家庄城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 498,
+    "question": "石家庄城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 499,
+    "question": "石家庄城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 500,
+    "question": "广州城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 501,
+    "question": "广州城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 502,
+    "question": "广州城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 503,
+    "question": "深圳城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 504,
+    "question": "深圳城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 505,
+    "question": "深圳城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 506,
+    "question": "南京城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 507,
+    "question": "南京城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 508,
+    "question": "南京城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 509,
+    "question": "合肥城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 510,
+    "question": "合肥城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 511,
+    "question": "合肥城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 512,
+    "question": "杭州城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 513,
+    "question": "杭州城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 514,
+    "question": "杭州城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 515,
+    "question": "济南城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 516,
+    "question": "济南城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 517,
+    "question": "济南城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 518,
+    "question": "青岛城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 519,
+    "question": "青岛城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 520,
+    "question": "青岛城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 521,
+    "question": "兰州城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 522,
+    "question": "兰州城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 523,
+    "question": "兰州城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 524,
+    "question": "银川城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 525,
+    "question": "银川城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 526,
+    "question": "银川城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 527,
+    "question": "天津城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 528,
+    "question": "天津城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 529,
+    "question": "天津城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 530,
+    "question": "沈阳城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 531,
+    "question": "沈阳城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 532,
+    "question": "沈阳城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 533,
+    "question": "大连城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 534,
+    "question": "大连城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 535,
+    "question": "大连城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 536,
+    "question": "长春城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 537,
+    "question": "长春城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 538,
+    "question": "长春城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 539,
+    "question": "南宁城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 540,
+    "question": "南宁城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 541,
+    "question": "南宁城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 542,
+    "question": "桂林城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 543,
+    "question": "桂林城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 544,
+    "question": "桂林城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 545,
+    "question": "海口城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 546,
+    "question": "海口城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 547,
+    "question": "海口城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 548,
+    "question": "三亚城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 549,
+    "question": "三亚城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 550,
+    "question": "三亚城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 551,
+    "question": "南昌城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 552,
+    "question": "南昌城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 553,
+    "question": "南昌城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 554,
+    "question": "九江城市公司的燃气定制业务今年完成了多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 555,
+    "question": "九江城市公司的地产配套业务开单金额是多少？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 556,
+    "question": "九江城市公司的线下实际开单占其总开单的比例？",
+    "domain": "消费者事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 557,
+    "question": "上海代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 558,
+    "question": "上海代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 559,
+    "question": "江苏代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 560,
+    "question": "江苏代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 561,
+    "question": "浙江代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 562,
+    "question": "浙江代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 563,
+    "question": "安徽代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 564,
+    "question": "安徽代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 565,
+    "question": "山东代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 566,
+    "question": "山东代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 567,
+    "question": "河南代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 568,
+    "question": "河南代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 569,
+    "question": "河北代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 570,
+    "question": "河北代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 571,
+    "question": "湖南代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 572,
+    "question": "湖南代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 573,
+    "question": "湖北代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 574,
+    "question": "湖北代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 575,
+    "question": "广东代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 576,
+    "question": "广东代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 577,
+    "question": "深圳代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 578,
+    "question": "深圳代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 579,
+    "question": "福建代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 580,
+    "question": "福建代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 581,
+    "question": "粤东代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 582,
+    "question": "粤东代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 583,
+    "question": "广西代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 584,
+    "question": "广西代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 585,
+    "question": "四川代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 586,
+    "question": "四川代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 587,
+    "question": "重庆代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 588,
+    "question": "重庆代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 589,
+    "question": "陕西代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 590,
+    "question": "陕西代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 591,
+    "question": "云贵代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 592,
+    "question": "云贵代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 593,
+    "question": "西北代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 594,
+    "question": "西北代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 595,
+    "question": "津冀代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 596,
+    "question": "津冀代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 597,
+    "question": "吉林代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 598,
+    "question": "吉林代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 599,
+    "question": "黑龙江代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 600,
+    "question": "黑龙江代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 601,
+    "question": "辽宁代表处占所属分公司总开单的贡献率是多少？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 602,
+    "question": "辽宁代表处和东部分公司的代表处平均开单相比差距多大？",
+    "domain": "商用事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 603,
+    "question": "净水业务占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 604,
+    "question": "净水业务和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 605,
+    "question": "净水业务的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 606,
+    "question": "饮水业务占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 607,
+    "question": "饮水业务和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 608,
+    "question": "饮水业务的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 609,
+    "question": "台净业务占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 610,
+    "question": "台净业务和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 611,
+    "question": "台净业务的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 612,
+    "question": "滤芯占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 613,
+    "question": "滤芯和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 614,
+    "question": "滤芯的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 615,
+    "question": "天猫直营占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 616,
+    "question": "天猫直营和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 617,
+    "question": "天猫直营的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 618,
+    "question": "京东直营占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 619,
+    "question": "京东直营和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 620,
+    "question": "京东直营的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 621,
+    "question": "抖音直营占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 622,
+    "question": "抖音直营和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 623,
+    "question": "抖音直营的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 624,
+    "question": "达播占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 625,
+    "question": "达播和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 626,
+    "question": "达播的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 627,
+    "question": "亚马逊占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 628,
+    "question": "亚马逊和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 629,
+    "question": "亚马逊的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 630,
+    "question": "东南亚占直营零售部整体开单的比例是多少？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 631,
+    "question": "东南亚和天猫直营的开单金额差距是多少万元？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  },
+  {
+    "id": 632,
+    "question": "东南亚的达成率比电商平均水平高还是低？",
+    "domain": "电商事业部",
+    "source": "278_bad_cases_diagnosis_report.md"
+  }
+]
