@@ -1292,21 +1292,6 @@ def import_runtime_bundle(
 
     written_log_files = _write_log_files(log_files, mode, skipped_log_files)
 
-    # 自动触发内存热重载
-    try:
-        import bookshelf_repository
-        if hasattr(bookshelf_repository.BookshelfRepository, "clear_cache"):
-            bookshelf_repository.BookshelfRepository.clear_cache()
-    except Exception:
-        pass
-    try:
-        import system_prompts
-        pool = system_prompts.ConnectionPool.get_instance()
-        if pool:
-            pool.close_all()
-    except Exception:
-        pass
-
     return {
         "ok": True,
         "dry_run": False,
