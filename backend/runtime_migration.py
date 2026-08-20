@@ -1093,6 +1093,7 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
                 continue
             _, config_skips = _sanitize_config_payload(filename, payload, valid_dataset_ids, dataset_id_map)
             skipped_config_items.extend(config_skips)
+            target_path = os.path.join(CONFIG_DIR, filename)
             exists = os.path.exists(target_path)
             if not exists:
                 action = "create"
