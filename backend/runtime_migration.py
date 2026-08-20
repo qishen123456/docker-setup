@@ -1087,9 +1087,9 @@ def preview_runtime_import(bundle: Dict[str, Any], overwrite_configs: bool = Fal
         fallback_source = get_default_datasource() or {}
         fallback_source_id = int(fallback_source.get("id") or 1)
         dataset_id_map = _build_dataset_id_map(cur, tables.get("bs_datasets") or [], fallback_source_id, mode)
-        valid_dataset_ids = _effective_dataset_ids_for_import(cur, tables, mode)
+        valid_dataset_ids = _existing_table_ids(cur, "bs_datasets") | _incoming_dataset_ids(tables)
         if dataset_id_map:
-            valid_dataset_ids = (valid_dataset_ids - set(dataset_id_map.keys())) | set(dataset_id_map.values())
+            valid_dataset_ids |= set(dataset_id_map.values()) | set(dataset_id_map.keys())
         for raw_name, payload in configs.items():
             filename = _safe_config_filename(raw_name)
             if not filename or (isinstance(payload, dict) and "__error__" in payload):
