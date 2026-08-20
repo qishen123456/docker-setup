@@ -844,6 +844,9 @@ def _upsert_rows(
         existing_id = _existing_natural_key_id(cur, table_name, row, natural_key_columns)
         if existing_id is not None and "id" in available_columns:
             row["id"] = existing_id
+        elif natural_key_columns:
+            # 增量新记录：移除旧ID，使用数据库自增主键，防止覆盖同ID的其他已有记录
+            row.pop("id", None)
 
         columns = list(row.keys())
         placeholders = ", ".join(["%s"] * len(columns))

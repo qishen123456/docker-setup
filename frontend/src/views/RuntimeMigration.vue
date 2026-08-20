@@ -420,11 +420,21 @@ const handleImport = async () => {
     }
     await loadSummary()
     const writtenConfigs = result.written_configs || []
-    ElMessage.success('🎉 运行态包导入成功！')
+    const importedCounts = result.imported_counts || {}
+    const sqlCount = importedCounts.bs_golden_sql_samples || 0
+    const synonymCount = importedCounts.bs_dataset_synonyms || 0
+    const dictCount = importedCounts.bs_data_dictionary_items || 0
+
+    ElMessage.success('🎉 运行态包导入成功，数据已刷新！')
     ElMessageBox.alert(
-      `已成功合并写入配置文件与数据资产！\n\n已更新配置：${writtenConfigs.join('、') || '已同步'}\n\nAI 模型、飞书任务与数据资产已全部即时就位！`,
-      '导入完成',
-      { type: 'success', confirmButtonText: '我知道了' }
+      `<div style="line-height: 1.8;">
+        <p style="font-weight: bold; font-size: 15px; color: #67c23a; margin-bottom: 8px;">✅ 运行态资产验真与写入成功！</p>
+        <p><strong>更新配置文件：</strong>${writtenConfigs.join('、') || '配置已同步'}</p>
+        <p><strong>数据表实际写入：</strong>Golden SQL <strong>${sqlCount}</strong> 条、同义词 <strong>${synonymCount}</strong> 条、字典 <strong>${dictCount}</strong> 条</p>
+        <p style="color: #909399; font-size: 12px; margin-top: 8px;">* 页面顶部的运行态记录及资产指标已即时更新。</p>
+      </div>`,
+      '导入验真成果',
+      { type: 'success', confirmButtonText: '我知道了', dangerouslyUseHTMLString: true }
     )
   } finally {
     importing.value = false
