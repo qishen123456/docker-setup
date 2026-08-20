@@ -1260,6 +1260,69 @@ def import_runtime_bundle(
         final_dataset_ids = _existing_table_ids(cur, "bs_datasets")
         conn.commit()
 
+    for raw_name, payload in configs.items():
+        filename = _safe_config_filename(raw_name)
+        if not filename or (isinstance(payload, dict) and "__error__" in payload):
+            skipped_configs.append(str(raw_name))
+            skipped_config_items.append(_skip_detail("config_file", "配置文件无效或不在允许范围内，已跳过", file=str(raw_name)))
+            continue
+        sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids, dataset_id_map)
+        skipped_config_items.extend(config_skips)
+        target_path = os.path.join(CONFIG_DIR, filename)
+
+        try:
+            if os.path.exists(target_path) and not overwrite_configs:
+                # 执行智能增量合并
+                existing_data = _read_json_file(target_path)
+                merged_data, changes = _deep_merge_config(filename, existing_data, sanitized_payload)
+                if changes > 0:
+                    _write_json_file(target_path, merged_data)
+                    written_configs.append(f"{filename} (智能合并 {changes} 项)")
+                else:
+                    skipped_configs.append(filename)
+            else:
+                _write_json_file(target_path, sanitized_payload)
+                written_configs.append(filename)
+        except Exception as exc:
+            skipped_configs.append(filename)
+            skipped_config_items.append(
+                _skip_detail("config_file", "配置文件写入失败，已跳过", file=filename, error=_first_line(exc))
+            )
+
+    written_log_files = _write_log_files(log_files, mode, skipped_log_files)
+
+    # 自动触发内存热重载
+    try:
+        from bookshelf_repository import BookshelfRepository
+        if hasattr(BookshelfRepository, "clear_cache"):
+            BookshelfRepository.clear_cache()
+    except Exception:
+        pass
+    try:
+        from system_prompts import ConnectionPool
+        pool = ConnectionPool.get_instance()
+        if pool:
+            pool.close_all()
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "dry_run": False,
+        "mode": mode,
+        "overwrite_configs": overwrite_configs,
+        "backup": backup,
+        "written_configs": written_configs,
+        "skipped_configs": skipped_configs,
+        "skipped_config_items": skipped_config_items,
+        "imported_counts": imported_counts,
+        "skipped_table_rows": skipped_table_rows,
+        "written_log_files": written_log_files,
+        "skipped_log_files": skipped_log_files,
+        "preview": preview,
+    }
+
+
 def _deep_merge_config(filename: str, existing_data: Any, incoming_data: Any) -> Tuple[Any, int]:
     """
     智能合并已有配置与导入包中的新配置，返回 (合并后的数据, 新增/更新的项数)
@@ -1368,71 +1431,6 @@ def _deep_merge_config(filename: str, existing_data: Any, incoming_data: Any) ->
             merged[k] = sub_merged
             changes += sub_c
     return merged, changes
-
-
-def _write_configs(
-    configs: Dict[str, Any],
-    overwrite_configs: bool,
-    final_dataset_ids: set[int],
-    dataset_id_map: Dict[int, int],
-    written_configs: List[str],
-    skipped_configs: List[str],
-    skipped_config_items: List[Dict[str, Any]],
-) -> None:
-    for raw_name, payload in configs.items():
-        filename = _safe_config_filename(raw_name)
-        if not filename or (isinstance(payload, dict) and "__error__" in payload):
-            skipped_configs.append(str(raw_name))
-            skipped_config_items.append(_skip_detail("config_file", "配置文件无效或不在允许范围内，已跳过", file=str(raw_name)))
-            continue
-        sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids, dataset_id_map)
-        skipped_config_items.extend(config_skips)
-        target_path = os.path.join(CONFIG_DIR, filename)
-
-        try:
-            if os.path.exists(target_path) and not overwrite_configs:
-                # 执行智能增量合并
-                existing_data = _read_json_file(target_path)
-                merged_data, changes = _deep_merge_config(filename, existing_data, sanitized_payload)
-                if changes > 0:
-                    _write_json_file(target_path, merged_data)
-                    written_configs.append(f"{filename} (增量合并 {changes} 项)")
-                else:
-                    skipped_configs.append(filename)
-            else:
-                _write_json_file(target_path, sanitized_payload)
-                written_configs.append(filename)
-        except Exception as exc:
-            skipped_configs.append(filename)
-            skipped_config_items.append(
-                _skip_detail("config_file", "配置文件写入失败，已跳过", file=filename, error=_first_line(exc))
-            )
-
-    written_log_files = _write_log_files(log_files, mode, skipped_log_files)
-
-    # 自动触发内存热重载
-    try:
-        from bookshelf_repository import BookshelfRepository
-        if hasattr(BookshelfRepository, "clear_cache"):
-            BookshelfRepository.clear_cache()
-    except Exception:
-        pass
-
-    return {
-        "ok": True,
-        "dry_run": False,
-        "mode": mode,
-        "overwrite_configs": overwrite_configs,
-        "backup": backup,
-        "written_configs": written_configs,
-        "skipped_configs": skipped_configs,
-        "skipped_config_items": skipped_config_items,
-        "imported_counts": imported_counts,
-        "skipped_table_rows": skipped_table_rows,
-        "written_log_files": written_log_files,
-        "skipped_log_files": skipped_log_files,
-        "preview": preview,
-    }
 
 
 def load_bundle_file(path: str) -> Dict[str, Any]:
