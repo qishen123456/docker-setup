@@ -28,7 +28,20 @@ def is_encrypted_secret(value: str | None) -> bool:
 
 
 def _key_file_path() -> Path:
-    return Path(os.getenv("SMARTASK_SECRET_KEY_FILE") or DEFAULT_KEY_FILE)
+    custom = os.getenv("SMARTASK_SECRET_KEY_FILE")
+    if custom:
+        return Path(custom)
+    # 统一收敛：优先查找 config 目录下的主密钥文件
+    candidates = [
+        BASE_DIR / "config" / ".secret_master_key",
+        BASE_DIR / "config" / "secret_master_key",
+        BASE_DIR / ".secret_master_key",
+        BASE_DIR / "secret_master_key",
+    ]
+    for p in candidates:
+        if p.exists() and p.read_text(encoding="utf-8").strip():
+            return p
+    return candidates[0]
 
 
 def _read_master_key(*, create: bool = False) -> str:
@@ -37,7 +50,7 @@ def _read_master_key(*, create: bool = False) -> str:
         return env_key.strip()
 
     key_path = _key_file_path()
-    if key_path.exists():
+    if key_path.exists() and key_path.read_text(encoding="utf-8").strip():
         return key_path.read_text(encoding="utf-8").strip()
 
     if not create:
