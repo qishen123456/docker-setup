@@ -5929,32 +5929,15 @@ LIMIT 100
 """.strip()
 
         if "商用事业部" in normalized_question and any(k in normalized_question for k in ["整体达成率", "达成率", "业绩", "开单"]):
-            return """
-SELECT * FROM (
-  SELECT '商用业务' AS 条线,
-         '事业部' AS 层级,
-         '商用事业部' AS 节点名称,
-         NULL::text AS 上级名称,
-         SUM(年度目标营收) AS 总任务金额,
-         SUM(年度开单金额) AS 年度开单金额,
-         ROUND(SUM(年度开单金额) / NULLIF(SUM(年度目标营收), 0) * 100, 2) AS 达成率,
-         ROUND(SUM(年度目标营收) - SUM(年度开单金额), 2) AS 剩余任务金额
-  FROM v_angel_group_data
-  WHERE 当前年 = '2026' AND 层级级别 IN ('分公司', '业务部')
-  UNION ALL
-  SELECT 条线,
-         层级级别 AS 层级,
-         节点名称,
-         '商用事业部' AS 上级名称,
-         SUM(年度目标营收) AS 总任务金额,
-         SUM(年度开单金额) AS 年度开单金额,
-         ROUND(SUM(年度开单金额) / NULLIF(SUM(年度目标营收), 0) * 100, 2) AS 达成率,
-         ROUND(SUM(年度目标营收) - SUM(年度开单金额), 2) AS 剩余任务金额
-  FROM v_angel_group_data
-  WHERE 当前年 = '2026' AND 层级级别 IN ('分公司', '业务部')
-  GROUP BY 条线, 层级级别, 节点名称
-) t
-ORDER BY CASE WHEN 层级 = '事业部' THEN 0 ELSE 1 END, 年度开单金额 DESC;
+            return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
+)
+SELECT *
+FROM 汇总结果
+WHERE 层级 IN ('事业部', '分公司', '业务部')
+ORDER BY CASE WHEN 层级 = '事业部' THEN 0 ELSE 1 END, 年度开单金额 DESC
+LIMIT 100
 """.strip()
 
         # 兜底：纯通用层级词（如"分公司"）按层级返回所有节点
