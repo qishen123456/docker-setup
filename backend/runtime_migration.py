@@ -775,8 +775,6 @@ def _existing_natural_key_id(cur, table_name: str, row: Dict[str, Any], key_colu
 def _build_dataset_id_map(cur, dataset_rows: Iterable[Dict[str, Any]], fallback_source_id: int, mode: str) -> Dict[int, int]:
     if mode == "replace":
         return {}
-    available_columns = set(_get_table_columns(cur, "bs_datasets"))
-    natural_key_columns = _natural_key_columns("bs_datasets", available_columns)
     result: Dict[int, int] = {}
     for raw_row in dataset_rows or []:
         if not isinstance(raw_row, dict):
@@ -784,9 +782,19 @@ def _build_dataset_id_map(cur, dataset_rows: Iterable[Dict[str, Any]], fallback_
         incoming_id = _safe_int(raw_row.get("id"))
         if incoming_id is None:
             continue
-        row = _normalize_row("bs_datasets", raw_row, fallback_source_id, {})
-        row = {key: value for key, value in row.items() if key in available_columns}
-        existing_id = _existing_natural_key_id(cur, "bs_datasets", row, natural_key_columns)
+        name = str(raw_row.get("dataset_name") or "").strip()
+        code = str(raw_row.get("dataset_code") or "").strip()
+        existing_id = None
+        if name:
+            cur.execute("SELECT id FROM bs_datasets WHERE dataset_name = %s LIMIT 1;", (name,))
+            r = cur.fetchone()
+            if r:
+                existing_id = _safe_int(r.get("id") if isinstance(r, dict) else r[0])
+        if existing_id is None and code:
+            cur.execute("SELECT id FROM bs_datasets WHERE dataset_code = %s LIMIT 1;", (code,))
+            r = cur.fetchone()
+            if r:
+                existing_id = _safe_int(r.get("id") if isinstance(r, dict) else r[0])
         if existing_id is not None:
             result[incoming_id] = existing_id
         else:
