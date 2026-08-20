@@ -58,6 +58,12 @@ config/smartask_test_report_*.md
 .env.development.local
 .env.test.local
 .env.production.local
+env
+.secret_master_key
+secret_master_key
+names.txt
+test_*.py
+backend/imports/smartask_runtime_*.json
 
 # Temp
 tmp/
