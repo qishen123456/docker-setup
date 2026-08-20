@@ -1243,6 +1243,125 @@ def import_runtime_bundle(
         final_dataset_ids = _existing_table_ids(cur, "bs_datasets")
         conn.commit()
 
+def _deep_merge_config(filename: str, existing_data: Any, incoming_data: Any) -> Tuple[Any, int]:
+    """
+    智能合并已有配置与导入包中的新配置，返回 (合并后的数据, 新增/更新的项数)
+    """
+    if not isinstance(existing_data, dict) or not isinstance(incoming_data, dict):
+        return incoming_data, 1
+
+    # 1. AI 模型配置 (ai_settings.json)
+    if filename == "ai_settings.json":
+        merged = deepcopy(existing_data)
+        existing_models = merged.get("models") or []
+        incoming_models = incoming_data.get("models") or []
+        existing_map = {}
+        for idx, m in enumerate(existing_models):
+            if isinstance(m, dict):
+                key = str(m.get("model") or m.get("name") or "").strip().lower()
+                if key:
+                    existing_map[key] = idx
+
+        changes = 0
+        has_new_default = any(m.get("is_default") for m in incoming_models if isinstance(m, dict))
+        if has_new_default:
+            for m in existing_models:
+                if isinstance(m, dict):
+                    m["is_default"] = False
+
+        for inc_m in incoming_models:
+            if not isinstance(inc_m, dict):
+                continue
+            key = str(inc_m.get("model") or inc_m.get("name") or "").strip().lower()
+            if key and key in existing_map:
+                # 更新已有模型配置
+                idx = existing_map[key]
+                existing_models[idx].update(inc_m)
+                changes += 1
+            else:
+                # 追加新模型，分配新自增 ID
+                max_id = max([int(m.get("id") or 0) for m in existing_models if isinstance(m, dict)] or [0])
+                new_m = deepcopy(inc_m)
+                new_m["id"] = max_id + 1
+                existing_models.append(new_m)
+                if key:
+                    existing_map[key] = len(existing_models) - 1
+                changes += 1
+
+        merged["models"] = existing_models
+        for k, v in incoming_data.items():
+            if k != "models" and k not in merged:
+                merged[k] = v
+        return merged, changes
+
+    # 2. 飞书同步配置 (feishu_sync.json)
+    if filename == "feishu_sync.json":
+        merged = deepcopy(existing_data)
+        existing_list = merged.get("sync_configs") or []
+        incoming_list = incoming_data.get("sync_configs") or []
+        existing_keys = {
+            str(item.get("name") or item.get("target_table") or "").strip()
+            for item in existing_list if isinstance(item, dict)
+        }
+        changes = 0
+        for item in incoming_list:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("name") or item.get("target_table") or "").strip()
+            if key and key not in existing_keys:
+                max_id = max([int(s.get("id") or 0) for s in existing_list if isinstance(s, dict)] or [0])
+                new_s = deepcopy(item)
+                new_s["id"] = max_id + 1
+                existing_list.append(new_s)
+                existing_keys.add(key)
+                changes += 1
+        merged["sync_configs"] = existing_list
+        return merged, changes
+
+    # 3. 数据源配置 (datasources.json)
+    if filename == "datasources.json":
+        merged = deepcopy(existing_data)
+        existing_list = merged.get("datasources") or []
+        incoming_list = incoming_data.get("datasources") or []
+        existing_names = {str(item.get("name") or "").strip() for item in existing_list if isinstance(item, dict)}
+        changes = 0
+        for item in incoming_list:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if name and name not in existing_names:
+                max_id = max([int(s.get("id") or 0) for s in existing_list if isinstance(s, dict)] or [0])
+                new_ds = deepcopy(item)
+                new_ds["id"] = max_id + 1
+                existing_list.append(new_ds)
+                existing_names.add(name)
+                changes += 1
+        merged["datasources"] = existing_list
+        return merged, changes
+
+    # 4. 其他 JSON 字典 (通用递归合并)
+    merged = deepcopy(existing_data)
+    changes = 0
+    for k, v in incoming_data.items():
+        if k not in merged:
+            merged[k] = v
+            changes += 1
+        elif isinstance(merged[k], dict) and isinstance(v, dict):
+            sub_merged, sub_c = _deep_merge_config(filename, merged[k], v)
+            merged[k] = sub_merged
+            changes += sub_c
+    return merged, changes
+
+
+def _write_configs(
+    configs: Dict[str, Any],
+    overwrite_configs: bool,
+    final_dataset_ids: set[int],
+    dataset_id_map: Dict[int, int],
+    written_configs: List[str],
+    skipped_configs: List[str],
+    skipped_config_items: List[Dict[str, Any]],
+) -> None:
     for raw_name, payload in configs.items():
         filename = _safe_config_filename(raw_name)
         if not filename or (isinstance(payload, dict) and "__error__" in payload):
@@ -1252,36 +1371,20 @@ def import_runtime_bundle(
         sanitized_payload, config_skips = _sanitize_config_payload(filename, payload, final_dataset_ids, dataset_id_map)
         skipped_config_items.extend(config_skips)
         target_path = os.path.join(CONFIG_DIR, filename)
-        if os.path.exists(target_path) and not overwrite_configs:
-            if filename == "feishu_sync.json" and isinstance(sanitized_payload, dict):
-                try:
-                    existing_data = _read_json_file(target_path) or {}
-                    existing_list = existing_data.get("sync_configs") or []
-                    existing_names = {str(item.get("name") or "").strip() for item in existing_list if isinstance(item, dict)}
-                    incoming_list = sanitized_payload.get("sync_configs") or []
-                    added = 0
-                    for item in incoming_list:
-                        if not isinstance(item, dict):
-                            continue
-                        name = str(item.get("name") or "").strip()
-                        if name and name not in existing_names:
-                            existing_list.append(item)
-                            existing_names.add(name)
-                            added += 1
-                    if added > 0:
-                        existing_data["sync_configs"] = existing_list
-                        _write_json_file(target_path, existing_data)
-                        written_configs.append(f"{filename} (增量合并 {added} 个任务)")
-                    else:
-                        skipped_configs.append(filename)
-                except Exception as exc:
+
+        try:
+            if os.path.exists(target_path) and not overwrite_configs:
+                # 执行智能增量合并
+                existing_data = _read_json_file(target_path)
+                merged_data, changes = _deep_merge_config(filename, existing_data, sanitized_payload)
+                if changes > 0:
+                    _write_json_file(target_path, merged_data)
+                    written_configs.append(f"{filename} (增量合并 {changes} 项)")
+                else:
                     skipped_configs.append(filename)
             else:
-                skipped_configs.append(filename)
-            continue
-        try:
-            _write_json_file(target_path, sanitized_payload)
-            written_configs.append(filename)
+                _write_json_file(target_path, sanitized_payload)
+                written_configs.append(filename)
         except Exception as exc:
             skipped_configs.append(filename)
             skipped_config_items.append(
@@ -1289,6 +1392,14 @@ def import_runtime_bundle(
             )
 
     written_log_files = _write_log_files(log_files, mode, skipped_log_files)
+
+    # 自动触发内存热重载
+    try:
+        from bookshelf_repository import BookshelfRepository
+        if hasattr(BookshelfRepository, "clear_cache"):
+            BookshelfRepository.clear_cache()
+    except Exception:
+        pass
 
     return {
         "ok": True,
