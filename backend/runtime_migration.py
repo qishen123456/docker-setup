@@ -1253,7 +1253,31 @@ def import_runtime_bundle(
         skipped_config_items.extend(config_skips)
         target_path = os.path.join(CONFIG_DIR, filename)
         if os.path.exists(target_path) and not overwrite_configs:
-            skipped_configs.append(filename)
+            if filename == "feishu_sync.json" and isinstance(sanitized_payload, dict):
+                try:
+                    existing_data = _read_json_file(target_path) or {}
+                    existing_list = existing_data.get("sync_configs") or []
+                    existing_names = {str(item.get("name") or "").strip() for item in existing_list if isinstance(item, dict)}
+                    incoming_list = sanitized_payload.get("sync_configs") or []
+                    added = 0
+                    for item in incoming_list:
+                        if not isinstance(item, dict):
+                            continue
+                        name = str(item.get("name") or "").strip()
+                        if name and name not in existing_names:
+                            existing_list.append(item)
+                            existing_names.add(name)
+                            added += 1
+                    if added > 0:
+                        existing_data["sync_configs"] = existing_list
+                        _write_json_file(target_path, existing_data)
+                        written_configs.append(f"{filename} (增量合并 {added} 个任务)")
+                    else:
+                        skipped_configs.append(filename)
+                except Exception as exc:
+                    skipped_configs.append(filename)
+            else:
+                skipped_configs.append(filename)
             continue
         try:
             _write_json_file(target_path, sanitized_payload)
