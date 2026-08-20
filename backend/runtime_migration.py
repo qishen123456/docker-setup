@@ -1310,6 +1310,9 @@ def import_runtime_bundle(
 
     written_log_files = _write_log_files(log_files, mode, skipped_log_files)
 
+    # 导入完成后，自动物化所有数据转换任务(Transforms)及结构定义(Schema DDL)视图
+    materialized_views = _materialize_imported_views(repo)
+
     return {
         "ok": True,
         "dry_run": False,
@@ -1323,8 +1326,53 @@ def import_runtime_bundle(
         "skipped_table_rows": skipped_table_rows,
         "written_log_files": written_log_files,
         "skipped_log_files": skipped_log_files,
+        "materialized_views": materialized_views,
         "preview": preview,
     }
+
+
+def _materialize_imported_views(repo: BookshelfRepository) -> List[Dict[str, Any]]:
+    """
+    导入完成后自动执行/物化激活的视图与转换任务，确保目标数据库具备完整的业务视图。
+    """
+    results: List[Dict[str, Any]] = []
+    # 1. 优先通过 DatasetTransformService 执行转换
+    try:
+        from dataset_transform_service import DatasetTransformService
+        service = DatasetTransformService()
+        transforms = service.get_transforms()
+        for t in transforms:
+            if not t.get("is_active"):
+                continue
+            try:
+                res = service.execute_transform(t["id"], triggered_by="migration_import")
+                results.append({"type": "transform", "name": t.get("target_name"), "success": res.get("success"), "message": res.get("message")})
+            except Exception as exc:
+                results.append({"type": "transform", "name": t.get("target_name"), "success": False, "message": str(exc)})
+    except Exception as exc:
+        results.append({"type": "transform_service", "name": "service_init", "success": False, "message": str(exc)})
+
+    # 2. 检查 bs_schema_definitions 中的 ddl_sql (如独立视图定义)
+    try:
+        with repo._connect() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT table_name, ddl_sql FROM bs_schema_definitions WHERE ddl_sql IS NOT NULL AND is_active = TRUE;")
+            schemas = cur.fetchall()
+            for s in schemas:
+                ddl = str(s.get("ddl_sql") or "").strip()
+                tname = str(s.get("table_name") or "")
+                if not ddl or not ddl.lower().startswith("create"):
+                    continue
+                try:
+                    cur.execute(ddl)
+                    conn.commit()
+                    results.append({"type": "schema_ddl", "name": tname, "success": True, "message": "DDL executed"})
+                except Exception as exc:
+                    conn.rollback()
+                    results.append({"type": "schema_ddl", "name": tname, "success": False, "message": str(exc)})
+    except Exception as exc:
+        results.append({"type": "schema_ddl", "name": "schema_query", "success": False, "message": str(exc)})
+
+    return results
 
 
 def _deep_merge_config(filename: str, existing_data: Any, incoming_data: Any) -> Tuple[Any, int]:
