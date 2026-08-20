@@ -113,7 +113,7 @@ NATURAL_KEY_COLUMNS = {
     "bs_lld_documents": ["dataset_id", "title"],
     "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key"],
     "bs_schema_definitions": ["dataset_id", "table_name"],
-    "bs_golden_sql_samples": ["dataset_id", "question"],
+    "bs_golden_sql_samples": ["dataset_id", "question", "sql_text"],
     "bs_agent_prompt_fragments": ["dataset_id", "agent_no", "prompt_key"],
     "bs_common_questions": ["dataset_id", "question_text"],
     "bs_regression_cases": ["dataset_id", "case_type", "question_text"],

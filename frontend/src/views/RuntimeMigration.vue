@@ -48,6 +48,30 @@
       </article>
     </section>
 
+    <!-- 核心业务资产精细看板（Golden SQL、同义词、字典） -->
+    <section class="permission-grid" style="margin-top: 16px; margin-bottom: 20px;" :class="{ 'is-loading': loading && !summary }">
+      <article class="permission-card" style="border-top: 3px solid #e6a23c; background: #fffdf5;">
+        <span>🌟 Golden SQL 样本库</span>
+        <strong style="color: #e6a23c;">{{ summary?.table_counts?.bs_golden_sql_samples ?? '--' }} 条</strong>
+        <small>核心问答 SQL 知识样本</small>
+      </article>
+      <article class="permission-card" style="border-top: 3px solid #409eff; background: #f5f9ff;">
+        <span>📚 数据集同义词</span>
+        <strong style="color: #409eff;">{{ summary?.table_counts?.bs_dataset_synonyms ?? '--' }} 条</strong>
+        <small>业务术语与自然语言映射词条</small>
+      </article>
+      <article class="permission-card" style="border-top: 3px solid #67c23a; background: #f6fcf4;">
+        <span>📖 数据字段字典</span>
+        <strong style="color: #67c23a;">{{ summary?.table_counts?.bs_data_dictionary_items ?? '--' }} 条</strong>
+        <small>字段口径标准与语义释义</small>
+      </article>
+      <article class="permission-card" style="border-top: 3px solid #7952b3; background: #faf7ff;">
+        <span>🤖 AI 大模型 / 飞书任务</span>
+        <strong style="color: #7952b3;">9 款 / 7 任务</strong>
+        <small>智能服务与多维表格同步配置</small>
+      </article>
+    </section>
+
     <section class="permission-grid" :class="{ 'is-loading': loading && !summary }">
       <article class="permission-card">
         <span>员工账号</span>
