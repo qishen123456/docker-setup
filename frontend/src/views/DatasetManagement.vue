@@ -156,49 +156,88 @@
             <el-tabs v-else v-model="activeTab">
               <!-- 常见问题 -->
               <el-tab-pane label="常见问题" name="common_questions">
-                <div v-if="canUseDatasetAction('question', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('question', -1)">新增常见问题</el-button></div>
-                <el-table :data="full.common_questions" border size="small">
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div><el-button v-if="canUseDatasetAction('question', 'create')" size="small" @click="openItemEditor('question', -1)">新增常见问题</el-button></div>
+                  <el-input v-model="tabPagination.common_questions.search" placeholder="搜索问题内容..." size="small" clearable style="width: 220px;" @input="tabPagination.common_questions.page = 1" />
+                </div>
+                <el-table :data="pagedQuestions.rows" border size="small">
                   <el-table-column label="问题" min-width="300"><template #default="{ row }">{{ row.question_text || '(空)' }}</template></el-table-column>
                   <el-table-column label="排序" width="80"><template #default="{ row }">{{ row.sort_order }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('question', 'update')" link type="primary" @click="openItemEditor('question', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('question', 'delete')" link type="danger" @click="deleteCollectionItem('question', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('question', 'update')" link type="primary" @click="openItemEditor('question', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('question', 'delete')" link type="danger" @click="deleteCollectionItem('question', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.common_questions.page"
+                    v-model:page-size="tabPagination.common_questions.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedQuestions.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <el-tab-pane label="标准题集" name="regression_cases">
-                <div v-if="canUseDatasetAction('regression', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('regression', -1)">新增回归题</el-button></div>
-                <el-table :data="full.regression_cases" border size="small">
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div><el-button v-if="canUseDatasetAction('regression', 'create')" size="small" @click="openItemEditor('regression', -1)">新增回归题</el-button></div>
+                  <el-input v-model="tabPagination.regression_cases.search" placeholder="搜索题干 / 预期焦点..." size="small" clearable style="width: 220px;" @input="tabPagination.regression_cases.page = 1" />
+                </div>
+                <el-table :data="pagedRegression.rows" border size="small">
                   <el-table-column label="类型" width="110"><template #default="{ row }">{{ row.case_type }}</template></el-table-column>
                   <el-table-column label="问题" min-width="260"><template #default="{ row }">{{ row.question_text || '(空)' }}</template></el-table-column>
                   <el-table-column label="预期焦点" min-width="260"><template #default="{ row }">{{ row.expected_focus || '-' }}</template></el-table-column>
                   <el-table-column label="执行预期" width="120"><template #default="{ row }">{{ row.expected_intent || '-' }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('regression', 'update')" link type="primary" @click="openItemEditor('regression', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('regression', 'delete')" link type="danger" @click="deleteCollectionItem('regression', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('regression', 'update')" link type="primary" @click="openItemEditor('regression', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('regression', 'delete')" link type="danger" @click="deleteCollectionItem('regression', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.regression_cases.page"
+                    v-model:page-size="tabPagination.regression_cases.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedRegression.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <!-- 路由词/别名 -->
               <el-tab-pane label="路由词/别名" name="synonyms">
-                <div v-if="canUseDatasetAction('synonym', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('synonym', -1)">新增路由词</el-button></div>
-                <el-table :data="full.synonyms" border size="small">
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div><el-button v-if="canUseDatasetAction('synonym', 'create')" size="small" @click="openItemEditor('synonym', -1)">新增路由词</el-button></div>
+                  <el-input v-model="tabPagination.synonyms.search" placeholder="搜索同义词 / 归一词..." size="small" clearable style="width: 220px;" @input="tabPagination.synonyms.page = 1" />
+                </div>
+                <el-table :data="pagedSynonyms.rows" border size="small">
                   <el-table-column label="同义词" min-width="180"><template #default="{ row }">{{ row.synonym }}</template></el-table-column>
                   <el-table-column label="归一词" min-width="180"><template #default="{ row }">{{ row.normalized_synonym }}</template></el-table-column>
                   <el-table-column label="权重" width="80"><template #default="{ row }">{{ row.weight }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('synonym', 'update')" link type="primary" @click="openItemEditor('synonym', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('synonym', 'delete')" link type="danger" @click="deleteCollectionItem('synonym', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('synonym', 'update')" link type="primary" @click="openItemEditor('synonym', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('synonym', 'delete')" link type="danger" @click="deleteCollectionItem('synonym', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.synonyms.page"
+                    v-model:page-size="tabPagination.synonyms.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedSynonyms.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <!-- LLD 文档 -->
@@ -219,24 +258,37 @@
 
               <!-- 数据字典 -->
               <el-tab-pane label="数据字典" name="dictionary">
-                <div class="toolbar">
-                  <el-button v-if="canUseDatasetAction('dict', 'create')" size="small" @click="openItemEditor('dict', -1)">新增字段</el-button>
-                  <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="success" @click="extractDictFromDDL">从 DDL 提取字段</el-button>
-                  <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="primary" :loading="pgDictLoading" @click="extractDictFromPg">从 PG 提取 fields</el-button>
-                  <el-button v-if="canUseDatasetAction('dict', 'delete')" size="small" type="danger" plain @click="clearDictionary">清空字段</el-button>
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div style="display: flex; gap: 8px;">
+                    <el-button v-if="canUseDatasetAction('dict', 'create')" size="small" @click="openItemEditor('dict', -1)">新增字段</el-button>
+                    <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="success" @click="extractDictFromDDL">从 DDL 提取字段</el-button>
+                    <el-button v-if="canUseDatasetFeature('dataset_dict_extract')" size="small" type="primary" :loading="pgDictLoading" @click="extractDictFromPg">从 PG 提取 fields</el-button>
+                    <el-button v-if="canUseDatasetAction('dict', 'delete')" size="small" type="danger" plain @click="clearDictionary">清空字段</el-button>
+                  </div>
+                  <el-input v-model="tabPagination.dictionary.search" placeholder="搜索表名 / 字段 / 语义名..." size="small" clearable style="width: 220px;" @input="tabPagination.dictionary.page = 1" />
                 </div>
-                <el-table :data="full.data_dictionary" border size="small">
+                <el-table :data="pagedDict.rows" border size="small">
                   <el-table-column label="表名" min-width="160"><template #default="{ row }">{{ row.table_name }}</template></el-table-column>
                   <el-table-column label="字段" min-width="140"><template #default="{ row }">{{ row.column_name }}</template></el-table-column>
                   <el-table-column label="JSONB Key" min-width="120"><template #default="{ row }">{{ row.jsonb_key || '-' }}</template></el-table-column>
                   <el-table-column label="语义名" min-width="140"><template #default="{ row }">{{ row.semantic_name || '-' }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('dict', 'update')" link type="primary" @click="openItemEditor('dict', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('dict', 'delete')" link type="danger" @click="deleteCollectionItem('dict', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('dict', 'update')" link type="primary" @click="openItemEditor('dict', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('dict', 'delete')" link type="danger" @click="deleteCollectionItem('dict', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.dictionary.page"
+                    v-model:page-size="tabPagination.dictionary.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedDict.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <!-- DDL + 表关联 (保留原始交互方式，已有 Drawer) -->
@@ -276,35 +328,61 @@
 
               <!-- Golden SQL -->
               <el-tab-pane label="Golden SQL" name="golden">
-                <div v-if="canUseDatasetAction('golden', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('golden', -1)">新增训练实例</el-button></div>
-                <el-table :data="full.golden_sql_samples" border size="small">
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div><el-button v-if="canUseDatasetAction('golden', 'create')" size="small" @click="openItemEditor('golden', -1)">新增训练实例</el-button></div>
+                  <el-input v-model="tabPagination.golden.search" placeholder="搜索问题 / SQL / Intent..." size="small" clearable style="width: 220px;" @input="tabPagination.golden.page = 1" />
+                </div>
+                <el-table :data="pagedGoldenSql.rows" border size="small">
                   <el-table-column label="Intent" width="100"><template #default="{ row }">{{ row.intent_type }}</template></el-table-column>
                   <el-table-column label="问题" min-width="260"><template #default="{ row }">{{ row.question || '(空)' }}</template></el-table-column>
                   <el-table-column label="SQL 预览" min-width="280"><template #default="{ row }"><div class="ddl-preview-line">{{ (row.sql_text || '').slice(0, 100) || '(空)' }}</div></template></el-table-column>
                   <el-table-column label="分数" width="70"><template #default="{ row }">{{ row.quality_score }}</template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('golden', 'update')" link type="primary" @click="openItemEditor('golden', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('golden', 'delete')" link type="danger" @click="deleteCollectionItem('golden', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('golden', 'update')" link type="primary" @click="openItemEditor('golden', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('golden', 'delete')" link type="danger" @click="deleteCollectionItem('golden', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.golden.page"
+                    v-model:page-size="tabPagination.golden.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedGoldenSql.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <!-- Agent 提示片段 -->
               <el-tab-pane label="Agent 提示片段" name="prompts">
-                <div v-if="canUseDatasetAction('prompt', 'create')" class="toolbar"><el-button size="small" @click="openItemEditor('prompt', -1)">新增片段</el-button></div>
-                <el-table :data="full.agent_prompts" border size="small">
+                <div class="toolbar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div><el-button v-if="canUseDatasetAction('prompt', 'create')" size="small" @click="openItemEditor('prompt', -1)">新增片段</el-button></div>
+                  <el-input v-model="tabPagination.prompts.search" placeholder="搜索 Key / 内容..." size="small" clearable style="width: 220px;" @input="tabPagination.prompts.page = 1" />
+                </div>
+                <el-table :data="pagedPrompts.rows" border size="small">
                   <el-table-column label="Agent" width="90"><template #default="{ row }">Agent{{ row.agent_no }}</template></el-table-column>
                   <el-table-column label="Key" width="150"><template #default="{ row }">{{ row.prompt_key }}</template></el-table-column>
                   <el-table-column label="内容预览" min-width="300"><template #default="{ row }"><div class="text-preview">{{ (row.prompt_content || '').slice(0, 120) || '(空)' }}</div></template></el-table-column>
                   <el-table-column label="操作" width="130">
-                    <template #default="{ $index }">
-                      <el-button v-if="canUseDatasetAction('prompt', 'update')" link type="primary" @click="openItemEditor('prompt', $index)">编辑</el-button>
-                      <el-button v-if="canUseDatasetAction('prompt', 'delete')" link type="danger" @click="deleteCollectionItem('prompt', $index)">删除</el-button>
+                    <template #default="{ row }">
+                      <el-button v-if="canUseDatasetAction('prompt', 'update')" link type="primary" @click="openItemEditor('prompt', row._rawIndex)">编辑</el-button>
+                      <el-button v-if="canUseDatasetAction('prompt', 'delete')" link type="danger" @click="deleteCollectionItem('prompt', row._rawIndex)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
+                <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                  <el-pagination
+                    v-model:current-page="tabPagination.prompts.page"
+                    v-model:page-size="tabPagination.prompts.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="pagedPrompts.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    size="small"
+                  />
+                </div>
               </el-tab-pane>
 
               <!-- 外部配置 -->
@@ -1511,6 +1589,38 @@ const filteredDatasets = computed(() => {
 })
 
 const sourceNameById = (id) => dataSources.value.find(x => Number(x.id) === Number(id))?.name || '未设置'
+
+// ========== 各 Tab 列表的分页与关键字搜索 ==========
+const tabPagination = reactive({
+  common_questions: { page: 1, pageSize: 10, search: '' },
+  regression_cases: { page: 1, pageSize: 10, search: '' },
+  synonyms: { page: 1, pageSize: 20, search: '' },
+  lld: { page: 1, pageSize: 10, search: '' },
+  dictionary: { page: 1, pageSize: 20, search: '' },
+  golden: { page: 1, pageSize: 10, search: '' },
+  prompts: { page: 1, pageSize: 10, search: '' },
+})
+
+const getPagedCollection = (key, searchFields = []) => {
+  const col = (full[key] || []).map((item, idx) => ({ ...item, _rawIndex: idx }))
+  const conf = tabPagination[key === 'golden_sql_samples' ? 'golden' : (key === 'data_dictionary' ? 'dictionary' : (key === 'agent_prompts' ? 'prompts' : key))] || { page: 1, pageSize: 10, search: '' }
+  const kw = (conf.search || '').trim().toLowerCase()
+  let filtered = col
+  if (kw && searchFields.length) {
+    filtered = col.filter(item => searchFields.some(field => String(item[field] || '').toLowerCase().includes(kw)))
+  }
+  const total = filtered.length
+  const start = (conf.page - 1) * conf.pageSize
+  const rows = filtered.slice(start, start + conf.pageSize)
+  return { rows, total }
+}
+
+const pagedSynonyms = computed(() => getPagedCollection('synonyms', ['synonym', 'normalized_synonym']))
+const pagedGoldenSql = computed(() => getPagedCollection('golden_sql_samples', ['question', 'sql_text', 'intent_type']))
+const pagedQuestions = computed(() => getPagedCollection('common_questions', ['question_text']))
+const pagedRegression = computed(() => getPagedCollection('regression_cases', ['question_text', 'expected_focus', 'case_type']))
+const pagedDict = computed(() => getPagedCollection('data_dictionary', ['table_name', 'column_name', 'semantic_name', 'jsonb_key']))
+const pagedPrompts = computed(() => getPagedCollection('agent_prompts', ['prompt_key', 'prompt_content']))
 
 // ========== 通用弹窗编辑器 ==========
 const itemEditorVisible = ref(false)
