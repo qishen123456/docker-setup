@@ -107,16 +107,16 @@ DATASET_REFERENCE_TABLES = {
 }
 
 NATURAL_KEY_COLUMNS = {
-    "bs_datasets": ["dataset_code"],
+    "bs_datasets": ["dataset_name"],
     "bs_dataset_synonyms": ["dataset_id", "synonym"],
     "bs_dataset_transforms": ["dataset_id", "target_name"],
-    "bs_lld_documents": ["dataset_id", "title", "version"],
-    "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key", "semantic_name"],
+    "bs_lld_documents": ["dataset_id", "title"],
+    "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key"],
     "bs_schema_definitions": ["dataset_id", "table_name"],
-    "bs_golden_sql_samples": ["dataset_id", "question", "sql_text"],
+    "bs_golden_sql_samples": ["dataset_id", "question"],
     "bs_agent_prompt_fragments": ["dataset_id", "agent_no", "prompt_key"],
     "bs_common_questions": ["dataset_id", "question_text"],
-    "bs_regression_cases": ["dataset_id", "question_text", "case_type"],
+    "bs_regression_cases": ["dataset_id", "case_type", "question_text"],
     "bs_dataset_external_configs": ["dataset_id", "config_type", "config_key"],
     "bs_dataset_report_config": ["dataset_id"],
 }
