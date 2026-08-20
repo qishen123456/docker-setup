@@ -108,7 +108,7 @@ DATASET_REFERENCE_TABLES = {
 
 NATURAL_KEY_COLUMNS = {
     "bs_datasets": ["dataset_name"],
-    "bs_dataset_synonyms": ["dataset_id", "synonym"],
+    "bs_dataset_synonyms": ["dataset_id", "normalized_synonym"],
     "bs_dataset_transforms": ["dataset_id", "target_name"],
     "bs_lld_documents": ["dataset_id", "title"],
     "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key"],
@@ -702,6 +702,9 @@ def _normalize_row(
     item = dict(row)
     if table_name in {"bs_datasets", "bs_schema_definitions"}:
         item["source_id"] = int(item.get("source_id") or fallback_source_id)
+    if table_name == "bs_dataset_synonyms":
+        if not item.get("normalized_synonym"):
+            item["normalized_synonym"] = "".join(str(item.get("synonym") or "").split()).lower()
     if table_name in DATASET_REFERENCE_TABLES and "dataset_id" in item:
         dataset_id = _safe_int(item.get("dataset_id"))
         if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
@@ -758,10 +761,6 @@ def _existing_natural_key_id(cur, table_name: str, row: Dict[str, Any], key_colu
         return None
     where_clause = " AND ".join([f"{column} IS NOT DISTINCT FROM %s" for column in key_columns])
     values = [row.get(column) for column in key_columns]
-    current_id = _safe_int(row.get("id"))
-    if current_id is not None:
-        where_clause = f"({where_clause}) AND id <> %s"
-        values.append(current_id)
     cur.execute(
         f"SELECT id FROM {table_name} WHERE {where_clause} ORDER BY id ASC LIMIT 1;",
         values,
