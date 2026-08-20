@@ -113,7 +113,6 @@ NATURAL_KEY_COLUMNS = {
     "bs_lld_documents": ["dataset_id", "title"],
     "bs_data_dictionary_items": ["dataset_id", "table_name", "column_name", "jsonb_key"],
     "bs_schema_definitions": ["dataset_id", "table_name"],
-    "bs_golden_sql_samples": ["dataset_id", "question", "sql_text"],
     "bs_agent_prompt_fragments": ["dataset_id", "agent_no", "prompt_key"],
     "bs_common_questions": ["dataset_id", "question_text"],
     "bs_regression_cases": ["dataset_id", "case_type", "question_text"],
@@ -705,6 +704,23 @@ def _normalize_row(
     if table_name == "bs_dataset_synonyms":
         if not item.get("normalized_synonym"):
             item["normalized_synonym"] = "".join(str(item.get("synonym") or "").split()).lower()
+    if table_name == "bs_golden_sql_samples":
+        raw_tags = item.get("tags")
+        if isinstance(raw_tags, list):
+            tags_list = list(raw_tags)
+        elif isinstance(raw_tags, str) and raw_tags:
+            try:
+                tags_list = list(json.loads(raw_tags))
+            except Exception:
+                tags_list = [raw_tags]
+        else:
+            tags_list = []
+        for tag in ["待AI校验", "全量原始导入"]:
+            if tag not in tags_list:
+                tags_list.append(tag)
+        item["tags"] = tags_list
+        # 移除原有的固定 ID，分配新主键保证 2506 条全部无损追加落库
+        item.pop("id", None)
     if table_name in DATASET_REFERENCE_TABLES and "dataset_id" in item:
         dataset_id = _safe_int(item.get("dataset_id"))
         if dataset_id is not None and dataset_id_map and dataset_id in dataset_id_map:
