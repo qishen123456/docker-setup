@@ -1294,14 +1294,14 @@ def import_runtime_bundle(
 
     # 自动触发内存热重载
     try:
-        from bookshelf_repository import BookshelfRepository
-        if hasattr(BookshelfRepository, "clear_cache"):
-            BookshelfRepository.clear_cache()
+        import bookshelf_repository
+        if hasattr(bookshelf_repository.BookshelfRepository, "clear_cache"):
+            bookshelf_repository.BookshelfRepository.clear_cache()
     except Exception:
         pass
     try:
-        from system_prompts import ConnectionPool
-        pool = ConnectionPool.get_instance()
+        import system_prompts
+        pool = system_prompts.ConnectionPool.get_instance()
         if pool:
             pool.close_all()
     except Exception:
