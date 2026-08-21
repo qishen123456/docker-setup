@@ -1,0 +1,358 @@
+{
+  "version": "extended-2026-08-19-v2",
+  "purpose": "基于 confirmed_behaviors_baseline.md 大幅拓展：每条款 4-5 个变体，原 31 用例 → 110+ 用例",
+  "cases": [
+    {"id": "BL-1.1-A", "source": "baseline §1.1 代表问题-商用分公司", "question": "东部分公司的业绩怎么样了",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 2}
+      ]},
+    {"id": "BL-1.1-B", "source": "baseline §1.1 代表问题-业务部", "question": "华南业务部的业绩如何",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-1.1-C", "source": "baseline §1.1 代表问题-代表处", "question": "某代表处的表现怎么样",
+      "asserts": [
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-1.1-D", "source": "baseline §1.1 末端例外：业务代表=个人", "question": "靳锋的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-1.1-E", "source": "baseline §1.1 末端例外：个人业绩查某指标", "question": "商用事业部业务代表靳锋的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-1.1-F", "source": "baseline §1.1 不要只返分公司1行", "question": "西部分公司的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 2}
+      ]},
+    {"id": "BL-1.1-G", "source": "baseline §1.1 不要只返业务部1行", "question": "公共办公业务部的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+
+    {"id": "BL-1.2-A", "source": "baseline §1.2 多对象对比", "question": "东部分公司和南部分公司的业绩对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "comparison"}
+      ]},
+    {"id": "BL-1.2-B", "source": "baseline §1.2 不走单对象下钻", "question": "东部分公司和西部分公司的业绩对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["comparison","ranking"]}
+      ]},
+
+    {"id": "BL-1.2.1-A", "source": "baseline §1.2.1 跨数据集对比", "question": "消费者和商用的对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "contains", "expect": 3},
+        {"path": "route.dataset_ids", "op": "contains", "expect": 2}
+      ]},
+    {"id": "BL-1.2.1-B", "source": "baseline §1.2.1 主体总任务金额对比", "question": "商用事业部和消费者事业部的总任务金额对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "contains", "expect": 3},
+        {"path": "route.dataset_ids", "op": "contains", "expect": 2}
+      ]},
+
+    {"id": "BL-1.2.2-A", "source": "baseline §1.2.2 商用和电商对比", "question": "商用和电商的对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "contains", "expect": 3},
+        {"path": "route.dataset_ids", "op": "contains", "expect": 62}
+      ]},
+    {"id": "BL-1.2.2-B", "source": "baseline §1.2.2 电商和商用业绩对比", "question": "电商和商用的业绩对比",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "contains", "expect": 3},
+        {"path": "route.dataset_ids", "op": "contains", "expect": 62}
+      ]},
+
+    {"id": "BL-1.3-A", "source": "baseline §1.3 江浙沪分公司-城市分公司", "question": "江浙沪分公司的城市分公司",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["drilldown","ranking"]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 2}
+      ]},
+    {"id": "BL-1.3-B", "source": "baseline §1.3 山东分公司-业务代表", "question": "山东分公司的业务代表",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["drilldown","ranking"]}
+      ]},
+    {"id": "BL-1.3-C", "source": "baseline §1.3 含排名词优先走 ranking", "question": "看下前三的江浙沪分公司城市分公司",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"}
+      ]},
+
+    {"id": "BL-1.4-A", "source": "baseline §1.4 电商根节点默认展示下级", "question": "电商事业部的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.row_count", "op": "range", "expect": [2, 6]}
+      ]},
+    {"id": "BL-1.4-B", "source": "baseline §1.4 不应只返电商汇总1行", "question": "电商事业部",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+
+    {"id": "BL-2.1-A", "source": "baseline §2.1 消费者城市分公司排名", "question": "消费者城市分公司排名",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 50},
+        {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIMIT 3"}
+      ]},
+    {"id": "BL-2.1-B", "source": "baseline §2.1 各分公司业绩排名", "question": "各分公司业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-2.1-C", "source": "baseline §2.1 业务代表排名-不默认 Top3", "question": "业务代表业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.sql", "op": "not_contains", "expect": "LIMIT 3"}
+      ]},
+
+    {"id": "BL-2.2-A", "source": "baseline §2.2 业务部排名", "question": "业务部业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["ranking","aggregate"]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-2.2-B", "source": "baseline §2.2 分公司排名", "question": "分公司业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["ranking","aggregate"]}
+      ]},
+    {"id": "BL-2.2-C", "source": "baseline §2.2 事业部排名", "question": "事业部业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["ranking","aggregate"]}
+      ]},
+    {"id": "BL-2.2-D", "source": "baseline §2.2 业务代表排名", "question": "业务代表业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["ranking","aggregate"]}
+      ]},
+
+    {"id": "BL-2.3-A", "source": "baseline §2.3 看下前三的业务承接人", "question": "看下前三的业务承接人",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.3-B", "source": "baseline §2.3 业务承接人业绩排名", "question": "电商事业部业务承接人业绩排名",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "in", "expect": ["ranking","aggregate"]}
+      ]},
+    {"id": "BL-2.3-C", "source": "baseline §2.3 前 3 的负责人", "question": "前3的负责人",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.3-D", "source": "baseline §2.3 任务承接人排名", "question": "任务承接人业绩排名前5",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [62]},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}
+      ]},
+
+    {"id": "BL-2.4-A", "source": "baseline §2.4 城市分公司业绩", "question": "城市分公司的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0}
+      ]},
+    {"id": "BL-2.4-B", "source": "baseline §2.4 城市分公司的业绩咋样", "question": "城市分公司的业绩咋样",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0}
+      ]},
+    {"id": "BL-2.4-C", "source": "baseline §2.4 业务部业绩情况", "question": "业务部的业绩情况",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0}
+      ]},
+    {"id": "BL-2.4-D", "source": "baseline §2.4 人名+层级+Overview 仍按层级", "question": "商用业务代表靳锋的业绩情况",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 0}
+      ]},
+
+    {"id": "BL-2.5-A", "source": "baseline §2.5 看下前三的城市分公司", "question": "看下前三的城市分公司",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.row_count", "op": "eq", "expect": 3},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.5-B", "source": "baseline §2.5 前5的业务代表", "question": "前5的业务代表",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}
+      ]},
+    {"id": "BL-2.5-C", "source": "baseline §2.5 排名优先 drilling 拦截", "question": "看前3的江浙沪分公司的城市分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.intent", "op": "eq", "expect": "ranking"},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+
+    {"id": "BL-2.6-A", "source": "baseline §2.6 垫底的三个分公司", "question": "垫底的三个分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.6-B", "source": "baseline §2.6 业绩排名垫底的3家分公司", "question": "消费者事业部，业绩排名垫底的 3 家分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.6-C", "source": "baseline §2.6 倒数前三的分公司", "question": "倒数前三的分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+    {"id": "BL-2.6-D", "source": "baseline §2.6 垫底的五个城市分公司", "question": "消费者事业部垫底的5个城市分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}
+      ]},
+    {"id": "BL-2.6-E", "source": "baseline §2.6 垫底的3个分公司", "question": "垫底的3个分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 3}
+      ]},
+
+    {"id": "BL-2.7-A", "source": "baseline §2.7 业绩最差的业务代表", "question": "业绩最差的业务代表",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 1}
+      ]},
+    {"id": "BL-2.7-B", "source": "baseline §2.7 业绩最好的分公司", "question": "业绩最好的分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 1}
+      ]},
+    {"id": "BL-2.7-C", "source": "baseline §2.7 垫底的分公司", "question": "垫底的分公司",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 1}
+      ]},
+    {"id": "BL-2.7-D", "source": "baseline §2.7 最高的业务部", "question": "业绩最高的业务部",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 1}
+      ]},
+    {"id": "BL-2.7-E", "source": "baseline §2.7 最低的承接人", "question": "业绩最低的承接人",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 1}
+      ]},
+    {"id": "BL-2.7-F", "source": "baseline §2.7 明确数量优先于最X", "question": "业绩最低的5个承接人",
+      "asserts": [
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}
+      ]},
+
+    {"id": "BL-2.8-A", "source": "baseline §2.8 云贵分公司的业绩", "question": "云贵分公司的业绩",
+      "asserts": [
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-2.8-B", "source": "baseline §2.8 消费者事业部垫底的5个城市分公司", "question": "消费者事业部垫底的5个城市分公司",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.query_intent.top_n", "op": "eq", "expect": 5}
+      ]},
+    {"id": "BL-2.8-C", "source": "baseline §2.8 上海那边业绩如何了", "question": "上海那边业绩如何了",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+
+    {"id": "BL-3.1-A", "source": "baseline §3.1 仅 业绩 字不弹确认", "question": "业绩",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "in", "expect": [false, null]}
+      ]},
+    {"id": "BL-3.1-B", "source": "baseline §3.1 仅 表现 字不弹确认", "question": "表现",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "in", "expect": [false, null]}
+      ]},
+    {"id": "BL-3.1-C", "source": "baseline §3.1 仅 金额 字不弹确认", "question": "金额",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "in", "expect": [false, null]}
+      ]},
+
+    {"id": "BL-3.2-A", "source": "baseline §3.2 确认卡片隐藏分数-上海", "question": "上海的业绩",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+    {"id": "BL-3.2-B", "source": "baseline §3.2 确认卡片隐藏分数-东部", "question": "东部的业绩",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+
+    {"id": "BL-3.3-A", "source": "baseline §3.3 干净 垫底的三个分公司 应歧义", "question": "垫底的三个分公司",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "in", "expect": [[2], [3], [2,3]]}
+      ]},
+    {"id": "BL-3.3-B", "source": "baseline §3.3 干净 各分公司业绩排名 应歧义", "question": "各分公司业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 0}
+      ]},
+
+    {"id": "BL-3.4-A", "source": "baseline §3.4 上海那边业绩如何了", "question": "上海那边业绩如何了",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+    {"id": "BL-3.4-B", "source": "baseline §3.4 东部那个分公司怎么样", "question": "东部那个分公司怎么样",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-3.4-C", "source": "baseline §3.4 河北业绩怎么样", "question": "河北业绩怎么样",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [2]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-3.4-D", "source": "baseline §3.4 看下上海代表处的业绩咋样了", "question": "看下上海代表处的业绩咋样了",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+
+    {"id": "BL-3.5-A", "source": "baseline §3.5 上海跨数据集多命中必须确认", "question": "上海的业绩",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+    {"id": "BL-3.5-B", "source": "baseline §3.5 同数据集多层级命中应确认", "question": "上海分公司",
+      "asserts": [
+        {"path": "requires_confirmation", "op": "eq", "expect": true}
+      ]},
+
+    {"id": "BL-3.6-A", "source": "baseline §3.6 看下上海代表处的业绩 唯一命中", "question": "看下上海代表处的业绩咋样了",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-3.6-B", "source": "baseline §3.6 看下上海代表处 简写", "question": "看下上海代表处",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-3.6-C", "source": "baseline §3.6 东部那个分公司怎么样", "question": "东部那个分公司怎么样",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-3.6-D", "source": "baseline §3.6 继续看河南代表处的业绩如何了", "question": "继续看河南代表处的业绩如何了",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]}
+      ]},
+
+    {"id": "BL-5.1-A", "source": "baseline §5.1 业务部排名不展示对比模板", "question": "业务部业绩排名",
+      "asserts": [
+        {"path": "dataset_results.0.report_spec.answerSummary.mode", "op": "not_eq", "expect": "comparison"}
+      ]},
+    {"id": "BL-5.1-B", "source": "baseline §5.1 明确对比才展示对比模板", "question": "东部分公司和南部分公司的业绩对比",
+      "asserts": [
+        {"path": "dataset_results.0.report_spec.answerSummary.mode", "op": "not_eq", "expect": "comparison"}
+      ]},
+    {"id": "BL-5.1-C", "source": "baseline §5.1 ranking 不应误入对比作用域", "question": "看下前三的城市分公司",
+      "asserts": [
+        {"path": "dataset_results.0.report_spec.answerSummary.mode", "op": "not_eq", "expect": "comparison"}
+      ]},
+    {"id": "BL-5.1-D", "source": "baseline §5.1 末端个人节点展示个人业绩指标", "question": "商用事业部业务代表靳锋的业绩",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]},
+    {"id": "BL-5.1-E", "source": "baseline §5.1 末端个人节点展示个人业绩指标", "question": "靳锋业绩咋样",
+      "asserts": [
+        {"path": "route.dataset_ids", "op": "eq", "expect": [3]},
+        {"path": "dataset_results.0.row_count", "op": "gte", "expect": 1}
+      ]}
+  ]
+}

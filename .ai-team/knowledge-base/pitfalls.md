@@ -98,3 +98,14 @@
 根因：`_build_rule_based_sql` ranking 兜底分支里，根节点名（"商用事业部"）被当中间层级过滤词处理，WHERE 层级='商用事业部' 匹配不到任何行，只剩兜底行。另有半成品修复误删 `verified_level` 赋值行导致 NameError 隐患
 解法：`_is_root_overview` 判定（target_level 命中 analysisDimensions 根节点名 + level_overview 触发词或"整体/总体/总览/汇总/全部"词）→ WHERE 层级 IN ('事业部','分公司','业务部') 三层返回；verified_level 赋值行原样补回。硬编码三层仅作用于商用 phase1 分支（消费者/电商已提前 return），误判面收敛在"根节点名+整体类词"窄交集
 影响范围：four_agent_ask.py:5142-5162；验收用例 qa_cases/baseline.json A1（已实测 PASS，row_count=8）
+
+[2026-08-19] 基线拓展 204 题全量实测发现的 6 个新 bug 族（详见 deliverables/baseline-survey-2026-08-19/）
+上下文：按 confirmed_behaviors_baseline.md 拓展 204 题实测（容器内 svc.ask 直调），21 题 FAIL，专家团 4 路并行定位根因
+根因与解法（定位全部经容器实证）：
+1. 业务代表 Overview 0 行（P0 必现）：four_agent_ask.py:5247-5262 手写分支 rank_limit=0 无守卫 → WHERE 全局排名<=0 LIMIT 0；兄弟分支（5279）和公共函数 _build_ranked_select_sql 都有 0=全量守卫
+2. 业务部对比 0 行（P0）：5611-5612 按恒空的「业务部」列过滤（ds=3 无业务部 jsonb_key，base SQL 置 '' AS 业务部）；应改按节点名称匹配
+3. confirm 后缀污染 SQL（P0，bug#14/#17 残留面）：意图侧 8739 已剥离「补充确认…先汇总后分析」后缀，但 8828/8868 SQL 构建仍吃带后缀 refined_query，"后"字命中 ranking token → rank_limit=3
+4. 承接人个人业绩返回全量（P1）：6290 ranking 分支只在 focus_dimension=='业务部' 时用 focus_member，承接人维度人名被丢弃（G5 修复漏网孪生）
+5. golden sample 2635 劫持（P1）：坏样本低分直通，1480 守卫「if not requested: return False」对纯层级问法放行 → 代表处问题混入 95 行
+6. 裸节点未确认（P1）：organization_route_resolver.py:302 single_clear_node 抢跑直出 + 组织树只到 level 2 + 204-205 org_tree 模式跳过节点索引 →「山东的业绩」该确认没确认（「上海」行为正确纯属侥幸）
+教训：正则 \b 对中文永远失效（smartask_engine/intent/resolver.py:50）；「各X的」句式走 aggregate 是锚点外推非缺陷（产品裁决挂起）
