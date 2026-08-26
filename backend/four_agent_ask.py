@@ -997,8 +997,6 @@ class FourAgentAskService:
                         ),
                         "• 风险识别仍以达成率、剩余缺口和项目推进节奏综合判断，避免只看相对名次。",
                     ]
-                if review_summary:
-                    lines.extend(["", f"> SQL复核：{review_summary}"])
                 if error_message:
                     lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
                 return "\n".join(lines)
@@ -1083,8 +1081,6 @@ class FourAgentAskService:
                     "• 结合上级组织横向比较，判断问题偏向个人执行还是组织支撑不足。",
                 ]
             )
-            if review_summary:
-                lines.extend(["", f"> SQL复核：{review_summary}"])
             if error_message:
                 lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
             return "\n".join(lines)
@@ -1117,8 +1113,6 @@ class FourAgentAskService:
                 f"• 先围绕{person_name}核对在手项目、客户转化和回款节奏，确认短期可兑现开单来源。",
                 f"• 再结合{parent_name or '上级组织'}横向比较，判断问题更偏个人执行还是组织支撑不足。",
             ]
-            if review_summary:
-                lines.extend(["", f"> SQL复核：{review_summary}"])
             if error_message:
                 lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
             return "\n".join(lines)
@@ -1177,8 +1171,6 @@ class FourAgentAskService:
                     f"⚠️ **{leader}保持优势**：沉淀头部节点打法，并向同层级中等达成节点推广。",
                     f"🔴 **共同改进项**：先针对低达成{child_level_label}建立周度跟进清单，再下钻到业务代表按缺口金额和项目阶段排序。",
                 ]
-                if review_summary:
-                    lines.extend(["", f"> SQL复核：{review_summary}"])
                 if error_message:
                     lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
                 return "\n".join(lines)
@@ -1236,8 +1228,6 @@ class FourAgentAskService:
                 f"• 当前动态识别 {risk_count} 个相对承压节点，建议优先查看 {format_rank(risk_examples)}；表现较好节点可参考 {format_rank(top_examples)}。",
             ]
         )
-        if review_summary:
-            lines.extend(["", f"> SQL复核：{review_summary}"])
         if error_message:
             lines.extend(["", f"> 说明：高级模型分析失败，已使用规则分层报告兜底。原因：{error_message}"])
         return "\n".join(lines)
@@ -4861,6 +4851,31 @@ ranking_params 说明：
                 entity_names = self._resolved_entity_names(context) or self._question_subject_names(normalized_question, context, include_resolved=False)
             if entity_names:
                 specific_names = [n for n in entity_names if n and n not in generic_level_terms]
+                # bug 2026-08-26：泛称+层级实体（"商用分公司"）分解为 层级+上级名称 过滤，避免 IN 伪节点名 0 行
+                _level_only_scope_parts = []
+                _level_only_dataset = self._safe_dict(context.get("dataset"))
+                try:
+                    _level_only_dataset_id = int(_level_only_dataset.get("id") or 0)
+                except Exception:
+                    _level_only_dataset_id = 0
+                _specific_name_entities = []
+                for _entity_item in specific_names:
+                    _decomposed = None
+                    try:
+                        _decomposed = self.organization_route_resolver.resolve_generic_level_entity(
+                            _entity_item, _level_only_dataset_id
+                        )
+                    except Exception:
+                        _decomposed = None
+                    if _decomposed:
+                        _esc_level = _decomposed["level"].replace("'", "''")
+                        _esc_parent = _decomposed["parent_name"].replace("'", "''")
+                        _level_only_scope_parts.append(f"(层级 = '{_esc_level}' AND 上级名称 = '{_esc_parent}')")
+                    else:
+                        _specific_name_entities.append(_entity_item)
+                if _level_only_scope_parts:
+                    where_parts.extend(_level_only_scope_parts)
+                specific_names = _specific_name_entities
                 if specific_names:
                     quoted_names = ",".join("'" + n.replace("'", "''") + "'" for n in specific_names)
                     if intent_target_level == "业务代表" and not is_multi_parent:
@@ -4946,6 +4961,29 @@ LIMIT 200
                         and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到", "之间", "范围"])
                     ]
                     entity_names = [e for e in all_entities if e in normalized_question]
+                    # bug 2026-08-26：泛称+层级实体（如"商用分公司"="商用"+"分公司"）不是真实节点名，
+                    # 直接进 节点名称 IN (...) 必然 0 行。分解为 层级+上级名称 过滤，
+                    # 返回该节点下该层级全部子节点（"商用分公司"→商用事业部下 4 家分公司）。
+                    if entity_names:
+                        _level_scope_parts = []
+                        _name_entities = []
+                        for _entity_item in entity_names:
+                            _decomposed = None
+                            try:
+                                _decomposed = self.organization_route_resolver.resolve_generic_level_entity(
+                                    _entity_item, int(_filter_dataset.get("id") or 0)
+                                )
+                            except Exception:
+                                _decomposed = None
+                            if _decomposed:
+                                _esc_level = _decomposed["level"].replace("'", "''")
+                                _esc_parent = _decomposed["parent_name"].replace("'", "''")
+                                _level_scope_parts.append(f"(层级 = '{_esc_level}' AND 上级名称 = '{_esc_parent}')")
+                            else:
+                                _name_entities.append(_entity_item)
+                        if _level_scope_parts:
+                            where_parts.extend(_level_scope_parts)
+                        entity_names = _name_entities
                     if entity_names:
                         quoted_entities = ",".join("'" + item.replace("'", "''") + "'" for item in entity_names)
                         target_level = intent_target_level or ""
@@ -8514,18 +8552,10 @@ LLD：
         # （N5：查无此节点时不得静默返回总览，须明确提示未找到）。
         if not (result.get("rows") or []):
             return self._build_fallback_analysis(question, context, review, result)
+        # bug 2026-08-26：商用数据集 Agent4 曾被硬编码 bypass（2026-05-01 c190fc5，当时 prompt 体系未就绪），
+        # 导致用户永远看到规则化兜底文本、无下级洞察。现移除 bypass 恢复 LLM 分析；
+        # LLM 失败时下方已有空正文兜底（退回 _build_fallback_analysis），最差等于旧行为。
         dataset = self._safe_dict(context.get("dataset"))
-        if dataset.get("dataset_code") in {"angel_business_2026", "angel_business_2026_phase1"} or dataset.get("dataset_name") in {
-            "商用事业部",
-            "商用事业部（阶段一升级版）",
-        }:
-            self._append_trace(
-                trace,
-                "agent4.analysis.rule_based",
-                "info",
-                analysis_preview="已基于结果数据生成规则分析摘要。",
-            )
-            return self._build_fallback_analysis(question, context, review, result)
         system_prompt = self._get_agent_prompt(
             4,
             "你是 Agent4 业务分析官，负责输出老板视角的经营分析结论。",

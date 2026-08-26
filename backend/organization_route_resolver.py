@@ -112,6 +112,65 @@ class OrganizationRouteResolver:
             self._node_index_cache = {}
         return self._node_index_cache
 
+    # bug 2026-08-26：泛称+层级分解。用户问"商用分公司的业绩"时，
+    # "商用分公司"不是真实节点名（实际节点是东部/北部/南部/西部分公司），
+    # 旧逻辑把它当节点名塞进 节点名称 IN (...) → 必然 0 行。
+    # 分解规则：entity = <节点名或别名> + <层级词>，如 "商用"+"分公司" →
+    # 过滤条件应为 层级='分公司' AND 上级名称='商用事业部'（返回该层级全部子节点）。
+    _GENERIC_LEVEL_WORDS = ("城市分公司", "分公司", "业务部", "事业部", "代表处", "城市公司")
+
+    def resolve_generic_level_entity(self, entity: str, dataset_id: int) -> Optional[Dict[str, str]]:
+        """'商用分公司' → {'level': '分公司', 'parent_name': '商用事业部'}。
+
+        仅当 entity 本身不是该数据集的真实节点名、且去掉层级后缀后的前缀
+        能通过 dataset_node_index 别名索引精确命中同数据集节点时生效；
+        其余情况返回 None（调用方保持原行为，遵守 N5：不存在节点不得静默改写）。
+        """
+        text = _compact(str(entity or ""))
+        if not text or len(text) < 4:
+            return None
+        try:
+            target_dataset_id = int(dataset_id)
+        except (TypeError, ValueError):
+            return None
+        node_index = self._load_dataset_node_index()
+        # 1) entity 本身已是真实节点名 → 不需要分解
+        for dataset in node_index.get("datasets") or []:
+            if not isinstance(dataset, dict):
+                continue
+            try:
+                if int(dataset.get("dataset_id") or 0) != target_dataset_id:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            for node in dataset.get("nodes") or []:
+                if _compact(str((node or {}).get("node_name") or "")) == text:
+                    return None
+            break
+        # 2) 逐层级词（长优先）剥后缀，前缀走别名索引精确命中
+        alias_index = node_index.get("flat_alias_index") or []
+        for level in self._GENERIC_LEVEL_WORDS:
+            if not text.endswith(level) or len(text) <= len(level):
+                continue
+            prefix = text[: -len(level)]
+            if len(prefix) < 2:
+                continue
+            for item in alias_index:
+                if not isinstance(item, dict) or _compact(str(item.get("alias") or "")) != prefix:
+                    continue
+                for match in item.get("matches") or []:
+                    if not isinstance(match, dict):
+                        continue
+                    try:
+                        if int(match.get("dataset_id") or 0) != target_dataset_id:
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+                    parent_name = _text(match.get("node_name"))
+                    if parent_name:
+                        return {"level": level, "parent_name": parent_name}
+        return None
+
     @staticmethod
     def _dataset_ids_for_node(node: Dict[str, Any], permissions: Dict[str, Any]) -> List[int]:
         node_id = _text(node.get("id"))
