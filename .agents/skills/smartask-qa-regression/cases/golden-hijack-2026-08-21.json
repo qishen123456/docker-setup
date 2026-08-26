@@ -1,0 +1,91 @@
+{
+  "cases": [
+    {
+      "id": "GS1",
+      "source": "bug 2026-08-21 golden-2634-hijack / baseline §1.4 对称（商用根节点带一层下级）",
+      "question": "商用事业部整体达成率是多少",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [3]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 8,
+          "note": "基线 §1.1/§1.4 对称：事业部 1 行 + 一级下级 4 分公司 + 3 业务部 = 8 行"
+        },
+        {
+          "path": "dataset_results.0.rows.0.节点名称",
+          "op": "eq",
+          "expect": "商用事业部",
+          "note": "首行必须是事业部汇总行"
+        },
+        {
+          "path": "dataset_results.0.rows.0.总任务金额",
+          "op": "eq",
+          "expect": 455000000,
+          "note": "真实口径 4.55 亿（事业部行）；修复前全表 SUM 多层冗余累加得 16.75 亿"
+        },
+        {
+          "path": "dataset_results.0.rows.0.达成率",
+          "op": "range",
+          "expect": [46.5, 47.5],
+          "note": "真实达成率 47.03%（2.14亿/4.55亿，应用链路实测）；修复前为 44.76%"
+        }
+      ]
+    },
+    {
+      "id": "GS2",
+      "source": "bug 2026-08-21 four-branch-pandian / 数量词事实陈述",
+      "question": "四大分公司区域业绩整体盘点",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm",
+          "note": "分公司为跨数据集通用层级词，弹确认是正确行为（实测 arbiter=generic_level_requires_confirmation:分公司）"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {"dataset_ids": [3]},
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [3]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "eq",
+              "expect": 29,
+              "note": "基线口径=29行：4 分公司+其一级下级 25 代表处（N8 同口径）；修复前 101 行含 72 业务代表（golden样本2633劫持）"
+            },
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "aggregate",
+              "note": "数量词修复应把 intent 改写为 aggregate，_verified_count=4"
+            },
+            {
+              "path": "dataset_results.0.query_intent._quantity_verified",
+              "op": "eq",
+              "expect": true
+            }
+          ]
+        },
+        {
+          "select": {"dataset_ids": [2]},
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [2]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

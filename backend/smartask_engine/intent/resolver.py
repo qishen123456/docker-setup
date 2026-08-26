@@ -174,6 +174,8 @@ class IntentResolver:
             or explicit_metric_filter
             or (any(token in text for token in ["哪些", "哪个", "哪家", "哪几个"]) and bool(filter_operator))
             or bool(re.search(r"完成得不好|完成不好|承压|风险节点|风险|落后|不达标", text))
+            # 零业绩口语也属过滤语义（bug 2026-08-25）：堵住后续 ranking/level_overview/drilldown 抽签路径
+            or any(token in text for token in ["没有业绩", "没有开单", "没业绩", "无业绩", "零业绩", "没开单", "无开单", "零开单"])
         )
         target_level = resolve_target_level_from_text()
         # 电商数据集中，口语“业务承接人/负责人”统一收敛到标准层级“承接人”。
@@ -190,10 +192,14 @@ class IntentResolver:
             target_level
             and not explicit_filter_question
             and not threshold_filter_question
+            # 指标阈值过滤（如"开单金额=0"/"低于500万"）成立时不得劫持（bug 2026-08-25）
+            and not explicit_metric_filter
             and re.search(r"(?:有哪些|有什么|包含哪些|名单|列表)", text)
             and re.search(r"(?:业务经理|负责人|细分业务|业务线|业务部)", text)
         )
-        if drilldown_problem or list_children_question:
+        # filter 语义已成立时抑制 drilldown 劫持（bug 2026-08-25：
+        # Agent1 refined 注入"明细/下属"曾把"低于500万的业务员"劫持到 drilldown 断裂 SQL）
+        if (drilldown_problem and not filter_problem) or list_children_question:
             intent.update({
                 "intent": "drilldown",
                 "target_level": target_level,
@@ -416,7 +422,9 @@ class IntentResolver:
                 return intent
 
         # 口语化意图映射
-        zero_actual_tokens = ["没有开张", "未开张", "零开单", "没开单", "无开单", "未开单", "没业绩", "零业绩", "无业绩", "未业绩"]
+        # 零业绩词表（bug 2026-08-25：原词表缺"没有业绩/没有开单"，
+        # "没有业绩的业务代表有哪些"无法命中本分支 → 被 ranking/drilldown 抽签劫持）
+        zero_actual_tokens = ["没有开张", "未开张", "零开单", "没开单", "无开单", "未开单", "没业绩", "零业绩", "无业绩", "未业绩", "没有业绩", "没有开单"]
         if any(token in text for token in zero_actual_tokens):
             intent.update({
                 "intent": "filter",

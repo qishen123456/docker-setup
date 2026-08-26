@@ -134,7 +134,7 @@
             <template v-if="group.meta">
               <div class="sa-drill-group-node">
                 <strong>{{ group.title }}</strong>
-                <small>{{ group.rows.length }}个{{ secondaryLevelLabel }}</small>
+                <small>{{ group.rows.length }}个{{ drillGroupLevelLabel(group) }}</small>
               </div>
               <div class="sa-drill-group-cell">
                 <strong>{{ group.meta.taskText || '-' }}</strong>
@@ -149,7 +149,7 @@
             <template v-else>
               <div class="sa-drill-group-title-only">
                 <span>{{ group.title }}</span>
-                <small>{{ group.rows.length }}个{{ isRankingQuestion ? rankingLevelLabel : secondaryLevelLabel }}</small>
+                <small>{{ group.rows.length }}个{{ isRankingQuestion ? rankingLevelLabel : drillGroupLevelLabel(group) }}</small>
               </div>
             </template>
           </div>
@@ -2097,6 +2097,8 @@ const secondaryDrillGroups = computed(() => {
       rows: rows.filter(item => sameOrgName(item.parent, parent)),
     }))
     .filter(group => group.rows.length)
+    // 多层级混合结果（如 29 行盘点：分公司+代表处）按层级排序，上级分组在前
+    .sort((a, b) => drillGroupLevelRank(a) - drillGroupLevelRank(b))
 })
 
 const secondaryLevelLabel = computed(() => {
@@ -2108,6 +2110,24 @@ const secondaryLevelLabel = computed(() => {
   const [level] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0] || []
   return level || '下级节点'
 })
+
+// 二级拆解分组的层级排序与标签（bug 2026-08-22：四大分公司盘点 29 行场景下，
+// 分公司分组被排到代表处分组之后，且分组标签误用全局 detailLevelLabel 显示成"4个代表处"）
+const DRILL_GROUP_LEVEL_ORDER = { 事业部: 0, 分公司: 1, 业务部: 1, 城市分公司: 1, 城市公司: 1, 代表处: 2, 业务代表: 3, 业务员: 3, 承接人: 3 }
+
+const drillGroupLevelRank = (group) => {
+  const ranks = (group.rows || []).map(row => DRILL_GROUP_LEVEL_ORDER[row.level] ?? 9)
+  return ranks.length ? Math.min(...ranks) : 9
+}
+
+const drillGroupLevelLabel = (group) => {
+  const counts = new Map()
+  ;(group.rows || []).forEach((row) => {
+    if (row.level) counts.set(row.level, (counts.get(row.level) || 0) + 1)
+  })
+  const [level] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0] || []
+  return level || secondaryLevelLabel.value
+}
 
 const rankingLevelLabel = computed(() => (
   explicitQuestionLevel.value

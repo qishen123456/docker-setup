@@ -210,7 +210,7 @@
     },
     {
       "id": "R-lowest",
-      "source": "baseline §2.7",
+      "source": "baseline §2.7 + 产品约定(非叶节点带下级, 2026-08-22 复核)",
       "question": "消费者事业部哪个分公司完成率最低",
       "asserts": [
         {
@@ -237,8 +237,9 @@
         },
         {
           "path": "dataset_results.0.row_count",
-          "op": "eq",
-          "expect": 1
+          "op": "range",
+          "expect": [6, 9],
+          "note": "1家最低分公司(江浙沪)+其城市分公司下级；旧expect=1是误判口径(memory 2026-08记录)"
         }
       ]
     },

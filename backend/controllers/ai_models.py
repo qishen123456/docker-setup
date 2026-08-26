@@ -108,6 +108,23 @@ def test_ai_model_route(model_id):
             return jsonify({"error": f"未找到 ID={model_id} 的模型"}), 404
 
         success, message, response_time = test_ai_model(model)
+
+        # 持久化测通状态（bug/需求 2026-08-25：模型下拉只显示实测连通过的模型，
+        # 测试结果写回 ai_settings.json 的 test_ok / last_test_at）
+        try:
+            config = read_json('ai_settings.json')
+            for m in config.get('models', []):
+                if m.get('id') == model_id:
+                    m['test_ok'] = bool(success)
+                    import time as _t
+                    m['last_test_at'] = _t.strftime('%Y-%m-%d %H:%M:%S')
+                    break
+            write_json('ai_settings.json', config)
+            mark_reinit()
+        except Exception:
+            # 持久化失败不影响本次测试结果返回
+            pass
+
         return jsonify({
             "success": success,
             "message": message,
@@ -218,7 +235,29 @@ def list_active_models():
 
     try:
         models = get_ai_models_safe()
-        active = [m for m in models if m.get("is_active")]
+        # 只保留启用且「默认模型 或 实测连通过」的模型（需求 2026-08-25）
+        active = [
+            m for m in models
+            if m.get("is_active") and (m.get("is_default") or m.get("test_ok"))
+        ]
+
+        # 去重：同名+同 provider 重复时优先保留通道名非空的，其次 id 小的
+        # （bug 2026-08-25：历史遗留 MiniMax-M2.5 ×2，id=4 有通道 vs id=10 通道空，
+        # 重复让下拉列表"看着混乱"）
+        seen_keys = {}
+        for m in active:
+            key = (m.get("name"), m.get("provider"))
+            cur = seen_keys.get(key)
+            if cur is None:
+                seen_keys[key] = m
+                continue
+            cur_has_channel = bool((cur.get("channel_display_name") or "").strip())
+            new_has_channel = bool((m.get("channel_display_name") or "").strip())
+            if new_has_channel and not cur_has_channel:
+                seen_keys[key] = m
+            elif new_has_channel == cur_has_channel and int(m.get("id", 0)) < int(cur.get("id", 0)):
+                seen_keys[key] = m
+        active = list(seen_keys.values())
 
         # 获取用户权限范围（非默认模型）
         allowed_ids = _get_effective_allowed_model_ids(user)
@@ -228,9 +267,14 @@ def list_active_models():
         non_default_models = [m for m in active if not m.get("is_default")]
 
         # 过滤非默认模型
-        # 如果能识别用户且有权限配置 → 按配置过滤
-        # 如果不能识别用户（user 为空或无 ID）→ 只显示默认模型（安全策略）
-        if allowed_ids is not None:
+        # 超管/管理员看全部活跃模型（bug 2026-08-25：超管 id=None 曾误触下面"未识别用户"清空分支，
+        # 导致非默认模型被清空、下拉只剩默认模型）
+        role = str(user.get("role") or "") if isinstance(user, dict) else ""
+        if role in ("super_admin", "admin"):
+            # 超管/管理员：保留全部非默认模型
+            pass
+        elif allowed_ids is not None:
+            # 有权限配置 → 按配置过滤
             non_default_models = [m for m in non_default_models if m["id"] in allowed_ids]
         elif not user or not user.get("id"):
             # 无法识别用户身份时，不显示任何非默认模型（防止未授权访问）
@@ -239,13 +283,15 @@ def list_active_models():
         # 组装结果（默认模型始终在前）
         result_models = default_models + non_default_models
         
-        # 转换为前端格式（不含敏感字段）
+        # 转换为前端格式（不含敏感字段；含通道展示字段）
         result = [
             {
                 "id": m["id"],
                 "name": m["name"],
                 "model": m.get("model", ""),
-                "is_default": m.get("is_default", False)
+                "is_default": m.get("is_default", False),
+                "channel_display_name": m.get("channel_display_name", ""),
+                "channel_icon": m.get("channel_icon", ""),
             }
             for m in result_models
         ]

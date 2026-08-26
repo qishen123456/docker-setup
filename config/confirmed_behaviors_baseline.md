@@ -601,3 +601,47 @@
 
 当前修复点：
 - `backend/four_agent_ask.py` 的 `_followup_dataset_hint_from_memory()` + `_is_entity_in_dataset()` + `_build_consumer_business_sql()`
+
+## 9. 数量词事实盘点与根节点汇总口径（2026-08-22 增补）
+
+### 9.1 「N大分公司 + 盘点词」按 29 行口径（4 分公司 + 25 代表处）
+
+代表问题：
+- `四大分公司区域业绩整体盘点`
+- `四大分公司业绩盘点`
+
+已确认行为：
+- 弹数据集确认（「分公司」是跨数据集通用层级词），确认后走规则 SQL
+- 返回 4 分公司 + 其一级下级 25 代表处 = 29 行，不含业务代表
+- 顶部 KPI 按 4 个根节点合计：累计任务 3.1 亿、整体达成率（合计口径），不得显示单一分公司值
+- `query_intent.intent=aggregate`、`target_level=分公司`、`_quantity_verified=true`
+
+不允许行为：
+- 被 Golden 样本（如 id=2633 的 LIKE 层级模糊匹配样本）劫持返回 101 行三层级瀑布
+- 拼「事业部」伪汇总行（仅含区域条线 3.1 亿却标称事业部，真值 4.55 亿含行业条线）
+
+边界：
+- 裸数量词问法（如 `商用的四个分公司`，无 整体/盘点/区域/总览 词）保持汇总行+4 明细的 comparative 布局（bug#19/20 已确认行为），不展开代表处
+
+当前修复点：
+- `backend/four_agent_ask.py::_select_sql_strategy`（filter/comparison/aggregate 判定必须在 `_build_rule_based_sql` 之后读取，数量词修复会就地改写 intent）
+- `backend/four_agent_ask.py::_build_syyb_sql` 数量词事实分支（盘点词门控）
+- `backend/report_spec_builder.py` KPI 多根总览按根节点合计分支
+
+### 9.2 「商用事业部整体达成率」只取事业部行
+
+代表问题：
+- `商用事业部整体达成率是多少`
+
+已确认行为：
+- 与 §1.1/§1.4 对称：根节点总览带一级下级，返回 8 行 = 事业部 1 行（首行）+ 4 分公司 + 3 业务部
+- 首行事业部：总任务 4.55 亿、年度开单 2.14 亿、达成率 47.03%（2026-08-22 数据口径）
+- KPI 卡数值与事业部行一致
+
+不允许行为：
+- 只返回事业部 1 行（丢一级下级）
+- 对 `angel_group_data` 全表 SUM——该表每个层级（事业部/分公司/代表处/业务经理）都冗余完整总额，全表累加得 16.75 亿（3.68 倍虚增）
+- 引用字段字典未登记的 JSONB 字段（如「层级级别」，会被 Agent3 字段校验 fail-close 拦截）；直接用 BASE_SQL 汇总结果按 `层级 IN ('事业部','分公司','业务部')` 过滤
+
+当前修复点：
+- `backend/four_agent_ask.py::_build_syyb_sql` 整体达成率硬编码分支

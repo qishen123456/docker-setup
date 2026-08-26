@@ -1436,9 +1436,10 @@ class FourAgentAskService:
             str(query_intent.get("target_level") or "") == "城市分公司"
             or "城市分公司" in level_hint_text
         )
-        filter_intent = str(query_intent.get("intent") or "") == "filter"
-        comparison_intent = str(query_intent.get("intent") or "") == "comparison"
-        aggregate_intent = str(query_intent.get("intent") or "") == "aggregate"
+        # 注意：filter/comparison/aggregate 判定不能在构建规则 SQL 之前固化，
+        # _build_rule_based_sql 的数量词修复会就地改写 query_intent["intent"]（如"四大分公司"→aggregate），
+        # 提前捕获会让守卫失效、被 Golden 样本劫持（bug 2026-08-21 四大分公司整体盘点 101 行瀑布）。
+        # 三个 flag 已移动到下方 rule_based_sql 惰性求值之后。
 
         def question_key(value: Any) -> str:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
@@ -1527,6 +1528,10 @@ class FourAgentAskService:
         # Prefer deterministic rule SQL; if unavailable, fall back to fresh generation.
         if rule_based_sql is None:
             rule_based_sql = self._build_rule_based_sql(question, route, context)
+        # 在规则 SQL 构建之后再读取 intent：数量词修复可能已把它就地改成 aggregate
+        filter_intent = str(query_intent.get("intent") or "") == "filter"
+        comparison_intent = str(query_intent.get("intent") or "") == "comparison"
+        aggregate_intent = str(query_intent.get("intent") or "") == "aggregate"
         if filter_intent or comparison_intent or aggregate_intent:
             if rule_based_sql:
                 return {
@@ -4861,7 +4866,9 @@ ranking_params 说明：
                     if intent_target_level == "业务代表" and not is_multi_parent:
                         where_parts.append(f"业务代表 IN ({quoted_names})")
                     else:
-                        where_parts.append(f"节点名称 IN ({quoted_names}) OR 上级名称 IN ({quoted_names})")
+                        # 括号必须包住整组 OR：where_parts 后续按 AND 拼接，
+                        # 裸 OR 会因 SQL 优先级把 (A AND B AND C) OR D 拆开（bug 2026-08-25 追踪确认）
+                        where_parts.append(f"(节点名称 IN ({quoted_names}) OR 上级名称 IN ({quoted_names}))")
             where_clause = " AND ".join(where_parts) if where_parts else "TRUE"
             return f"""
 WITH 汇总结果 AS (
@@ -4926,12 +4933,16 @@ LIMIT 200
                 matched_triggers = set(query_intent.get("matched_triggers") or [])
                 if not (matched_triggers & spoken_filter_triggers):
                     level_values = {"分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司", "业务代表"}
+                    _filter_dataset = self._safe_dict(context.get("dataset"))
                     all_entities = [
                         n for n in self._resolved_entity_names(context) if n
                         and n not in level_values
                         and len(n) >= 4
                         and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
                         and not re.search(r"\d|万", n)
+                        # 数据集根节点名（如 confirm 注入的"组织树标准名称：商用事业部"）是路由信息不是查询实体，
+                        # 误注入会把过滤范围劫持成"上级=商用事业部的全部节点"（bug 2026-08-25 追踪确认）
+                        and not self._is_dataset_root_name(n, _filter_dataset)
                         and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到", "之间", "范围"])
                     ]
                     entity_names = [e for e in all_entities if e in normalized_question]
@@ -4946,9 +4957,10 @@ LIMIT 200
                             elif has_branch:
                                 where_parts.append(f"节点名称 IN ({quoted_entities})")
                         elif target_level == "城市分公司" or target_level == "城市公司":
-                            where_parts.append(f"上级名称 IN ({quoted_entities}) OR 节点名称 IN ({quoted_entities})")
+                            # 整组 OR 加括号，防 AND 拼接后被 SQL 优先级拆开
+                            where_parts.append(f"(上级名称 IN ({quoted_entities}) OR 节点名称 IN ({quoted_entities}))")
                         else:
-                            where_parts.append(f"节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})")
+                            where_parts.append(f"(节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities}))")
                 where_clause = " AND ".join(where_parts)
                 order_direction = "ASC" if filter_operator in {"<", "<="} else "DESC"
                 tie_breaker = "剩余任务金额 DESC, 条线 DESC, 节点名称" if filter_metric_column == "达成率" else "达成率 ASC, 条线 DESC, 节点名称"
@@ -5007,7 +5019,7 @@ LIMIT 200
                 else:
                     group_level = "分公司"
 
-            # 数量词事实验证通过（如"四个分公司"），直接返回明细数据+整体汇总行，供顶部KPI使用
+            # 数量词事实验证通过（如"四个分公司"），按基线口径返回该层级明细+一级下级
             if _quantity_verified_fact:
                 where_conditions = [f"层级 = '{group_level}'"]
                 # 分公司层级额外过滤名称含"分公司"，排除业务部
@@ -5015,7 +5027,32 @@ LIMIT 200
                     where_conditions.append("节点名称 LIKE '%分公司'")
                 where_clause = " AND ".join(where_conditions)
                 dataset_display_name = dataset_name.replace("开单金额","").replace("（阶段一升级版）","").strip()
-                # 第一行返回整体汇总行（供顶部KPI展示），后面跟着各分公司明细
+                # 只有带"整体/盘点/区域/总览"等盘点词的才按 29 行口径（bug 2026-08-21）；
+                # 裸数量词（如"商用的四个分公司"）保持 bug#19/20 已确认的汇总行+明细 comparative 布局。
+                _pandian_overview = bool(re.search(r"整体|盘点|总览|全景|区域", normalized_question))
+                if group_level == "分公司" and _pandian_overview:
+                    # 分公司事实盘点（如"四大分公司区域业绩整体盘点"）基线口径=29行：
+                    # 4 分公司 + 其一级下级 25 代表处；不带业务代表、不拼伪事业部汇总行
+                    # （汇总行仅含区域条线 3.1 亿却标称事业部 4.55 亿会误导；KPI 由 report_spec 按根节点合计）。
+                    return f"""
+WITH 明细结果 AS (
+{syyb_base_sql}
+WHERE (层级 = '分公司' AND 节点名称 LIKE '%分公司')
+   OR (层级 = '代表处' AND 上级名称 LIKE '%分公司')
+)
+SELECT 条线, 层级, 节点名称, 上级名称, 事业部, 分公司, 代表处, 业务部, 业务代表, 总任务金额, 年度开单金额, 达成率, 剩余任务金额
+FROM 明细结果
+ORDER BY
+  CASE 层级
+    WHEN '分公司' THEN 1
+    WHEN '代表处' THEN 2
+    ELSE 9
+  END,
+  达成率 DESC NULLS LAST,
+  节点名称
+LIMIT 100
+""".strip()
+                # 其他层级：第一行返回整体汇总行（供顶部KPI展示），后面跟着各节点明细
                 return f"""
 WITH 明细结果 AS (
 {syyb_base_sql}
@@ -5227,6 +5264,8 @@ WITH 业务代表原始 AS (
                         tie_breaker="剩余任务金额 DESC, 组织路径",
                     )
                 if asks_grouped_rank:
+                    # rank_limit=0 表示未指定数量，按全量返回（bug 2026-08-25 与用户 SQL 实测确认）
+                    grouped_rank_where = f"上级内排名 <= {rank_limit}" if rank_limit > 0 else "TRUE"
                     return f"""
 {business_person_rank_sql},
 业务代表上级内排序 AS (
@@ -5240,10 +5279,15 @@ WITH 业务代表原始 AS (
 )
 SELECT *
 FROM 业务代表上级内排序
-WHERE 上级内排名 <= {rank_limit}
+WHERE {grouped_rank_where}
 ORDER BY 上级名称, 上级内排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
 LIMIT 100
 """.strip()
+                # rank_limit=0 表示未指定数量：WHERE 全局排名 <= 0 永假 + LIMIT 0 → 恒 0 行假阴性
+                # （bug 2026-08-25 用户实测"没有业绩的业务代表有哪些"误判 ranking 后 0 行）
+                # 与代表处分支（line ~5310）对齐：0 → 返回全量排名
+                global_rank_where = f"全局排名 <= {rank_limit}" if rank_limit > 0 else "TRUE"
+                global_rank_limit_clause = f"LIMIT {rank_limit}" if rank_limit > 0 else "LIMIT 10000"
                 return f"""
 {business_person_rank_sql},
 业务代表全局排序 AS (
@@ -5256,9 +5300,9 @@ LIMIT 100
 )
 SELECT *
 FROM 业务代表全局排序
-WHERE 全局排名 <= {rank_limit}
+WHERE {global_rank_where}
 ORDER BY 全局排名, {metric_column} {order_direction}, 剩余任务金额 DESC, 组织路径
-LIMIT {rank_limit}
+{global_rank_limit_clause}
 """.strip()
             if target_is_office or "代表处" in normalized_question:
                 asks_extreme_rank = any(token in normalized_question for token in ["最好", "最差", "最高", "最低", "哪个", "第一", "倒数第一"])
@@ -5685,7 +5729,8 @@ LIMIT 10000
                 )
                 if mixed_with_compare:
                     quoted_all = ",".join("'" + item.replace("'", "''") + "'" for item in drilldown_entities)
-                    where_parts.append(f"节点名称 IN ({quoted_all}) OR 上级名称 IN ({quoted_all}) OR 业务代表 IN ({quoted_all})")
+                    # 整组 OR 加括号，防 AND 拼接后被 SQL 优先级拆开
+                    where_parts.append(f"(节点名称 IN ({quoted_all}) OR 上级名称 IN ({quoted_all}) OR 业务代表 IN ({quoted_all}))")
                 else:
                     if org_names:
                         org_where_parts = []
@@ -5783,9 +5828,15 @@ LIMIT 10000
             is_terminal_node = target_level_hint == "业务代表" or any(name.endswith("业务代表") for name in drilldown_entities)
 
             if is_terminal_node:
+                # 修复断裂拼接（bug 2026-08-25）：syyb_base_sql 是完整独立语句（以 FROM summarized_nodes 结尾），
+                # 裸拼 HAVING 会产生无 GROUP BY 的非法 SQL；必须用 WITH 包裹后按 WHERE 过滤（语义等价）
                 return f"""
+WITH 汇总结果 AS (
 {syyb_base_sql}
-HAVING 节点名称 IN ({quoted_entities})
+)
+SELECT *
+FROM 汇总结果
+WHERE 节点名称 IN ({quoted_entities})
 ORDER BY 条线 DESC,
   CASE 层级
     WHEN '事业部' THEN 0
@@ -5837,9 +5888,14 @@ LIMIT 10000
 """.strip()
 
         if not block_single_entity_shortcuts and all(token in normalized_question for token in ["东部分公司", "南部分公司"]):
+            # 修复断裂拼接（bug 2026-08-25）：同 is_terminal_node 分支，WITH 包裹 + WHERE 过滤
             return f"""
+WITH 汇总结果 AS (
 {syyb_base_sql}
-HAVING 节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司')
+)
+SELECT *
+FROM 汇总结果
+WHERE (节点名称 IN ('东部分公司','南部分公司') OR 上级名称 IN ('东部分公司','南部分公司'))
 ORDER BY 条线 DESC, 层级 DESC, 上级名称, 节点名称
 LIMIT 10000
 """.strip()
@@ -5888,28 +5944,21 @@ LIMIT 100
 """.strip()
 
         if "商用事业部" in normalized_question and "整体达成率" in normalized_question:
-            return """
-WITH 字段提取 AS (
-  SELECT
-    CASE WHEN jsonb_typeof(fields->'总任务（金额）')='array' THEN fields->'总任务（金额）'->0->>'text' ELSE fields->>'总任务（金额）' END AS 任务原始,
-    CASE WHEN jsonb_typeof(fields->'年度开单金额')='array' THEN fields->'年度开单金额'->0->>'text' ELSE fields->>'年度开单金额' END AS 开单原始,
-    CASE WHEN jsonb_typeof(fields->'当前年')='array' THEN fields->'当前年'->0->>'text' ELSE fields->>'当前年' END AS 当前年
-  FROM angel_group_data
-),
-基础数据 AS (
-  SELECT
-    COALESCE(NULLIF(regexp_replace(任务原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 任务金额,
-    COALESCE(NULLIF(regexp_replace(开单原始,'[^0-9.-]','','g'),''),'0')::NUMERIC AS 开单金额
-  FROM 字段提取
-  WHERE COALESCE(NULLIF(当前年,''),'2026')='2026'
+            # 口径修正（bug 2026-08-21/22）：与 baseline §1.1/§1.4 对称——根节点总览带一级下级：
+            # 事业部 1 行 + 4 分公司 + 3 业务部 = 8 行。
+            # 各行数值直接来自 angel_group_data 对应层级的自身行（该表每个层级都冗余完整总额），
+            # 不做跨层 SUM（全表累加会把任务 4.55 亿虚增成 16.75 亿）。
+            return f"""
+WITH 汇总结果 AS (
+{syyb_base_sql}
 )
-SELECT
-  '商用事业部' AS 事业部,
-  SUM(任务金额) AS 总任务金额,
-  SUM(开单金额) AS 年度开单金额,
-  CASE WHEN SUM(任务金额)>0 THEN ROUND(SUM(开单金额)/SUM(任务金额)*100,2) ELSE 0 END AS 达成率,
-  ROUND(SUM(任务金额)-SUM(开单金额),2) AS 剩余任务金额
-FROM 基础数据
+SELECT *
+FROM 汇总结果
+WHERE 层级 IN ('事业部', '分公司', '业务部')
+ORDER BY
+  CASE 层级 WHEN '事业部' THEN 0 WHEN '分公司' THEN 1 WHEN '业务部' THEN 1 ELSE 9 END,
+  达成率 DESC NULLS LAST,
+  节点名称
 LIMIT 100
 """.strip()
 
@@ -5919,8 +5968,12 @@ LIMIT 100
             where_clause = f"层级 = '{actual_target_level}'"
             if actual_target_level == "分公司":
                 where_clause = "层级 = '分公司' AND 节点名称 LIKE '%分公司'"
+            # 修复断裂拼接（bug 2026-08-25 追踪确认）：syyb_base_sql 是完整独立语句，
+            # 裸拼会让外层 SELECT * FROM 汇总结果 引用未定义 CTE（用户实测"业务员有哪些"断裂 SQL 的窝点）
             return f"""
+WITH 汇总结果 AS (
 {syyb_base_sql}
+)
 SELECT *
 FROM 汇总结果
 WHERE {where_clause}
@@ -6253,9 +6306,11 @@ LIMIT 10000
                 if compare_dimension == "业务部":
                     where_parts.append(f"业务部 IN ({quoted_members})")
                     where_parts.append(f"层级级别 = '业务部'")
-                elif compare_dimension in {"承接人", "任务承接人", "负责人", "业务经理"} or projection_mode == "manager":
+                elif compare_dimension in {"承接人", "任务承接人", "负责人", "业务经理"} or (not compare_dimension and projection_mode == "manager"):
                     where_parts.append(f"负责人 IN ({quoted_members})")
                     # 修复：电商数据集"负责人"实为业务部/事业部级的负责人，不能硬编码'业务经理'层级
+                    # 守卫 2026-08-26：projection_mode=="manager" 只在维度未识别时兜底；
+                    # 节点索引已给出明确维度（如"业务承接角色"）时不许劫持（bug：京东直营和天猫直营对比 0 行）
                 elif compare_dimension in {"业务承接角色", "细分业务", "业务线"} or user_level in {"业务承接角色", "细分业务", "业务线"}:
                     where_parts.append(f"细分业务 IN ({quoted_members})")
                     # 修复：去掉硬编码"层级级别='业务经理'"，避免与实际层级不一致
@@ -6272,6 +6327,23 @@ LIMIT 10000
                         '电商业务' AS 条线,
                         '承接人' AS 层级,
                         COALESCE(NULLIF(TRIM(负责人), ''), '未知承接人') AS 节点名称,
+                        CASE
+                            WHEN 层级级别 = '事业部' THEN NULL
+                            WHEN 层级级别 = '业务部' THEN '电商事业部'
+                            ELSE COALESCE(NULLIF(TRIM(业务部), ''), '电商事业部')
+                        END AS 上级名称,
+                        年度目标营收 AS 总任务金额,
+                        年度开单金额 AS 年度开单金额,
+                        NULLIF(TRIM(负责人), '') AS 业务承接人,
+                        ROUND(总任务达成率 * 100, 2) AS 达成率,
+                        ROUND(年度目标营收 - 年度开单金额, 2) AS 剩余任务金额
+                    """.strip()
+                # 业务承接角色对比需要把细分业务作为节点（与人名对比投影同理，2026-08-26）
+                if compare_dimension in {"业务承接角色", "细分业务", "业务线"}:
+                    select_cols = """
+                        '电商业务' AS 条线,
+                        '业务承接角色' AS 层级,
+                        COALESCE(NULLIF(TRIM(细分业务), ''), NULLIF(TRIM(业务部), ''), '电商事业部') AS 节点名称,
                         CASE
                             WHEN 层级级别 = '事业部' THEN NULL
                             WHEN 层级级别 = '业务部' THEN '电商事业部'
@@ -6838,12 +6910,15 @@ WITH 字段提取 AS (
                 matched_triggers = set(query_intent.get("matched_triggers") or [])
                 if not (matched_triggers & spoken_filter_triggers):
                     level_values = {"分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司", "业务代表"}
+                    _consumer_filter_dataset = self._safe_dict(context.get("dataset"))
                     all_entities = [
                         n for n in self._resolved_entity_names(context) if n
                         and n not in level_values
                         and len(n) >= 4
                         and any(n.endswith(suffix) for suffix in ["分公司", "代表处", "业务部", "事业部", "城市公司", "城市分公司"])
                         and not re.search(r"\d|万", n)
+                        # 数据集根节点名是路由信息不是查询实体（bug 2026-08-25，与商用版 filter 分支同步修复）
+                        and not self._is_dataset_root_name(n, _consumer_filter_dataset)
                         and not any(t in n for t in ["年度", "开单", "任务", "达成", "剩余", "销售", "实际", "大于", "小于", "高于", "低于", "超过", "不少于", "不低于", "达到"])
                     ]
                     entity_names = [e for e in all_entities if e in normalized_question]
@@ -6858,9 +6933,10 @@ WITH 字段提取 AS (
                             elif has_branch:
                                 where_parts.append(f"节点名称 IN ({quoted_entities})")
                         elif target_level == "城市分公司" or target_level == "城市公司":
-                            where_parts.append(f"上级名称 IN ({quoted_entities}) OR 节点名称 IN ({quoted_entities})")
+                            # 整组 OR 加括号，防 AND 拼接后被 SQL 优先级拆开
+                            where_parts.append(f"(上级名称 IN ({quoted_entities}) OR 节点名称 IN ({quoted_entities}))")
                         else:
-                            where_parts.append(f"节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities})")
+                            where_parts.append(f"(节点名称 IN ({quoted_entities}) OR 上级名称 IN ({quoted_entities}))")
                 order_direction = "ASC" if filter_operator in {"<", "<="} else "DESC"
                 tie_breaker = "剩余任务金额 DESC, 上级名称, 节点名称" if filter_metric_column == "达成率" else "达成率 ASC, 上级名称, 节点名称"
                 where_clause = " AND ".join(where_parts)
@@ -6872,7 +6948,6 @@ WHERE {where_clause}
 ORDER BY {filter_metric_column} {order_direction}, {tie_breaker}
 LIMIT 200
 """.strip()
-                print("[DEBUG] asks_threshold_filter SQL:\n", generated_sql2, flush=True)
                 return generated_sql2
 
         # consumer_metric_map / map_consumer_metric 已上提到过滤分支前
@@ -7128,7 +7203,7 @@ LIMIT 10000
         ROW_NUMBER() OVER (ORDER BY {sort_column} {order_direction}, 年度开单金额 DESC, 剩余任务金额 DESC, 节点名称) AS 排名序号
     FROM 汇总结果
     WHERE 层级 = '分公司'
-    LIMIT {rank_limit}
+    {"LIMIT " + str(rank_limit) if rank_limit > 0 else ""}
 )
 SELECT r.*
 FROM 汇总结果 r

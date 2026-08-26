@@ -5687,6 +5687,13 @@ watch(canViewFullscreenReport, (allowed) => {
   }
 })
 
+// 已选模型被后端过滤（未测通/同名去重/权限不足）时回退 Auto，避免 el-select 显示裸 id（bug 2026-08-26）
+const sanitizeModelSelection = () => {
+  if (modelId.value != null && !aiModels.value.some(m => Number(m.id) === Number(modelId.value))) {
+    modelId.value = null
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('smartask-create-fresh-chat', handleExternalFreshChat)
   loadFeatureFlags()
@@ -5708,6 +5715,7 @@ onMounted(async () => {
   try {
     const modelRes = await getActiveAIModels()
     aiModels.value = modelRes.models || []
+    sanitizeModelSelection()
   } catch {}
 
   if (session.state.selectedDatasetId && !isDatasetVisible(session.state.selectedDatasetId)) {
@@ -5730,6 +5738,7 @@ onActivated(async () => {
   try {
     const modelRes = await getActiveAIModels()
     aiModels.value = modelRes.models || []
+    sanitizeModelSelection()
   } catch {}
   loadHistory()
   // keep-alive 切回也会复用旧实例上的 reactive 状态；同样需要清掉刷新/上一次卡死时的残留

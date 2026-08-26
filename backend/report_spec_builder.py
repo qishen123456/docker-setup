@@ -1141,6 +1141,16 @@ def build_report_spec(
             add_kpi("root-overall-rate", "整体达成率", overall_rate_value(), rate_metric)
             add_kpi("root-total-remain", f"累计{metric_label(remain_metric, '剩余任务金额')}", sum_metric(remain_metric), remain_metric)
             comparison_nodes = saved_comparison_nodes
+        elif focus_node is None and len(tree["roots"]) > 1:
+            # 多根总览且结果集无父级汇总行（如"四大分公司整体盘点"=4 分公司+各自代表处）：
+            # 只按根节点合计（根行口径已含下级，全行累加会翻倍），不能误用第一个根的单节点值。
+            saved_comparison_nodes = comparison_nodes
+            comparison_nodes = list(tree["roots"])
+            add_kpi("root-total-task", f"累计{metric_label(task_metric, '总任务金额')}", sum_metric(task_metric), task_metric)
+            add_kpi("root-total-actual", f"累计{metric_label(actual_metric, '年度开单金额')}", sum_metric(actual_metric), actual_metric)
+            add_kpi("root-overall-rate", "整体达成率", overall_rate_value(), rate_metric)
+            add_kpi("root-total-remain", f"累计{metric_label(remain_metric, '剩余任务金额')}", sum_metric(remain_metric), remain_metric)
+            comparison_nodes = saved_comparison_nodes
         else:
             for metric in metrics[:6]:
                 value = _row_value(root_source["raw"], metric)

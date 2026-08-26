@@ -70,9 +70,11 @@
             class="sidebar-history"
             :class="{ 'sidebar-history-highlight': historyPanelHighlighted }"
           >
+            <!-- PM 2026-08-26 自适应方案（用户拍板）：菜单展开多少历史就让多少，
+                 按面板实际高度显示 1-4 张整卡，永不收起 -->
             <div class="sidebar-history-head">
               <div>
-                <div class="sidebar-history-title">任务 ({{ historyPreviewList.length + (currentRunningTask ? 1 : 0) }})</div>
+                <div class="sidebar-history-title">任务 ({{ visibleHistoryList.length + (currentRunningTask ? 1 : 0) }})</div>
               </div>
               <div class="sidebar-history-actions">
                 <button
@@ -95,7 +97,7 @@
               </div>
             </div>
 
-            <div v-if="historyPreviewList.length || currentRunningTask" class="sidebar-history-list">
+            <div v-if="visibleHistoryList.length || currentRunningTask" class="sidebar-history-list">
               <!-- 虚拟"当前执行任务"行：不持久化，仅 session.status === 'running' 时显示 -->
               <article
                 v-if="currentRunningTask"
@@ -119,7 +121,7 @@
               </article>
 
               <article
-                v-for="item in historyPreviewList"
+                v-for="item in visibleHistoryList"
                 :key="item.id"
                 class="history-item"
                 :class="{ 'history-item-active': item.id === activeHistoryId }"
@@ -580,16 +582,50 @@ const canAccessMenuItem = (item) => {
 const availableMenuItems = computed(() => menuItems.filter((item) => !item.hidden && canAccessMenuItem(item)))
 const primaryMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path === '/smart-ask' || item.path === '/sql-debug'))
 const managementMenuItems = computed(() => availableMenuItems.value.filter((item) => item.path !== '/smart-ask' && item.path !== '/sql-debug'))
-const cachedPageNames = computed(() => (
-  Array.from(new Set(availableMenuItems.value.map((item) => routeComponentNamesByPath[item.path]).filter(Boolean)))
-))
+// bug 2026-08-25：菜单展开时历史区自动折叠让位（动态让位交互）
+// 注意：open/close 事件由 el-menu 发出（el-sub-menu 不发这两个事件）；
+// default-openeds 默认展开不触发 @open，故初始值按当前路由是否在管理页判定
 const managementDefaultOpeneds = computed(() => (
   managementMenuItems.value.some((item) => item.path === route.path) ? ['management'] : []
+))
+// PM 2026-08-26 自适应方案（用户拍板）：菜单展开多少历史就让多少——
+// ResizeObserver 监听历史面板实际高度，算出能放下几张卡（1-8），不收起来
+// 源数据也取 8 兜底（空间决定显示，但数据先备够）
+const historyPreviewList = computed(() => historySessions.value.slice(0, 8))
+const visibleHistoryCount = ref(8)
+const visibleHistoryList = computed(() => historyPreviewList.value.slice(0, visibleHistoryCount.value))
+let historyPanelObserver = null
+const updateVisibleHistoryCount = () => {
+  const panel = historyPanelRef.value
+  if (!panel) return
+  const head = panel.querySelector('.sidebar-history-head')
+  const firstCard = panel.querySelector('.history-item')
+  // card 高度 + 列表 gap；head 用实测高度；面板 padding 用 getComputedStyle 取真实值
+  const cardH = (firstCard ? firstCard.offsetHeight : 100) + 8
+  const headH = head ? head.offsetHeight : 0
+  const cs = window.getComputedStyle(panel)
+  const padTop = parseFloat(cs.paddingTop) || 0
+  const padBottom = parseFloat(cs.paddingBottom) || 0
+  const avail = panel.clientHeight - headH - padTop - padBottom
+  // 用 floor：只显示完整卡（半张隐藏不友好），但用 getComputedStyle 取精确 padding 避免保守 buffer
+  // 宁可下方多 0-30px 缝隙，也不要显示半张误导用户
+  const n = Math.floor(avail / cardH)
+  visibleHistoryCount.value = Math.min(8, Math.max(1, n))
+}
+watch(historyPanelRef, (el) => {
+  if (historyPanelObserver) { historyPanelObserver.disconnect(); historyPanelObserver = null }
+  if (el && typeof ResizeObserver !== 'undefined') {
+    historyPanelObserver = new ResizeObserver(updateVisibleHistoryCount)
+    historyPanelObserver.observe(el)
+    nextTick(updateVisibleHistoryCount)
+  }
+})
+const cachedPageNames = computed(() => (
+  Array.from(new Set(availableMenuItems.value.map((item) => routeComponentNamesByPath[item.path]).filter(Boolean)))
 ))
 const currentTitle = computed(() => menuItems.find((item) => item.path === route.path)?.label || '智能分析工作台')
 const currentSubtitle = computed(() => subtitleMap[route.path] || '经营分析工作台')
 const activeDatasetIds = computed(() => session.activeDatasetIds.value || [])
-const historyPreviewList = computed(() => historySessions.value.slice(0, 4))
 const showHistorySidebar = computed(() => route.path === '/smart-ask' && !collapsed.value)
 // 虚拟"当前执行/待确认任务"：session 在跑或待确认时显示在历史列表顶部，不持久化
 const currentRunningTask = computed(() => {
@@ -1087,6 +1123,7 @@ onUnmounted(() => {
   stopAdminConsoleFloatDrag()
   window.removeEventListener('resize', handleAdminConsoleFloatResize)
   window.removeEventListener(ADMIN_CONSOLE_FLOAT_TOGGLE_EVENT, handleAdminConsoleFloatToggle)
+  if (historyPanelObserver) { historyPanelObserver.disconnect(); historyPanelObserver = null }
 })
 </script>
 
@@ -1163,11 +1200,20 @@ body,
   flex-direction: column;
   padding: 14px 12px;
   transition: width var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
-  overflow: hidden;
+  /* bug 2026-08-25：sidebar 整体可滚（菜单全展开超 100vh 时兜底），
+     但滚动条视觉隐藏——用户用滚轮仍可滚动看全部，看不到滚动条框 */
+  overflow: hidden auto;
   height: 100vh;
   box-sizing: border-box;
   border-right: none !important;
   box-shadow: 8px 0 32px rgba(0, 0, 0, 0.08) !important;
+  /* bug 2026-08-25：sidebar 加深色背景让整列视觉饱满（之前透明背景看起来"飘"） */
+  background: linear-gradient(180deg, #1A1D24 0%, #14171C 100%);
+  scrollbar-width: none;
+}
+.sidebar::-webkit-scrollbar {
+  width: 0;
+  display: none;
 }
 
 .sidebar::before {
@@ -1262,13 +1308,11 @@ body,
   border-right: none !important;
   padding-top: 4px;
   overflow-x: hidden;
+  /* bug 2026-08-25：菜单完全放开，不设 max-height（用户反馈"不要滚动条框"）
+     超管 10 子项展开时 sidebar 整体超出 100vh → sidebar 级 overflow 滚动兜底 */
+  overflow-y: visible;
   scrollbar-width: none;
 }
-
-.nav-menu::-webkit-scrollbar {
-  display: none;
-}
-
 .sidebar.sidebar-collapsed .nav-menu {
   width: 100% !important;
   margin: 0;
@@ -1638,16 +1682,20 @@ body,
   position: relative;
   margin: 12px 0 12px;
   padding: 14px 12px 12px;
+  /* PM 2026-08-26 自适应方案（用户拍板）：菜单展开多少历史就让多少——
+     面板 flex:1 吃剩余空间，显示卡数由 ResizeObserver 按实际高度算（1-4 张）；
+     min-height 120px 保底 1 张卡（超管 10 子项也不至于归零，超出走 sidebar 整体滚动） */
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-card, 12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(10px);
+  transition: flex 0.2s ease, min-height 0.2s ease, padding 0.2s ease;
 }
 
 .sidebar-history-highlight {
@@ -1766,18 +1814,39 @@ body,
   gap: 8px;
   flex: 1 1 auto;
   min-height: 0;
+  /* PM 2026-08-26 自适应：显示卡数由 JS 按面板高度算（visibleHistoryCount），
+     不再需要固定 440px max-height 内部滚动 */
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 2px;
+}
+
+/* 滚动条：深色面板配浅灰半透明（bug 2026-08-25 反馈"太白"） */
+.sidebar-history-list::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar-history-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+}
+.sidebar-history-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.sidebar-history-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .history-item {
   position: relative;
   display: flex;
   align-items: flex-start;
-  /* 卡片均分列表剩余高度，填满面板不留底部空白 */
-  flex: 1 1 0;
-  min-height: 0;
+  /* bug 2026-08-25 全角色方案：卡片死硬固定 100px（!important 防内部样式覆盖），
+     4 个大小永远一致；内容溢出被 overflow hidden 截断 */
+  flex: none !important;
+  height: 100px !important;
+  min-height: 100px !important;
+  max-height: 100px !important;
+  box-sizing: border-box;
   gap: 10px;
   width: 100%;
   padding: 12px 14px;
@@ -2268,6 +2337,8 @@ body,
   border: 1px solid transparent;
   font-size: 12px;
   transition: all var(--duration-normal, 220ms) var(--ease-out, cubic-bezier(0.16,1,0.3,1));
+  /* bug 2026-08-25：自动贴底，让 sidebar 整体在视觉上填满 100vh */
+  margin-top: auto;
 }
 
 .sidebar.sidebar-collapsed .sidebar-footer {

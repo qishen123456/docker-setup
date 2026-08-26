@@ -514,49 +514,79 @@
     },
     {
       "id": "N8",
-      "source": "2.0 手测回归：四大分公司区域整体盘点应29行；修复后不展开101行瀑布",
+      "source": "2.0 手测回归：四大分公司区域整体盘点应29行；修复后不展开101行瀑布（2026-08-22 修复后升格，弹确认走完）",
       "question": "四大分公司区域业绩整体盘点",
       "asserts": [
         {
-          "path": "route.dataset_ids",
-          "op": "eq",
-          "expect": [
-            3
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              3
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                3
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.target_level",
+              "op": "eq",
+              "expect": "分公司"
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "eq",
+              "expect": 29
+            }
           ]
-        },
-        {
-          "path": "dataset_results.0.query_intent.target_level",
-          "op": "eq",
-          "expect": "分公司"
-        },
-        {
-          "path": "dataset_results.0.row_count",
-          "op": "eq",
-          "expect": 29
         }
       ]
     },
     {
       "id": "N8B",
-      "source": "2.0 手测回归：复合问法必须稳定命中四分公司层级",
+      "source": "2.0 手测回归：复合问法必须稳定命中四分公司层级（2026-08-22 修复后升格，弹确认走完）",
       "question": "四大分公司业绩盘点",
       "asserts": [
         {
-          "path": "route.dataset_ids",
-          "op": "contains",
-          "expect": 3
-        },
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
         {
-          "path": "dataset_results.0.query_intent.target_level",
-          "op": "eq",
-          "expect": "分公司"
-        },
-        {
-          "path": "dataset_results.0.row_count",
-          "op": "range",
-          "expect": [
-            25,
-            35
+          "select": {
+            "dataset_ids": [
+              3
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "contains",
+              "expect": 3
+            },
+            {
+              "path": "dataset_results.0.query_intent.target_level",
+              "op": "eq",
+              "expect": "分公司"
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "range",
+              "expect": [
+                25,
+                35
+              ]
+            }
           ]
         }
       ]

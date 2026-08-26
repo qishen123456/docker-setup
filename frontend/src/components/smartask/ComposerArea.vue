@@ -119,8 +119,19 @@
                     >
                       <div class="sa-ds-option-main">
                         <div class="sa-ds-option-title sa-model-option-title">
-                          <span>{{ m.name }}</span>
-                          <span v-if="m.is_default" class="sa-model-default-badge">默认模型</span>
+                          <div class="sa-model-option-left">
+                            <span class="sa-model-icon-mini" aria-hidden="true">
+                              <svg viewBox="0 0 24 24" focusable="false"><path d="M13.4 2.4 5.9 13.1h5.2l-.6 8.5 7.6-11h-5.3l.6-8.2Z" fill="currentColor"/></svg>
+                            </span>
+                            <span class="sa-model-option-name">{{ m.name }}</span>
+                            <span v-if="m.is_default" class="sa-model-default-badge">默认</span>
+                          </div>
+                          <div class="sa-model-option-right">
+                            <span v-if="m.channel_display_name" class="sa-model-option-channel">
+                              {{ m.channel_display_name }}
+                            </span>
+                            <span v-if="m.is_default" class="sa-model-check" aria-hidden="true">✓</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -221,7 +232,18 @@ const datasetSelectValue = computed({
 })
 
 const modelSelectValue = computed({
-  get: () => modelModelId.value ?? '',
+  get: () => {
+    // bug 2026-08-26：aiModels 异步加载未到位时，modelModelId 已是有效 ID（如 13），
+    // el-select 找不到匹配 option 会把原始 ID 当文字渲染（"神马13" 闪烁）。
+    // 守卫：列表未就绪 或 当前 ID 不在列表中 → 返回 '' 显示 placeholder "Auto"
+    // 注意：props 必须用 props.aiModels 访问（defineProps 对象方式下裸写 aiModels 是未定义变量，
+    // 上一版因此 ReferenceError → 点击模型选项无反应，2026-08-26 二次修复）
+    if (!modelModelId.value) return ''
+    const models = props.aiModels || []
+    if (models.length === 0) return ''
+    if (!models.some(m => String(m.id) === String(modelModelId.value))) return ''
+    return modelModelId.value
+  },
   set: value => { modelModelId.value = value === '' ? null : value }
 })
 
@@ -510,11 +532,33 @@ onMounted(() => {
   min-width: 0;
 }
 
-.sa-model-option-title > span:first-child {
+.sa-model-option-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sa-model-option-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sa-model-option-channel {
+  flex: 0 0 auto;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 10px;
+  font-weight: 600;
+  color: #6B7280;
+  line-height: 1.2;
 }
 
 .sa-ds-option-auto .sa-ds-option-title {
@@ -528,9 +572,9 @@ onMounted(() => {
   padding: 6px;
 }
 
-:deep(.sa-ds-popper .el-select-dropdown__list) {
-  padding: 0;
-}
+/* 模型下拉弹层：scoped 选择器对 teleport 到 body 的 element-plus popper 失效
+   （已下沉到下方非 scoped 块） */
+
 
 :deep(.sa-ds-popper .el-select-dropdown__item) {
   min-height: 38px;
@@ -553,7 +597,7 @@ onMounted(() => {
 .sa-textarea-wrap {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
+  grid-template-columns: minmax(0, 1fr) 190px;
   grid-template-rows: 52px;
   column-gap: 12px;
   height: 88px;
@@ -800,17 +844,17 @@ onMounted(() => {
 .sa-composer-actions {
   grid-column: 2;
   justify-self: end;
-  width: 118px;
+  width: 190px;
   display: grid;
-  grid-template-columns: 82px 30px;
+  grid-template-columns: 150px 30px;
   align-items: center;
-  column-gap: 6px;
+  column-gap: 10px;
   pointer-events: auto;
 }
 
 .sa-model-corner-select {
   grid-column: 1;
-  width: 82px;
+  width: 150px;
 }
 
 .sa-model-corner-select :deep(.el-select__wrapper) {
@@ -997,20 +1041,20 @@ onMounted(() => {
   }
 
   .sa-composer-actions {
-    width: 104px;
-    grid-template-columns: 72px 28px;
-    column-gap: 4px;
+    width: 150px;
+    grid-template-columns: 110px 28px;
+    column-gap: 6px;
   }
 
   .sa-textarea-wrap {
-    grid-template-columns: minmax(0, 1fr) 104px;
+    grid-template-columns: minmax(0, 1fr) 150px;
     column-gap: 10px;
     padding-left: 14px;
     padding-right: 14px;
   }
 
   .sa-model-corner-select {
-    width: 72px;
+    width: 110px;
   }
 
   .sa-model-corner-select :deep(.el-select__wrapper) {
@@ -1033,5 +1077,128 @@ onMounted(() => {
   .sa-composer-running-mask {
     right: 14px;
   }
+}
+</style>
+
+<style>
+/* ============================================================
+   模型下拉弹层 — 浅色高端版（参考用户截图的版式 / 配色与整体协调）
+   触发器保持原色；弹层浅色面板 + 精致边框 + 柔和投影
+   布局参考截图：左=闪电+名称+默认徽章 / 右=通道+对勾
+   ============================================================ */
+.sa-model-popper.el-popper {
+  min-width: 280px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.04), 0 12px 32px rgba(16, 24, 40, 0.12);
+  max-height: 380px;
+  overflow: hidden;
+}
+.sa-model-popper .el-select-dropdown__list {
+  max-height: 368px;
+  overflow-y: auto;
+  padding: 6px;
+}
+/* 滚动条：白底弹层配黑灰半透明（bug 2026-08-25 反馈"太白"） */
+.sa-model-popper .el-select-dropdown__list::-webkit-scrollbar {
+  width: 5px;
+}
+.sa-model-popper .el-select-dropdown__list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 3px;
+}
+.sa-model-popper .el-select-dropdown__list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.34);
+}
+.sa-model-popper .el-select-dropdown__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sa-model-popper .el-select-dropdown__item {
+  background: transparent;
+  border-radius: 10px;
+  margin: 2px 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+}
+.sa-model-popper .el-select-dropdown__item:hover,
+.sa-model-popper .el-select-dropdown__item.is-hovering {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+.sa-model-popper .el-select-dropdown__item.is-selected {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+}
+.sa-model-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.sa-model-option-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sa-model-option-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.sa-model-icon-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #E61F24;
+}
+.sa-model-icon-mini svg {
+  width: 14px;
+  height: 14px;
+}
+.sa-model-option-name {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sa-model-default-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #ECFDF5;
+  color: #047857;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.sa-model-option-channel {
+  flex: 0 0 auto;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #F3F4F6;
+  color: #4B5563;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.sa-model-check {
+  color: #10B981;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 </style>
