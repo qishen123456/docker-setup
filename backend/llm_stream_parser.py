@@ -24,7 +24,8 @@ def stream_delta_value_to_text(value: Any) -> str:
 def extract_stream_delta(delta_obj: Any) -> Tuple[str, str]:
     content_delta = stream_delta_value_to_text(getattr(delta_obj, "content", ""))
     reasoning_delta = ""
-    reasoning_keys = ("reasoning_content", "reasoning", "reasoning_text")
+    # reasoning_details 是 MiniMax reasoning_split=True 的思考字段（list-of-dict，stream_delta_value_to_text 已兼容）
+    reasoning_keys = ("reasoning_content", "reasoning", "reasoning_text", "reasoning_details")
 
     for key in reasoning_keys:
         reasoning_delta = stream_delta_value_to_text(getattr(delta_obj, key, ""))

@@ -7,6 +7,7 @@ and user profile data is non-secret Feishu identity metadata.
 """
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,12 @@ from typing import Any, Dict
 from flask import request, session
 
 from config_manager import read_json, write_json
+
+# bug 2026-08-27 并发鉴权黑洞取证：A 问数请求执行期间，Flask 进程内所有
+# get_current_user() 失败（403），但独立进程同刻读同一文件正常。
+# 此 logger 只加诊断不改行为：resolve_token 每条失败路径 + get_current_user
+# 空返回时打 WARNING，附 token 前缀/文件路径/tokens数量/mtime/cwd 现场。
+_auth_diag_logger = logging.getLogger("auth_store.diag")
 
 
 TOKEN_FILE = "auth_tokens.json"
@@ -43,7 +50,17 @@ def _parse_iso(value: str) -> datetime | None:
 
 
 def _load() -> Dict[str, Any]:
-    data = read_json(TOKEN_FILE)
+    try:
+        data = read_json(TOKEN_FILE)
+    except Exception as exc:
+        # bug 2026-08-27 取证：token 文件读取异常（如并发写撕裂 ValueError）。
+        # 记录后原样 re-raise，保持既有 500 行为不变。
+        _auth_diag_logger.warning(
+            "[auth-diag] auth_tokens.json read failed: %s: %s (并发写撕裂或编码异常)",
+            type(exc).__name__,
+            exc,
+        )
+        raise
     if not isinstance(data, dict):
         return {"tokens": {}}
     tokens = data.get("tokens")
@@ -86,25 +103,55 @@ def create_session_token(user_info: Dict[str, Any]) -> str:
     return token
 
 
+def _auth_diag_snapshot(token: str, reason: str, data: Dict[str, Any] | None = None) -> None:
+    """并发鉴权黑洞取证日志（只读诊断，不改变任何行为）。"""
+    try:
+        from config_manager import CONFIG_DIR
+        filepath = os.path.join(CONFIG_DIR, TOKEN_FILE)
+        try:
+            st = os.stat(filepath)
+            file_info = f"size={st.st_size} mtime={int(st.st_mtime)} inode={st.st_ino}"
+        except Exception as exc:
+            file_info = f"stat_failed={type(exc).__name__}"
+        tokens_count = len((data or {}).get("tokens") or {})
+        _auth_diag_logger.warning(
+            "[auth-diag] resolve_token miss reason=%s token_prefix=%s... path=%s tokens_in_file=%d %s cwd=%s thread=%s",
+            reason,
+            (token or "")[:10],
+            filepath,
+            tokens_count,
+            file_info,
+            os.getcwd(),
+            __import__("threading").current_thread().name,
+        )
+    except Exception:
+        # 诊断日志自身绝不影响主流程
+        pass
+
+
 def resolve_token(token: str) -> Dict[str, Any] | None:
     if not token:
         return None
     data = _load()
     item = data.get("tokens", {}).get(token)
     if not isinstance(item, dict):
+        _auth_diag_snapshot(token, "token_not_in_file", data)
         return None
     expires_at = _parse_iso(item.get("expires_at", ""))
     if expires_at and expires_at <= _now():
         data.get("tokens", {}).pop(token, None)
         _save(data)
+        _auth_diag_snapshot(token, "token_expired_popped", data)
         return None
     user = item.get("user")
     if not isinstance(user, dict):
+        _auth_diag_snapshot(token, "token_user_invalid", data)
         return None
     refreshed_user = _refresh_user_from_employee(user)
     if _is_user_disabled(refreshed_user):
         data.get("tokens", {}).pop(token, None)
         _save(data)
+        _auth_diag_snapshot(token, "user_disabled_popped", data)
         return None
     return refreshed_user
 
@@ -209,6 +256,15 @@ def get_current_user() -> Dict[str, Any]:
     user = resolve_token(token)
     if user:
         return user
+    # bug 2026-08-27 取证：区分"请求未带 token"和"带 token 但 resolve 失败"
+    # （后者才是并发黑洞场景；resolve_token 内部已打出 miss 原因）
+    if token:
+        _auth_diag_logger.warning(
+            "[auth-diag] get_current_user empty with token present: token_prefix=%s... path=%s method=%s",
+            token[:10],
+            getattr(request, "path", "?"),
+            getattr(request, "method", "?"),
+        )
     session_user = session.get("user")
     if not isinstance(session_user, dict):
         return {}

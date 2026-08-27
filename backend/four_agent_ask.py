@@ -8602,12 +8602,15 @@ Agent3 复核结果：
 {json.dumps(context.get("query_intent") or {}, ensure_ascii=False)}
 """
         try:
-            # reasoning 类模型（如 MiniMax-M3）会先产出大段 <think> 思考，max_tokens 太小会被思考烧光导致正文为空，
-            # 这里放宽到 4096 给"思考 + 正文"留足空间。
+            # reasoning 类模型（如 MiniMax-M3）会先产出大段 <think> 思考，max_tokens 太小会被思考烧光导致正文为空。
+            # 默认模型 MiniMax-M3 官方已开 reasoning_split（思考走 reasoning_details 不占正文），
+            # 但故障转移到的备选模型（如 edgefn 的 MiniMax-M2.5）不支持 split，思考仍混在 content 里烧额度
+            # ——empty_body_after_think 兜底多在此时触发（2026-08-27 实测）。放宽到 8192 给"思考 + 正文"留足空间。
+            # max_tokens 只是上限，非 reasoning 模型不会多产内容，无负面影响。
             content = self._chat(
                 system_prompt,
                 user_prompt,
-                max_tokens=4096,
+                max_tokens=8192,
                 trace=trace,
                 stage="agent4.analysis",
                 agent_name="Agent4",

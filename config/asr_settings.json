@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "provider": "feishu",
+  "app_id": "cli_a970ac1e21b89cee",
+  "app_secret_b64": "NUkwTk9SVVppb2xhMlJiTzJWWVhhY0JWbm9QemVTb1E=",
+  "max_duration_sec": 60,
+  "max_audio_kb": 3072
+}

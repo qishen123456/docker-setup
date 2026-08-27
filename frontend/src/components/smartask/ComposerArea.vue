@@ -138,11 +138,51 @@
                   </el-option>
                 </el-select>
 
+                <!-- 语音输入：WorkBuddy 式录音条（桌面点击开始/结束，移动端按住说话） -->
+                <button
+                  v-if="canRecord && recorderState === 'idle' && !isRunning && !disabled"
+                  class="sa-mic-btn"
+                  aria-label="语音输入"
+                  @click="handleMicClick"
+                  @touchstart.prevent="handleMicTouchStart"
+                  @touchend.prevent="handleMicTouchEnd"
+                  @touchmove="handleMicTouchMove"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                    <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                    <path d="M5 10a7 7 0 0 0 14 0"></path>
+                    <line x1="12" y1="17" x2="12" y2="22"></line>
+                  </svg>
+                </button>
+
+                <div
+                  v-else-if="recorderState !== 'idle'"
+                  class="sa-recorder-pill"
+                  :class="{ 'is-cancel-pending': touchCancelPending, 'is-clickable': recorderState === 'recording' && !isTouchDevice, 'is-recording': recorderState === 'recording' }"
+                  :title="recorderState === 'recording' && !isTouchDevice ? '点击结束并识别，Esc 取消' : ''"
+                  @click="handlePillClick"
+                >
+                  <span class="sa-recorder-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                      <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                      <path d="M5 10a7 7 0 0 0 14 0"></path>
+                      <line x1="12" y1="17" x2="12" y2="22"></line>
+                    </svg>
+                  </span>
+                  <span class="sa-recorder-timer">{{ recordTimerText }}</span>
+                  <!-- 谷歌式极简：无 ✕/✓，闪烁+计时，点击结束识别，Esc 取消（2026-08-27 按用户要求改） -->
+                  <span v-if="recorderState === 'recording' && isTouchDevice" class="sa-recorder-hint">
+                    {{ touchCancelPending ? '松手取消' : '松手结束，上滑取消' }}
+                  </span>
+                  <span v-else-if="recorderState === 'transcribing'" class="sa-recorder-hint">识别中…</span>
+                </div>
+
                 <button
                   v-if="!isRunning && allowSend"
                   class="sa-send-btn"
+                  :class="{ 'is-disabled': recorderState !== 'idle' }"
                   aria-label="发送问题"
-                  @click="$emit('send')"
+                  @click="recorderState === 'idle' && $emit('send')"
                 >
                   <span class="sa-send-icon" aria-hidden="true">
                     <svg class="sa-send-plane" viewBox="0 0 24 24" fill="currentColor" focusable="false">
@@ -169,7 +209,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getAsrConfig, transcribeAudio } from '../../api/index'
 
 const modelQuery = defineModel('query', { type: String, default: '' })
 const modelDatasetId = defineModel('datasetId', { default: null })
@@ -273,8 +315,196 @@ const handleKeydown = (event) => {
   if (event.key !== 'Enter') return
   if (event.shiftKey) return
   if (!props.allowSend || props.isRunning) return
+  if (recorderState.value !== 'idle') return // 录音/识别中不触发发送
   event.preventDefault()
   emit('send')
+}
+
+// ===================== 语音输入（ASR，方案见 docs/voice-input-design-2026-08-26.md） =====================
+// 飞书 file_recognize 只收 16k PCM：用 AudioWorklet 直接采 PCM，不走 MediaRecorder（webm 不被接受）
+const recorderState = ref('idle') // idle | recording | transcribing
+const asrEnabled = ref(false)
+const asrMaxDurationSec = ref(60)
+const recordSeconds = ref(0)
+const touchCancelPending = ref(false)
+// 只用主指针判定触屏：带触屏的 Windows 笔记本 'ontouchstart' 也为 true，
+// 会被误判成移动端导致桌面点击失效（2026-08-27 实测 bug）
+const isTouchDevice = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+
+const canRecord = computed(() => (
+  asrEnabled.value
+  && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+  && typeof (window.AudioContext || window.webkitAudioContext) !== 'undefined'
+))
+
+const recordTimerText = computed(() => {
+  const s = recordSeconds.value
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+})
+
+let audioCtx = null
+let mediaStream = null
+let workletNode = null
+let pcmChunks = []
+let recordTimer = null
+let recordMaxTimer = null
+let recordStartedAt = 0
+let touchStartY = 0
+
+const WORKLET_CODE = `
+class PCMCollector extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0]
+    if (input && input[0] && input[0].length) this.port.postMessage(input[0].slice(0))
+    return true
+  }
+}
+registerProcessor('pcm-collector', PCMCollector)
+`
+
+const startRecording = async () => {
+  if (recorderState.value !== 'idle') return
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch (e) {
+    ElMessage.warning('请允许浏览器使用麦克风')
+    return
+  }
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    audioCtx = new Ctx()
+    const source = audioCtx.createMediaStreamSource(mediaStream)
+    const workletUrl = URL.createObjectURL(new Blob([WORKLET_CODE], { type: 'application/javascript' }))
+    await audioCtx.audioWorklet.addModule(workletUrl)
+    URL.revokeObjectURL(workletUrl)
+    workletNode = new AudioWorkletNode(audioCtx, 'pcm-collector')
+    pcmChunks = []
+    workletNode.port.onmessage = (e) => { pcmChunks.push(e.data) }
+    // 不接 destination 时 Chrome 不驱动 process()；接零增益节点避免外放回录
+    const mute = audioCtx.createGain()
+    mute.gain.value = 0
+    source.connect(workletNode)
+    workletNode.connect(mute)
+    mute.connect(audioCtx.destination)
+  } catch (e) {
+    cleanupAudio()
+    ElMessage.error('当前浏览器不支持录音')
+    return
+  }
+  recordStartedAt = Date.now()
+  recordSeconds.value = 0
+  touchCancelPending.value = false
+  recorderState.value = 'recording'
+  recordTimer = setInterval(() => {
+    recordSeconds.value = Math.floor((Date.now() - recordStartedAt) / 1000)
+  }, 500)
+  recordMaxTimer = setTimeout(() => finishRecording(), asrMaxDurationSec.value * 1000)
+}
+
+const cleanupAudio = () => {
+  if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
+  if (recordMaxTimer) { clearTimeout(recordMaxTimer); recordMaxTimer = null }
+  if (workletNode) { try { workletNode.disconnect() } catch (e) {} workletNode = null }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null }
+}
+
+const cancelRecording = () => {
+  cleanupAudio()
+  pcmChunks = []
+  recorderState.value = 'idle'
+}
+
+const mergeChunks = (chunks) => {
+  const total = chunks.reduce((n, c) => n + c.length, 0)
+  const merged = new Float32Array(total)
+  let offset = 0
+  for (const c of chunks) { merged.set(c, offset); offset += c.length }
+  return merged
+}
+
+const downsampleTo16k = (samples, srcRate) => {
+  if (srcRate === 16000) return samples
+  const ratio = srcRate / 16000
+  const out = new Float32Array(Math.floor(samples.length / ratio))
+  for (let i = 0; i < out.length; i++) {
+    out[i] = samples[Math.min(samples.length - 1, Math.floor(i * ratio))]
+  }
+  return out
+}
+
+const floatTo16BitPcmBase64 = (samples) => {
+  const buf = new ArrayBuffer(samples.length * 2)
+  const view = new DataView(buf)
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  const step = 0x8000
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + step))
+  }
+  return btoa(binary)
+}
+
+const finishRecording = async () => {
+  if (recorderState.value !== 'recording') return
+  const srcRate = audioCtx ? audioCtx.sampleRate : 48000
+  const chunks = pcmChunks
+  cleanupAudio()
+  pcmChunks = []
+  const samples = downsampleTo16k(mergeChunks(chunks), srcRate)
+  // 少于 0.3 秒视为误触
+  if (!samples || samples.length < 16000 * 0.3) {
+    recorderState.value = 'idle'
+    return
+  }
+  recorderState.value = 'transcribing'
+  try {
+    const res = await transcribeAudio(floatTo16BitPcmBase64(samples))
+    const text = String(res?.text || '').trim()
+    if (text) {
+      const cur = String(modelQuery.value || '').trimEnd()
+      modelQuery.value = cur ? `${cur} ${text}` : text
+      nextTick(() => { resizeTextarea(); inputRef.value && inputRef.value.focus() })
+    } else {
+      ElMessage.info('未检测到语音内容，请重试。')
+    }
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error || '语音识别失败，请稍后重试')
+  } finally {
+    recorderState.value = 'idle'
+  }
+}
+
+// 桌面端：点击开始；录音条点击=结束识别，Esc=取消（谷歌式极简）
+const handleMicClick = () => {
+  if (isTouchDevice) return // 触屏走 press-hold，避免 touch 合成 click 冲突
+  startRecording()
+}
+const handlePillClick = () => {
+  if (isTouchDevice) return
+  if (recorderState.value === 'recording') finishRecording()
+}
+const handleEscKey = (e) => {
+  if (e.key === 'Escape' && recorderState.value === 'recording') cancelRecording()
+}
+// 移动端：按住说话，上滑取消
+const handleMicTouchStart = (e) => {
+  touchStartY = e.touches && e.touches[0] ? e.touches[0].clientY : 0
+  startRecording()
+}
+const handleMicTouchMove = (e) => {
+  if (recorderState.value !== 'recording') return
+  const y = e.touches && e.touches[0] ? e.touches[0].clientY : touchStartY
+  touchCancelPending.value = (touchStartY - y) > 60
+}
+const handleMicTouchEnd = () => {
+  if (recorderState.value !== 'recording') return
+  if (touchCancelPending.value) cancelRecording()
+  else finishRecording()
 }
 
 watch(modelQuery, () => nextTick(resizeTextarea))
@@ -284,6 +514,19 @@ onMounted(() => {
     resizeTextarea()
     inputRef.value?.focus()
   })
+  getAsrConfig()
+    .then((res) => {
+      asrEnabled.value = !!(res && res.enabled)
+      if (res && res.max_duration_sec) asrMaxDurationSec.value = res.max_duration_sec
+    })
+    .catch(() => { asrEnabled.value = false })
+  window.addEventListener('keydown', handleEscKey)
+})
+
+onUnmounted(() => {
+  // 组件销毁时释放麦克风，避免录音中路由跳走导致设备占用
+  window.removeEventListener('keydown', handleEscKey)
+  cleanupAudio()
 })
 </script>
 
@@ -808,7 +1051,8 @@ onMounted(() => {
 
 .sa-composer-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
+  /* 右列原固定 118px，加入麦克风后动作区变宽会重叠溢出（2026-08-27 bug）；改 auto 由内容撑开 */
+  grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 12px;
   align-items: end;
   position: absolute;
@@ -844,17 +1088,17 @@ onMounted(() => {
 .sa-composer-actions {
   grid-column: 2;
   justify-self: end;
-  width: 190px;
-  display: grid;
-  grid-template-columns: 150px 30px;
+  /* 原固定 190px/两列网格只容得下 模型选择器+发送键，麦克风/录音条会被挤到第二行重叠
+     （2026-08-27 bug）；改 flex 自适应宽度，内容多少都能排开 */
+  display: flex;
   align-items: center;
   column-gap: 10px;
   pointer-events: auto;
 }
 
 .sa-model-corner-select {
-  grid-column: 1;
   width: 150px;
+  flex: 0 0 auto;
 }
 
 .sa-model-corner-select :deep(.el-select__wrapper) {
@@ -1035,14 +1279,11 @@ onMounted(() => {
     left: 14px;
     right: 14px;
     bottom: 12px;
-    grid-template-columns: minmax(0, 1fr) 104px;
     column-gap: 10px;
     align-items: end;
   }
 
   .sa-composer-actions {
-    width: 150px;
-    grid-template-columns: 110px 28px;
     column-gap: 6px;
   }
 
@@ -1077,6 +1318,100 @@ onMounted(() => {
   .sa-composer-running-mask {
     right: 14px;
   }
+}
+
+/* 语音输入：麦克风按钮 + 录音条（WorkBuddy 式） */
+.sa-mic-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #6B7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex: 0 0 auto;
+}
+.sa-mic-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+}
+.sa-mic-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sa-recorder-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  flex: 0 0 auto;
+}
+/* 外框呼吸闪烁只在录音中进行（2026-08-27 用户反馈闪烁不明显） */
+.sa-recorder-pill.is-recording {
+  animation: sa-recorder-glow 1.2s ease-in-out infinite;
+}
+.sa-recorder-pill.is-cancel-pending {
+  border-color: #FCA5A5;
+  background: #FEF2F2;
+}
+.sa-recorder-icon {
+  display: flex;
+  color: #F51F19;
+}
+.sa-recorder-pill.is-recording .sa-recorder-icon {
+  animation: sa-recorder-pulse 1.2s ease-in-out infinite;
+}
+.sa-recorder-icon svg {
+  width: 16px;
+  height: 16px;
+}
+/* 图标：红→橙→红 变色 + 缩放，比单纯透明度闪更明显 */
+@keyframes sa-recorder-pulse {
+  0%, 100% { color: #F51F19; transform: scale(1); }
+  50% { color: #F97316; transform: scale(1.25); }
+}
+/* 外框：边框色 + 红色光晕呼吸 */
+@keyframes sa-recorder-glow {
+  0%, 100% {
+    border-color: #E5E7EB;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+  }
+  50% {
+    border-color: #F51F19;
+    box-shadow: 0 0 0 4px rgba(245, 31, 25, 0.18), 0 1px 6px rgba(245, 31, 25, 0.35);
+  }
+}
+.sa-recorder-timer {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+  min-width: 38px;
+}
+.sa-recorder-pill.is-clickable {
+  cursor: pointer;
+}
+.sa-recorder-pill.is-clickable:hover {
+  border-color: #D1D5DB;
+  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.12);
+}
+.sa-recorder-hint {
+  font-size: 12px;
+  color: #6B7280;
+  white-space: nowrap;
+}
+.sa-send-btn.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>
 

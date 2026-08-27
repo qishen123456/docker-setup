@@ -40,6 +40,7 @@ from config_manager import get_app_config, init_default_configs
 from secret_codec import decrypt_secret_value
 from controllers.ai_models import ai_models_bp
 from controllers.agents import agents_bp
+from controllers.asr import asr_bp
 from controllers.auth import auth_bp
 from controllers.bookshelf import bookshelf_bp
 from controllers.dashboard import dashboard_bp
@@ -121,6 +122,7 @@ app.register_blueprint(datasources_bp)
 app.register_blueprint(data_permissions_bp)
 app.register_blueprint(dataset_transform_bp)
 app.register_blueprint(ai_models_bp)
+app.register_blueprint(asr_bp)
 app.register_blueprint(feishu_bp)
 app.register_blueprint(smart_chat_bp)
 app.register_blueprint(bookshelf_bp)

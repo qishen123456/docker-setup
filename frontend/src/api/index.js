@@ -105,6 +105,11 @@ export const deleteAIModel = (id) => api.delete(`/ai-models/${id}`)
 export const testAIModel = (id) => api.post(`/ai-models/${id}/test`)
 export const setDefaultAIModel = (id) => api.post(`/ai-models/${id}/set-default`)
 
+// ASR 语音转文字（silent：toast 由调用方按场景自定）
+export const getAsrConfig = () => api.get('/asr/config', { timeout: 5000, silent: true })
+export const transcribeAudio = (audioB64, format = 'pcm') =>
+  api.post('/asr/transcribe', { audio_b64: audioB64, format }, { silent: true })
+
 // Report Config
 export const getReportConfig = (datasetId) => api.get(`/datasets/${datasetId}/report-config`)
 export const upsertReportConfig = (datasetId, config) => api.put(`/datasets/${datasetId}/report-config`, { config })
