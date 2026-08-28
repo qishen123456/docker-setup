@@ -59,6 +59,141 @@ _SYSTEM_PROMPT = """你是智能问数系统的"问题理解守门员"。给你�
 - 数据集已有默认口径时，泛指词按默认口径理解：书架定义了主指标（如默认"业绩"=达成率）时，"业绩如何""情况怎么样"这类泛词判 pass，不要为泛词本身弹 suggest。
 - confidence 表示你对 action 判断的把握，不是对答案的把握。"""
 
+_DRAFT_SYSTEM_PROMPT = """你是智能问数系统的"确认文本分类器"。场景：系统弹了"确认口径"卡片（让用户选数据集/范围），用户没有点预设选项，而是手动输入了一段话。判断这段话的意图：
+
+- correction：用户在纠正/推翻自己的问题。常见信号："打错了""我是说""不是问X""应该问""要看的是""说错了"。此时输出改写后的完整问题。
+- supplement：用户在补充筛选口径、范围、条件（如"按华东区域分公司口径""只看今年的""加上河南代表处"）。此时不改写问题。
+
+只允许输出 JSON（不要输出任何其他文字）：
+{
+  "kind": "correction" | "supplement",
+  "rewritten_question": "仅 kind=correction 时填写：结合用户输入改写后的完整问题，保持用户原意，不要扩写不要加戏",
+  "confidence": 0.0~1.0
+}
+
+拿不准一律输出 supplement（supplement 时 rewritten_question 留空，confidence 表示你对分类的把握）。"""
+
+
+def classify_confirmation_draft(question: str, draft: str) -> Dict[str, Any]:
+    """确认卡自由文本消化（澄清方案 C）。
+
+    判"纠正问题"还是"补充口径"：
+      - correction 且置信度达标 → 返回改写后的完整问题，由调用方弹重问卡；
+      - 其余一切（supplement / 低置信 / LLM 失败 / 超时 / 解析失败）→ {"kind": "supplement"}。
+
+    fail-open 方向固定为 supplement（追加 refined_query 继续当前 route），
+    绝不因本函数失败而拦死确认流程。复用守门员的模型与超时配置。
+    """
+    fallback = {"kind": "supplement", "rewritten_question": "", "confidence": None}
+    try:
+        question = str(question or "").strip()
+        draft = str(draft or "").strip()
+        if not question or not draft:
+            return fallback
+        settings = _load_settings()
+        if not settings.get("enabled"):
+            return fallback
+        model_cfg = _load_model_config(int(settings.get("model_id") or 0))
+        if not model_cfg:
+            return fallback
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=model_cfg.get("api_key") or "",
+            base_url=model_cfg.get("base_url") or "https://api.openai.com/v1",
+            timeout=float(settings.get("timeout_seconds") or 15),
+            max_retries=0,
+        )
+        extra_body = {"reasoning_split": True} if model_cfg.get("reasoning_split") else None
+        resp = client.chat.completions.create(
+            model=model_cfg.get("model") or "",
+            messages=[
+                {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
+                {"role": "user", "content": f"原问题：{question}\n用户输入：{draft}"},
+            ],
+            stream=False,
+            max_tokens=int(settings.get("max_tokens") or 1024),
+            temperature=0,
+            extra_body=extra_body,
+        )
+        parsed = _extract_json((resp.choices[0].message.content or "").strip())
+        if not parsed:
+            return fallback
+        kind = str(parsed.get("kind") or "").strip().lower()
+        rewritten = str(parsed.get("rewritten_question") or "").strip()
+        try:
+            confidence = float(parsed.get("confidence") or 0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        min_conf = float(settings.get("draft_correction_min_confidence") or 0.8)
+        # 微调 2：LLM 判"纠正"但低置信 → 降级为补充路径（宁可补充，不可重推确认流程）
+        if kind == "correction" and rewritten and rewritten != question and confidence >= min_conf:
+            return {"kind": "correction", "rewritten_question": rewritten, "confidence": confidence}
+        return fallback
+    except Exception as exc:
+        logger.warning("classify_confirmation_draft failed (fail-open→supplement): %s", exc)
+        return fallback
+
+
+_DIRECTION_CANDIDATE_PROMPT = """用户的问数问题里有一处方向歧义（正反两个方向叠用的口误，如「最好最坏」「最好不」）。
+
+请给出 2~3 个改写后的完整候选问题，要求：
+1. 每个候选覆盖一种可能的意图方向；措辞用自然的业务语言（如"排名第一的""倒数第一的"），不要机械复述歧义片段本身
+2. 如果"两个方向都要看"是合理意图，最后一个候选给对比版本（如"最好和最坏的业务员对比"）
+3. 候选必须完整保留原问题的其余部分（主体、时间、范围、追问上下文），不得改写无关内容
+4. 候选之间不得重复语义
+
+只允许输出 JSON（不要输出任何其他文字）：{"candidates": ["候选1", "候选2"]}"""
+
+
+def generate_direction_candidates(question: str, fragment: str) -> List[str]:
+    """方向歧义候选的 LLM 自然措辞生成（0.5 层增强）。
+
+    触发仍由纯正则保证精度；本函数只负责把候选"说成自然人话"
+    （排名第一/倒数第一/两个都要对比）。任何失败返回 []，调用方回退机械替换候选。
+    """
+    try:
+        question = str(question or "").strip()
+        if not question:
+            return []
+        settings = _load_settings()
+        if not settings.get("enabled"):
+            return []
+        model_cfg = _load_model_config(int(settings.get("model_id") or 0))
+        if not model_cfg:
+            return []
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=model_cfg.get("api_key") or "",
+            base_url=model_cfg.get("base_url") or "https://api.openai.com/v1",
+            timeout=float(settings.get("timeout_seconds") or 15),
+            max_retries=0,
+        )
+        extra_body = {"reasoning_split": True} if model_cfg.get("reasoning_split") else None
+        resp = client.chat.completions.create(
+            model=model_cfg.get("model") or "",
+            messages=[
+                {"role": "system", "content": _DIRECTION_CANDIDATE_PROMPT},
+                {"role": "user", "content": f"原问题：{question}\n歧义片段：{fragment}"},
+            ],
+            stream=False,
+            max_tokens=int(settings.get("max_tokens") or 1024),
+            temperature=0,
+            extra_body=extra_body,
+        )
+        parsed = _extract_json((resp.choices[0].message.content or "").strip())
+        raw = [str(c).strip() for c in ((parsed or {}).get("candidates") or []) if str(c).strip()]
+        # 合法性：不得等于原问题、去重、最多 3 个
+        candidates: List[str] = []
+        for cand in raw:
+            if cand != question and cand not in candidates:
+                candidates.append(cand)
+        return candidates[:3]
+    except Exception as exc:
+        logger.warning("generate_direction_candidates failed (fallback to mechanical): %s", exc)
+        return []
+
 
 def _load_settings() -> Dict[str, Any]:
     try:

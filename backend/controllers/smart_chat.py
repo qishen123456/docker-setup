@@ -19,6 +19,12 @@ from ask_flow.contracts import AskRequest, ConfirmRequest
 import dataset_report_config as drc
 from disambiguation.shadow_gatekeeper import schedule_shadow_log, build_correction, is_visible_user
 from disambiguation.typo_fastpath import detect_obvious_typo, build_early_clarify_result, log_fastpath
+from disambiguation.direction_ambiguity import (
+    detect_direction_ambiguity,
+    build_direction_clarify_result,
+    log_direction,
+    is_enabled as direction_ambiguity_enabled,
+)
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
 from feature_flags import feature_available
@@ -566,6 +572,31 @@ def smart_chat():
                 )
                 return jsonify(result)
 
+        # 第 0.5 层：方向歧义快检（纯正则，独立开关，全员开放不挂角色门控）。
+        # 命中即短路返回"选方向"纠正卡；观察位词目只记日志不弹卡。fail-open。
+        if not payload.get("skip_typo_check") and direction_ambiguity_enabled():
+            _dir_hit = detect_direction_ambiguity(question)
+            if _dir_hit and _dir_hit.get("observe_only"):
+                log_direction(question, _dir_hit, user=user, session_id=session_id)
+            elif _dir_hit:
+                result = build_direction_clarify_result(question, _dir_hit, session_id=session_id)
+                result["total_duration"] = round(time.time() - started, 2)
+                _append_controller_debug(
+                    "smart_chat.direction_ambiguity.hit",
+                    fragment=_dir_hit.get("fragment"),
+                    candidates=_dir_hit.get("candidates"),
+                )
+                log_direction(question, _dir_hit, user=user, session_id=session_id)
+                _log_smart_chat_result(
+                    result=result,
+                    question=question,
+                    started=started,
+                    user=user,
+                    request_info=req_info,
+                    event_prefix="smart_chat",
+                )
+                return jsonify(result)
+
         _append_controller_debug(
             "smart_chat.service.ask.start",
             question=question,
@@ -809,6 +840,13 @@ def smart_chat_stream():
         _typo_hit = None
         if not payload.get("skip_typo_check") and is_visible_user(user):
             _typo_hit = detect_obvious_typo(question, allowed_dataset_ids)
+        # 第 0.5 层：方向歧义快检（纯正则，独立开关，全员开放）。观察位词目只记日志不弹卡。
+        _dir_hit = None
+        if not _typo_hit and not payload.get("skip_typo_check") and direction_ambiguity_enabled():
+            _dir_hit = detect_direction_ambiguity(question)
+        if _dir_hit and _dir_hit.get("observe_only"):
+            log_direction(question, _dir_hit, user=user, session_id=session_id)
+            _dir_hit = None
         if _typo_hit:
             typo_result = build_early_clarify_result(question, _typo_hit, session_id=session_id)
             typo_result["total_duration"] = round(time.time() - started, 2)
@@ -823,6 +861,21 @@ def smart_chat_stream():
                 event_prefix="smart_chat_stream",
             )
             event_queue.put({"type": "result", "result": typo_result})
+            completed.set()
+        elif _dir_hit:
+            dir_result = build_direction_clarify_result(question, _dir_hit, session_id=session_id)
+            dir_result["total_duration"] = round(time.time() - started, 2)
+            log_direction(question, _dir_hit, user=user, session_id=session_id)
+            _log_smart_chat_result(
+                result=dir_result,
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                trace_events=trace_events,
+                event_prefix="smart_chat_stream",
+            )
+            event_queue.put({"type": "result", "result": dir_result})
             completed.set()
         else:
             worker = threading.Thread(target=run_ask, daemon=True)

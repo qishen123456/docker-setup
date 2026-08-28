@@ -23,6 +23,7 @@ from bookshelf_repository import BookshelfConfigurationError, BookshelfRepositor
 from config_manager import decode_secret, get_ai_models, get_default_ai_model
 from dataset_copilot.syyb_rule_generator import BASE_SQL as SYYB_BASE_SQL, _sql_with_filter
 from disambiguation import DisambiguationArbiter
+from disambiguation.shadow_gatekeeper import classify_confirmation_draft
 from datasource_router import router as datasource_router
 from data_permission_store import apply_row_level_filter, load_data_permissions, org_mention_permission_check, user_org_scope_for_rule
 from dataset_dimension_profiles import find_group_matches, get_dataset_profile, resolve_member_mentions
@@ -9805,6 +9806,52 @@ Agent3 复核结果：
                 route["dataset_ids"] = candidate_ids[:2]
             else:
                 route["dataset_ids"] = route.get("dataset_ids", []) or ([candidate_ids[0]] if candidate_ids else route.get("dataset_ids", []))
+
+            # 方案 C：确认卡自由文本消化。未命中预设选项的文本（用户在草稿框里手输的），
+            # 先让 LLM 判"纠正问题"还是"补充口径"：
+            #   纠正问题 → 不继续当前 route，返回 early_clarify 重问卡，前端用改写后的问题重走主流程；
+            #   补充口径/低置信/失败 → 追加进 refined_query（修复自由文本被静默丢弃的洞）继续当前 route。
+            if not selected_option_item and (selected_option or "").strip():
+                _draft_verdict = classify_confirmation_draft(question, option_text)
+                if _draft_verdict.get("kind") == "correction":
+                    _rewritten = str(_draft_verdict.get("rewritten_question") or "").strip()
+                    _draft_result = {
+                        "question": question,
+                        "rows": [],
+                        "row_count": 0,
+                        "columns": [],
+                        "steps": [],
+                        "analysis": "",
+                        "route": {
+                            "dataset_ids": [],
+                            "requires_confirmation": False,
+                            "decision": "early_clarify",
+                        },
+                        "clarify_suggestion": {
+                            "action": "suggest",
+                            "interpretation": question,
+                            "reason": f"按你的补充「{option_text[:50]}」，问题应改写为：",
+                            "candidates": [_rewritten],
+                            "confidence": _draft_verdict.get("confidence"),
+                            "source": "draft_digestion",
+                        },
+                        "early_clarify": True,
+                        "session_id": session_id,
+                        "conversation_session_id": conversation_session_id,
+                        "total_duration": round(time.time() - started, 2),
+                    }
+                    self._append_trace(
+                        trace, "confirmation.draft_correction", "info",
+                        draft=option_text[:120], rewritten=_rewritten[:200],
+                    )
+                    self._flush_trace(trace, _draft_result)
+                    return _draft_result
+                base_query = str(route.get("refined_query") or question or "").strip()
+                route["refined_query"] = (base_query + "\n补充确认：" + option_text).strip()
+                self._append_trace(
+                    trace, "confirmation.draft_supplement", "info",
+                    draft=option_text[:120],
+                )
 
         # 单数据集确认时，将问题中其他数据集的维度别名映射到当前数据集
         if len(route.get("dataset_ids") or []) == 1:
