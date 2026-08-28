@@ -231,7 +231,7 @@ N1-N8、think 标签泄漏和 R-bottom5 详见 `cases/bugs.json`；完整问法�
 ## 关键文件索引
 
 - `config/confirmed_behaviors_baseline.md` — 已确认行为基线（唯一事实源）
-- `.workbuddy/artifacts/bug-backlog-2026-08-14.md` — 待修复问题清单 + 分组（#1-6/#11-18 已于 2026-08-13~17 全部修复，验收用例已迁入 baseline.json）
+- `docs/archive/bug-backlog-2026-08-14.md` — 待修复问题清单 + 分组（#1-6/#11-18 已于 2026-08-13~17 全部修复，验收用例已迁入 baseline.json；2026-08-28 从 .workbuddy/artifacts 归档至此）
 - `backend/four_agent_ask.py` — 意图解析、SQL 生成、confirm 流程（上帝文件）
 - `backend/smartask_engine/intent/resolver.py` — IntentResolver
 - `backend/ask_engine_route.py` — 层级词路由（bug#16 承接人层级词登记处）

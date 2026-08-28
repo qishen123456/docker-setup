@@ -1,9 +1,3 @@
-<!-- AUTO-GENERATED from .agents/rules/ - DO NOT EDIT. Edit the source and rerun scripts/sync-ide-rules.ps1 -->
----
-# Trae rule - global conventions (always applied)
-alwaysApply: true
----
-
 # SmartAsk 项目 AI 工作准则
 
 > 本文件是 AGENTS.md 的跨 IDE 适配版，`.trae/rules/project-conventions.md` 由本文件同步生成。

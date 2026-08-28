@@ -34,5 +34,6 @@
 
 - 框架：Flask 3.0.3 + Vanna[chromadb] 0.7.9 + openai SDK
 - 配置：新增数据集策略写 `config/` 下 json；功能开关走 feature_flag；角色权限写 advancedRoles
-- 测试：pytest + pytest-asyncio
+- 测试：pytest + pytest-asyncio，新功能至少配单测
 - 数据库：MySQL/PostgreSQL + ChromaDB(向量)，建表 SQL 在 `docker/*.sql`
+- 日志：用项目既有的日志中间件模式，不要引入新的日志框架

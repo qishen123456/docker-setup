@@ -234,6 +234,8 @@ backend/controllers/training.py
 # .ai-team/, .trae/, .agents/, .github/, AGENTS.md are shared team assets — track in git
 # .workbuddy/ is per-user AI workspace data (memory, sessions) — do not commit
 .workbuddy/
+# .qoder/ is Qoder's auto-generated repowiki — regenerable, do not commit
+.qoder/
 .ai-team/checkpoints/
 
 # 临时诊断脚本与容器副本（勿提交）

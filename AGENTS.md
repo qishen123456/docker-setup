@@ -183,3 +183,15 @@ Phase 6  DevOps → 部署+回滚
 - 本目录是框架无关副本，专家包变更后运行 `scripts/sync-from-expert-pack.sh` 同步
 - 新增角色时，先在专家包侧按 `dev-team-blueprint` 扩展流程操作，再同步到本目录
 - **配置校验**：改动 `.ai-team/` 或 `.ai-data/` 的配置后，运行 `python3 scripts/verify-expert-teams.py` 校验 YAML 语法、prompt_file 路径存在性、Agent ID 一致性、旧 ID 残留、cross_team 对称性
+
+---
+
+## 八、文档权威源声明（2026-08-28）
+
+- **AI 行为规则唯一权威源：`.agents/`**（rules + skills）。`.trae/rules/` 是其同步副本（由 `scripts/sync-ide-rules.ps1` 生成），**禁止手改**；改规则只改 `.agents/rules/` 后重跑脚本。
+- **专家团资产**：`.ai-team/`（代码开发）、`.ai-data/`（数据分析），见第四节。
+- **人类文档**：`docs/`；历史方案/决策类报告归档在 `docs/archive/`。
+- **`.qoder/`** 为 Qoder 可再生产物，已于 2026-08-28 移除并加入 `.gitignore`，**禁止作为事实源引用**（内容为 2026-08-08 过期快照，可从 git 历史找回）。
+- **`.workbuddy/`** 为 WorkBuddy 会话产物，不进 git；只保留 `memory/` 工作日志，方案/决策类报告一律归档 `docs/archive/`。
+- **禁止在多处维护重复文档**；新增规则只改 `.agents/`。
+- 治理方案全文见 `docs/ai-docs-consolidation-plan.md`。
