@@ -289,13 +289,14 @@ const sendSseRequest = async (url, body, signal, onEvent) => {
   emitBufferedFrames()
 }
 
-export const sendSmartChatStream = (question, signal, selectedDatasetIds, onEvent, modelId, sessionId, conversationHistory) =>
+export const sendSmartChatStream = (question, signal, selectedDatasetIds, onEvent, modelId, sessionId, conversationHistory, options) =>
   sendSseRequest('/api/smart-chat/stream', {
     question,
     selected_dataset_ids: selectedDatasetIds || undefined,
     model_id: modelId || undefined,
     session_id: sessionId || undefined,
     conversation_history: conversationHistory || undefined,
+    skip_typo_check: options?.skipTypoCheck || undefined,
   }, signal, onEvent)
 
 export const getSmartAskReportHistory = (limit = 50) => api.get('/smart-chat/report-history', { params: { limit }, timeout: 5000, silent: true })

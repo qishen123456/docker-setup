@@ -107,6 +107,51 @@
                     />
                     <PlanCard :route="msg.data?.route" />
 
+                    <!-- 错字短路纠正卡（第 0 层快检命中：只出此卡，不进流水线） -->
+                    <div v-if="msg.data?.early_clarify" class="sa-early-clarify">
+                      <div class="sa-early-clarify-head">
+                        <span class="sa-clarify-icon">?</span>
+                        <span class="sa-early-clarify-title">
+                          {{ msg.data.clarify_suggestion?.reason || '这个问题里可能有错字' }}
+                        </span>
+                      </div>
+                      <div class="sa-early-clarify-body">
+                        <span class="sa-early-clarify-label">你是不是想问：</span>
+                        <button
+                          v-for="(cand, ci) in (msg.data.clarify_suggestion?.candidates || [])"
+                          :key="ci"
+                          class="sa-clarify-chip sa-early-clarify-chip"
+                          :disabled="isRunning"
+                          @click.stop.prevent="applyClarifySuggestion(cand)"
+                        >{{ cand }}</button>
+                      </div>
+                      <button
+                        class="sa-early-clarify-continue"
+                        :disabled="isRunning"
+                        @click.stop.prevent="resendOriginalQuestion(msg)"
+                      >没问题，按原问题继续查</button>
+                    </div>
+
+                    <!-- 纠正条（守门员预览，后端按角色门控，默认仅超管可见） -->
+                    <div v-if="msg.data?.clarify_suggestion && !msg.data?.early_clarify" class="sa-clarify-strip">
+                      <span class="sa-clarify-icon">?</span>
+                      <span class="sa-clarify-text">
+                        已按「{{ msg.data.clarify_suggestion.interpretation }}」理解
+                        <span v-if="msg.data.clarify_suggestion.reason" class="sa-clarify-reason">
+                          {{ msg.data.clarify_suggestion.reason }}
+                        </span>
+                      </span>
+                      <span class="sa-clarify-chips">
+                        <button
+                          v-for="(cand, ci) in msg.data.clarify_suggestion.candidates"
+                          :key="ci"
+                          class="sa-clarify-chip"
+                          :disabled="isRunning"
+                          @click.stop.prevent="applyClarifySuggestion(cand)"
+                        >{{ cand }}</button>
+                      </span>
+                    </div>
+
                     <!-- 思考过程卡（可折叠）-->
                     <ThinkingCard
                       v-if="shouldShowThinkingCard(msg)"
@@ -4150,6 +4195,7 @@ const syncCompletedResultMessage = () => {
 
 const shouldShowLiveFeed = (msg) => {
   if (msg?.loading) return true
+  if (msg?.data?.early_clarify) return false
   if (!session.state.logs.length) return false
   if (msg?.data?.requires_confirmation) return false
   if (msg?.data?.aborted) return isLatestAiMessage(msg) || isCurrentSessionMessage(msg)
@@ -4197,6 +4243,7 @@ const shouldShowResultHandoff = (msg) => {
 }
 
 const shouldShowResultChain = (msg) => Boolean(
+  !msg?.data?.early_clarify &&
   isMessageExecutionComplete(msg) &&
   (getReport(msg) || getPrimaryDataset(msg) || (msg.data && !msg.data.error))
 )
@@ -4502,11 +4549,27 @@ const rerunQuestion = async (msg) => {
   }
 }
 
-const handleSend = async () => {
+// 纠正条 chip 点击：把候选理解直接作为新问题发送（复用主发送链路）
+const applyClarifySuggestion = (text) => {
+  const t = String(text || '').trim()
+  if (!t || isRunning.value) return
+  query.value = t
+  handleSend()
+}
+
+// 错字短路纠正卡：用户确认原问题没错字，带 skipTypoCheck 跳过第 0 层快检重新发送
+const resendOriginalQuestion = (msg) => {
+  const t = String(msg?.data?.question || msg?.question || '').trim()
+  if (!t || isRunning.value) return
+  query.value = t
+  handleSend({ skipTypoCheck: true })
+}
+
+const handleSend = async (sendOptions) => {
+  const opts = (sendOptions && typeof sendOptions === 'object' && !Array.isArray(sendOptions)) ? sendOptions : undefined
   if (!canUseFeature('smart_send_question')) return
   const text = query.value.trim()
   if (!text || isRunning.value) return
-
   const createShellId = () => {
     if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
       return `history-report-${window.crypto.randomUUID()}`
@@ -4545,7 +4608,7 @@ const handleSend = async () => {
 
   try {
     const datasetInput = getDatasetInputForQuestion(text)
-    const res = await session.startAsk(text, datasetInput, getModelInputForQuestion())
+    const res = await session.startAsk(text, datasetInput, getModelInputForQuestion(), opts)
     clearPendingQuickDataset()
     if (res) {
       aiMsg.loading = false
@@ -6384,6 +6447,121 @@ onUnmounted(() => {
   color: #6B7280;
 }
 
+.sa-clarify-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(245, 31, 25, 0.18);
+  border-radius: 10px;
+  background: rgba(245, 31, 25, 0.04);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.sa-clarify-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(245, 31, 25, 0.12);
+  color: #F51F19;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sa-clarify-text {
+  color: #334155;
+}
+.sa-clarify-reason {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.sa-clarify-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.sa-clarify-chip {
+  border: 1px solid rgba(245, 31, 25, 0.35);
+  background: #fff;
+  color: #F51F19;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sa-clarify-chip:hover:not(:disabled) {
+  background: #F51F19;
+  color: #fff;
+}
+.sa-clarify-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 错字短路纠正卡（第 0 层快检）：细条的醒目放大版，只出此卡 */
+.sa-early-clarify {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(245, 31, 25, 0.3);
+  border-radius: 12px;
+  background: rgba(245, 31, 25, 0.05);
+}
+.sa-early-clarify-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sa-early-clarify-title {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.sa-early-clarify-body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sa-early-clarify-label {
+  color: #64748b;
+  font-size: 13px;
+}
+.sa-early-clarify-chip {
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sa-early-clarify-continue {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 2px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sa-early-clarify-continue:hover:not(:disabled) {
+  color: #F51F19;
+}
+.sa-early-clarify-continue:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .sa-confirm-card {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;

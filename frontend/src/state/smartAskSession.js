@@ -1833,7 +1833,7 @@ const finalizeFromResult = async (data) => {
   persist()
 }
 
-const startAsk = async (question, selectedDatasetInput, modelId) => {
+const startAsk = async (question, selectedDatasetInput, modelId, options) => {
   const normalizedQuestion = String(question || '').trim()
   if (!normalizedQuestion) return null
   const currentRunToken = ++runToken
@@ -1887,6 +1887,8 @@ const startAsk = async (question, selectedDatasetInput, modelId) => {
       },
       modelId || undefined,
       state.conversationSessionId,
+      undefined,
+      options || undefined,
     )
     if (currentRunToken !== runToken) return null
     if (!finalPayload) {

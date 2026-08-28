@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ask_flow import ask_flow_controller
 from ask_flow.contracts import AskRequest, ConfirmRequest
 import dataset_report_config as drc
+from disambiguation.shadow_gatekeeper import schedule_shadow_log, build_correction, is_visible_user
+from disambiguation.typo_fastpath import detect_obvious_typo, build_early_clarify_result, log_fastpath
 from auth_store import get_current_user
 from data_permission_store import allowed_dataset_ids_for_user
 from feature_flags import feature_available
@@ -541,6 +543,29 @@ def smart_chat():
             )
             return _permission_denied_response(user, payload.get("selected_dataset_ids"), allowed_dataset_ids)
 
+        # 第 0 层：明显错字快检（毫秒级纯代码）。命中即短路返回纠正卡，不进问数流水线；
+        # 前端"按原问题继续查"会带 skip_typo_check 跳过本层。任何异常静默放行（fail-open）。
+        if not payload.get("skip_typo_check") and is_visible_user(user):
+            _typo_hit = detect_obvious_typo(question, allowed_dataset_ids)
+            if _typo_hit:
+                result = build_early_clarify_result(question, _typo_hit, session_id=session_id)
+                result["total_duration"] = round(time.time() - started, 2)
+                _append_controller_debug(
+                    "smart_chat.typo_fastpath.hit",
+                    fragment=_typo_hit.get("fragment"),
+                    suggestion=_typo_hit.get("suggestion"),
+                )
+                log_fastpath(question, _typo_hit, user=user, session_id=session_id)
+                _log_smart_chat_result(
+                    result=result,
+                    question=question,
+                    started=started,
+                    user=user,
+                    request_info=req_info,
+                    event_prefix="smart_chat",
+                )
+                return jsonify(result)
+
         _append_controller_debug(
             "smart_chat.service.ask.start",
             question=question,
@@ -570,6 +595,13 @@ def smart_chat():
             request_info=req_info,
             event_prefix="smart_chat",
         )
+        # 守门员分流：可见用户走同步纠正条（自身写影子日志）；其余用户走异步影子，一次提问只调一次守门员
+        if is_visible_user(user):
+            _correction = build_correction(question=question, result=result, user=user, session_id=session_id)
+            if _correction:
+                result["clarify_suggestion"] = _correction
+        else:
+            schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
 
         if result.get("error"):
             _append_controller_debug("smart_chat.response.error", error=result.get("error"))
@@ -741,6 +773,13 @@ def smart_chat_stream():
                     event_prefix="smart_chat_stream",
                 )
                 print(f"[DEBUG] stream result requires_confirmation={result.get('requires_confirmation')} route_decision={result.get('route', {}).get('decision')} route_requires_confirmation={result.get('route', {}).get('requires_confirmation')} dataset_ids={result.get('route', {}).get('dataset_ids')}", flush=True)
+                # 守门员分流：可见用户走同步纠正条（自身写影子日志）；其余用户走异步影子
+                if is_visible_user(user):
+                    _correction = build_correction(question=question, result=result, user=user, session_id=session_id)
+                    if _correction:
+                        result["clarify_suggestion"] = _correction
+                else:
+                    schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
                 event_queue.put({"type": "result", "result": result})
             except Exception as exc:
                 error_result = {
@@ -766,8 +805,28 @@ def smart_chat_stream():
             finally:
                 completed.set()
 
-        worker = threading.Thread(target=run_ask, daemon=True)
-        worker.start()
+        # 第 0 层：明显错字快检（与同步端点同一层）。命中则不启 worker，直接发纠正卡结果。
+        _typo_hit = None
+        if not payload.get("skip_typo_check") and is_visible_user(user):
+            _typo_hit = detect_obvious_typo(question, allowed_dataset_ids)
+        if _typo_hit:
+            typo_result = build_early_clarify_result(question, _typo_hit, session_id=session_id)
+            typo_result["total_duration"] = round(time.time() - started, 2)
+            log_fastpath(question, _typo_hit, user=user, session_id=session_id)
+            _log_smart_chat_result(
+                result=typo_result,
+                question=question,
+                started=started,
+                user=user,
+                request_info=req_info,
+                trace_events=trace_events,
+                event_prefix="smart_chat_stream",
+            )
+            event_queue.put({"type": "result", "result": typo_result})
+            completed.set()
+        else:
+            worker = threading.Thread(target=run_ask, daemon=True)
+            worker.start()
         yield _sse_frame("ready", {"ok": True, "question": question})
 
         while not completed.is_set() or not event_queue.empty():

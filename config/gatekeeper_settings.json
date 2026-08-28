@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "visible_enabled": true,
+  "visible_roles": ["super_admin", "admin", "business_admin"],
+  "model_id": 13,
+  "timeout_seconds": 15,
+  "max_tokens": 1024,
+  "log_path": "",
+  "_comment": "P-1 影子守门员配置（澄清方案 v4 / 9.1-B1）。enabled=false 即整体下线，一键回滚。model_id 锁单个快模型（ai_settings.json 的 id），禁止指向慢模型（GLM-5.1 实测 64s）。timeout 绝不继承主链路 180s。log_path 留空=默认 config/shadow_gatekeeper_log.jsonl。"
+}
