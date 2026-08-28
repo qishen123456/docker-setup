@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-commit guard: if .agents/rules changed, IDE rule copies must be in sync.
+# Install (one line, per machine, hooks are not tracked by git):
+#   cp scripts/pre-commit .git/hooks/pre-commit
+if git diff --cached --name-only | grep -q '^\.agents/rules/'; then
+    powershell -ExecutionPolicy Bypass -File "$(git rev-parse --show-toplevel)/scripts/sync-ide-rules.ps1" -Check
+    if [ $? -ne 0 ]; then
+        echo "ERROR: .agents/rules changed but IDE copies are stale."
+        echo "Run: powershell -ExecutionPolicy Bypass -File scripts/sync-ide-rules.ps1"
+        exit 1
+    fi
+fi
+exit 0

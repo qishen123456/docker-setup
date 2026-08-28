@@ -189,6 +189,8 @@ Phase 6  DevOps → 部署+回滚
 ## 八、文档权威源声明（2026-08-28）
 
 - **AI 行为规则唯一权威源：`.agents/`**（rules + skills）。`.trae/rules/` 是其同步副本（由 `scripts/sync-ide-rules.ps1` 生成），**禁止手改**；改规则只改 `.agents/rules/` 后重跑脚本。
+- **防滞后门禁**：改 `.agents/rules/` 后未重跑同步脚本时，`scripts/pre-commit` 钩子会拦截提交。安装（每台机器一次，钩子不进 git）：`cp scripts/pre-commit .git/hooks/pre-commit`。手动校验：`scripts/sync-ide-rules.ps1 -Check`。
+- **接入新 IDE**：在 `scripts/sync-ide-rules.ps1` 的 `$targets` 表中加一行（目录 + frontmatter 映射）即可生成对应 IDE 的规则副本。
 - **专家团资产**：`.ai-team/`（代码开发）、`.ai-data/`（数据分析），见第四节。
 - **人类文档**：`docs/`；历史方案/决策类报告归档在 `docs/archive/`。
 - **`.qoder/`** 为 Qoder 可再生产物，已于 2026-08-28 移除并加入 `.gitignore`，**禁止作为事实源引用**（内容为 2026-08-08 过期快照，可从 git 历史找回）。
