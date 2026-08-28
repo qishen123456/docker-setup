@@ -9286,6 +9286,36 @@ Agent3 复核结果：
                 }
             )
 
+        # 0 行诊断（输入理解层 P0.5 / 设计文档 §5）：全部数据集 0 行时三分支干预。
+        # 分支 A/B → early_clarify 卡片（候选点击重问）；分支 C → 诚实文案替换垃圾分析报告。
+        # fail-open：诊断器任何异常都不影响 0 行旧行为；正常问数（有行）零开销。
+        if dataset_results and not any(int(d.get("row_count") or 0) > 0 for d in dataset_results):
+            try:
+                from disambiguation import zero_row_diagnosis as _zrd
+
+                if _zrd.is_enabled():
+                    _diag = _zrd.diagnose(
+                        question, route, dataset_results, current_user=current_user,
+                    )
+                    if _diag and _diag.get("branch") in ("A", "B") and _diag.get("candidates"):
+                        _zrd_result = _zrd.build_clarify_result(question, _diag, route)
+                        _zrd_result["total_duration"] = round(time.time() - started, 2)
+                        self._append_trace(
+                            trace, "zero_row.diagnosis", "info",
+                            branch=_diag.get("branch"),
+                            candidates=_diag.get("candidates"),
+                        )
+                        return _zrd_result
+                    if _diag and _diag.get("honest_analysis"):
+                        for _d in dataset_results:
+                            _d["analysis"] = _diag["honest_analysis"]
+                        self._append_trace(
+                            trace, "zero_row.diagnosis", "info",
+                            branch=_diag.get("branch"), subject=_diag.get("subject"),
+                        )
+            except Exception:
+                pass
+
         primary = dataset_results[0]
         display_title = self._build_display_title(question, primary)
         combined_analysis = "\n\n---\n\n".join(
@@ -9703,7 +9733,8 @@ Agent3 复核结果：
             result["question"] = question
             result["effective_question"] = effective_question
             result["conversation_session_id"] = conversation_session_id
-            if conversation_session_id and not result.get("error"):
+            # early_clarify 卡片结果（0 行诊断 A/B）不写短期记忆，防污染追问上下文
+            if conversation_session_id and not result.get("error") and not result.get("early_clarify"):
                 self.short_term_memory.remember_result(conversation_session_id, question, route, result)
             self._flush_trace(trace, result)
             return result
@@ -9983,7 +10014,8 @@ Agent3 复核结果：
         result = self._run_pipeline(question, route, started, steps, trace=trace, current_user=current_user)
         result["session_id"] = session_id
         result["conversation_session_id"] = conversation_session_id
-        if conversation_session_id and not result.get("error"):
+        # early_clarify 卡片结果（0 行诊断 A/B）不写短期记忆，防污染追问上下文
+        if conversation_session_id and not result.get("error") and not result.get("early_clarify"):
             self.short_term_memory.remember_result(conversation_session_id, question, route, result)
         # P0-1：确认会话不一次即焚——首次 confirm 成功后保留 pending payload，
         # 允许用户在同一 session 下换选其他数据集（多分支对比场景）

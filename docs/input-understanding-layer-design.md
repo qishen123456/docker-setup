@@ -324,3 +324,25 @@ P0 落地：`backend/disambiguation/pinyin_index.py` + 评估基线 93 道 + 专
 - 清晰题召回噪音 **1/31**（「对比」语境连接词窗口「和南」→河南/湖南，证据层无害，决策层可滤）
 - 问数回归（5 用例冒烟）**18 断言 17 PASS / 0 FAIL**，镜像重建后现有功能零回归
 - pypinyin 0.55.0 已入 `backend/requirements.txt`，镜像重建完成
+
+---
+
+## 十三、P0.5 实施验证记录（0 行诊断器，2026-08-28）
+
+落地：`backend/disambiguation/zero_row_diagnosis.py`（新）+ `_run_pipeline` 挂载（`four_agent_ask.py`，1 处插入覆盖 ask/confirm 双路径）+ `early_clarify` 结果不写短期记忆（防污染追问上下文，2 处条件）+ `zero_row_diagnosis_enabled` 开关。**前端零改动**（复用 early_clarify 卡片通道）。
+
+**三分支实测**：
+
+| 分支 | 测试方式 | 结果 |
+|---|---|---|
+| A 对象不存在 | 端到端：「靳峰的业绩」（第 0 层不管的 2 字同音错） | ✅ 弹卡「书架中没有找到『靳峰』，你可能想问：靳锋的业绩」——原漏网场景闭环 |
+| B 路由错数据集 | 单元（diagnose 直调）✅；候选句「用商用事业部开单金额数据集查东部分公司的业绩」实测路由到 ds=3、8 行 ✅。自然触发难——路由本身很稳，B 是兜底保险 | ✅ |
+| C 真没数据 | 端到端：「达成率大于200%的分公司」走完确认后 0 行 | ✅ 垃圾报告（编造的痛点/改进建议）替换为诚实文案「没有查到匹配数据。可以检查：对象名称…时间范围…」 |
+
+**实测发现**：
+
+1. 确认会话 session_id 是响应里返回的确认会话 id（如 `39de293b-…`），**不是**请求自传的 conversation session_id——confirm-by-boss 拿错 id 报 "Confirmation session not found or expired"
+2. `preferred_dataset_ids` 只是偏好不是强制——Agent1 路由对正确主体很稳，B 分支自然场景难以构造（好事）
+3. 分支 A 候选有少量措辞瑕疵（「东部分公司业绩」缺"的"）——机械替换的固有边界，P1 LLM 主判层解决，不阻塞
+
+回归：18 断言 17 PASS / 0 FAIL / 1 CONFIRM，零回归。
