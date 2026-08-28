@@ -28,6 +28,9 @@ pymysql>=1.1.0          # MySQL 支持
 psycopg2-binary>=2.9.0   # PostgreSQL 支持
 # pyodbc>=5.0.0         # SQL Server 支持（需本机装 ODBC Driver 17，已注释）
 
+# 中文拼音（输入理解层拼音索引：同音/近音召回，P0 地基）
+pypinyin>=0.51.0
+
 # 其他工具
 python-dotenv>=1.0.0
 typing-inspection>=0.4.2

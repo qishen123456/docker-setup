@@ -2,9 +2,13 @@
 """生成输入理解层评估基线 understanding_eval.json（前置 0）。
 
 素材来源：
-  失误题  <- backend/_typo100_test.py 的 TYPO_ENTITIES(70 错字) + AMB(15 歧义)
+  失误题  <- backend/_typo100_test.py 的 TYPO_ENTITIES + AMB(15 歧义)
   清晰题  <- config/confirmed_behaviors_baseline.md 第6节(16条) + _typo100_test.py 的 CLEAR(15条)
   0 行场景 <- 手工 mock 夹具（A/B/C 三分支各一）
+
+2026-08-28 修订：
+  - 刘志伟 dataset_id 3→62（书架实测：刘志伟别名只在 ds=62 节点索引下，typo100 原表标错）
+  - 变体==实体名本身的（刘志伟）不进失误题——那是正确写法，应属清晰题
 
 重复生成：python backend/tests/fixtures/_gen_eval.py
 """
@@ -16,7 +20,7 @@ BACKEND = os.path.abspath(os.path.join(HERE, ".."))
 ROOT = os.path.abspath(os.path.join(BACKEND, ".."))
 OUT = os.path.join(HERE, "understanding_eval.json")
 
-# ---- 失误题素材（与 _typo100_test.py 保持一致）----
+# ---- 失误题素材（与 _typo100_test.py 对齐，dataset_id 已按书架实测纠偏）----
 DS2, DS3, DS62 = 2, 3, 62
 TYPO_ENTITIES = [
     ("山东分公司", DS2, ["山冬分公司", "山东分司", "山東分公司", "山东分公"]),
@@ -29,7 +33,7 @@ TYPO_ENTITIES = [
     ("商用事业部", DS3, ["商泳事业部", "商用事业不", "伤用事业部", "商用事業部"]),
     ("迟昊", DS3, ["迟浩", "池昊", "迟吴"]),
     ("丁杰", DS3, ["丁洁", "丁傑", "订杰"]),
-    ("刘志伟", DS3, ["刘志伟", "刘志威", "刘至伟"]),
+    ("刘志伟", DS62, ["刘志威", "刘至伟"]),  # ds 实测=62；变体"刘志伟"=正确写法，不进失误题
     ("靳锋", DS3, ["靳峰", "劲锋", "靳风"]),
     ("京东直营", DS62, ["京东直赢", "京冬直营", "京东直银"]),
     ("天猫直营", DS62, ["天猫直赢", "甜猫直营", "天喵直营"]),
@@ -48,7 +52,7 @@ CLEAR_TYPO100 = [
     ("云贵渝分公司各城市分公司的业绩", DS2), ("达成率大于50%的分公司", DS2),
     ("前三的分公司", DS2), ("商用事业部业绩分析", DS3), ("南部分公司这个月开单", DS3),
     ("京津分公司达成率", DS2), ("西北分公司业绩怎么样", DS2), ("河南代表处的业绩", DS3),
-    ("消费者事业部排名", DS2),
+    ("消费者事业部排名", DS2), ("刘志伟的业绩", DS62),
 ]
 # baseline.md 第6节"建议的最小回归问题清单"（13 问数题）
 CLEAR_BASELINE6 = [
@@ -68,6 +72,8 @@ def gen_typo():
     tpl_i = 0
     for name, ds, variants in TYPO_ENTITIES:
         for v in variants:
+            if v == name:
+                continue  # 正确写法不是失误题
             q = TYPO_TPL[tpl_i % len(TYPO_TPL)].format(v)
             tpl_i += 1
             cases.append({
@@ -136,13 +142,13 @@ def gen_zero_rows():
 def main():
     typo, clear, zero = gen_typo(), gen_clear(), gen_zero_rows()
     doc = {
-        "version": "1.0",
+        "version": "1.1",
         "generated_at": "2026-08-28",
-        "description": "输入理解层评估基线（P0 阻断级前置）。失误题=理解层应识别并纠正/提示；清晰题=应 pass 零打扰；0 行=三分支各走对路。",
+        "description": "输入理解层评估基线（P0 阻断级前置）。失误题=理解层应识别并纠正/提示；清晰题=应 pass 零打扰；0 行=三分支各走对路。v1.1：刘志伟 ds 纠偏 3→62，变体==实体名不进失误题。",
         "sets": {
             "typo": {
                 "name": "失误题（同音/漏字/多字/口误全谱系）",
-                "pass_criteria": "召回率 >=80%",
+                "pass_criteria": "召回率 >=80%（分母只含 expect_correction 非空的实体错字题；歧义题单列）",
                 "count": len(typo),
                 "cases": typo,
             },

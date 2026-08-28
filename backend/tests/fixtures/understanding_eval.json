@@ -1,12 +1,12 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "generated_at": "2026-08-28",
-  "description": "输入理解层评估基线（P0 阻断级前置）。失误题=理解层应识别并纠正/提示；清晰题=应 pass 零打扰；0 行=三分支各走对路。",
+  "description": "输入理解层评估基线（P0 阻断级前置）。失误题=理解层应识别并纠正/提示；清晰题=应 pass 零打扰；0 行=三分支各走对路。v1.1：刘志伟 ds 纠偏 3→62，变体==实体名不进失误题。",
   "sets": {
     "typo": {
       "name": "失误题（同音/漏字/多字/口误全谱系）",
-      "pass_criteria": "召回率 >=80%",
-      "count": 60,
+      "pass_criteria": "召回率 >=80%（分母只含 expect_correction 非空的实体错字题；歧义题单列）",
+      "count": 59,
       "cases": [
         {
           "question": "山冬分公司的业绩",
@@ -405,8 +405,8 @@
           "source": "typo100"
         },
         {
-          "question": "刘志伟达成率多少",
-          "dataset_id": 3,
+          "question": "刘志威达成率多少",
+          "dataset_id": 62,
           "expected_action": [
             "rewrite",
             "soft_hint",
@@ -417,8 +417,8 @@
           "source": "typo100"
         },
         {
-          "question": "刘志威完成情况",
-          "dataset_id": 3,
+          "question": "刘至伟完成情况",
+          "dataset_id": 62,
           "expected_action": [
             "rewrite",
             "soft_hint",
@@ -429,19 +429,7 @@
           "source": "typo100"
         },
         {
-          "question": "刘至伟的业绩",
-          "dataset_id": 3,
-          "expected_action": [
-            "rewrite",
-            "soft_hint",
-            "clarify"
-          ],
-          "expect_correction": "刘志伟",
-          "category": "typo_entity",
-          "source": "typo100"
-        },
-        {
-          "question": "靳峰业绩怎么样",
+          "question": "靳峰的业绩",
           "dataset_id": 3,
           "expected_action": [
             "rewrite",
@@ -453,7 +441,7 @@
           "source": "typo100"
         },
         {
-          "question": "看下劲锋",
+          "question": "劲锋业绩怎么样",
           "dataset_id": 3,
           "expected_action": [
             "rewrite",
@@ -465,7 +453,7 @@
           "source": "typo100"
         },
         {
-          "question": "靳风达成率多少",
+          "question": "看下靳风",
           "dataset_id": 3,
           "expected_action": [
             "rewrite",
@@ -477,7 +465,7 @@
           "source": "typo100"
         },
         {
-          "question": "京东直赢完成情况",
+          "question": "京东直赢达成率多少",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -489,7 +477,7 @@
           "source": "typo100"
         },
         {
-          "question": "京冬直营的业绩",
+          "question": "京冬直营完成情况",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -501,7 +489,7 @@
           "source": "typo100"
         },
         {
-          "question": "京东直银业绩怎么样",
+          "question": "京东直银的业绩",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -513,7 +501,7 @@
           "source": "typo100"
         },
         {
-          "question": "看下天猫直赢",
+          "question": "天猫直赢业绩怎么样",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -525,7 +513,7 @@
           "source": "typo100"
         },
         {
-          "question": "甜猫直营达成率多少",
+          "question": "看下甜猫直营",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -537,7 +525,7 @@
           "source": "typo100"
         },
         {
-          "question": "天喵直营完成情况",
+          "question": "天喵直营达成率多少",
           "dataset_id": 62,
           "expected_action": [
             "rewrite",
@@ -733,7 +721,7 @@
     "clear": {
       "name": "清晰题（正常问法）",
       "pass_criteria": "误拦率 0",
-      "count": 30,
+      "count": 31,
       "cases": [
         {
           "question": "山东分公司的业绩",
@@ -878,6 +866,16 @@
         {
           "question": "消费者事业部排名",
           "dataset_id": 2,
+          "expected_action": [
+            "pass"
+          ],
+          "expect_correction": null,
+          "category": "clear",
+          "source": "baseline6/typo100_clear"
+        },
+        {
+          "question": "刘志伟的业绩",
+          "dataset_id": 62,
           "expected_action": [
             "pass"
           ],
