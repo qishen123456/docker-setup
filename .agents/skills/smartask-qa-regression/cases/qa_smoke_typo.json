@@ -1,0 +1,169 @@
+{
+  "cases": [
+    {
+      "id": "D1",
+      "source": "baseline §1.1",
+      "question": "东部分公司的业绩怎么样了",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 8
+        }
+      ]
+    },
+    {
+      "id": "C1",
+      "source": "baseline §1.2",
+      "question": "东部分公司和南部分公司的业绩对比",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            3
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "comparison"
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "source": "baseline §5.1",
+      "question": "达成率低于50%的城市分公司",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            2
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "filter"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "range",
+          "expect": [
+            40,
+            55
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R7",
+      "source": "baseline §2.5",
+      "question": "看下前三的城市分公司",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            2
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.top_n",
+          "op": "eq",
+          "expect": 3
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 3
+        }
+      ]
+    },
+    {
+      "id": "R2-confirm",
+      "source": "baseline §2.1/2.2/bug#17",
+      "question": "各分公司业绩排名",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              2
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                2
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.intent",
+              "op": "eq",
+              "expect": "ranking"
+            },
+            {
+              "path": "dataset_results.0.query_intent.top_n",
+              "op": "eq",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "range",
+              "expect": [
+                10,
+                16
+              ]
+            }
+          ]
+        },
+        {
+          "select": {
+            "dataset_ids": [
+              3
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                3
+              ]
+            },
+            {
+              "path": "dataset_results.0.query_intent.top_n",
+              "op": "eq",
+              "expect": 0
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "range",
+              "expect": [
+                3,
+                6
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
