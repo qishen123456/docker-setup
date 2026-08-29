@@ -179,7 +179,7 @@ def detect_obvious_typo(
                             continue
                     if not _lev_le1(window, alias):
                         continue
-                    hits.append({"window": window, "entry": e})
+                    hits.append({"window": window, "entry": e, "start": start, "end": start + wlen})
 
         if not hits:
             return None
@@ -190,7 +190,9 @@ def detect_obvious_typo(
         nodes = {h["entry"]["node_name"] for h in best}
         if len(nodes) != 1 or len(windows) != 1:
             return None
-        hit = best[0]
+        # 同一 window 文本可能多处命中：取 start 最小者，与 replace(fragment, alias, 1)
+        # 只替换第一个出现的语义保持一致（解析条 span 定位依赖此 offset）
+        hit = min(best, key=lambda h: h.get("start", 0))
         fragment = hit["window"]
         alias = hit["entry"]["alias"]
         return {
@@ -200,6 +202,9 @@ def detect_obvious_typo(
             "dataset_id": hit["entry"].get("dataset_id"),
             "corrected_question": question.replace(fragment, alias, 1),
             "match_kind": "alias_window",
+            # Phase 0.1：滑窗 offset 透出（解析条 v1 span 定位来源 1）
+            "start": hit.get("start"),
+            "end": hit.get("end"),
         }
     except Exception:
         return None  # fail-open：任何异常都放行原问题
@@ -236,6 +241,21 @@ def build_early_clarify_result(
     fragment = str(hit.get("fragment") or "")
     suggestion = str(hit.get("suggestion") or "")
     corrected = str(hit.get("corrected_question") or "")
+    suggestion_card = {
+        "action": "suggest",
+        "interpretation": question,
+        "reason": f"「{fragment}」疑似「{suggestion}」的错字",
+        "candidates": [corrected] if corrected else [],
+        "confidence": 1.0,
+        "source": "typo_fastpath",
+    }
+    # Phase 0.1：透传错字片段 span（解析条 v1 框选原句用；无 offset 不加，向后兼容）
+    if hit.get("start") is not None and hit.get("end") is not None:
+        suggestion_card["span"] = {
+            "start": hit["start"],
+            "end": hit["end"],
+            "fragment": fragment,
+        }
     return {
         "question": question,
         "rows": [],
@@ -248,14 +268,7 @@ def build_early_clarify_result(
             "requires_confirmation": False,
             "decision": "early_clarify",
         },
-        "clarify_suggestion": {
-            "action": "suggest",
-            "interpretation": question,
-            "reason": f"「{fragment}」疑似「{suggestion}」的错字",
-            "candidates": [corrected] if corrected else [],
-            "confidence": 1.0,
-            "source": "typo_fastpath",
-        },
+        "clarify_suggestion": suggestion_card,
         "early_clarify": True,
         "session_id": session_id or "",
     }
@@ -296,6 +309,13 @@ def log_fastpath(
             "self_confidence": 1.0,
             "candidate_options_topN": [str(hit.get("corrected_question") or "")[:120]],
         }
+        # Phase 0.1：影子日志记错字片段 span，供离线统计与解析条联调
+        if hit.get("start") is not None and hit.get("end") is not None:
+            record["typo_span"] = {
+                "start": hit["start"],
+                "end": hit["end"],
+                "fragment": str(hit.get("fragment") or ""),
+            }
         # P1-a 影子校验（冻结范围 1）：对错字候选做书架校验，只记日志不改弹卡
         try:
             from disambiguation.candidate_validator import is_enabled as _cv_on, validate_candidates

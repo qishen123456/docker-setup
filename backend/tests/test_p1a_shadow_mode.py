@@ -163,6 +163,54 @@ class CorrectQuestionTest(unittest.TestCase):
         self.assertEqual(tf.correct_question(""), "")
 
 
+class TypoSpanOffsetTest(unittest.TestCase):
+    """Phase 0.1：滑窗 offset 透出（解析条 v1 span 定位来源 1）。"""
+
+    def test_hit_carries_exact_offsets(self):
+        q = "商泳事业部的业绩"
+        hit = tf.detect_obvious_typo(q)
+        self.assertIsNotNone(hit)
+        # offset 精确指向原句片段：q[start:end] == fragment（滑窗命中 5 字片段"商泳事业部"）
+        self.assertEqual(q[hit["start"]:hit["end"]], hit["fragment"])
+        self.assertEqual(hit["fragment"], "商泳事业部")
+        self.assertEqual(hit["start"], 0)
+        self.assertEqual(hit["end"], 5)
+
+    def test_offset_consistent_with_corrected_question(self):
+        # span 语义与 replace(fragment, alias, 1) 一致：cut+paste 应得到 corrected_question
+        q = "查一下商泳事业部的业绩"
+        hit = tf.detect_obvious_typo(q)
+        self.assertIsNotNone(hit)
+        rebuilt = q[:hit["start"]] + hit["suggestion"] + q[hit["end"]:]
+        self.assertEqual(rebuilt, hit["corrected_question"])
+
+    def test_repeated_fragment_takes_first_occurrence(self):
+        # 同一错字片段出现两次：offset 取第一个出现位置（与 replace(...,1) 语义一致）
+        q = "商泳事业部和商泳事业部"
+        hit = tf.detect_obvious_typo(q)
+        self.assertIsNotNone(hit)
+        first = q.find(hit["fragment"])
+        self.assertEqual(hit["start"], first)
+        self.assertEqual(q[hit["start"]:hit["end"]], hit["fragment"])
+
+    def test_early_clarify_result_carries_span(self):
+        q = "商泳事业部的业绩"
+        hit = tf.detect_obvious_typo(q)
+        result = tf.build_early_clarify_result(q, hit)
+        span = result["clarify_suggestion"].get("span")
+        self.assertIsNotNone(span)
+        self.assertEqual(span["start"], hit["start"])
+        self.assertEqual(span["end"], hit["end"])
+        self.assertEqual(span["fragment"], hit["fragment"])
+
+    def test_no_offset_no_span_key(self):
+        # 无 offset 的 hit（如旧调用方手工构造）→ 不加 span 键，向后兼容
+        result = tf.build_early_clarify_result(
+            "x", {"fragment": "商泳", "suggestion": "商用", "corrected_question": "商用"}
+        )
+        self.assertNotIn("span", result["clarify_suggestion"])
+
+
 class DirectionCascadeTest(unittest.TestCase):
     """冻结范围 3：观察位候选对（影子）+ 方向卡级联修错字（唯一活体改动）。"""
 
