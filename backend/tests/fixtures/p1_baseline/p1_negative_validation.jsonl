@@ -1,0 +1,54 @@
+{"question": "东部分公司的业绩怎么样", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=8", "duration": 35.56, "judge": "OK"}
+{"question": "西部分公司的达成率", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 33.34, "judge": "OK"}
+{"question": "南部分公司今年开单金额是多少", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 106.81, "judge": "OK"}
+{"question": "北部分公司业绩情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 13.01, "judge": "OK"}
+{"question": "云贵渝分公司达成率是多少", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=8", "duration": 22.88, "judge": "OK"}
+{"question": "川藏分公司的业绩", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 38.57, "judge": "OK"}
+{"question": "山东分公司开单金额", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=6", "duration": 24.77, "judge": "OK"}
+{"question": "临沂城市公司今年开单金额", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 31.73, "judge": "OK"}
+{"question": "赣闽分公司业绩怎么样", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 80.03, "judge": "OK"}
+{"question": "重庆城市公司的达成率", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 44.19, "judge": "OK"}
+{"question": "河南代表处开单金额合计", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=5", "duration": 52.81, "judge": "OK"}
+{"question": "浙江代表处近期业绩情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=4", "duration": 55.6, "judge": "OK"}
+{"question": "湖南代表处的达成率是多少", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=4", "duration": 38.68, "judge": "OK"}
+{"question": "消费者事业部整体达成率", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=14", "duration": 18.87, "judge": "OK"}
+{"question": "公共办公业务部达成率", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=5", "duration": 24.43, "judge": "OK"}
+{"question": "餐饮业务部近期业务开展情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=6", "duration": 22.57, "judge": "OK"}
+{"question": "京东直营年度开单金额是多少", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 14.3, "judge": "OK"}
+{"question": "抖音直营开单金额", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 14.52, "judge": "OK"}
+{"question": "天猫直营今年的业绩", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 41.95, "judge": "OK"}
+{"question": "亚马逊板块本期运营数据", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 30.05, "judge": "OK"}
+{"question": "直营零售部的业绩数据", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=5", "duration": 40.97, "judge": "OK"}
+{"question": "商用事业部年度开单金额", "category": "负样本-单实体", "expect": null, "verdict": "ZERO_LEAK", "observed_state": "zero", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的年度开单金额」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 2.91, "judge": "FAIL(expect pass, got ZERO_LEAK)"}
+{"question": "国内业务部今年的开单情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=5", "duration": 136.23, "judge": "OK"}
+{"question": "台净业务今年的情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 15.97, "judge": "OK"}
+{"question": "电商事业部今年的业绩", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=3", "duration": 119.29, "judge": "OK"}
+{"question": "商用事业部排名前三的业务部", "category": "负样本-排名", "expect": null, "verdict": "CARD", "observed_state": "card", "detail": "?: [\"按达成率排名前三的业务部\", \"按年度开单金额排名前三的业务部\", \"按总任务金额排名前三的业务部\"]", "duration": 32.77, "judge": "OK(reasonable_clarify)"}
+{"question": "各分公司开单金额排名", "category": "负样本-排名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 0.27, "judge": "OK(reasonable_clarify)"}
+{"question": "业绩排名前五的分公司", "category": "负样本-排名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 0.27, "judge": "OK(reasonable_clarify)"}
+{"question": "各代表处达成率排名", "category": "负样本-排名", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=25", "duration": 42.11, "judge": "OK"}
+{"question": "开单金额最低的分公司是哪个", "category": "负样本-排名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 0.27, "judge": "OK(reasonable_clarify)"}
+{"question": "达成率最高的代表处是哪个", "category": "负样本-排名", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 19.81, "judge": "OK"}
+{"question": "东部分公司和南部分公司业绩对比", "category": "负样本-对比", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=56", "duration": 21.02, "judge": "OK"}
+{"question": "京东直营和天猫直营哪个开单金额高", "category": "负样本-对比", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=2", "duration": 10.75, "judge": "OK"}
+{"question": "丁杰的业绩完成情况", "category": "负样本-人名", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 43.66, "judge": "OK"}
+{"question": "迟昊今年的开单业绩", "category": "负样本-人名", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 20.9, "judge": "OK"}
+{"question": "商用事业部和消费者事业部的达成率对比", "category": "负样本-对比", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=14", "duration": 93.99, "judge": "OK"}
+{"question": "张卫军的达成率是多少", "category": "负样本-人名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"系统推荐：商用事业部 - 张卫军个人达成率\", \"消费者事业部 - 张卫军个人达成率\", \"电商事业部 - 张卫军个人达成率\"]", "duration": 16.92, "judge": "OK(reasonable_clarify)"}
+{"question": "王帅的业绩怎么样", "category": "负样本-人名", "expect": null, "verdict": "CARD", "observed_state": "card", "detail": "?: [\"王帅的达成率是多少\", \"王帅的年度开单金额是多少\", \"王帅的总任务金额和达成率分别是多少\"]", "duration": 26.95, "judge": "FAIL(expect pass, got CARD)"}
+{"question": "陈亮亮今年开单金额", "category": "负样本-人名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"系统推荐：消费者事业部\", \"商用事业部\", \"电商事业部\"]", "duration": 13.76, "judge": "OK(reasonable_clarify)"}
+{"question": "商用事业部今年上半年的业绩", "category": "负样本-时间", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=8", "duration": 37.93, "judge": "OK"}
+{"question": "曾庆凌负责板块的本期业绩", "category": "负样本-人名", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=1", "duration": 44.38, "judge": "OK"}
+{"question": "各分公司2026年的达成率", "category": "负样本-时间", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 0.26, "judge": "OK(reasonable_clarify)"}
+{"question": "东部分公司本月开单金额", "category": "负样本-时间", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=8", "duration": 36.39, "judge": "OK"}
+{"question": "消费者事业部今年的总任务金额", "category": "负样本-指标", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=14", "duration": 37.19, "judge": "OK"}
+{"question": "消费者事业部各城市公司业绩", "category": "负样本-层级", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=14", "duration": 32.65, "judge": "OK"}
+{"question": "商用事业部各分公司的达成率", "category": "负样本-层级", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=4", "duration": 13.15, "judge": "OK"}
+{"question": "西部分公司的层级业绩汇总", "category": "负样本-层级", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=7", "duration": 60.14, "judge": "OK"}
+{"question": "东部分公司下属业务部的业绩", "category": "负样本-层级", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=8", "duration": 16.71, "judge": "OK"}
+{"question": "上海代表处的开单金额是多少", "category": "负样本-单实体", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"系统推荐：消费者事业部 - 上海城市分公司开单金额\", \"商用事业部 - 上海相关区域开单金额\", \"电商事业部 - 上海相关渠道开单金额\"]", "duration": 21.72, "judge": "OK(reasonable_clarify)"}
+{"question": "北京代表处今年业绩", "category": "负样本-单实体", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额 - 北京城市公司\", \"商用事业部开单金额 - 北京代表处\"]", "duration": 16.06, "judge": "OK(reasonable_clarify)"}
+{"question": "达成率超过百分之百的分公司有哪些", "category": "负样本-筛选", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"商用事业部开单金额\", \"消费者事业部开单金额\"]", "duration": 4.69, "judge": "OK(reasonable_clarify)"}
+{"question": "开单金额排名前十的分公司", "category": "负样本-排名", "expect": null, "verdict": "CONFIRM", "observed_state": "confirm", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 0.27, "judge": "OK(reasonable_clarify)"}
+{"question": "商泳事业部的业绩", "category": "正样本-对照错字", "expect": "商用事业部", "verdict": "CARD_HIT", "observed_state": "card", "detail": "typo_fastpath: [\"商用事业部的业绩\"]", "duration": 0.05, "judge": "OK"}
+{"question": "净水业务线今年的营收情况", "category": "负样本-单实体", "expect": null, "verdict": "DIRECT_OK", "observed_state": "pass", "detail": "rows=11", "duration": 71.16, "judge": "OK"}
