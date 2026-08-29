@@ -1,0 +1,16 @@
+[
+  {"question": "NB业绩怎么样", "category": "首字母", "expect": "南部", "dataset_id": null},
+  {"question": "XB业绩怎么样", "category": "首字母", "expect": "西部", "dataset_id": null},
+  {"question": "DJ业绩怎么样", "category": "首字母", "expect": "丁杰", "dataset_id": null},
+  {"question": "JD直营咋样", "category": "中英混写", "expect": "京东", "dataset_id": null},
+  {"question": "天猫tmall开单", "category": "中英混写", "expect": "天猫", "dataset_id": null},
+  {"question": "dongbu业绩", "category": "中英混写", "expect": "东部", "dataset_id": null},
+  {"question": "靳峰的业绩", "category": "人名同音", "expect": "靳锋", "dataset_id": null},
+  {"question": "商泳事业部最好最坏的业务员", "category": "组合失误", "expect": null, "dataset_id": null},
+  {"question": "商用", "category": "超短", "expect": "商用", "dataset_id": null},
+  {"question": "开单为0的分公司有哪些", "category": "极端筛选", "expect": null, "dataset_id": null},
+  {"question": "达成率100%以上的代表处", "category": "极端筛选", "expect": null, "dataset_id": null},
+  {"question": "除了东部其他分公司", "category": "否定排除", "expect": null, "dataset_id": null},
+  {"question": "商用事业部下面的代表处", "category": "层级跳跃", "expect": null, "dataset_id": null},
+  {"question": "shangyong事业部业绩", "category": "对照-中英混写", "expect": "商用", "dataset_id": null}
+]

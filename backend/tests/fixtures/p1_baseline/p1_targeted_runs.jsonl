@@ -1,0 +1,8 @@
+{"question": "商用事业部年度开单金额", "category": "教科书题", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的年度开单金额」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 2.47, "run": "run1"}
+{"question": "商用事业部年度开单金额", "category": "教科书题", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的年度开单金额」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 2.55, "run": "run2"}
+{"question": "商用事业部年度开单金额", "category": "教科书题", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的年度开单金额」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 2.56, "run": "run3"}
+{"question": "商用事业部达成率", "category": "探测", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的达成率」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 4.79, "run": "probe"}
+{"question": "商用事业部开单金额", "category": "探测", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部的开单金额」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 4.03, "run": "probe"}
+{"question": "消费者事业部年度开单金额", "category": "探测-对照", "expect": null, "verdict": "DIRECT_OK", "detail": "rows=14", "duration": 26.44, "run": "probe"}
+{"question": "商用事业部的业绩", "category": "探测", "expect": null, "verdict": "DIRECT_OK", "detail": "rows=8", "duration": 63.37, "run": "probe"}
+{"question": "电商事业部年度开单金额", "category": "探测-对照", "expect": null, "verdict": "DIRECT_OK", "detail": "rows=3", "duration": 83.41, "run": "probe"}

@@ -1,0 +1,56 @@
+{"question": "XB业绩怎么样", "category": "首字母", "expect": "西部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部 - 西北/西部分公司\", \"消费者事业部 - 西北/西部分公司\", \"电商事业部\"]", "duration": 14.14, "run": "run0"}
+{"question": "DJ业绩怎么样", "category": "首字母", "expect": "丁杰", "verdict": "DIRECT_OK", "detail": "rows=83", "duration": 87.19, "run": "run0"}
+{"question": "NB业绩怎么样", "category": "首字母", "expect": "南部", "verdict": "CARD_MISS", "detail": "?: [\"西北分公司业绩怎么样\"]", "duration": 104.37, "run": "run0"}
+{"question": "JD直营咋样", "category": "中英混写", "expect": "京东", "verdict": "CONFIRM", "detail": "[\"电商事业部（含JD电商渠道）\", \"消费者事业部（JD品牌/直营业务线）\", \"商用事业部\"]", "duration": 25.92, "run": "run0"}
+{"question": "dongbu业绩", "category": "中英混写", "expect": "东部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部（东部业绩）\", \"消费者事业部\", \"电商事业部\"]", "duration": 12.24, "run": "run0"}
+{"question": "天猫tmall开单", "category": "中英混写", "expect": "天猫", "verdict": "CARD_MISS", "detail": "?: [\"新零售板块年度开单金额\", \"消费者事业部整体年度开单金额（含新零售）\"]", "duration": 39.6, "run": "run0"}
+{"question": "商泳事业部最好最坏的业务员", "category": "组合失误", "expect": null, "verdict": "CARD", "detail": "direction_ambiguity: [\"商泳事业部排名第一的业务员\", \"商泳事业部排名倒数第一的业务员\", \"商泳事业部最好和最差的业务员对比\"]", "duration": 1.89, "run": "run0"}
+{"question": "商用", "category": "超短", "expect": "商用", "verdict": "CARD_HIT", "detail": "?: [\"商用事业部达成率情况\", \"商用事业部年度开单金额\", \"商用事业部剩余任务金额\"]", "duration": 0.33, "run": "run0"}
+{"question": "开单为0的分公司有哪些", "category": "极端筛选", "expect": null, "verdict": "CONFIRM", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 4.59, "run": "run0"}
+{"question": "靳峰的业绩", "category": "人名同音", "expect": "靳锋", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部 - 靳峰业绩\", \"消费者事业部 - 靳峰业绩\", \"电商事业部 - 靳峰业绩\"]", "duration": 25.72, "run": "run0"}
+{"question": "除了东部其他分公司", "category": "否定排除", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 · 东部分公司\", \"电商事业部开单金额 · 其他\"]", "duration": 0.21, "run": "run0"}
+{"question": "达成率100%以上的代表处", "category": "极端筛选", "expect": null, "verdict": "CARD", "detail": "zero_row_diagnosis_a: [\"达成率100%以上海代表处\"]", "duration": 0.53, "run": "run0"}
+{"question": "商用事业部下面的代表处", "category": "层级跳跃", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部下面的代表处」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 0.54, "run": "run0"}
+{"question": "shangyong事业部业绩", "category": "对照-中英混写", "expect": "商用", "verdict": "CARD_HIT", "detail": "?: [\"商用事业部业绩\"]", "duration": 78.11, "run": "run0"}
+{"question": "XB业绩怎么样", "category": "首字母", "expect": "西部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部 - 西部分公司\", \"消费者事业部 - 西北区域分公司\", \"电商事业部 - 相关业务部\"]", "duration": 16.62, "run": "run1"}
+{"question": "NB业绩怎么样", "category": "首字母", "expect": "南部", "verdict": "CONFIRM", "detail": "[\"系统推荐：消费者事业部整体业绩\", \"商用事业部整体业绩\", \"电商事业部整体业绩\"]", "duration": 19.63, "run": "run1"}
+{"question": "DJ业绩怎么样", "category": "首字母", "expect": "丁杰", "verdict": "CONFIRM", "detail": "[\"消费者事业部（线下/燃气定制/地产/新零售四大业务线）\", \"商用事业部（东/南/西/北四大分公司）\", \"电商事业部（国内业务部/直营零售部/跨境业务部）\"]", "duration": 19.21, "run": "run1"}
+{"question": "天猫tmall开单", "category": "中英混写", "expect": "天猫", "verdict": "CONFIRM", "detail": "[\"系统推荐：电商事业部\", \"消费者事业部\", \"商用事业部\"]", "duration": 15.19, "run": "run1"}
+{"question": "JD直营咋样", "category": "中英混写", "expect": "京东", "verdict": "DIRECT_OK", "detail": "rows=11", "duration": 35.17, "run": "run1"}
+{"question": "dongbu业绩", "category": "中英混写", "expect": "东部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部东部分公司业绩\", \"消费者事业部下的东部业绩\", \"电商事业部下的东部业绩\"]", "duration": 13.58, "run": "run1"}
+{"question": "商泳事业部最好最坏的业务员", "category": "组合失误", "expect": null, "verdict": "CARD", "detail": "direction_ambiguity: [\"商泳事业部业绩最好的业务员\", \"商泳事业部业绩最差的业务员\", \"商泳事业部业绩最好和最差的业务员对比\"]", "duration": 1.85, "run": "run1"}
+{"question": "商用", "category": "超短", "expect": "商用", "verdict": "CARD_HIT", "detail": "?: [\"商用事业部整体业绩如何（达成率）\", \"商用事业部年度开单金额是多少\", \"商用事业部下各分公司业绩排名\"]", "duration": 0.3, "run": "run1"}
+{"question": "靳峰的业绩", "category": "人名同音", "expect": "靳锋", "verdict": "CONFIRM", "detail": "[\"系统推荐：消费者事业部 - 靳峰个人业绩\", \"商用事业部 - 靳峰个人业绩\", \"电商事业部 - 靳峰个人业绩\"]", "duration": 18.48, "run": "run1"}
+{"question": "开单为0的分公司有哪些", "category": "极端筛选", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 - 分公司\", \"消费者事业部开单金额 - 分公司\"]", "duration": 9.4, "run": "run1"}
+{"question": "除了东部其他分公司", "category": "否定排除", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 · 东部分公司\", \"电商事业部开单金额 · 其他\"]", "duration": 0.17, "run": "run1"}
+{"question": "达成率100%以上的代表处", "category": "极端筛选", "expect": null, "verdict": "CARD", "detail": "zero_row_diagnosis_a: [\"达成率100%以上海代表处\"]", "duration": 0.51, "run": "run1"}
+{"question": "商用事业部下面的代表处", "category": "层级跳跃", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部下面的代表处」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 0.5, "run": "run1"}
+{"question": "shangyong事业部业绩", "category": "对照-中英混写", "expect": "商用", "verdict": "ZERO_LEAK", "detail": "## 消费者事业部开单金额\n\n围绕「shangyong事业部的业绩」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集", "duration": 18.33, "run": "run1"}
+{"question": "NB业绩怎么样", "category": "首字母", "expect": "南部", "verdict": "CONFIRM", "detail": "[\"消费者事业部 - 整体业绩/分公司排名\", \"商用事业部 - 整体业绩/四大分公司\", \"电商事业部 - 整体业绩/业务部对比\"]", "duration": 18.13, "run": "run2"}
+{"question": "XB业绩怎么样", "category": "首字母", "expect": "西部", "verdict": "DIRECT_OK", "detail": "rows=83", "duration": 50.18, "run": "run2"}
+{"question": "JD直营咋样", "category": "中英混写", "expect": "京东", "verdict": "DIRECT_OK", "detail": "rows=1", "duration": 31.95, "run": "run2"}
+{"question": "DJ业绩怎么样", "category": "首字母", "expect": "丁杰", "verdict": "DIRECT_OK", "detail": "rows=83", "duration": 75.11, "run": "run2"}
+{"question": "dongbu业绩", "category": "中英混写", "expect": "东部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部的东部分公司业绩\", \"消费者事业部的东部分公司业绩\", \"电商事业部下东部相关业务业绩\"]", "duration": 10.66, "run": "run2"}
+{"question": "天猫tmall开单", "category": "中英混写", "expect": "天猫", "verdict": "CONFIRM", "detail": "[\"消费者事业部开单金额\", \"电商事业部开单金额\", \"商用事业部开单金额\"]", "duration": 36.82, "run": "run2"}
+{"question": "商泳事业部最好最坏的业务员", "category": "组合失误", "expect": null, "verdict": "CARD", "detail": "direction_ambiguity: [\"商泳事业部排名第一的业务员\", \"商泳事业部倒数第一的业务员\", \"商泳事业部最好和最坏的业务员对比\"]", "duration": 2.23, "run": "run2"}
+{"question": "商用", "category": "超短", "expect": "商用", "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 0.28, "run": "run2"}
+{"question": "靳峰的业绩", "category": "人名同音", "expect": "靳锋", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部 - 靳峰业绩\", \"消费者事业部 - 靳峰业绩\", \"电商事业部 - 靳峰业绩\"]", "duration": 29.36, "run": "run2"}
+{"question": "开单为0的分公司有哪些", "category": "极端筛选", "expect": null, "verdict": "CONFIRM", "detail": "[\"消费者事业部开单金额\", \"商用事业部开单金额\"]", "duration": 8.14, "run": "run2"}
+{"question": "除了东部其他分公司", "category": "否定排除", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 · 东部分公司\", \"电商事业部开单金额 · 其他\"]", "duration": 0.17, "run": "run2"}
+{"question": "达成率100%以上的代表处", "category": "极端筛选", "expect": null, "verdict": "CARD", "detail": "zero_row_diagnosis_a: [\"达成率100%以上海代表处\"]", "duration": 0.49, "run": "run2"}
+{"question": "商用事业部下面的代表处", "category": "层级跳跃", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部下面的代表处」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 0.5, "run": "run2"}
+{"question": "shangyong事业部业绩", "category": "对照-中英混写", "expect": "商用", "verdict": "DIRECT_OK", "detail": "rows=8", "duration": 61.19, "run": "run2"}
+{"question": "NB业绩怎么样", "category": "首字母", "expect": "南部", "verdict": "CONFIRM", "detail": "[\"系统推荐：消费者事业部业绩\", \"商用事业部业绩\", \"电商事业部业绩\"]", "duration": 17.98, "run": "run3"}
+{"question": "XB业绩怎么样", "category": "首字母", "expect": "西部", "verdict": "CONFIRM", "detail": "[\"消费者事业部 - 西南/西北分公司业绩\", \"商用事业部 - 西部分公司业绩\", \"消费者事业部 - 新零售业务线\"]", "duration": 23.63, "run": "run3"}
+{"question": "DJ业绩怎么样", "category": "首字母", "expect": "丁杰", "verdict": "CONFIRM", "detail": "[\"消费者事业部 - 查询 DJ 的开单业绩\", \"商用事业部 - 查询 DJ 的开单业绩\", \"电商事业部 - 查询 DJ 的开单业绩\"]", "duration": 31.36, "run": "run3"}
+{"question": "天猫tmall开单", "category": "中英混写", "expect": "天猫", "verdict": "CONFIRM", "detail": "[\"系统推荐：电商事业部\", \"消费者事业部\", \"商用事业部\"]", "duration": 12.83, "run": "run3"}
+{"question": "dongbu业绩", "category": "中英混写", "expect": "东部", "verdict": "CONFIRM", "detail": "[\"系统推荐：商用事业部\", \"消费者事业部\", \"电商事业部\"]", "duration": 14.47, "run": "run3"}
+{"question": "JD直营咋样", "category": "中英混写", "expect": "京东", "verdict": "DIRECT_OK", "detail": "rows=1", "duration": 45.54, "run": "run3"}
+{"question": "商泳事业部最好最坏的业务员", "category": "组合失误", "expect": null, "verdict": "CARD", "detail": "direction_ambiguity: [\"商泳事业部业绩排名第一的业务员\", \"商泳事业部业绩排名倒数第一的业务员\", \"商泳事业部业绩最好和最差的业务员对比\"]", "duration": 2.86, "run": "run3"}
+{"question": "商用", "category": "超短", "expect": "商用", "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 1.93, "run": "run3"}
+{"question": "开单为0的分公司有哪些", "category": "极端筛选", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 - 分公司\", \"消费者事业部开单金额 - 分公司\"]", "duration": 12.16, "run": "run3"}
+{"question": "达成率100%以上的代表处", "category": "极端筛选", "expect": null, "verdict": "CARD", "detail": "zero_row_diagnosis_a: [\"达成率100%以上海代表处\"]", "duration": 0.53, "run": "run3"}
+{"question": "除了东部其他分公司", "category": "否定排除", "expect": null, "verdict": "CONFIRM", "detail": "[\"商用事业部开单金额 · 东部分公司\", \"电商事业部开单金额 · 其他\"]", "duration": 0.16, "run": "run3"}
+{"question": "靳峰的业绩", "category": "人名同音", "expect": "靳锋", "verdict": "CARD_MISS", "detail": "?: [\"请确认\\\"靳峰\\\"是否在系统内，或提供所在事业部/分公司信息\", \"疑似\\\"胡根\\\"或\\\"黄超\\\"等近音人名，请确认是否为错字\"]", "duration": 26.01, "run": "run3"}
+{"question": "商用事业部下面的代表处", "category": "层级跳跃", "expect": null, "verdict": "ZERO_LEAK", "detail": "## 商用事业部开单金额\n\n围绕「商用事业部下面的代表处」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集重试。", "duration": 0.47, "run": "run3"}
+{"question": "shangyong事业部业绩", "category": "对照-中英混写", "expect": "商用", "verdict": "ZERO_LEAK", "detail": "## 消费者事业部开单金额\n\n围绕「shangyong事业部的业绩」没有查到匹配数据。\n\n可以检查：对象名称是否与业务口径一致、时间范围是否过窄、或换一个数据集", "duration": 16.26, "run": "run3"}
