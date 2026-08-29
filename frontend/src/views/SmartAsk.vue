@@ -59,6 +59,7 @@
                   :allow-copy="featureAccess.smart_question_copy"
                   :allow-edit="featureAccess.smart_question_edit"
                   :allow-rerun="featureAccess.smart_question_rerun"
+                  :spans="getQuestionParseSpans(msg)"
                   @copy="copyQuestion(msg)"
                   @edit="editQuestion(msg)"
                   @rerun="rerunQuestion(msg)"
@@ -151,6 +152,9 @@
                         >{{ cand }}</button>
                       </span>
                     </div>
+
+                    <!-- 结构化解析条（响应层聚合，后端开关+角色门控；确认卡/纠正卡消息不出条） -->
+                    <ParseBar v-if="msg.data?.parse_bar" :bar="msg.data.parse_bar" />
 
                     <!-- 思考过程卡（可折叠）-->
                     <ThinkingCard
@@ -1295,6 +1299,7 @@ import ChatHeader from '../components/smartask/ChatHeader.vue'
 import WelcomeScreen from '../components/smartask/WelcomeScreen.vue'
 import UserBubble from '../components/smartask/UserBubble.vue'
 import PlanCard from '../components/smartask/PlanCard.vue'
+import ParseBar from '../components/smartask/ParseBar.vue'
 import ThinkingCard from '../components/smartask/ThinkingCard.vue'
 import LiveExecutionFeed from '../components/smartask/LiveExecutionFeed.vue'
 import ResultDigestCard from '../components/smartask/ResultDigestCard.vue'
@@ -1448,6 +1453,16 @@ const displayLogs = computed(() => {
   }
   return session.state.logs
 })
+
+// 用户问句的解析片段框出（解析条 v1）：取其后紧跟的 AI 回复的 parse_bar.spans
+const getQuestionParseSpans = (msg) => {
+  const list = displayMessages.value || []
+  const idx = list.findIndex(m => m.id === msg.id)
+  if (idx < 0) return null
+  const next = list[idx + 1]
+  const spans = next && next.role !== 'user' ? next.data?.parse_bar?.spans : null
+  return Array.isArray(spans) && spans.length ? spans : null
+}
 
 const displayResult = computed(() => {
   if (isViewingReadonly.value && readonlySnapshot.value?.result) {

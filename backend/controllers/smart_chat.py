@@ -640,6 +640,11 @@ def smart_chat():
             _preview = build_initials_preview(question=question, user=user)
             if _preview:
                 result["clarify_suggestion"] = _preview
+        # 结构化解析条（响应层只读聚合，fail-open；内部已判开关/可见性/出条铁律）
+        from disambiguation.parse_spans import build_parse_bar
+        _parse_bar = build_parse_bar(question=question, result=result, user=user)
+        if _parse_bar:
+            result["parse_bar"] = _parse_bar
 
         if result.get("error"):
             _append_controller_debug("smart_chat.response.error", error=result.get("error"))
@@ -824,6 +829,11 @@ def smart_chat_stream():
                     _preview = build_initials_preview(question=question, user=user)
                     if _preview:
                         result["clarify_suggestion"] = _preview
+                # 结构化解析条（响应层只读聚合，fail-open；内部已判开关/可见性/出条铁律）
+                from disambiguation.parse_spans import build_parse_bar
+                _parse_bar = build_parse_bar(question=question, result=result, user=user)
+                if _parse_bar:
+                    result["parse_bar"] = _parse_bar
                 event_queue.put({"type": "result", "result": result})
             except Exception as exc:
                 error_result = {

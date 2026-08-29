@@ -1,7 +1,19 @@
 <template>
   <div class="sa-user-message">
     <div class="sa-user-main">
-      <div class="sa-user-bubble">{{ content }}</div>
+      <div class="sa-user-bubble">
+        <template v-if="segments">
+          <template v-for="(seg, i) in segments" :key="i">
+            <span
+              v-if="seg.slot"
+              class="sa-user-span"
+              :title="`${seg.slot === 'node' ? '对象' : '指标'}：${seg.resolved}`"
+            >{{ seg.text }}</span>
+            <template v-else>{{ seg.text }}</template>
+          </template>
+        </template>
+        <template v-else>{{ content }}</template>
+      </div>
       <div v-if="allowCopy || allowEdit || allowRerun" class="sa-user-actions" aria-label="问题操作">
         <el-tooltip v-if="allowCopy" content="复制" placement="bottom" :show-after="180">
           <button class="sa-user-action" type="button" aria-label="复制问题" @click="$emit('copy')">
@@ -56,9 +68,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { DocumentCopy, Edit, RefreshRight } from '@element-plus/icons-vue'
 
-defineProps({
+const props = defineProps({
   content: {
     type: String,
     default: ''
@@ -82,10 +95,33 @@ defineProps({
   allowRerun: {
     type: Boolean,
     default: true
+  },
+  // 解析条 span 框出（parse-bar-design.md v1）：[{start, end, slot, resolved_value}]
+  spans: {
+    type: Array,
+    default: null
   }
 })
 
 defineEmits(['copy', 'edit', 'rerun'])
+
+// 按 spans 的 start/end 把问句切成 普通文本/高亮片段 段；区间无效或重叠时回退纯文本
+const segments = computed(() => {
+  const spans = (props.spans || [])
+    .filter(s => Number.isInteger(s.start) && Number.isInteger(s.end) && s.end > s.start)
+    .sort((a, b) => a.start - b.start)
+  if (!spans.length || !props.content) return null
+  const segs = []
+  let cursor = 0
+  for (const s of spans) {
+    if (s.start < cursor || s.end > props.content.length) return null // 重叠/越界 → 回退纯文本
+    if (s.start > cursor) segs.push({ text: props.content.slice(cursor, s.start) })
+    segs.push({ text: props.content.slice(s.start, s.end), slot: s.slot, resolved: s.resolved_value })
+    cursor = s.end
+  }
+  if (cursor < props.content.length) segs.push({ text: props.content.slice(cursor) })
+  return segs
+})
 </script>
 
 <style scoped>
@@ -156,6 +192,17 @@ defineEmits(['copy', 'edit', 'rerun'])
   box-shadow:
     0 6px 16px rgba(185, 28, 28, 0.15),
     0 2px 5px rgba(185, 28, 28, 0.08);
+}
+
+/* 解析片段框出（解析条 v1）：红底气泡上的白边半透框 */
+.sa-user-span {
+  display: inline-block;
+  padding: 0 4px;
+  margin: 0 1px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  cursor: default;
 }
 
 .sa-user-actions {
