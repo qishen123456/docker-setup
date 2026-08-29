@@ -10,8 +10,10 @@ v1.1 弹卡词目（均为真实观察到的用户形态）：
   B. 相邻双方向词叠加（如「最好最坏的」）——两个不同的最X直接相连、中间无连接词，
      不是合法中文（合法的会带"和/与/或"：做最好和最坏的打算），正反皆有可能。
 其余 5 个臆想词目（最差不的/最高不的/最低不的/最多不的/最少不的）只记影子日志
-不弹卡——它们的真实意图映射全靠猜（"最高不"是 最高 还是 最低？），
-攒到真实分布数据后再配各自的候选对，避免生成"最不差的"这种不像人话的候选。
+不弹卡——它们的真实意图映射全靠猜（"最高不"是 最高 还是 最低？）。
+P1-a 起影子日志加记 proposed_candidates（候选对映射表 差↔好/高↔低/多↔少 原位替换），
+攒真实分布数据评估该不该升级弹卡；方向卡生成候选前先做级联修错字
+（复用 typo_fastpath.correct_question，fail-open 回退原问题）。
 
 安全约束（评审 7 洞 + 2 微调后的定稿）：
   1. 触发词必须带"的"（"最好不的"），合法的"最好不按月度算"（had better not）不含"的"，天然放行；
@@ -48,6 +50,17 @@ _STACKED_RE = re.compile(r"(最[好差坏高低多少])(最[好差坏高低多�
 # 观察位：臆想词目只记日志不弹卡（真实意图映射无数据支撑，见模块 docstring 第 3 条）
 _OBSERVE_RE = re.compile(r"最[差高低多少]不的")
 
+# P1-a：观察位词目的候选对映射表（好↔不好已有 v1 词目 A，此处补齐 差/高/低/多/少）。
+# 仍是影子不弹卡——命中时把"若升级弹卡会给的候选"记进影子日志 proposed_candidates，
+# 供影子数据评估这批词目该不该升级弹卡。
+_OBSERVE_PAIRS = {
+    "差": ("最差", "最好"),
+    "高": ("最高", "最低"),
+    "低": ("最低", "最高"),
+    "多": ("最多", "最少"),
+    "少": ("最少", "最多"),
+}
+
 
 def is_enabled() -> bool:
     """独立开关：direction_ambiguity_enabled，缺省 True（全员开放，不挂角色门控）。"""
@@ -83,8 +96,19 @@ def detect_direction_ambiguity(question: str) -> Optional[Dict[str, Any]]:
                 "candidates": candidates,
                 "reason": "「最好不」可能是「最好」或「最不好」的口误，两种方向结果相反",
             }
-        if _OBSERVE_RE.search(question):
-            return {"observe_only": True, "fragment": _OBSERVE_RE.search(question).group(0)}
+        observe = _OBSERVE_RE.search(question)
+        if observe:
+            frag = observe.group(0)
+            hit: Dict[str, Any] = {"observe_only": True, "fragment": frag}
+            # 候选对（影子评估用，不弹卡）："最差不" → 最差/最好 原位替换 count=1
+            span = frag[:-1]  # 去掉尾部"的"，如"最差不"
+            pair = _OBSERVE_PAIRS.get(span[1:2] if len(span) == 3 else "")
+            if pair:
+                proposed = [question.replace(span, repl, 1) for repl in pair]
+                proposed = [c for c in proposed if c != question]
+                if proposed:
+                    hit["proposed_candidates"] = proposed
+            return hit
         # 词目 B：相邻双方向词叠加（"最好最坏的"）。候选=分别只保留其中一个方向词，原位放回。
         stacked = _STACKED_RE.search(question)
         if stacked and stacked.group(1) != stacked.group(2):
@@ -115,12 +139,38 @@ def build_direction_clarify_result(
     前端据 early_clarify=True 渲染纠正卡（两个方向候选 chip + 按原问题继续查），
     不渲染 PlanCard/报告等无用卡片。候选措辞优先用 LLM 自然语言生成
     （排名第一/倒数第一/两个都要对比），LLM 失败回退机械替换候选（fail-open）。
+
+    P1-a 级联修错字（活体改动授权，仅限本函数）：生成候选前先对原问题做错字纠正
+    （复用 typo_fastpath 同一张别名表），纠正成功则用纠正后的问题重建方向候选——
+    「商泳事业部最好最坏的业务员」的候选必须是"商用事业部排名第一的业务员"，
+    不能带着错字"商泳"。纠正失败/纠正后方向片段丢失 → 回退原问题原候选（fail-open）。
     """
     candidates = [str(c) for c in (hit.get("candidates") or []) if str(c).strip()]
+    effective_question = str(question or "")
+    fragment = str(hit.get("fragment") or "")
+    try:
+        from disambiguation.typo_fastpath import correct_question
+
+        corrected = correct_question(effective_question)
+        if corrected == effective_question and fragment and fragment in effective_question:
+            # 方向片段紧跟错字时，快检的边界规则会挡住纠正（"商泳事业部最…"的"最"不在
+            # 合法后邻词表）：把方向片段遮蔽成非汉字再纠一次，纠完还原。
+            masked_q = effective_question.replace(fragment, "※" * len(fragment), 1)
+            corrected_masked = correct_question(masked_q)
+            if corrected_masked != masked_q:
+                corrected = corrected_masked.replace("※" * len(fragment), fragment, 1)
+        if corrected and corrected != effective_question:
+            rehit = detect_direction_ambiguity(corrected)
+            if rehit and not rehit.get("observe_only") and rehit.get("candidates"):
+                effective_question = corrected
+                candidates = [str(c) for c in rehit["candidates"] if str(c).strip()]
+                fragment = str(rehit.get("fragment") or fragment)
+    except Exception:
+        pass  # fail-open：纠正失败就用原问题
     try:
         from disambiguation.shadow_gatekeeper import generate_direction_candidates
 
-        llm_candidates = generate_direction_candidates(question, str(hit.get("fragment") or ""))
+        llm_candidates = generate_direction_candidates(effective_question, fragment)
         if llm_candidates:
             candidates = llm_candidates
     except Exception:
@@ -151,8 +201,12 @@ def build_direction_clarify_result(
 
 
 def log_direction(question: str, hit: Dict[str, Any], user: Optional[Dict[str, Any]] = None,
-                  session_id: str = "") -> None:
-    """写影子日志（gk_source=direction_ambiguity），弹卡/观察都记。fail-open。"""
+                  session_id: str = "", shown_candidates: Optional[List[str]] = None) -> None:
+    """写影子日志（gk_source=direction_ambiguity），弹卡/观察都记。fail-open。
+
+    shown_candidates：弹卡时实际展示给用户的候选（级联修错字/LLM 措辞后的最终版），
+    由调用方从卡片结果里透传；缺省回退 hit 里的机械候选。影子校验以实际展示候选为准。
+    """
     try:
         from disambiguation.shadow_gatekeeper import _append_log, _load_settings
 
@@ -164,6 +218,7 @@ def log_direction(question: str, hit: Dict[str, Any], user: Optional[Dict[str, A
             or os.path.join(CONFIG_DIR, "shadow_gatekeeper_log.jsonl")
         )
         observe_only = bool(hit.get("observe_only"))
+        shown = [str(c) for c in (shown_candidates or []) if str(c).strip()]
         record = {
             "question": question,
             "session_id": session_id or "",
@@ -180,8 +235,20 @@ def log_direction(question: str, hit: Dict[str, Any], user: Optional[Dict[str, A
             "would_block": not observe_only,
             "block_reason": str(hit.get("reason") or f"观察位命中「{hit.get('fragment')}」，未弹卡"),
             "self_confidence": None if observe_only else 1.0,
-            "candidate_options_topN": [str(c)[:120] for c in (hit.get("candidates") or [])][:3],
+            "candidate_options_topN": [str(c)[:120] for c in (shown or hit.get("candidates") or [])][:3],
         }
+        # P1-a：观察位词目的候选对（影子评估"该不该升级弹卡"用）
+        if hit.get("proposed_candidates"):
+            record["proposed_candidates"] = [str(c)[:120] for c in hit["proposed_candidates"]][:3]
+        # P1-a 影子校验（冻结范围 1）：对实际展示的方向候选做书架校验，只记日志不改弹卡；
+        # 观察位没有活体候选时校验 proposed_candidates（评估升级后候选质量）
+        try:
+            from disambiguation.candidate_validator import is_enabled as _cv_on, validate_candidates
+            _cands = shown or hit.get("candidates") or hit.get("proposed_candidates") or []
+            if _cv_on() and _cands:
+                record["candidate_validation"] = validate_candidates(_cands, question=question)
+        except Exception:
+            pass
         _append_log(record, log_path)
     except Exception:
         pass

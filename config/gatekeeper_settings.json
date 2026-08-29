@@ -7,7 +7,10 @@
   "max_tokens": 1024,
   "log_path": "",
   "direction_ambiguity_enabled": true,
+  "candidate_validation_enabled": true,
+  "initials_guardrail_enabled": true,
+  "initials_preview_enabled": true,
   "draft_correction_min_confidence": 0.8,
   "zero_row_diagnosis_enabled": true,
-  "_comment": "P-1 影子守门员配置（澄清方案 v4 / 9.1-B1）。enabled=false 即整体下线，一键回滚。model_id 锁单个快模型（ai_settings.json 的 id），禁止指向慢模型（GLM-5.1 实测 64s）。timeout 绝不继承主链路 180s。log_path 留空=默认 config/shadow_gatekeeper_log.jsonl。direction_ambiguity_enabled=false 独立关闭第 0.5 层方向歧义快检（与 visible_roles 角色门控解耦，纯正则全员开放）。zero_row_diagnosis_enabled=false 关闭 0 行诊断器（P0.5 三分支），关闭后 0 行回退旧版兜底报告。"
+  "_comment": "P-1 影子守门员配置（澄清方案 v4 / 9.1-B1）。enabled=false 即整体下线，一键回滚。model_id 锁单个快模型（ai_settings.json 的 id），禁止指向慢模型（GLM-5.1 实测 64s）。timeout 绝不继承主链路 180s。log_path 留空=默认 config/shadow_gatekeeper_log.jsonl。direction_ambiguity_enabled=false 独立关闭第 0.5 层方向歧义快检（与 visible_roles 角色门控解耦，纯正则全员开放）。zero_row_diagnosis_enabled=false 关闭 0 行诊断器（P0.5 三分支），关闭后 0 行回退旧版兜底报告。candidate_validation_enabled=false 关闭 P1-a 候选出口书架校验影子日志（只影响记不记，永不拦候选）。initials_guardrail_enabled=false 关闭 P1-a 首字母静默护栏影子日志（只影响记不记，不改活体行为）。initials_preview_enabled=true 开启首字母提示条超管预览（仅 visible_roles 内用户可见，守门员纠正条优先于它；候选来自 abbreviation_aliases.json 精排表优先、拼音索引撞车出多候选）。"
 }

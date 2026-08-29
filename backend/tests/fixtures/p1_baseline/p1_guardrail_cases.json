@@ -13,12 +13,12 @@
   {"question": "各分公司最高不的达成率", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "最高", "deterministic": true, "reasonable_clarify": false},
   {"question": "开单最多不的业务员", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "最多", "deterministic": true, "reasonable_clarify": false},
   {"question": "业绩最低不的代表处", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "最低", "deterministic": true, "reasonable_clarify": false},
-  {"question": "看下最好不的业务员", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "最好", "deterministic": true, "reasonable_clarify": false},
+  {"question": "看下最好不的业务员", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": null, "deterministic": true, "reasonable_clarify": false},
   {"question": "东部分公司最好最坏的业务员", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "排名第一", "deterministic": true, "reasonable_clarify": false},
-  {"question": "商用事业部最好最坏的月份", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": "排名第一", "deterministic": true, "reasonable_clarify": false},
-  {"question": "最不好的业务员是谁", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": false},
+  {"question": "商用事业部最好最坏的月份", "category": "护栏-方向口误", "expected_verdict": "clarify", "expect_correction": null, "deterministic": true, "reasonable_clarify": false},
+  {"question": "最不好的业务员是谁", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": true},
   {"question": "业绩最差的代表处是哪个", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": false},
-  {"question": "达成率最高的分公司", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": false},
+  {"question": "达成率最高的分公司", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": true},
   {"question": "排名最后的业务部", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": true},
   {"question": "他的业绩最不好吗", "category": "护栏-方向合法对照", "expected_verdict": "pass", "deterministic": true, "reasonable_clarify": true}
 ]

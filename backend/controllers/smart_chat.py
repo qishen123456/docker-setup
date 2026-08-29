@@ -586,7 +586,8 @@ def smart_chat():
                     fragment=_dir_hit.get("fragment"),
                     candidates=_dir_hit.get("candidates"),
                 )
-                log_direction(question, _dir_hit, user=user, session_id=session_id)
+                log_direction(question, _dir_hit, user=user, session_id=session_id,
+                              shown_candidates=(result.get("clarify_suggestion") or {}).get("candidates"))
                 _log_smart_chat_result(
                     result=result,
                     question=question,
@@ -633,6 +634,12 @@ def smart_chat():
                 result["clarify_suggestion"] = _correction
         else:
             schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
+        # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡
+        if not result.get("clarify_suggestion") and not result.get("early_clarify"):
+            from disambiguation.initials_guardrail import build_initials_preview
+            _preview = build_initials_preview(question=question, user=user)
+            if _preview:
+                result["clarify_suggestion"] = _preview
 
         if result.get("error"):
             _append_controller_debug("smart_chat.response.error", error=result.get("error"))
@@ -811,6 +818,12 @@ def smart_chat_stream():
                         result["clarify_suggestion"] = _correction
                 else:
                     schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
+                # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡
+                if not result.get("clarify_suggestion") and not result.get("early_clarify"):
+                    from disambiguation.initials_guardrail import build_initials_preview
+                    _preview = build_initials_preview(question=question, user=user)
+                    if _preview:
+                        result["clarify_suggestion"] = _preview
                 event_queue.put({"type": "result", "result": result})
             except Exception as exc:
                 error_result = {
@@ -865,7 +878,8 @@ def smart_chat_stream():
         elif _dir_hit:
             dir_result = build_direction_clarify_result(question, _dir_hit, session_id=session_id)
             dir_result["total_duration"] = round(time.time() - started, 2)
-            log_direction(question, _dir_hit, user=user, session_id=session_id)
+            log_direction(question, _dir_hit, user=user, session_id=session_id,
+                          shown_candidates=(dir_result.get("clarify_suggestion") or {}).get("candidates"))
             _log_smart_chat_result(
                 result=dir_result,
                 question=question,

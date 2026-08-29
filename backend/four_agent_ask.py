@@ -9305,6 +9305,18 @@ Agent3 复核结果：
                             branch=_diag.get("branch"),
                             candidates=_diag.get("candidates"),
                         )
+                        # P1-a 影子校验（冻结范围 1）：诊断卡候选过书架校验，只记日志不改弹卡
+                        try:
+                            from disambiguation import candidate_validator as _cv
+                            _cv.validate_and_log(
+                                source="zero_row_diagnosis",
+                                question=question,
+                                candidates=_diag.get("candidates") or [],
+                                user=current_user,
+                                session_id=str(route.get("conversation_session_id") or ""),
+                            )
+                        except Exception:
+                            pass
                         return _zrd_result
                     if _diag and _diag.get("honest_analysis"):
                         for _d in dataset_results:

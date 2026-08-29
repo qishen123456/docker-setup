@@ -205,6 +205,24 @@ def detect_obvious_typo(
         return None  # fail-open：任何异常都放行原问题
 
 
+def correct_question(
+    question: str,
+    allowed_dataset_ids: Optional[List[int]] = None,
+) -> str:
+    """纯纠正函数（P1-a 方向卡级联修错字用）：命中明显错字返回纠正后的问题，否则原样返回。
+
+    复用 detect_obvious_typo 同一张别名表与全部安全约束（候选唯一/3 字门槛/权限过滤），
+    不复制表、不新增匹配逻辑。fail-open：任何异常/未命中都返回原问题。
+    """
+    try:
+        hit = detect_obvious_typo(question, allowed_dataset_ids)
+        if hit and hit.get("corrected_question"):
+            return str(hit["corrected_question"])
+    except Exception:
+        pass
+    return str(question or "")
+
+
 def build_early_clarify_result(
     question: str,
     hit: Dict[str, Any],
@@ -278,6 +296,15 @@ def log_fastpath(
             "self_confidence": 1.0,
             "candidate_options_topN": [str(hit.get("corrected_question") or "")[:120]],
         }
+        # P1-a 影子校验（冻结范围 1）：对错字候选做书架校验，只记日志不改弹卡
+        try:
+            from disambiguation.candidate_validator import is_enabled as _cv_on, validate_candidates
+            if _cv_on():
+                record["candidate_validation"] = validate_candidates(
+                    [str(hit.get("corrected_question") or "")], question=question
+                )
+        except Exception:
+            pass
         _append_log(record, log_path)
     except Exception:
         pass

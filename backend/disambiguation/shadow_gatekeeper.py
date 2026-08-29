@@ -386,6 +386,26 @@ def run_shadow_log(
                 "gk_error": str(exc)[:200],
             }
         )
+    # P1-a 冻结范围 1：守门员候选的书架校验（影子，只记录不拦截）
+    try:
+        from disambiguation.candidate_validator import is_enabled as _cv_on, validate_candidates
+        if _cv_on() and record.get("candidate_options_topN"):
+            record["candidate_validation"] = validate_candidates(
+                record["candidate_options_topN"],
+                question=question,
+                allowed_dataset_ids=[int(d) for d in dataset_ids if d],
+            )
+    except Exception:
+        pass
+    # P1-a 冻结范围 2：首字母静默护栏（影子，只观察记录）
+    try:
+        from disambiguation.initials_guardrail import is_enabled as _ig_on, build_guardrail_entries
+        if _ig_on():
+            _ig_entries = build_guardrail_entries(question, result)
+            if _ig_entries:
+                record["initials_guardrail"] = _ig_entries
+    except Exception:
+        pass
     record["gk_latency_ms"] = int((time.time() - started) * 1000)
     try:
         _append_log(record, log_path)
@@ -526,6 +546,26 @@ def build_correction(
                     "self_confidence": (parsed or {}).get("confidence") if parsed else None,
                     "candidate_options_topN": [str(c)[:120] for c in ((parsed or {}).get("candidates") or [])][:3],
                 }
+                # P1-a 冻结范围 1：守门员候选的书架校验（影子，只记录不拦截）
+                try:
+                    from disambiguation.candidate_validator import is_enabled as _cv_on, validate_candidates
+                    if _cv_on() and record["candidate_options_topN"]:
+                        record["candidate_validation"] = validate_candidates(
+                            record["candidate_options_topN"],
+                            question=question,
+                            allowed_dataset_ids=[int(d) for d in (route.get("dataset_ids") or []) if d],
+                        )
+                except Exception:
+                    pass
+                # P1-a 冻结范围 2：首字母静默护栏（影子，只观察记录）
+                try:
+                    from disambiguation.initials_guardrail import is_enabled as _ig_on, build_guardrail_entries
+                    if _ig_on():
+                        _ig_entries = build_guardrail_entries(question, result)
+                        if _ig_entries:
+                            record["initials_guardrail"] = _ig_entries
+                except Exception:
+                    pass
                 log_path = str(settings.get("log_path") or os.path.join(CONFIG_DIR, "shadow_gatekeeper_log.jsonl"))
                 _append_log(record, log_path)
         except Exception:
