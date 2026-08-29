@@ -219,6 +219,13 @@ def build_parse_bar(
             return None
 
         node_values = [s["resolved_value"] for s in node_slots]
+        # 修正写回学习（§8）：本人历史修正命中 → 槽位标 learned 提示（绝不改 resolved_value）
+        user_id = str((user or {}).get("username") or (user or {}).get("id") or "")
+        if user_id:
+            try:
+                _apply_feedback(slots, load_user_feedback(user_id))
+            except Exception:
+                pass  # feedback 挂了不影响出条
         inherited_nodes = [s["resolved_value"] for s in node_slots if s.get("inherited")]
         text = _build_text(
             dataset_names,
@@ -412,3 +419,96 @@ def apply_override_to_bar(
         return new_bar
     except Exception:
         return None
+
+# ---------------------------------------------------------------------------
+# 修正写回学习（parse-bar 设计 §8）：rerun 时记录用户修正，下次同用户同片段
+# 命中旧解析时槽位标 learned（"已学习"提示）。绝不自动替换 resolved_value。
+# 全程 fail-open：feedback 库挂了不影响主链路。
+# ---------------------------------------------------------------------------
+
+_FEEDBACK_RECENT_LIMIT = 200
+
+
+def _connect_feedback():
+    try:
+        from bookshelf_repository import BookshelfRepository
+        return BookshelfRepository()._connect()
+    except Exception:
+        return None
+
+
+def record_feedback(user_id, slot, question, span_text, original_resolved,
+                    new_value, dataset_id=None, session_id=""):
+    if not user_id or not new_value:
+        return
+    try:
+        conn = _connect_feedback()
+    except Exception:
+        return
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO user_alias_feedback "
+            "(user_id, slot, question, span_text, original_resolved, new_value, dataset_id, session_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (str(user_id), slot, question or "", span_text or "",
+             original_resolved or "", new_value, dataset_id, session_id or ""))
+        conn.commit()
+        cur.close()
+    except Exception:
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def load_user_feedback(user_id):
+    """返回 {(slot, span_text, original_resolved): {"suggestion": new_value, "at": iso}}（同 key 取最新）"""
+    if not user_id:
+        return {}
+    try:
+        conn = _connect_feedback()
+    except Exception:
+        return {}
+    if conn is None:
+        return {}
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT slot, span_text, original_resolved, new_value, created_at "
+            "FROM user_alias_feedback WHERE user_id = %s "
+            "ORDER BY created_at DESC LIMIT %s",
+            (str(user_id), _FEEDBACK_RECENT_LIMIT))
+        rows = cur.fetchall()
+        cur.close()
+    except Exception:
+        return {}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    out = {}
+    for slot, span_text, orig, new_value, created_at in rows:
+        key = (slot or "", span_text or "", orig or "")
+        if key not in out:  # DESC 序，先见即最新
+            out[key] = {"suggestion": new_value or "",
+                        "at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at or "")}
+    return out
+
+
+def _apply_feedback(slots, feedback):
+    """给命中的槽位标 learned 提示（绝不改 resolved_value）"""
+    if not feedback:
+        return
+    for slot in slots:
+        if slot.get("slot") not in ("node", "metric"):
+            continue
+        key = (slot["slot"], slot.get("span_text", ""), slot.get("resolved_value", ""))
+        hit = feedback.get(key)
+        if hit and hit.get("suggestion") and hit["suggestion"] != slot.get("resolved_value"):
+            slot["learned"] = hit

@@ -228,3 +228,80 @@ class ParseBarPhase2Test(unittest.TestCase):
         with mock.patch.object(ps, "_load_datasets", side_effect=RuntimeError("boom")):
             self.assertFalse(ps.node_belongs_to_dataset("北部分公司", 3))
             self.assertEqual(ps.list_slot_candidates("node", "南部分公司", 3, [3]), [])
+
+
+class TestFeedbackLearning(unittest.TestCase):
+    """Phase 2.5：修正写回学习（record/load/learned 叠加，全程 fail-open）"""
+
+    def test_record_feedback_fail_open(self):
+        # DB 不可用时不抛异常、不影响主链路
+        with mock.patch.object(ps, "_connect_feedback", return_value=None):
+            ps.record_feedback("u1", "node", "南部的业绩", "南部", "南部分公司", "北部分公司")
+        with mock.patch.object(ps, "_connect_feedback", side_effect=RuntimeError("boom")):
+            ps.record_feedback("u1", "node", "南部的业绩", "南部", "南部分公司", "北部分公司")
+
+    def test_record_feedback_writes_row(self):
+        cur = mock.Mock()
+        conn = mock.Mock()
+        conn.cursor.return_value = cur
+        with mock.patch.object(ps, "_connect_feedback", return_value=conn):
+            ps.record_feedback("u1", "node", "南部的业绩", "南部", "南部分公司",
+                               "北部分公司", dataset_id=3, session_id="s1")
+        cur.execute.assert_called_once()
+        sql, params = cur.execute.call_args[0]
+        self.assertIn("INSERT INTO user_alias_feedback", sql)
+        self.assertEqual(params[0], "u1")
+        self.assertEqual(params[1], "node")
+        self.assertEqual(params[5], "北部分公司")
+        conn.commit.assert_called_once()
+
+    def test_load_user_feedback_latest_wins(self):
+        rows = [
+            ("node", "南部", "南部分公司", "北部分公司", "2026-08-29 10:00:00"),  # 最新（DESC 序在前）
+            ("node", "南部", "南部分公司", "东部分公司", "2026-08-28 10:00:00"),
+        ]
+        cur = mock.Mock()
+        cur.fetchall.return_value = rows
+        conn = mock.Mock()
+        conn.cursor.return_value = cur
+        with mock.patch.object(ps, "_connect_feedback", return_value=conn):
+            fb = ps.load_user_feedback("u1")
+        self.assertEqual(fb[("node", "南部", "南部分公司")]["suggestion"], "北部分公司")
+
+    def test_load_user_feedback_fail_open(self):
+        with mock.patch.object(ps, "_connect_feedback", return_value=None):
+            self.assertEqual(ps.load_user_feedback("u1"), {})
+        self.assertEqual(ps.load_user_feedback(""), {})
+
+    def test_build_parse_bar_marks_learned(self):
+        result = _result("南部的业绩", ["南部分公司"], "南部分公司")
+        fb = {("node", "南部", "南部分公司"): {"suggestion": "北部分公司", "at": "2026-08-29"}}
+        with mock.patch.object(ps, "load_user_feedback", return_value=fb):
+            bar = ps.build_parse_bar("南部的业绩", result, user={"username": "u1", "role": "super_admin"})
+        node = next(s for s in bar["slots"] if s["slot"] == "node")
+        self.assertEqual(node["learned"]["suggestion"], "北部分公司")
+        # 绝不自动替换 resolved_value
+        self.assertEqual(node["resolved_value"], "南部分公司")
+
+    def test_build_parse_bar_no_learned_when_miss_or_anonymous(self):
+        result = _result("南部的业绩", ["南部分公司"], "南部分公司")
+        # 不命中（key 不匹配）
+        fb = {("node", "北部", "北部分公司"): {"suggestion": "X", "at": ""}}
+        with mock.patch.object(ps, "load_user_feedback", return_value=fb):
+            bar = ps.build_parse_bar("南部的业绩", result, user={"username": "u1", "role": "super_admin"})
+        node = next(s for s in bar["slots"] if s["slot"] == "node")
+        self.assertNotIn("learned", node)
+        # 匿名用户不查 feedback（load 不应被调用）
+        with mock.patch.object(ps, "load_user_feedback", side_effect=AssertionError("不应被调用")):
+            bar2 = ps.build_parse_bar("南部的业绩", result, user={"role": "super_admin"})
+        node2 = next(s for s in bar2["slots"] if s["slot"] == "node")
+        self.assertNotIn("learned", node2)
+
+    def test_build_parse_bar_feedback_fail_open(self):
+        # feedback 查询炸了 → bar 照出、不带 learned
+        result = _result("南部的业绩", ["南部分公司"], "南部分公司")
+        with mock.patch.object(ps, "load_user_feedback", side_effect=RuntimeError("boom")):
+            bar = ps.build_parse_bar("南部的业绩", result, user={"username": "u1", "role": "super_admin"})
+        self.assertIsNotNone(bar)
+        node = next(s for s in bar["slots"] if s["slot"] == "node")
+        self.assertNotIn("learned", node)

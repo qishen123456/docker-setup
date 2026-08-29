@@ -23,21 +23,22 @@
             :class="{
               'sa-parse-token-inherited': s.inherited,
               'sa-parse-token-editable': editable && !s.inherited,
-              'sa-parse-token-corrected': s.corrected
+              'sa-parse-token-corrected': s.corrected,
+              'sa-parse-token-learned': s.learned
             }"
             :title="nodeTitle(s)"
             @click.stop="openPicker('node', s, $event)"
-          >{{ s.resolved_value }}</span>{{ i < nodeSlots.length - 1 ? '、' : '' }}
+          >{{ s.resolved_value }}<span v-if="s.learned" class="sa-parse-learned">↺</span></span>{{ i < nodeSlots.length - 1 ? '、' : '' }}
         </template>
       </template>
       <template v-if="metricSlot">
         的
         <span
           class="sa-parse-token sa-parse-token-metric"
-          :class="{ 'sa-parse-token-editable': editable, 'sa-parse-token-corrected': metricSlot.corrected }"
-          :title="editable ? metricTitle + '（点击修正）' : metricTitle"
+          :class="{ 'sa-parse-token-editable': editable, 'sa-parse-token-corrected': metricSlot.corrected, 'sa-parse-token-learned': metricSlot.learned }"
+          :title="(editable ? metricTitle + '（点击修正）' : metricTitle) + learnedTip(metricSlot)"
           @click.stop="openPicker('metric', metricSlot, $event)"
-        >{{ metricSlot.resolved_value }}</span>
+        >{{ metricSlot.resolved_value }}<span v-if="metricSlot.learned" class="sa-parse-learned">↺</span></span>
       </template>
       <template v-if="!nodeSlots.length && !metricSlot && datasetSlots.length">查询</template>
     </span>
@@ -90,10 +91,15 @@ const datasetSlots = computed(() => slots.value.filter(s => s.slot === 'dataset'
 const nodeSlots = computed(() => slots.value.filter(s => s.slot === 'node'))
 const metricSlot = computed(() => slots.value.find(s => s.slot === 'metric') || null)
 
+const learnedTip = (s) => {
+  if (!s || !s.learned || !s.learned.suggestion) return ''
+  const at = s.learned.at ? String(s.learned.at).slice(0, 10) : ''
+  return `；已学习：你上次修正为「${s.learned.suggestion}」${at ? `（${at}）` : ''}`
+}
 const nodeTitle = (s) => {
   if (s.inherited) return '对象（继承自上文，请直接重问修正）'
   const base = s.span_text ? `对象：原句「${s.span_text}」解析为「${s.resolved_value}」` : `对象：${s.resolved_value}`
-  return props.editable ? base + '（点击修正）' : base
+  return (props.editable ? base + '（点击修正）' : base) + learnedTip(s)
 }
 const metricTitle = computed(() => {
   const s = metricSlot.value
@@ -237,6 +243,16 @@ const pickCandidate = (c) => {
 
 .sa-parse-token-corrected {
   box-shadow: inset 0 -2px 0 currentColor;
+}
+
+.sa-parse-token-learned {
+  border-style: dashed;
+}
+
+.sa-parse-learned {
+  margin-left: 3px;
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 .sa-parse-inherited {

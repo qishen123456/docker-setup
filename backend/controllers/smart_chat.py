@@ -1050,6 +1050,26 @@ def parse_bar_rerun():
             "compiled_question": compiled["question"],
             "override": {"slot": slot, "new_value": new_value},
         }
+        # 修正写回学习（§8）：rerun 成功后记录本次修正，下次同片段命中标 learned。
+        # fail-open：记录失败不影响 rerun 结果。
+        if not result.get("error"):
+            try:
+                from disambiguation.parse_spans import record_feedback
+                orig_slot = next(
+                    (s for s in (original_bar.get("slots") or [])
+                     if isinstance(s, dict) and s.get("slot") == slot), {})
+                record_feedback(
+                    user_id=str((user or {}).get("username") or (user or {}).get("id") or ""),
+                    slot=slot,
+                    question=question,
+                    span_text=str(orig_slot.get("span_text") or ""),
+                    original_resolved=str(orig_slot.get("resolved_value") or ""),
+                    new_value=str(new_value or ""),
+                    dataset_id=target_ds or None,
+                    session_id=session_id,
+                )
+            except Exception:
+                pass
         _log_smart_chat_result(
             result=result, question=question, started=started, user=user,
             request_info=req_info, event_prefix="parse_bar_rerun",

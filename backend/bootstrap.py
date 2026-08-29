@@ -57,6 +57,7 @@ MIGRATIONS = [
     "20260627_ecommerce_standard_view.sql",
     "20260630_dataset_transforms.sql",
     "20260807_missing_tables.sql",
+    "20260829_user_alias_feedback.sql",
 ]
 
 IMPORTS_DIR = os.path.join(CURRENT_DIR, "imports")
