@@ -154,7 +154,14 @@
                     </div>
 
                     <!-- 结构化解析条（响应层聚合，后端开关+角色门控；确认卡/纠正卡消息不出条） -->
-                    <ParseBar v-if="msg.data?.parse_bar" :bar="msg.data.parse_bar" />
+                    <ParseBar
+                      v-if="msg.data?.parse_bar"
+                      :bar="msg.data.parse_bar"
+                      :dataset-id="getParseBarDatasetId(msg)"
+                      :editable="!isRunning && !isViewingReadonly"
+                      :rerunning="!!parseBarRerunning[msg.id]"
+                      @correct="handleParseBarCorrect(msg, $event)"
+                    />
 
                     <!-- 思考过程卡（可折叠）-->
                     <ThinkingCard
@@ -1289,7 +1296,7 @@ import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted,
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
-import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels } from '../api/index'
+import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels, rerunParseBar } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
 import { useFeatureFlags } from '../state/featureFlags'
@@ -1462,6 +1469,43 @@ const getQuestionParseSpans = (msg) => {
   const next = list[idx + 1]
   const spans = next && next.role !== 'user' ? next.data?.parse_bar?.spans : null
   return Array.isArray(spans) && spans.length ? spans : null
+}
+
+// 解析条原位修正（Phase 2）：点 token 选候选 → 编译重跑 → 就地替换当前 AI 回复
+const parseBarRerunning = reactive({})
+const getParseBarDatasetId = (msg) => {
+  const dsr = msg?.data?.dataset_results
+  const first = Array.isArray(dsr) && dsr.length ? dsr[0] : null
+  const id = first?.dataset_id ?? msg?.data?.route?.dataset_ids?.[0]
+  const n = Number(id)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+const handleParseBarCorrect = async (msg, override) => {
+  if (!msg?.data?.parse_bar || parseBarRerunning[msg.id]) return
+  const list = displayMessages.value || []
+  const idx = list.findIndex(m => m.id === msg.id)
+  const userMsg = idx > 0 ? list[idx - 1] : null
+  const question = String(userMsg && userMsg.role === 'user' ? userMsg.content : '').trim()
+  if (!question) return
+  parseBarRerunning[msg.id] = true
+  try {
+    const { data } = await rerunParseBar({
+      question,
+      parse_bar: msg.data.parse_bar,
+      override,
+      session_id: session.state.conversationSessionId || ''
+    })
+    if (data && !data.error) {
+      msg.data = data // 就地替换 AI 回复；spans 为原句 offset，气泡框出自动正确
+      ElMessage.success('已按修正重新查询')
+    } else {
+      ElMessage.warning(data?.error || '修正重跑失败，请重试')
+    }
+  } catch (e) {
+    ElMessage.warning(e?.response?.data?.error || '修正重跑失败，请重试')
+  } finally {
+    parseBarRerunning[msg.id] = false
+  }
 }
 
 const displayResult = computed(() => {

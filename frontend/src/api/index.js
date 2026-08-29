@@ -308,4 +308,10 @@ export const confirmByBoss = (payload) => api.post('/smart-chat/confirm-by-boss'
 export const confirmByBossStream = (payload, signal, onEvent) =>
   sendSseRequest('/api/smart-chat/confirm-by-boss/stream', payload, signal, onEvent)
 
+// 解析条原位编辑（parse-bar-design Phase 2）：候选拉取 + 结构化修正重跑
+export const getParseBarCandidates = (payload) =>
+  api.post('/smart-chat/parse-bar/candidates', payload, { silent: true })
+export const rerunParseBar = (payload) =>
+  api.post('/smart-chat/parse-bar/rerun', payload, { timeout: 120000 })
+
 export default api

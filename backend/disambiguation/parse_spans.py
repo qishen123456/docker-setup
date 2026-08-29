@@ -237,3 +237,178 @@ def build_parse_bar(
         return bar
     except Exception:
         return None  # fail-open：任何异常都不出条，主流程零感知
+
+
+# ============ Phase 2：原位编辑（候选 + 编译重跑 + bar 改写） ============
+# 实现机制（诚实偏离设计文档 §3.3 的说明）：不在 four_agent_ask 开结构化旁路，
+# 改为「编译重跑 + 三重锚定」——把结构化修正编译成确定性问句（书架全名+标准词），
+# 用 preferred_dataset_ids 锚定数据集，走正常 ask() 全流程。
+# 等效达到文档目标：防 LLM 漂移（锚定后无解释空间）+ 权限过滤（ask() 全链路照常）；
+# 同时零侵入上帝文件 four_agent_ask.py、不动 AskRequest 契约。
+
+_datasets_cache: Dict[str, Any] = {"mtime": 0.0, "data": []}
+
+
+def _load_datasets() -> List[Dict[str, Any]]:
+    """dataset_node_index 的 datasets 结构（含 nodes），mtime 缓存。"""
+    try:
+        mtime = os.path.getmtime(_NODE_INDEX_PATH)
+        if mtime != _datasets_cache["mtime"]:
+            with open(_NODE_INDEX_PATH, "r", encoding="utf-8") as fh:
+                index = json.load(fh)
+            _datasets_cache["data"] = index.get("datasets") or []
+            _datasets_cache["mtime"] = mtime
+        return _datasets_cache["data"]
+    except Exception:
+        return _datasets_cache.get("data") or []
+
+
+def node_belongs_to_dataset(node_name: str, dataset_id: int) -> bool:
+    """书架归属校验（rerun 权限红线用）：node_name 是否为该数据集的节点。"""
+    try:
+        for ds in _load_datasets():
+            if int(ds.get("dataset_id") or 0) != int(dataset_id):
+                continue
+            for n in ds.get("nodes") or []:
+                if str(n.get("node_name") or "") == str(node_name):
+                    return True
+        return False
+    except Exception:
+        return False
+
+
+def list_slot_candidates(
+    slot: str,
+    current_value: Any = None,
+    dataset_id: Optional[int] = None,
+    allowed_dataset_ids: Optional[List[int]] = None,
+) -> List[Dict[str, Any]]:
+    """槽位候选（原位下拉用）。任何失败返回 []。
+
+    - node：同数据集同 parent 同 level 的兄弟节点（书架第一层；拼音索引层 v2.5 再加）
+    - dataset：用户有权限的数据集列表
+    - metric：指标词表白名单值域（去重）
+    """
+    try:
+        slot = str(slot or "")
+        if slot == "node":
+            if not dataset_id:
+                return []
+            current = str(current_value or "").strip()
+            for ds in _load_datasets():
+                if int(ds.get("dataset_id") or 0) != int(dataset_id):
+                    continue
+                nodes = ds.get("nodes") or []
+                cur = next((n for n in nodes if str(n.get("node_name") or "") == current), None)
+                if not cur:
+                    return []
+                level, parent = cur.get("node_level"), cur.get("parent_name")
+                out = []
+                for n in nodes:
+                    name = str(n.get("node_name") or "")
+                    if not name or name == current:
+                        continue
+                    if n.get("node_level") == level and n.get("parent_name") == parent:
+                        out.append({"value": name, "label": name, "level": str(level or "")})
+                return out
+            return []
+        if slot == "dataset":
+            allowed = set(int(d) for d in (allowed_dataset_ids or []) if d)
+            out = []
+            for ds in _load_datasets():
+                ds_id = int(ds.get("dataset_id") or 0)
+                if allowed and ds_id not in allowed:
+                    continue
+                name = str(ds.get("dataset_name") or "").strip()
+                if ds_id and name:
+                    out.append({"value": ds_id, "label": name})
+            return out
+        if slot == "metric":
+            seen, out = set(), []
+            for v in (_load_settings().get("metric_aliases") or {}).values():
+                v = str(v or "").strip()
+                if v and v not in seen:
+                    seen.add(v)
+                    out.append({"value": v, "label": v})
+            return out
+        return []
+    except Exception:
+        return []
+
+
+def compile_question(
+    question: str,
+    original_bar: Dict[str, Any],
+    override: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """把单槽修正编译成确定性问句 + 数据集锚定。失败返回 None。
+
+    返回 {"question": 编译后问句, "dataset_id": 锚定数据集}。
+    - node/metric：原句 span 片段替换为 书架全名/标准指标词（确定性文本，路由规则直达）
+    - dataset：问句不动，仅换锚定数据集（语义=确认卡换数据集）
+    """
+    try:
+        question = str(question or "").strip()
+        override = override or {}
+        slot = str(override.get("slot") or "")
+        new_value = override.get("new_value")
+        bar = original_bar or {}
+        slots = bar.get("slots") or []
+        if slot == "dataset":
+            ds_id = int(new_value)
+            if ds_id <= 0:
+                return None
+            return {"question": question, "dataset_id": ds_id}
+        if slot in ("node", "metric"):
+            target = next((s for s in slots if s.get("slot") == slot and s.get("start") is not None), None)
+            if not target:
+                return None  # 继承槽位无 span，无法编译（前端应禁用此类槽的编辑）
+            new_text = str(new_value or "").strip()
+            if not new_text:
+                return None
+            start, end = int(target["start"]), int(target["end"])
+            compiled = question[:start] + new_text + question[end:]
+            ds_id = int(override.get("dataset_id") or 0) or None
+            return {"question": compiled, "dataset_id": ds_id}
+        return None
+    except Exception:
+        return None
+
+
+def apply_override_to_bar(
+    original_bar: Dict[str, Any],
+    override: Dict[str, Any],
+    new_dataset_name: str = "",
+) -> Optional[Dict[str, Any]]:
+    """原解析条应用单槽修正：spans 保留原句 offset，被改槽位标 corrected=True。"""
+    try:
+        bar = original_bar or {}
+        override = override or {}
+        slot = str(override.get("slot") or "")
+        new_value = override.get("new_value")
+        slots = []
+        for s in bar.get("slots") or []:
+            s2 = dict(s)
+            if s2.get("slot") == slot:
+                if slot == "dataset":
+                    s2["resolved_value"] = str(new_dataset_name or new_value or "")
+                else:
+                    s2["resolved_value"] = str(new_value or "")
+                s2["corrected"] = True
+                s2.pop("inherited", None)
+            slots.append(s2)
+        if not slots:
+            return None
+        dataset_names = [s["resolved_value"] for s in slots if s.get("slot") == "dataset"]
+        node_values = [s["resolved_value"] for s in slots if s.get("slot") == "node"]
+        metric_value = next((str(s["resolved_value"]) for s in slots if s.get("slot") == "metric"), "")
+        new_bar: Dict[str, Any] = {
+            "text": _build_text(dataset_names, node_values, metric_value, []),
+            "slots": slots,
+            "spans": [s for s in slots if s.get("start") is not None],
+            "source": "parse_bar",
+            "based_on": "corrected",
+        }
+        return new_bar
+    except Exception:
+        return None

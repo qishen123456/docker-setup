@@ -932,6 +932,135 @@ def smart_chat_stream():
     return response
 
 
+@smart_chat_bp.route("/api/smart-chat/parse-bar/candidates", methods=["POST"])
+def parse_bar_candidates():
+    """解析条槽位候选（原位编辑下拉用）。书架/权限过滤在 list_slot_candidates 内完成。"""
+    user = get_current_user()
+    denied = _require_feature(user, "smart_send_question")
+    if denied:
+        return denied
+    try:
+        payload = request.get_json(silent=True) or {}
+        slot = str(payload.get("slot") or "")
+        current_value = payload.get("current_value")
+        dataset_id = payload.get("dataset_id")
+        try:
+            dataset_id = int(dataset_id) if dataset_id is not None else None
+        except (TypeError, ValueError):
+            dataset_id = None
+        from disambiguation.parse_spans import is_visible_user as _pb_visible, list_slot_candidates
+        if not _pb_visible(user):
+            return jsonify({"candidates": []})
+        candidates = list_slot_candidates(
+            slot, current_value=current_value, dataset_id=dataset_id,
+            allowed_dataset_ids=_allowed_dataset_ids(user),
+        )
+        return jsonify({"candidates": candidates})
+    except Exception as exc:
+        return jsonify({"candidates": [], "error": str(exc)}), 200  # fail-open：候选拉不到不阻断
+
+
+@smart_chat_bp.route("/api/smart-chat/parse-bar/rerun", methods=["POST"])
+def parse_bar_rerun():
+    """解析条结构化修正重跑（编译重跑+三重锚定，parse-bar-design Phase 2）。
+
+    权限红线：dataset override 必须 ∈ allowed_dataset_ids；node override 必须属于目标
+    数据集书架且目标数据集 ∈ allowed；metric override 必须 ∈ 词表白名单。任一不过 → 403。
+    """
+    started = time.time()
+    user = get_current_user()
+    req_info = request_snapshot(request)
+    payload = request.get_json(silent=True) or {}
+    denied = _require_feature(user, "smart_send_question")
+    if denied:
+        return denied
+    question = (payload.get("question") or "").strip()
+    original_bar = payload.get("parse_bar") or {}
+    override = payload.get("override") or {}
+    session_id = (payload.get("session_id") or "").strip()
+    conversation_history = payload.get("conversation_history")
+    if not question or not override:
+        return jsonify({"error": "question and override are required."}), 400
+    try:
+        from disambiguation.parse_spans import (
+            apply_override_to_bar,
+            compile_question,
+            is_visible_user as _pb_visible,
+            list_slot_candidates,
+            node_belongs_to_dataset,
+        )
+        if not _pb_visible(user):
+            return jsonify({"error": "parse bar not visible for this user."}), 403
+        allowed = _allowed_dataset_ids(user) or []
+        allowed_set = set(int(d) for d in allowed if d)
+        slot = str(override.get("slot") or "")
+        new_value = override.get("new_value")
+        # 目标数据集：dataset override 用新值；node/metric override 用 override 带的当前数据集
+        if slot == "dataset":
+            try:
+                target_ds = int(new_value)
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid dataset id."}), 400
+        else:
+            try:
+                target_ds = int(override.get("dataset_id") or 0)
+            except (TypeError, ValueError):
+                target_ds = 0
+        # 权限红线 1：目标数据集必须在用户权限内
+        if allowed_set and target_ds not in allowed_set:
+            _log_smart_chat_rejection(
+                event_prefix="parse_bar_rerun",
+                title="解析条修正数据集越权",
+                error_message="目标数据集不在当前账号权限内。",
+                question=question, started=started, user=user, request_info=req_info,
+                status_code=403, details={"target_dataset_id": target_ds},
+            )
+            return jsonify({"error": "目标数据集不在当前账号权限内。"}), 403
+        # 权限红线 2：node override 必须是目标数据集书架内节点（防注入书架外节点）
+        if slot == "node" and not node_belongs_to_dataset(str(new_value or ""), target_ds):
+            return jsonify({"error": "修正对象不属于目标数据集。"}), 403
+        # 权限红线 3：metric override 必须在词表白名单值域内
+        if slot == "metric":
+            whitelist = {c["value"] for c in list_slot_candidates("metric")}
+            if str(new_value or "") not in whitelist:
+                return jsonify({"error": "修正指标不在支持范围内。"}), 403
+        compiled = compile_question(question, original_bar, override)
+        if not compiled:
+            return jsonify({"error": "无法编译修正（槽位无原句定位，可能为继承上文）。"}), 400
+        result = ask_flow_controller.ask(AskRequest(
+            question=compiled["question"],
+            preferred_dataset_ids=[compiled["dataset_id"]] if compiled.get("dataset_id") else None,
+            allowed_dataset_ids=allowed,
+            session_id=session_id,
+            conversation_history=conversation_history if isinstance(conversation_history, list) else None,
+            current_user=user,
+        ))
+        result["total_duration"] = round(time.time() - started, 2)
+        # 解析条改写：spans 保留原句 offset（问句气泡框出不变），被改槽位标 corrected
+        new_ds_name = ""
+        if slot == "dataset":
+            cand = next((c for c in list_slot_candidates("dataset", allowed_dataset_ids=allowed)
+                         if int(c["value"]) == target_ds), None)
+            new_ds_name = str(cand["label"]) if cand else ""
+        new_bar = apply_override_to_bar(original_bar, override, new_dataset_name=new_ds_name)
+        if new_bar:
+            result["parse_bar"] = new_bar
+        result["parse_bar_corrected"] = {
+            "original_question": question,
+            "compiled_question": compiled["question"],
+            "override": {"slot": slot, "new_value": new_value},
+        }
+        _log_smart_chat_result(
+            result=result, question=question, started=started, user=user,
+            request_info=req_info, event_prefix="parse_bar_rerun",
+        )
+        return jsonify(result)
+    except Exception as exc:
+        _append_controller_debug("parse_bar_rerun.exception", error=str(exc))
+        return jsonify({"error": f"parse-bar rerun failed: {exc}",
+                        "total_duration": round(time.time() - started, 2)}), 500
+
+
 @smart_chat_bp.route("/api/smart-chat/confirm-by-boss", methods=["POST"])
 def confirm_by_boss():
     started = time.time()

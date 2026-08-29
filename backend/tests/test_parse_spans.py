@@ -149,3 +149,82 @@ class ParseBarGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParseBarPhase2Test(unittest.TestCase):
+    """Phase 2 原位编辑：候选/编译/bar 改写/归属校验（权限红线的函数级覆盖）。"""
+
+    def test_node_candidates_siblings(self):
+        # 兄弟节点候选：南部分公司 → 东/北/西部（同 parent 同 level，排除自身）
+        values = [c["value"] for c in ps.list_slot_candidates("node", "南部分公司", 3, [2, 3, 62])]
+        self.assertIn("北部分公司", values)
+        self.assertNotIn("南部分公司", values)
+
+    def test_dataset_candidates_filtered_by_allowed(self):
+        cands = ps.list_slot_candidates("dataset", allowed_dataset_ids=[3])
+        self.assertEqual([c["value"] for c in cands], [3])
+
+    def test_metric_candidates_whitelist(self):
+        with mock.patch.object(ps, "_load_settings",
+                               return_value={"metric_aliases": {"业绩": "开单金额", "达成": "达成率"}}):
+            values = [c["value"] for c in ps.list_slot_candidates("metric")]
+        self.assertEqual(sorted(values), ["开单金额", "达成率"])
+
+    def test_node_belongs_to_dataset(self):
+        # 权限红线 2 函数级：书架归属校验（防注入书架外节点）
+        self.assertTrue(ps.node_belongs_to_dataset("北部分公司", 3))
+        self.assertFalse(ps.node_belongs_to_dataset("北部分公司", 2))
+        self.assertFalse(ps.node_belongs_to_dataset("昆仑分公司", 3))
+
+    def test_compile_node_override(self):
+        bar = _bar("南部的业绩", _result("南部的业绩", ["南部分公司"], "南部分公司"))
+        compiled = ps.compile_question("南部的业绩", bar,
+                                       {"slot": "node", "new_value": "北部分公司", "dataset_id": 3})
+        self.assertEqual(compiled["question"], "北部分公司的业绩")  # 书架全名替换，确定性文本
+        self.assertEqual(compiled["dataset_id"], 3)
+
+    def test_compile_metric_override(self):
+        bar = _bar("南部的业绩", _result("南部的业绩", ["南部分公司"], "南部分公司"))
+        compiled = ps.compile_question("南部的业绩", bar, {"slot": "metric", "new_value": "达成率"})
+        self.assertEqual(compiled["question"], "南部的达成率")
+
+    def test_compile_dataset_override_keeps_question(self):
+        # dataset 修正=换锚定数据集，问句不动（语义=确认卡换数据集）
+        bar = _bar("南部的业绩", _result("南部的业绩", ["南部分公司"], "南部分公司"))
+        compiled = ps.compile_question("南部的业绩", bar, {"slot": "dataset", "new_value": 2})
+        self.assertEqual(compiled["question"], "南部的业绩")
+        self.assertEqual(compiled["dataset_id"], 2)
+
+    def test_compile_inherited_node_returns_none(self):
+        # 继承槽位无 span → 无法编译（前端禁编辑的后端双保险）
+        bar = _bar("那他的达成率呢", _result("那他的达成率呢", ["南部分公司"], "南部分公司"))
+        self.assertIsNone(ps.compile_question("那他的达成率呢", bar,
+                                              {"slot": "node", "new_value": "北部分公司", "dataset_id": 3}))
+
+    def test_apply_override_marks_corrected_keeps_spans(self):
+        bar = _bar("南部的业绩", _result("南部的业绩", ["南部分公司"], "南部分公司"))
+        new_bar = ps.apply_override_to_bar(bar, {"slot": "node", "new_value": "北部分公司"})
+        node = next(s for s in new_bar["slots"] if s["slot"] == "node")
+        self.assertTrue(node["corrected"])
+        self.assertEqual(node["resolved_value"], "北部分公司")
+        self.assertEqual((node["start"], node["end"]), (0, 2))  # spans 保留原句 offset
+        self.assertEqual(node["span_text"], "南部")  # 原片段保留（气泡框出不变）
+        self.assertEqual(new_bar["based_on"], "corrected")
+        self.assertIn("北部分公司", new_bar["text"])
+
+    def test_apply_override_untouched_slots_kept(self):
+        # 改 metric 时 node 槽的继承标记不受影响
+        bar = _bar("那他的达成率呢", _result("那他的达成率呢", ["南部分公司"], "南部分公司"))
+        new_bar = ps.apply_override_to_bar(bar, {"slot": "metric", "new_value": "开单金额"})
+        metric = next(s for s in new_bar["slots"] if s["slot"] == "metric")
+        node = next(s for s in new_bar["slots"] if s["slot"] == "node")
+        self.assertTrue(metric["corrected"])
+        self.assertTrue(node.get("inherited"))
+
+    def test_fail_open_phase2(self):
+        self.assertIsNone(ps.compile_question("", {}, {}))
+        self.assertIsNone(ps.apply_override_to_bar({}, {}))
+        self.assertEqual(ps.list_slot_candidates("unknown"), [])
+        with mock.patch.object(ps, "_load_datasets", side_effect=RuntimeError("boom")):
+            self.assertFalse(ps.node_belongs_to_dataset("北部分公司", 3))
+            self.assertEqual(ps.list_slot_candidates("node", "南部分公司", 3, [3]), [])
