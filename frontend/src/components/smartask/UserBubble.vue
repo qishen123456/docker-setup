@@ -130,7 +130,7 @@ const segments = computed(() => {
   align-items: flex-start;
   gap: 12px;
   justify-content: flex-end;
-  margin: 20px 0;
+  margin: 10px 0;
 }
 
 .sa-user-main {

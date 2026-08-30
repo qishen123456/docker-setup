@@ -254,6 +254,7 @@ const state = reactive({
   currentSessionId: '',
   conversationSessionId: '',
   isHistoricalSnapshot: false,
+  liveParseBar: null,
 })
 
 let phaseTimer = null
@@ -968,6 +969,11 @@ const buildTraceArtifacts = (stage, status, payload = {}, existing = null) => {
 }
 
 const applyTraceEvent = (payload = {}) => {
+  // 解析条实时透出：理解阶段完成后端即推 parse_bar（trace 搭车），只存状态不进执行流
+  if (String(payload?.event?.stage || '') === 'parse_bar') {
+    state.liveParseBar = payload.event.parse_bar || null
+    return
+  }
   if (shouldQueueTraceEvent(payload)) {
     traceEventQueue.push(payload)
     return
@@ -1859,6 +1865,7 @@ const startAsk = async (question, selectedDatasetInput, modelId, options) => {
   state.startedAt = new Date().toISOString()
   state.updatedAt = state.startedAt
   state.currentSessionId = ''
+  state.liveParseBar = null
   state.conversationSessionId = state.conversationSessionId || createSessionId()
 
   beginRealtimeStreaming(normalizedQuestion)
@@ -1882,6 +1889,9 @@ const startAsk = async (question, selectedDatasetInput, modelId, options) => {
           return
         }
         if (eventName === 'result') {
+          // 最终结果到达即丢弃实时解析条：终态以 result.parse_bar 为准
+          // （确认卡/纠正卡/错误结果无 parse_bar，实时条随之消失，不违反出条铁律）
+          state.liveParseBar = null
           finalPayload = payload
         }
       },

@@ -192,6 +192,7 @@ def build_initials_preview(
         mapping = map_token(token)
         if not mapping:
             return None
+        mapping = list(dict.fromkeys(mapping))  # 同别名撞多节点（上海→城市公司/代表处）展示去重
         candidates = []
         for entity in mapping[:4]:
             # 实体后缀与 token 后原文重叠时去重（TM直营→天猫直营直营 ✗ → 天猫直营 ✓）

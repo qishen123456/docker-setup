@@ -111,9 +111,10 @@ class ParseBarGateTest(unittest.TestCase):
         r = _result("各分公司业绩排名", requires_confirmation=True)
         self.assertIsNone(_bar("各分公司业绩排名", r))
 
-    def test_clarify_suggestion_message_no_bar(self):
+    def test_clarify_suggestion_message_still_shows_bar(self):
+        # 守门员软建议条不再吞解析条（南部案例：LLM 抖动出软建议时条被吞）
         r = _result("南部的业绩", ["南部分公司"], clarify_suggestion={"candidates": ["x"]})
-        self.assertIsNone(_bar("南部的业绩", r))
+        self.assertIsNotNone(_bar("南部的业绩", r))
 
     def test_early_clarify_no_bar(self):
         r = _result("商泳的业绩", early_clarify=True, dataset_results=[])

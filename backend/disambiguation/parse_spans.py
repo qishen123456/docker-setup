@@ -188,13 +188,15 @@ def build_parse_bar(
         question = str(question or "").strip()
         if not question:
             return None
-        # 出条铁律：确认卡/纠正卡/early_clarify/错误消息不出解析条（两套候选 UI 不同屏）
+        # 出条铁律：确认卡/early_clarify/错误消息不出解析条（阻断型候选 UI 不同屏）
+        # 注：clarify_suggestion（守门员/首字母软建议条）不再互斥——它与解析条同为非阻断提示，
+        # 且解析条槽位可编辑已承载同等纠偏能力；曾因互斥导致 LLM 抖动时解析条被吞（南部案例）。
         route = result.get("route") or {}
         if result.get("error"):
             return None
         if result.get("requires_confirmation") or route.get("requires_confirmation"):
             return None
-        if result.get("early_clarify") or result.get("clarify_suggestion"):
+        if result.get("early_clarify"):
             return None
         dataset_results = [d for d in (result.get("dataset_results") or []) if isinstance(d, dict)]
         if not dataset_results:
@@ -239,6 +241,17 @@ def build_parse_bar(
             "spans": [s for s in slots if s.get("start") is not None],
             "source": "parse_bar",
         }
+        # 缩写映射场景（nb→南部→南部分公司）：节点在原句无字面，避免误标"继承自上文"
+        initials_hint = str((route or {}).get("initials_hint") or "").strip()
+        if initials_hint:
+            abbrev_nodes = []
+            for s in node_slots:
+                if s.get("inherited"):
+                    s["abbrev"] = True
+                    abbrev_nodes.append(str(s.get("resolved_value") or ""))
+            if abbrev_nodes:
+                bar["inherited_note"] = f"「{initials_hint}」按书架缩写映射为「{'、'.join(abbrev_nodes[:3])}」"
+                inherited_nodes = []
         if inherited_nodes:
             bar["inherited_note"] = "「" + "、".join(inherited_nodes) + "」继承自上文"
         return bar
@@ -439,14 +452,15 @@ def _connect_feedback():
 
 def record_feedback(user_id, slot, question, span_text, original_resolved,
                     new_value, dataset_id=None, session_id=""):
+    """写入用户修正记录；返回是否落库成功（旧调用方忽略返回值，保持 fail-open）。"""
     if not user_id or not new_value:
-        return
+        return False
     try:
         conn = _connect_feedback()
     except Exception:
-        return
+        return False
     if conn is None:
-        return
+        return False
     try:
         cur = conn.cursor()
         cur.execute(
@@ -457,8 +471,9 @@ def record_feedback(user_id, slot, question, span_text, original_resolved,
              original_resolved or "", new_value, dataset_id, session_id or ""))
         conn.commit()
         cur.close()
+        return True
     except Exception:
-        pass
+        return False
     finally:
         try:
             conn.close()

@@ -97,6 +97,15 @@
                       <span class="sa-thinking-text">正在分析问题意图并规划路径...</span>
                     </div>
 
+                    <!-- 结构化解析条（响应层聚合，后端开关+角色门控；确认卡/纠正卡消息不出条）。置顶：先看到"系统怎么理解"，再看执行过程。运行中显示实时条（理解完成即推），终态以 result.parse_bar 为准 -->
+                    <ParseBar
+                      v-if="parseBarFor(msg)"
+                      :bar="parseBarFor(msg)"
+                      :dataset-id="getParseBarDatasetId(msg)"
+                      :editable="!isRunning && !isViewingReadonly"
+                      @ask="handleParseBarAsk(msg, $event)"
+                    />
+
                     <!-- 执行进度卡-->
                     <LiveExecutionFeed
                       v-if="shouldShowLiveFeed(msg)"
@@ -152,16 +161,6 @@
                         >{{ cand }}</button>
                       </span>
                     </div>
-
-                    <!-- 结构化解析条（响应层聚合，后端开关+角色门控；确认卡/纠正卡消息不出条） -->
-                    <ParseBar
-                      v-if="msg.data?.parse_bar"
-                      :bar="msg.data.parse_bar"
-                      :dataset-id="getParseBarDatasetId(msg)"
-                      :editable="!isRunning && !isViewingReadonly"
-                      :rerunning="!!parseBarRerunning[msg.id]"
-                      @correct="handleParseBarCorrect(msg, $event)"
-                    />
 
                     <!-- 思考过程卡（可折叠）-->
                     <ThinkingCard
@@ -1296,7 +1295,7 @@ import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted,
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import * as echarts from 'echarts'
-import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels, rerunParseBar } from '../api/index'
+import { getBookshelfDatasets, getCommonQuestions, getActiveAIModels, recordParseBarFeedback } from '../api/index'
 import { useSmartAskSession } from '../state/smartAskSession'
 import { getSessionCache, setSessionCache } from '../state/sessionCache'
 import { useFeatureFlags } from '../state/featureFlags'
@@ -1471,8 +1470,8 @@ const getQuestionParseSpans = (msg) => {
   return Array.isArray(spans) && spans.length ? spans : null
 }
 
-// 解析条原位修正（Phase 2）：点 token 选候选 → 编译重跑 → 就地替换当前 AI 回复
-const parseBarRerunning = reactive({})
+// 解析条编辑（重设计）：点候选 = 本地暂存（可连改多个槽位），确认后把修正问句
+// 作为一条新提问发进当前会话（新用户气泡 + 新 AI 回复），替代旧的"点选即就地重跑"
 const getParseBarDatasetId = (msg) => {
   const dsr = msg?.data?.dataset_results
   const first = Array.isArray(dsr) && dsr.length ? dsr[0] : null
@@ -1480,32 +1479,60 @@ const getParseBarDatasetId = (msg) => {
   const n = Number(id)
   return Number.isFinite(n) && n > 0 ? n : null
 }
-const handleParseBarCorrect = async (msg, override) => {
-  if (!msg?.data?.parse_bar || parseBarRerunning[msg.id]) return
+
+// 按 span offset 倒序替换，把暂存修改编译成新问句（dataset 槽无 span，走显式锚定）
+const compileParseBarQuestion = (question, overrides) => {
+  const repls = (overrides || [])
+    .filter(o => (o.slot === 'node' || o.slot === 'metric') && Number.isInteger(o.start) && Number.isInteger(o.end))
+    .map(o => ({ start: o.start, end: o.end, text: String(o.new_label || o.new_value || '') }))
+    .filter(r => r.text)
+    .sort((a, b) => b.start - a.start)
+  let q = String(question || '')
+  for (const r of repls) q = q.slice(0, r.start) + r.text + q.slice(r.end)
+  return q.trim()
+}
+
+// 运行中实时解析条（理解阶段完成即出条）：终态优先用 result.parse_bar；
+// 实时条只挂在当前正在执行的那条 AI 消息上（loading 结束即收回，确认卡不残留）
+const liveParseBar = computed(() => session.state.liveParseBar)
+const parseBarFor = (msg) => msg.data?.parse_bar
+  || (msg.loading && msg.id === activeRequestAiMessageId.value ? liveParseBar.value : null)
+
+const handleParseBarAsk = async (msg, payload) => {
+  const bar = msg?.data?.parse_bar
+  const overrides = Array.isArray(payload?.overrides) ? payload.overrides : []
+  if (!bar || !overrides.length) return
+  if (isRunning.value) {
+    ElMessage.info('正在查询中，请稍后再试')
+    return
+  }
   const list = displayMessages.value || []
   const idx = list.findIndex(m => m.id === msg.id)
   const userMsg = idx > 0 ? list[idx - 1] : null
   const question = String(userMsg && userMsg.role === 'user' ? userMsg.content : '').trim()
   if (!question) return
-  parseBarRerunning[msg.id] = true
-  try {
-    const { data } = await rerunParseBar({
-      question,
-      parse_bar: msg.data.parse_bar,
-      override,
-      session_id: session.state.conversationSessionId || ''
-    })
-    if (data && !data.error) {
-      msg.data = data // 就地替换 AI 回复；spans 为原句 offset，气泡框出自动正确
-      ElMessage.success('已按修正重新查询')
-    } else {
-      ElMessage.warning(data?.error || '修正重跑失败，请重试')
-    }
-  } catch (e) {
-    ElMessage.warning(e?.response?.data?.error || '修正重跑失败，请重试')
-  } finally {
-    parseBarRerunning[msg.id] = false
+  const compiled = compileParseBarQuestion(question, overrides)
+  const dsOverride = overrides.find(o => o.slot === 'dataset')
+  const dsId = Number(dsOverride?.dataset_id ?? payload?.dataset_id)
+  const pinnedDatasetId = Number.isFinite(dsId) && dsId > 0 ? dsId : null
+  // 仅改数据集（问句无字面变化）时沿用原问句 + 显式锚定新数据集
+  const finalQuestion = compiled && compiled !== question ? compiled : question
+  if (finalQuestion === question && !pinnedDatasetId) {
+    ElMessage.info('未改动解析内容')
+    return
   }
+  // 修正学习落库 fail-open：不等待、不阻塞提问链路
+  recordParseBarFeedback({
+    question,
+    parse_bar: bar,
+    overrides,
+    dataset_id: pinnedDatasetId,
+    session_id: session.state.conversationSessionId || ''
+  }).catch(() => {})
+  // 复用主发送链路（同 applyClarifySuggestion 范式）；改数据集时显式锚定，
+  // 绕过 datasetInput 的自动释放启发式（用户已明确指定口径）
+  query.value = finalQuestion
+  await handleSend(pinnedDatasetId ? { datasetId: pinnedDatasetId } : undefined)
 }
 
 const displayResult = computed(() => {
@@ -4666,7 +4693,12 @@ const handleSend = async (sendOptions) => {
   startTimer()
 
   try {
-    const datasetInput = getDatasetInputForQuestion(text)
+    // 解析条确认链路可显式锚定数据集（opts.datasetId）：用户已明确指定口径，
+    // 跳过 datasetInput 的自动释放启发式
+    const pinnedDatasetId = opts && Number.isFinite(Number(opts.datasetId)) && Number(opts.datasetId) > 0
+      ? Number(opts.datasetId)
+      : null
+    const datasetInput = pinnedDatasetId || getDatasetInputForQuestion(text)
     const res = await session.startAsk(text, datasetInput, getModelInputForQuestion(), opts)
     clearPendingQuickDataset()
     if (res) {
@@ -6122,7 +6154,7 @@ onUnmounted(() => {
 .sa-msg-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   width: 100%;
 }
 .sa-msg-wrap {
@@ -6173,7 +6205,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin: 20px 0;
+  margin: 10px 0;
 }
 .sa-ai-meta {
   display: flex;

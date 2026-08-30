@@ -313,5 +313,8 @@ export const getParseBarCandidates = (payload) =>
   api.post('/smart-chat/parse-bar/candidates', payload, { silent: true })
 export const rerunParseBar = (payload) =>
   api.post('/smart-chat/parse-bar/rerun', payload, { timeout: 120000 })
+// 解析条「暂存→确认新提问」链路：确认时把本次修正落库用于学习（fail-open，不阻塞提问）
+export const recordParseBarFeedback = (payload) =>
+  api.post('/smart-chat/parse-bar/feedback', payload, { silent: true })
 
 export default api

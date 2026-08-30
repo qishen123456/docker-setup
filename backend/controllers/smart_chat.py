@@ -1081,6 +1081,54 @@ def parse_bar_rerun():
                         "total_duration": round(time.time() - started, 2)}), 500
 
 
+@smart_chat_bp.route("/api/smart-chat/parse-bar/feedback", methods=["POST"])
+def parse_bar_feedback():
+    """解析条「暂存→确认新提问」链路的修正学习落库（fail-open）。
+
+    前端确认后走正常提问链路发新问句，不经过 rerun 端点；修正记录在此补齐，
+    供下次同片段命中标 learned。落库失败不影响提问主链路（前端也不等待结果）。
+    """
+    user = get_current_user()
+    denied = _require_feature(user, "smart_send_question")
+    if denied:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    overrides = payload.get("overrides") or []
+    question = str(payload.get("question") or "")[:500]
+    dataset_id = payload.get("dataset_id")
+    session_id = str(payload.get("session_id") or "")[:128]
+    try:
+        from disambiguation.parse_spans import is_visible_user as _pb_visible, record_feedback
+        if not _pb_visible(user):
+            return jsonify({"recorded": 0})
+        recorded = 0
+        for o in overrides:
+            if not isinstance(o, dict):
+                continue
+            slot = str(o.get("slot") or "")
+            if slot not in ("node", "metric", "dataset"):
+                continue
+            new_value = str(o.get("new_value") or "").strip()
+            original = str(o.get("original") or "").strip()
+            if not new_value or new_value == original:
+                continue
+            if record_feedback(
+                user_id=str((user or {}).get("username") or (user or {}).get("id") or ""),
+                slot=slot,
+                question=question,
+                span_text=str(o.get("span_text") or "")[:200],
+                original_resolved=original[:200],
+                new_value=new_value[:200],
+                dataset_id=dataset_id or None,
+                session_id=session_id,
+            ):
+                recorded += 1
+        return jsonify({"recorded": recorded})
+    except Exception as exc:
+        _append_controller_debug("parse_bar_feedback.exception", error=str(exc))
+        return jsonify({"recorded": 0})  # fail-open：学习记录丢失不阻断
+
+
 @smart_chat_bp.route("/api/smart-chat/confirm-by-boss", methods=["POST"])
 def confirm_by_boss():
     started = time.time()

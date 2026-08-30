@@ -4178,6 +4178,124 @@ ranking_params 说明：
         runner_up_score = candidate_contexts[1][2] if len(candidate_contexts) > 1 else 0
         route_margin = best_score - runner_up_score
 
+        # 节点索引确定性消解（基线 §3.5/§3.6：唯一真实节点直出；多数据集命中要展示真实节点）
+        # 别名只命中同一数据集 → 直接锁定跳过仲裁；命中跨数据集/多节点 → 弹"真实节点级"
+        # 确认卡（数据集+节点名+层级），不再落 LLM 仲裁的模糊"指标存在"卡。
+        # 拉丁缩写（sh/jd）复用首字母护栏 map_token 扩展后再查索引。
+        # fail-open：索引缺失/无命中 → 不锁不卡，走原有流程。
+        try:
+            node_index = getattr(self, "_dataset_node_index", None)
+            if node_index is None:
+                node_index = self._load_dataset_node_index()
+                self._dataset_node_index = node_index
+            catalog_ids = {int(d.get("id") or 0) for d in catalog}
+            flat_index = node_index.get("flat_alias_index") or []
+
+            def _collect_matches(text: str) -> List[Dict[str, Any]]:
+                hits: List[Dict[str, Any]] = []
+                for entry in flat_index:
+                    alias = str(entry.get("alias") or "").strip()
+                    if len(alias) < 2 or alias not in text:
+                        continue
+                    for match in (entry.get("matches") or []):
+                        try:
+                            if int(match.get("dataset_id") or 0) in catalog_ids:
+                                hits.append(match)
+                        except (TypeError, ValueError):
+                            continue
+                return hits
+
+            raw_hits = _collect_matches(question)
+            initials_hint = ""
+            if not raw_hits:
+                # 拉丁缩写扩展：sh → 上海/深圳（首字母护栏同款映射，人工精排表优先）
+                try:
+                    from disambiguation.initials_guardrail import map_token
+
+                    for latin in re.findall(r"[A-Za-z]{2,}", str(question or "")):
+                        for entity in map_token(latin.lower(), list(catalog_ids)) or []:
+                            raw_hits.extend(_collect_matches(str(entity)))
+                        if raw_hits:
+                            initials_hint = latin.lower()
+                            break
+                except Exception:
+                    pass
+
+            # 按 (数据集, 节点) 去重，同节点的别名包含关系（南部/南部分公司）自然收敛
+            distinct_node_hits: List[Dict[str, Any]] = []
+            seen_node_keys = set()
+            for match in raw_hits:
+                key = (int(match.get("dataset_id") or 0), str(match.get("node_name") or ""))
+                if key in seen_node_keys:
+                    continue
+                seen_node_keys.add(key)
+                distinct_node_hits.append(match)
+
+            node_hit_dataset_ids = {int(m.get("dataset_id") or 0) for m in distinct_node_hits}
+            if len(node_hit_dataset_ids) == 1:
+                locked_id = next(iter(node_hit_dataset_ids))
+                locked_score = next(
+                    (score for d, _c, score in candidate_contexts if int(d.get("id") or 0) == locked_id),
+                    0,
+                )
+                locked_route = {
+                    "dataset_ids": [locked_id],
+                    "intent": "detail",
+                    "refined_query": question,
+                    "requires_confirmation": False,
+                    "decision": "generate_sql",
+                    "match_score": locked_score,
+                    "route_margin": 100,
+                    "matched_sample_id": None,
+                    "matched_sample_sql": "",
+                    "arbiter_reason": "node_index_unique",
+                    "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
+                    "split_queries": [{"dataset_id": locked_id, "sub_query": question}],
+                    "initials_hint": initials_hint,
+                }
+                # 唯一节点必须随路由下传：缩写场景（nb→南部）题干里没有可消解字面，
+                # 丢了节点下游只能按字面执行出垃圾结果（2026-08-30 "nb的业绩"实测）。
+                # 同数据集多节点不携带，留给下游按题干消解。
+                if len(distinct_node_hits) == 1:
+                    locked_route["resolved_subject_name"] = str(distinct_node_hits[0].get("node_name") or "")
+                    locked_route["resolved_subject_level"] = str(distinct_node_hits[0].get("node_level") or "")
+                return locked_route
+            if len(distinct_node_hits) >= 2:
+                confirmation_options = []
+                for idx, item in enumerate(distinct_node_hits[:6]):
+                    did = int(item.get("dataset_id") or 0)
+                    opt_id = f"node_index_{did}_{idx + 1}"
+                    node_name = str(item.get("node_name") or "").strip()
+                    confirmation_options.append({
+                        "id": opt_id,
+                        "label": f"{item.get('dataset_name') or f'数据集 {did}'} - {node_name}",
+                        "description": f"{item.get('node_level') or ''}层级",
+                        "dataset_ids": [did],
+                        "option_type": "dataset_disambiguation",
+                        "option_id": opt_id,
+                        "confirmation_type": "dataset_disambiguation",
+                        "resolved_subject_name": node_name,
+                        "resolved_subject_level": str(item.get("node_level") or "").strip(),
+                        "scope_filter": {},
+                        "score": 100,
+                    })
+                hint_text = f"「{initials_hint}」" if initials_hint else "问题中的对象"
+                return {
+                    "dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
+                    "intent": "confirm",
+                    "refined_query": question,
+                    "requires_confirmation": True,
+                    "decision": "wait_boss_confirm",
+                    "match_score": 100,
+                    "route_margin": 100,
+                    "candidate_dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
+                    "confirmation_question": f"{hint_text}在多个数据集中命中了不同节点，请确认要查询哪个：",
+                    "confirmation_options": confirmation_options,
+                    "arbiter_reason": "node_index_ambiguous",
+                }
+        except Exception:
+            pass  # fail-open：索引消解失败不影响原路由流程
+
         target_level_hint = self._question_target_level_hint(question)
         exclusive_level_hints = {"城市分公司", "城市公司"}
         if target_level_hint in exclusive_level_hints:
@@ -8908,6 +9026,27 @@ Agent3 复核结果：
             report_config = {**report_config, "queryIntent": query_intent}
             context["report_config"] = report_config
             context["query_intent"] = query_intent
+            # 解析条实时透出：理解阶段一完成就把"系统怎么理解"推给前端（trace 搭车，
+            # 不改 SSE 契约），用户无需等 2 分钟才发现理解错了。fail-open，主流程零感知。
+            try:
+                if int(dataset_id) == int(dataset_ids[0]):  # 与最终聚合一致：取首数据集口径
+                    from disambiguation.parse_spans import build_parse_bar
+                    _live_bar = build_parse_bar(
+                        question=str(route.get("raw_question") or question or ""),
+                        result={
+                            "route": route,
+                            "dataset_results": [{
+                                "dataset_id": int(dataset_id),
+                                "dataset_name": dataset_meta.get("dataset_name"),
+                                "resolved_entities": context.get("resolved_entities"),
+                            }],
+                        },
+                        user=current_user,
+                    )
+                    if _live_bar:
+                        self._append_trace(trace, "parse_bar", "done", parse_bar=_live_bar)
+            except Exception:
+                pass
             self._append_trace(
                 trace,
                 "pipeline.dataset_context",
