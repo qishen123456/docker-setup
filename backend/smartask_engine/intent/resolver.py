@@ -654,6 +654,19 @@ class IntentResolver:
                 score += 30
             if metric_column and metric_column in text:
                 score += 30
+            # 指标核心词命中（2026-09-03 用服构成指标实测）：label/column 去掉通用
+            # 金额/单位后缀后的独有部分（"滤芯开单金额"→"滤芯开单"）出现在题干里，
+            # 视为点名该指标。精确包含规则要求整串出现，"滤芯开单排名"够不到
+            # "滤芯开单金额"，会静默回落到达成率排序。
+            # 分值必须压过通用"开单"组合分（actual 60+metric_text 40=100）：
+            # 点名独有核心词是显式 name-drop，理应胜过通用词命中，否则
+            # "滤芯开单排名"会被"开单"带到年度开单金额排序（报告文案与数据口径撕裂）。
+            for label_text in {metric_label, metric_column}:
+                label_str = str(label_text or "")
+                core = re.sub(r"(?:金额|万元|百分比|万|额|%|_)+$", "", label_str).strip()
+                if len(core) >= 2 and core != label_str and core in text:
+                    score += 70
+                    break
             return score
 
         def trigger_matched(item: str) -> bool:

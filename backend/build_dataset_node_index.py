@@ -17,11 +17,13 @@ SUPPORTED_DATASET_CODES = (
     "consumer_business_standard_v1",
     "angel_business_2026_phase1",
     "feishu_tbldianshang",
+    "feishu_tblyongfukaidan",
 )
 SOURCE_TABLE_TO_DATASET_CODES = {
     "feishu_tbl_xioafeizhe": ["consumer_business_standard_v1"],
     "angel_group_data": ["angel_business_2026_phase1"],
     "feishu_tbldianshang": ["feishu_tbldianshang"],
+    "feishu_tblyongfukaidan": ["feishu_tblyongfukaidan"],
 }
 
 LEVEL_SUFFIXES = [
@@ -36,6 +38,27 @@ LEVEL_SUFFIXES = [
     "业务部",
     "事业部",
 ]
+
+# 节点索引自动别名只按后缀剥离生成，业务惯用简称需在此显式补充
+# key: (dataset_code, node_name) → 额外别名
+EXTRA_NODE_ALIASES = {
+    ("feishu_tblyongfukaidan", "用户服务与运营事业部"): ["用服事业部", "用服"],
+    # 用服视图分公司列已去除"用户服务与运营"后缀（如"粤桂琼分公司"），与其他数据集同名，
+    # 同名时进入多数据集消歧确认；补"X用服"别名供口语指向用服
+    ("feishu_tblyongfukaidan", "粤桂琼分公司"): ["粤桂琼用服"],
+    ("feishu_tblyongfukaidan", "豫晋分公司"): ["豫晋用服"],
+    ("feishu_tblyongfukaidan", "鄂皖分公司"): ["鄂皖用服"],
+    ("feishu_tblyongfukaidan", "湖南分公司"): ["湖南用服"],
+    ("feishu_tblyongfukaidan", "河北分公司"): ["河北用服"],
+    ("feishu_tblyongfukaidan", "赣闽分公司"): ["赣闽用服"],
+    ("feishu_tblyongfukaidan", "云贵渝分公司"): ["云贵渝用服"],
+    ("feishu_tblyongfukaidan", "西北分公司"): ["西北用服"],
+    ("feishu_tblyongfukaidan", "江浙沪分公司"): ["江浙沪用服"],
+    ("feishu_tblyongfukaidan", "黑吉辽分公司"): ["黑吉辽用服"],
+    ("feishu_tblyongfukaidan", "京津分公司"): ["京津用服"],
+    ("feishu_tblyongfukaidan", "川藏分公司"): ["川藏用服"],
+    ("feishu_tblyongfukaidan", "山东分公司"): ["山东用服"],
+}
 
 
 def _extract_jsonb_text(field_name: str) -> str:
@@ -157,6 +180,42 @@ ORDER BY
 """.strip()
 
 
+def _yongfu_nodes_sql() -> str:
+    return """
+WITH nodes AS (
+    SELECT DISTINCT
+        '事业部' AS node_level,
+        COALESCE(NULLIF(TRIM(事业部), ''), '用户服务与运营事业部') AS node_name,
+        NULL::TEXT AS parent_name,
+        '用服经营链路' AS track
+    FROM v_feishu_tblyongfukaidan
+    WHERE 层级级别 = '事业部'
+    UNION ALL
+    SELECT DISTINCT
+        '分公司' AS node_level,
+        TRIM(分公司) AS node_name,
+        COALESCE(NULLIF(TRIM(事业部), ''), '用户服务与运营事业部') AS parent_name,
+        '用服经营链路' AS track
+    FROM v_feishu_tblyongfukaidan
+    WHERE 层级级别 = '分公司' AND COALESCE(TRIM(分公司), '') <> ''
+)
+SELECT node_level, node_name, parent_name, track
+FROM (
+    SELECT DISTINCT node_level, node_name, parent_name, track
+    FROM nodes
+    WHERE node_name <> ''
+) dedup
+ORDER BY
+    CASE node_level
+        WHEN '事业部' THEN 0
+        WHEN '分公司' THEN 1
+        ELSE 9
+    END,
+    parent_name NULLS FIRST,
+    node_name;
+""".strip()
+
+
 def _build_syyb_base_sql(context: Dict[str, Any]) -> str:
     dictionary_keys = {
         str(item.get("jsonb_key") or "").strip()
@@ -262,6 +321,9 @@ def _build_dataset_nodes(
             continue
         seen_keys.add(node_key)
         aliases = _build_aliases(node_name)
+        for extra in EXTRA_NODE_ALIASES.get((dataset_code, node_name), []):
+            if extra not in aliases:
+                aliases.append(extra)
         node = {
             "node_name": node_name,
             "node_level": node_level,
@@ -423,6 +485,8 @@ def _build_sql_for_dataset(
         return _commercial_nodes_sql(context)
     if dataset_code == "feishu_tbldianshang":
         return _ecommerce_nodes_sql()
+    if dataset_code == "feishu_tblyongfukaidan":
+        return _yongfu_nodes_sql()
     raise ValueError(f"Unsupported dataset for node index build: {dataset_code}")
 
 

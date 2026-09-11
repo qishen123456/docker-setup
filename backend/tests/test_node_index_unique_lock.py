@@ -118,8 +118,9 @@ class NodeIndexAmbiguousConfirmTest(unittest.TestCase):
         self.assertTrue(route.get("requires_confirmation"))
         self.assertEqual(route.get("arbiter_reason"), "node_index_ambiguous")
         labels = [o.get("label") for o in route.get("confirmation_options") or []]
-        self.assertIn("消费者事业部开单金额 - 湖南分公司", labels)
-        self.assertIn("商用事业部开单金额 - 湖南代表处", labels)
+        # 统一完整问句格式（2026-08-31 定稿）
+        self.assertIn("消费者事业部 · 湖南分公司的业绩", labels)
+        self.assertIn("商用事业部 · 湖南代表处的业绩", labels)
         # 选项带真实节点名和层级，不是模糊的"指标存在"
         for o in route["confirmation_options"]:
             self.assertTrue(o.get("resolved_subject_name"))
@@ -142,9 +143,10 @@ class NodeIndexAmbiguousConfirmTest(unittest.TestCase):
         self.assertTrue(route.get("requires_confirmation"))
         self.assertEqual(route.get("arbiter_reason"), "node_index_ambiguous")
         labels = [o.get("label") for o in route.get("confirmation_options") or []]
-        self.assertIn("商用事业部开单金额 - 上海代表处", labels)
-        self.assertIn("消费者事业部开单金额 - 上海城市公司", labels)
-        self.assertIn("消费者事业部开单金额 - 深圳城市公司", labels)
+        # 统一完整问句格式（2026-08-31 定稿）
+        self.assertIn("商用事业部 · 上海代表处的业绩", labels)
+        self.assertIn("消费者事业部 · 上海城市公司的业绩", labels)
+        self.assertIn("消费者事业部 · 深圳城市公司的业绩", labels)
 
     def test_initials_single_dataset_still_locks(self):
         # 缩写扩展后全部命中同一数据集 → 直锁不弹卡（如 jd→京东直营 只有电商有）
@@ -168,3 +170,58 @@ class NodeIndexAmbiguousConfirmTest(unittest.TestCase):
         self.assertEqual(route.get("dataset_ids"), [4])
         self.assertFalse(route.get("requires_confirmation"))
         self.assertEqual(route.get("arbiter_reason"), "node_index_unique")
+
+    SAME_DS_INDEX = {
+        "datasets": [],
+        "flat_alias_index": [
+            {"alias": "南部", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "南部分公司", "node_level": "分公司"}]},
+            {"alias": "南部分公司", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "南部分公司", "node_level": "分公司"}]},
+            {"alias": "北部", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "北部分公司", "node_level": "分公司"}]},
+            {"alias": "北部分公司", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "北部分公司", "node_level": "分公司"}]},
+            {"alias": "上海", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "上海城市公司", "node_level": "城市分公司"},
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "上海代表处", "node_level": "代表处"}]},
+            {"alias": "上海城市公司", "matches": [
+                {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "node_name": "上海城市公司", "node_level": "城市分公司"}]},
+        ],
+    }
+
+    def test_initials_same_dataset_collision_shows_node_card(self):
+        # nb→[南部分公司, 北部分公司] 同属 ds3：主体本身歧义，必须出节点确认卡而非静默直锁
+        with patch("disambiguation.initials_guardrail.map_token", return_value=["南部分公司", "北部分公司"]):
+            route = self._route("nb的业绩", node_index=self.SAME_DS_INDEX)
+        self.assertTrue(route.get("requires_confirmation"))
+        self.assertEqual(route.get("arbiter_reason"), "node_index_ambiguous")
+        labels = [o.get("label") for o in route.get("confirmation_options") or []]
+        # 统一完整问句格式：同数据集也带数据集前缀（2026-08-31 定稿）
+        self.assertIn("商用事业部 · 南部分公司的业绩", labels)
+        self.assertIn("商用事业部 · 北部分公司的业绩", labels)
+        # 统一确认话术
+        self.assertEqual(route.get("confirmation_question"), "你是不是想问：")
+        for o in route["confirmation_options"]:
+            self.assertEqual(o.get("dataset_ids"), [3])
+            self.assertTrue(o.get("resolved_subject_name"))
+            # 描述必须带数据集名，用户才知道每个节点属于哪个数据集
+            self.assertIn("商用事业部开单金额", o.get("description") or "")
+
+    def test_same_dataset_multi_node_literal_shows_node_card(self):
+        # "上海的业绩"：上海在同数据集有城市公司+代表处两个节点 → 出节点选择卡
+        route = self._route("上海的业绩", node_index=self.SAME_DS_INDEX)
+        self.assertTrue(route.get("requires_confirmation"))
+        self.assertEqual(route.get("arbiter_reason"), "node_index_ambiguous")
+        labels = [o.get("label") for o in route.get("confirmation_options") or []]
+        # 统一完整问句格式（2026-08-31 定稿）
+        self.assertIn("商用事业部 · 上海城市公司的业绩", labels)
+        self.assertIn("商用事业部 · 上海代表处的业绩", labels)
+
+    def test_longest_alias_wins_no_overconfirm(self):
+        # "上海城市公司的业绩"：长别名已精确到节点 → 直锁，不被短前缀"上海"带出兄弟节点弹卡
+        route = self._route("上海城市公司的业绩", node_index=self.SAME_DS_INDEX)
+        self.assertEqual(route.get("dataset_ids"), [3])
+        self.assertFalse(route.get("requires_confirmation"))
+        self.assertEqual(route.get("arbiter_reason"), "node_index_unique")
+        self.assertEqual(route.get("resolved_subject_name"), "上海城市公司")

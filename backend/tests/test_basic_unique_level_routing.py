@@ -177,8 +177,10 @@ class BasicUniqueLevelRoutingTest(unittest.TestCase):
         self.assertEqual(result.get("intent"), "confirm")
         self.assertEqual(result.get("arbiter_reason"), "node_index_dataset_ambiguous")
         labels = [option.get("label") for option in result.get("confirmation_options") or []]
-        self.assertIn("消费者事业部任务达成分析（标准版） - 上海城市公司", labels)
-        self.assertIn("商用事业部开单金额 - 上海代表处", labels)
+        # 统一确认卡：候选为"业务名 · 节点 的 指标"完整问句格式（原"数据集名 - 节点名"）
+        self.assertTrue(any("上海城市公司" in label for label in labels), f"labels={labels}")
+        self.assertTrue(any("上海代表处" in label for label in labels), f"labels={labels}")
+        self.assertTrue(any("的业绩" in label for label in labels), f"labels={labels}")
 
     def test_bare_node_with_multiple_nodes_in_same_dataset_requires_confirmation(self):
         service = object.__new__(FourAgentAskService)

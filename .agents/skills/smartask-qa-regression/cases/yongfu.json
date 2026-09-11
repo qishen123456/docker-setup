@@ -1,0 +1,285 @@
+{
+  "cases": [
+    {
+      "id": "YF1-overview",
+      "question": "用服事业部业绩怎么样",
+      "source": "用服接入基线 2026-09-03（2026-09-06 飞书漂移 分公司14→13，gte 15→14）",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "requires_confirmation",
+          "op": "eq",
+          "expect": false
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 14
+        }
+      ]
+    },
+    {
+      "id": "YF2-rank-all",
+      "question": "用服各分公司业绩排名",
+      "source": "用服接入基线 2026-09-03 / baseline §2.1(不默认Top3)",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "ranking"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 13
+        }
+      ]
+    },
+    {
+      "id": "YF3-top3",
+      "question": "用服前3的分公司",
+      "source": "用服接入基线 2026-09-03 / baseline §2.x",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.top_n",
+          "op": "eq",
+          "expect": 3
+        },
+        {
+          "path": "dataset_results.0.query_intent.direction",
+          "op": "eq",
+          "expect": "desc"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 3
+        }
+      ]
+    },
+    {
+      "id": "YF4-bottom3",
+      "question": "用服垫底的三个分公司",
+      "source": "用服接入基线 2026-09-03 / baseline §2.6",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.direction",
+          "op": "eq",
+          "expect": "asc"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "eq",
+          "expect": 3
+        }
+      ]
+    },
+    {
+      "id": "YF5-prefix-single",
+      "question": "用服粤桂琼分公司的业绩怎么样",
+      "source": "用服接入基线 2026-09-03 / baseline §3.6(唯一真实节点直出)",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "eq",
+          "expect": false
+        },
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 1
+        },
+        {
+          "path": "dataset_results.0.rows.0.节点名称",
+          "op": "contains",
+          "expect": "粤桂琼"
+        }
+      ]
+    },
+    {
+      "id": "YF6-bare-ambig",
+      "question": "粤桂琼分公司业绩",
+      "source": "用服接入基线 2026-09-03 / baseline §3.5(裸节点多数据集弹真实节点卡)",
+      "asserts": [
+        {
+          "path": "requires_confirmation",
+          "op": "allow_confirm"
+        }
+      ],
+      "confirm": [
+        {
+          "select": {
+            "dataset_ids": [
+              64
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                64
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            },
+            {
+              "path": "dataset_results.0.rows.0.节点名称",
+              "op": "contains",
+              "expect": "粤桂琼"
+            }
+          ]
+        },
+        {
+          "select": {
+            "dataset_ids": [
+              2
+            ]
+          },
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                2
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "YF7-filter",
+      "question": "用服达成率大于50%的分公司有哪些",
+      "source": "用服接入基线 2026-09-03 / baseline §筛选",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.intent",
+          "op": "eq",
+          "expect": "filter"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "range",
+          "expect": [
+            10,
+            15
+          ]
+        }
+      ]
+    },
+    {
+      "id": "YF8-composition",
+      "question": "用服分公司滤芯开单排名",
+      "source": "用服接入基线 2026-09-03 / bug: 错路由电商62",
+      "asserts": [
+        {
+          "path": "route.dataset_ids",
+          "op": "eq",
+          "expect": [
+            64
+          ]
+        },
+        {
+          "path": "dataset_results.0.query_intent.sort_metric_column",
+          "op": "contains",
+          "expect": "滤芯"
+        },
+        {
+          "path": "dataset_results.0.row_count",
+          "op": "gte",
+          "expect": 13
+        }
+      ]
+    },
+    {
+      "id": "YF9-multiturn",
+      "source": "用服接入基线 2026-09-03 / baseline §8.1(多轮跨数据集实体合法)（2026-09-06 飞书漂移 分公司14→13，gte 15→14）",
+      "turns": [
+        {
+          "question": "用服事业部业绩",
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                64
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 14
+            }
+          ]
+        },
+        {
+          "question": "粤桂琼呢",
+          "asserts": [
+            {
+              "path": "route.dataset_ids",
+              "op": "eq",
+              "expect": [
+                64
+              ]
+            },
+            {
+              "path": "dataset_results.0.row_count",
+              "op": "gte",
+              "expect": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

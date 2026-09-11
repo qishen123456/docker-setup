@@ -64,6 +64,13 @@ def _alias_matches_question(alias: str, node_name: str, normalized_question: str
         return True
 
     node_suffix = _node_suffix(compact_name)
+    # 数据集域前缀别名豁免（2026-09-03 用服接入实测）：事业部根节点的"额外别名"
+    # （非节点名前缀，如"用服"之于"用户服务与运营事业部"）紧跟层级词时是
+    # "域+层级"用法（"用服分公司"=用服事业部的分公司），不是后缀冲突。
+    # 若按普通冲突拒绝，"用服分公司滤芯排名"的"用服"会被丢弃，路由被其他数据集的
+    # 节点别名（如电商"滤芯"）拐走。只豁免根节点额外别名，后缀剥离别名（"消费者"）
+    # 保持原冲突判定不变。
+    is_root_scope_alias = bool(alias) and not compact_name.startswith(alias) and node_suffix == "事业部"
     start = 0
     while True:
         index = normalized_question.find(alias, start)
@@ -71,7 +78,7 @@ def _alias_matches_question(alias: str, node_name: str, normalized_question: str
             return False
         tail = normalized_question[index + len(alias):]
         conflict_suffix = next((suffix for suffix in ORG_SUFFIXES if tail.startswith(suffix)), "")
-        if not conflict_suffix or conflict_suffix == node_suffix:
+        if not conflict_suffix or conflict_suffix == node_suffix or (is_root_scope_alias and conflict_suffix):
             return True
         start = index + len(alias)
 
@@ -354,9 +361,28 @@ class OrganizationRouteResolver:
 
         distinct_node_names = _unique([item["node_name"] for item in mentions])
         dataset_ids = _unique([dataset_id for item in mentions for dataset_id in item.get("dataset_ids") or []])
+
+        # 数据集域前缀收窄（2026-09-03 用服接入实测）：根节点（事业部级）别名与其他
+        # 数据集的节点同时命中、且根别名只属于一个数据集时，根别名表达的是"选数据集"
+        # 而不是"选节点"（"用服粤桂琼"=用服事业部的粤桂琼分公司）。把 mentions 收窄到
+        # 该数据集并优先保留非根节点，避免"用服粤桂琼分公司的业绩"被弹成跨数据集确认卡。
+        # 单数据集场景不动（"商用事业部和东部分公司对比"的根节点仍是有效成员）。
+        root_mentions = [m for m in mentions if _compact(m.get("node_name")).endswith("事业部")]
+        root_dataset_ids = _unique([ds for m in root_mentions for ds in (m.get("dataset_ids") or [])])
+        if len(dataset_ids) > 1 and len(root_dataset_ids) == 1:
+            scope_id = root_dataset_ids[0]
+            narrowed = [m for m in mentions if scope_id in (m.get("dataset_ids") or [])]
+            finer = [m for m in narrowed if not _compact(m.get("node_name")).endswith("事业部")]
+            mentions = finer or narrowed
+            distinct_node_names = _unique([item["node_name"] for item in mentions])
+            dataset_ids = _unique([ds for item in mentions for ds in (item.get("dataset_ids") or [])])
+
         candidate_dataset_ids = dataset_ids[:]
-        refined_suffix = f"组织树标准名称：{'、'.join(distinct_node_names)}。请优先按这些组织节点所属数据集和组织范围执行。"
-        refined_query = f"{question}\n{refined_suffix}".strip()
+        # 消歧后缀（2026-09-06 文案修订）：面向用户可读的"我理解为您指的是…"，
+        # 替代旧"组织树标准名称：X。请优先按这些组织节点所属数据集和组织范围执行。"
+        # ——旧文案是系统指令口吻，被 Agent4 复述展示给用户时看不懂（用户实测反馈）。
+        refined_suffix = f"（我理解为您指的是：{'、'.join(distinct_node_names)}，请按其所属数据集口径执行。）"
+        refined_query = f"{question}{refined_suffix}".strip()
 
         single_clear_node = len(mentions) == 1 and len(dataset_ids) == 1
         if single_clear_node:
@@ -456,3 +482,42 @@ class OrganizationRouteResolver:
             "resolved_entities_preview": distinct_node_names,
             "arbiter_reason": "organization_tree_scope_requires_confirmation",
         }
+
+    def domain_prefix_scope_id(
+        self,
+        question: str,
+        rewritten_question: str,
+        catalog: List[Dict[str, Any]],
+    ) -> Optional[int]:
+        """主体纠正改写丢失数据集域前缀时，返回应锁定的数据集 id；否则返回 None。
+
+        用服接入实测（2026-09-03）：LLM 主体纠正会把"用服粤桂琼"的域前缀"用服"
+        当口语剥掉（改写为"粤桂琼分公司的业绩"），路由只剩跨数据集同名节点，
+        在消费者/用服之间误弹确认卡。以下条件全部满足时，调用方应放弃改写、
+        保留原始问题进入路由（resolve 的域前缀收窄会锁定该数据集）：
+        1. 原始问题命中"唯一根节点域别名 + 跨数据集节点"（同 resolve 收窄条件）；
+        2. 改写后该条件不再成立（前缀被剥掉）；
+        3. 改写保留的主体仍是真实组织节点——防止"商用事业部丁杰"→"丁杰"这类
+           人名主体纠正被误拦（人名不在节点索引时条件 3 不成立，改写照常生效）。
+        """
+        def _scope_id(text: str) -> Optional[int]:
+            mentions = self._find_mentions(text, catalog, None)
+            if not mentions:
+                return None
+            dataset_ids = _unique([ds for m in mentions for ds in (m.get("dataset_ids") or [])])
+            root_dataset_ids = _unique([
+                ds
+                for m in mentions
+                if _compact(m.get("node_name")).endswith("事业部")
+                for ds in (m.get("dataset_ids") or [])
+            ])
+            if len(dataset_ids) > 1 and len(root_dataset_ids) == 1:
+                return int(root_dataset_ids[0])
+            return None
+
+        scope_id = _scope_id(question)
+        if scope_id is None or _scope_id(rewritten_question) is not None:
+            return None
+        if not self._find_mentions(rewritten_question, catalog, None):
+            return None
+        return scope_id
