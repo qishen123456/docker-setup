@@ -118,10 +118,11 @@
         <span :class="['sa-section-summary', `is-${secondaryDrillSummaryTone}`]" v-html="secondaryDrillSummary"></span>
       </div>
       <div class="sa-drill-table" :class="{ 'is-person-ranking': isBusinessPersonRanking, 'is-ranking': isRankingQuestion }" role="table" aria-label="二级经营拆解">
-        <div class="sa-drill-row is-head" role="row">
+        <div class="sa-drill-row is-head" role="row" :style="drillGridStyle">
           <span>节点</span>
           <span>任务 / 完成</span>
           <span>缺口</span>
+          <span v-for="m in activeExtraDrillMetrics" :key="`drill-head-${m.key}`">{{ m.label }}</span>
           <span>{{ secondaryMetricColumnLabel }}</span>
         </div>
         <template v-for="group in secondaryDrillGroups" :key="group.key">
@@ -129,6 +130,7 @@
             v-if="group.title"
             class="sa-drill-group-row"
             :class="[`is-group-${(group.index % 4) + 1}`, group.tone ? `is-${group.tone}` : '']"
+            :style="drillGridStyle"
             role="row"
           >
             <template v-if="group.meta">
@@ -141,6 +143,11 @@
                 <span>完成 {{ group.meta.actualText || '-' }}{{ group.meta.rateText ? `（${group.meta.rateText}）` : '' }}</span>
               </div>
               <div class="sa-drill-group-cell">{{ group.meta.remainText || '-' }}</div>
+              <div
+                v-for="m in activeExtraDrillMetrics"
+                :key="`drill-group-extra-${m.key}`"
+                class="sa-drill-group-cell"
+              >{{ drillExtraText(group.meta, m.key) }}</div>
               <div class="sa-drill-group-cell is-metric">
                 <strong>{{ rankingMetricText(group.meta) || group.meta.rateText || '-' }}</strong>
                 <span>{{ rankingMetricMeta.label }}</span>
@@ -158,6 +165,7 @@
             :key="`drill-${row.level}-${row.parent}-${row.name}-${index}`"
             class="sa-drill-row"
             :class="row.rankGroup?.includes('后') ? 'is-rank-bottom' : row.rankGroup?.includes('前') ? 'is-rank-top' : ''"
+            :style="drillGridStyle"
             role="row"
           >
             <div class="sa-drill-node">
@@ -169,6 +177,11 @@
               <span>完成 {{ row.actualText || '-' }}{{ row.rateText ? `（${row.rateText}）` : '' }}</span>
             </div>
             <div class="sa-drill-gap">{{ row.remainText || '-' }}</div>
+            <div
+              v-for="m in activeExtraDrillMetrics"
+              :key="`drill-extra-${m.key}`"
+              class="sa-drill-gap"
+            >{{ drillExtraText(row, m.key) }}</div>
             <div class="sa-drill-rate" :class="secondaryRateTone(row)">
               <div class="sa-drill-rate-head">
                 <strong>{{ secondaryMetricText(row) }}</strong>
@@ -490,7 +503,7 @@ const rankSides = computed(() => {
   const fromIntent = cleanText(queryIntent.value?.rank_sides).toLowerCase()
   if (fromIntent === 'both') return 'both'
   const text = questionText.value
-  const asksTop = /Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好/.test(text)
+  const asksTop = /Top|TOP|top|前\s*(?:\d+|[一二两三四五六七八九十]+)|最高|最好|排名第?[一1]|(?<!倒数)第[一1]名/.test(text)
   const asksBottom = /后\s*(?:\d+|[一二两三四五六七八九十]+)|倒数|最低|最差|垫底/.test(text)
   return asksTop && asksBottom ? 'both' : fromIntent
 })
@@ -636,6 +649,19 @@ const normalizedRows = computed(() => rows.value.map((row) => {
     remainText: formatAmountByContract(remainValue),
     rankGroup: cleanText(rankGroupKey ? row[rankGroupKey] : ''),
     undertaker: cleanText(undertakerKey ? row[undertakerKey] : ''),
+    extras: extraDrillMetrics.value.map((metric) => {
+      const keys = Object.keys(row || {})
+      const colKey = keys.find(key => key === metric.column)
+        || keys.find(key => key.includes(metric.column))
+        || keys.find(key => key.includes(metric.label))
+        || ''
+      const rawValue = colKey ? row[colKey] : null
+      const numeric = toNumber(rawValue)
+      const text = metric.format === 'percent'
+        ? (numeric === null ? '' : `${numeric.toFixed(2).replace(/\.?0+$/, '')}%`)
+        : formatAmountByContract(parseAmountByContract(rawValue, colKey || metric.column))
+      return { key: metric.key, label: metric.label, text }
+    }),
     raw: row,
   }
 }).filter(item => item.name))
@@ -685,6 +711,49 @@ const amountUnitConfig = computed(() => {
   const unit = reportUnit || String(amountMetric?.unit || '').trim()
   const scale = Number(amountMetric?.scale) || 1
   return { unit, scale }
+})
+
+// 额外拆解列：report_config.metrics 里显式标记 show_in_drill 的指标，
+// 在「四、二级拆解」追加为数据列（如用服数据集的滤芯/增值开单）。
+// 未标记的数据集不产出额外列，卡片渲染保持原样。
+const STANDARD_DRILL_METRIC_KEYS = new Set(['task', 'actual', 'rate', 'remain'])
+const extraDrillMetrics = computed(() => {
+  const metrics = Array.isArray(reportConfig.value?.metrics) ? reportConfig.value.metrics : []
+  return metrics
+    .filter(m => m && m.show_in_drill === true && !STANDARD_DRILL_METRIC_KEYS.has(String(m.key || '')))
+    .map(m => ({
+      key: String(m.key || m.column || m.label || ''),
+      label: cleanText(m.label || m.column || ''),
+      column: cleanText(m.column || m.label || ''),
+      format: String(m.format || ''),
+    }))
+    .filter(m => m.key && m.label && m.column)
+})
+
+// 只展示至少在一条结果行里取到值的额外列，避免某类问题 SQL 没带该列时渲染一整列「-」
+const activeExtraDrillMetrics = computed(() => {
+  const metrics = extraDrillMetrics.value
+  if (!metrics.length) return []
+  return metrics.filter(m => normalizedRows.value.some(row => (
+    (row.extras || []).some(extra => extra.key === m.key && extra.text)
+  )))
+})
+
+const drillExtraText = (item, key) => (
+  (item?.extras || []).find(extra => extra.key === key)?.text || '-'
+)
+
+// 有额外列时改用内联网格列宽（列数动态）；无额外列返回 null，走 CSS 默认与 is-person-ranking 变体
+const drillGridStyle = computed(() => {
+  const count = activeExtraDrillMetrics.value.length
+  if (!count) return null
+  const isPerson = isBusinessPersonRanking.value
+  const base = isPerson
+    ? ['minmax(160px, 1.3fr)', 'minmax(105px, 0.9fr)', 'minmax(84px, 0.72fr)']
+    : ['minmax(96px, 0.95fr)', 'minmax(96px, 0.9fr)', 'minmax(78px, 0.72fr)']
+  const extras = Array.from({ length: count }, () => 'minmax(86px, 0.8fr)')
+  const tail = isPerson ? 'minmax(140px, 1.05fr)' : 'minmax(126px, 1.12fr)'
+  return { gridTemplateColumns: [...base, ...extras, tail].join(' ') }
 })
 const intentName = computed(() => reportConfig.value?.queryIntent?.intent || props.route?.intent || '')
 const isFilterResult = computed(() => intentName.value === 'filter')
@@ -3110,6 +3179,13 @@ const actionItems = computed(() => {
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
+/* 列分隔细线（2026-09-10 用户反馈：多列无分隔看着乱） */
+.sa-drill-row > *:not(:first-child),
+.sa-drill-group-row > *:not(:first-child) {
+  border-left: 1px solid rgba(15, 23, 42, 0.06);
+  padding-left: 12px;
+}
+
 .sa-drill-table.is-person-ranking .sa-drill-row {
   grid-template-columns: minmax(220px, 1.55fr) minmax(120px, 0.9fr) minmax(90px, 0.62fr) minmax(170px, 1.15fr);
 }
@@ -3118,12 +3194,24 @@ const actionItems = computed(() => {
   border-top: 0;
 }
 
+/* 表头加重（2026-09-10 用户反馈：列标题不明显） */
 .sa-drill-row.is-head {
   padding: 8px 12px;
-  background: #F8F9FA;
-  color: #9CA3AF;
+  background: #F1F3F5;
+  color: #4B5563;
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+/* 表头文字不折行（避免「滤芯开单金额」断成两行），分隔线内边距收窄防溢出 */
+.sa-drill-row.is-head > * {
+  white-space: nowrap;
+}
+
+.sa-drill-row.is-head > *:not(:first-child) {
+  padding-left: 8px;
 }
 
 .sa-drill-group-row {

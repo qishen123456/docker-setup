@@ -259,6 +259,8 @@ class BookshelfRepository:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
             text = re.sub(r"^(请问|帮我|帮忙|麻烦|查一下|看一下|查询|分析一下|我想知道)+", "", text)
             text = re.sub(r"(呢|啊|呀|吗|么|吧)$", "", text)
+            # 助词"的"不影响问法同一性（与 four_agent_ask._select_sql_strategy 同口径）
+            text = text.replace("的", "")
             text = text.replace("消费者事业部", "").replace("消费事业部", "").replace("消费者", "")
             text = text.replace("商用事业部", "").replace("商用", "")
             return text

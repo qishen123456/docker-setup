@@ -1,0 +1,5 @@
+{
+  "dataset_priority": [2, 3, 62],
+  "recommend_on_tie": false,
+  "_comment": "统一确认卡默认推荐规则。dataset_priority: 数据集优先级（候选按此排序，默认 消费者=2 > 商用=3 > 电商=62）。recommend_on_tie: 同数据集撞车（如 nb→南部/北部）时是否仍给第1个标'推荐'角标，默认 false=真歧义不硬标推荐。后续在 AdminConsole 可视化配置。"
+}

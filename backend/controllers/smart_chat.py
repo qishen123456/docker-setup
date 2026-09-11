@@ -634,8 +634,13 @@ def smart_chat():
                 result["clarify_suggestion"] = _correction
         else:
             schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
-        # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡
-        if not result.get("clarify_suggestion") and not result.get("early_clarify"):
+        # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡。
+        # 防重复：缩写已被路由层应用（initials_hint）时解析条缩写标注已承载同信息；
+        # 有确认卡时卡片已提供真实节点选择——两种情况下提示条都在推荐"刚执行完的同一个问题"。
+        _route_guard = result.get("route") or {}
+        if (not result.get("clarify_suggestion") and not result.get("early_clarify")
+                and not result.get("requires_confirmation") and not _route_guard.get("requires_confirmation")
+                and not _route_guard.get("initials_hint")):
             from disambiguation.initials_guardrail import build_initials_preview
             _preview = build_initials_preview(question=question, user=user)
             if _preview:
@@ -823,8 +828,13 @@ def smart_chat_stream():
                         result["clarify_suggestion"] = _correction
                 else:
                     schedule_shadow_log(question=question, result=result, user=user, session_id=session_id)
-                # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡
-                if not result.get("clarify_suggestion") and not result.get("early_clarify"):
+                # 首字母提示条（超管预览）：守门员没给纠正条时才尝试，不覆盖已有卡。
+                # 防重复：缩写已被路由层应用（initials_hint）时解析条缩写标注已承载同信息；
+                # 有确认卡时卡片已提供真实节点选择——两种情况下提示条都在推荐"刚执行完的同一个问题"。
+                _route_guard = result.get("route") or {}
+                if (not result.get("clarify_suggestion") and not result.get("early_clarify")
+                        and not result.get("requires_confirmation") and not _route_guard.get("requires_confirmation")
+                        and not _route_guard.get("initials_hint")):
                     from disambiguation.initials_guardrail import build_initials_preview
                     _preview = build_initials_preview(question=question, user=user)
                     if _preview:
@@ -1211,6 +1221,17 @@ def confirm_by_boss():
             requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
         ))
         result["total_duration"] = round(time.time() - started, 2)
+        # 确认执行后补 parse_bar：让历史消息保留"最终确认的理解"解析条（单值节点，2026-08-31 定稿）。
+        # 否则前端 doConfirm 用 res 整体替换消息 data 时，确认前的解析条会被覆盖丢失（用户实测反馈）。
+        if not result.get("error"):
+            try:
+                from disambiguation.parse_spans import build_parse_bar
+                _pb_question = str(result.get("question") or selected_option or "").strip()
+                _parse_bar = build_parse_bar(question=_pb_question, result=result, user=user)
+                if _parse_bar:
+                    result["parse_bar"] = _parse_bar
+            except Exception:
+                pass  # fail-open：parse_bar 生成失败不影响确认结果
         _log_smart_chat_result(
             result=result,
             question=selected_option or session_id,
@@ -1333,6 +1354,17 @@ def confirm_by_boss_stream():
                     requested_flow=str(payload.get("ask_flow") or payload.get("flow") or ""),
                 ))
                 result["total_duration"] = round(time.time() - started, 2)
+                # 确认执行后补 parse_bar（stream 版，与同步版对齐，2026-08-31）：让历史保留"最终确认的理解"解析条。
+                # 前端确认走 stream 版（confirmByBossStream），不补则确认后 res 无 parse_bar，解析条被覆盖丢失。
+                if not result.get("error"):
+                    try:
+                        from disambiguation.parse_spans import build_parse_bar
+                        _pb_question = str(result.get("question") or selected_option or "").strip()
+                        _parse_bar = build_parse_bar(question=_pb_question, result=result, user=user)
+                        if _parse_bar:
+                            result["parse_bar"] = _parse_bar
+                    except Exception:
+                        pass  # fail-open：parse_bar 生成失败不影响确认结果
                 ds_id = result.get("dataset_id")
                 if ds_id:
                     rc = drc.get_config(int(ds_id))

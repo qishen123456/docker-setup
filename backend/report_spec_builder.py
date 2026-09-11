@@ -954,11 +954,17 @@ def build_report_spec(
         if children:
             comparison_nodes = [n for n in children if n.get("name")]
 
-    low_first = (
-        str(query_intent.get("direction") or "").lower() == "asc"
-        if query_intent.get("intent") == "ranking"
-        else _negative_ranking_requested(question or "")
-    )
+    # rank_sides=both（前 N + 后 N 同查）时强制最佳在前：intent 非 ranking（如被“对比”
+    # 触发成 comparison）时会走问题文本启发式，被“倒数”一词带偏成升序，
+    # 导致榜首/末位反置（2026-08-30 实测：“排名第一和倒数第一对比” leader 成了最差节点）
+    if str(query_intent.get("rank_sides") or "") == "both":
+        low_first = False
+    else:
+        low_first = (
+            str(query_intent.get("direction") or "").lower() == "asc"
+            if query_intent.get("intent") == "ranking"
+            else _negative_ranking_requested(question or "")
+        )
 
     scene = detect_report_scene(question, focus_node if not explicit_comparative else None, len(matched_nodes), query_intent)
     if query_intent.get("intent") == "ranking":
@@ -1628,6 +1634,10 @@ def build_report_spec(
             effective_limit = int(raw_top_n)
         # top_n=0 表示用户未指定数量，返回全部节点
         rank_limit = max(0, min(len(ranked_comparison_nodes), effective_limit)) if ranked_comparison_nodes else 0
+        # both 且未解析出 top_n（如 intent=comparison 绕过了 ranking 分支）：SQL 已按 前N+后N 返回，
+        # 每侧数量 = 总行数的一半，避免 top_n 空回落 effective_limit=10 导致文案"前2和后2"与实问"第一和倒数第一"不符
+        if rank_sides == "both" and (raw_top_n is None or raw_top_n == "") and ranked_comparison_nodes:
+            rank_limit = max(1, len(ranked_comparison_nodes) // 2)
         if rank_sides == "both" and rank_limit:
             bottom_nodes = list(reversed(ranked_comparison_nodes[-rank_limit:]))
             ranked_nodes = []

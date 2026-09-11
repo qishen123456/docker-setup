@@ -32,14 +32,25 @@ _ALIASES_PATH = os.path.join(CONFIG_DIR, "abbreviation_aliases.json")
 _aliases_cache: Dict[str, Any] = {"mtime": 0.0, "data": {}}
 
 
-def _load_aliases() -> Dict[str, str]:
-    """读人工精排映射表（abbreviation_aliases.json），mtime 缓存。任何失败返回 {}。"""
+def _load_aliases() -> Dict[str, List[str]]:
+    """读人工精排映射表（abbreviation_aliases.json），mtime 缓存。任何失败返回 {}。
+
+    值支持两种形态：单节点字符串（jd→京东直营）或撞车组列表
+    （nb→[南部分公司, 北部分公司]，拼音推不出的口语撞车组人工收录，
+    列表原样返回多候选，由路由层出节点确认卡）。
+    """
     try:
         mtime = os.path.getmtime(_ALIASES_PATH)
         if mtime != _aliases_cache["mtime"]:
             with open(_ALIASES_PATH, "r", encoding="utf-8") as fh:
                 data = json.load(fh).get("aliases") or {}
-            _aliases_cache["data"] = {str(k).lower(): str(v) for k, v in data.items() if v}
+            normalized: Dict[str, List[str]] = {}
+            for key, value in data.items():
+                values = value if isinstance(value, list) else [value]
+                cleaned = [str(v).strip() for v in values if str(v or "").strip()]
+                if cleaned:
+                    normalized[str(key).lower()] = cleaned
+            _aliases_cache["data"] = normalized
             _aliases_cache["mtime"] = mtime
         return _aliases_cache["data"]
     except Exception:
@@ -84,8 +95,8 @@ def map_token(
 ) -> List[str]:
     """把拉丁 token 映射到书架实体候选（别名原文，按 node 去重）。任何失败返回 []。
 
-    优先级：人工精排表（abbreviation_aliases.json，如 jd→京东直营）> 拼音首字母/全拼索引。
-    索引撞车时返回多个候选（双候选来自索引节点，不硬猜）。
+    优先级：人工精排表（abbreviation_aliases.json，如 jd→京东直营、nb→南部/北部撞车组）
+    > 拼音首字母/全拼索引。索引撞车时返回多个候选（双候选来自索引节点，不硬猜）。
     """
     try:
         token = str(token or "").strip().lower()
@@ -93,7 +104,7 @@ def map_token(
             return []
         curated = _load_aliases().get(token)
         if curated:
-            return [curated]
+            return list(curated)[:top_n]
         from disambiguation.pinyin_index import _load_index
 
         allowed = set(int(d) for d in (allowed_dataset_ids or []) if d)

@@ -1,7 +1,9 @@
 {
   "_comment": "结构化解析条配置（parse-bar-design.md v1）。enabled 总开关；visible_roles 可见角色；metric_aliases 指标词表（原句词 → 指标名），保守收录铁定词，回款类因 ds3 聚合断链（backlog-sql-data-layer.md）暂不收录，避免标注出查不了的指标。改动即时生效（config 挂载），无需重启。",
   "enabled": true,
-  "visible_roles": ["super_admin"],
+  "visible_roles": [
+    "super_admin"
+  ],
   "metric_aliases": {
     "开单金额": "开单金额",
     "业绩": "开单金额",
@@ -10,6 +12,12 @@
     "达成率": "达成率",
     "达成": "达成率",
     "任务目标": "任务目标",
-    "目标": "任务目标"
-  }
+    "目标": "任务目标",
+    "滤芯": "滤芯开单金额",
+    "增值": "增值开单金额"
+  },
+  "metric_detail_words": [
+    "滤芯",
+    "增值"
+  ]
 }

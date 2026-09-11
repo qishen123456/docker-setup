@@ -32,16 +32,19 @@
           >{{ displayLabel(s) }}<span v-if="s.learned" class="sa-parse-learned">↺</span></span>{{ i < nodeSlots.length - 1 ? '、' : '' }}
         </template>
       </template>
-      <template v-if="metricSlot">
+      <template v-if="metricSlots.length">
         的
-        <span
-          class="sa-parse-token sa-parse-token-metric"
-          :class="{ 'sa-parse-token-editable': editable, 'sa-parse-token-corrected': metricSlot.corrected, 'sa-parse-token-learned': metricSlot.learned, 'sa-parse-token-pending': isPending(metricSlot) }"
-          :title="tokenTitle(metricTitle, metricSlot) + learnedTip(metricSlot)"
-          @click.stop="openPicker('metric', metricSlot, $event)"
-        >{{ displayLabel(metricSlot) }}<span v-if="metricSlot.learned" class="sa-parse-learned">↺</span></span>
+        <template v-for="(m, mi) in metricSlots" :key="`mt-${mi}`">
+          <span v-if="mi > 0">和</span>
+          <span
+            class="sa-parse-token sa-parse-token-metric"
+            :class="{ 'sa-parse-token-editable': editable, 'sa-parse-token-corrected': m.corrected, 'sa-parse-token-learned': m.learned, 'sa-parse-token-pending': isPending(m) }"
+            :title="tokenTitle(metricTitle, m) + learnedTip(m)"
+            @click.stop="openPicker('metric', m, $event)"
+          >{{ displayLabel(m) }}<span v-if="m.learned" class="sa-parse-learned">↺</span></span>
+        </template>
       </template>
-      <template v-if="!nodeSlots.length && !metricSlot && datasetSlots.length">查询</template>
+      <template v-if="!nodeSlots.length && !metricSlots.length && datasetSlots.length">查询</template>
     </span>
     <span v-if="bar.inherited_note" class="sa-parse-inherited">{{ bar.inherited_note }}</span>
 
@@ -107,7 +110,7 @@ const emit = defineEmits(['ask'])
 const slots = computed(() => (props.bar && Array.isArray(props.bar.slots) ? props.bar.slots : []))
 const datasetSlots = computed(() => slots.value.filter(s => s.slot === 'dataset'))
 const nodeSlots = computed(() => slots.value.filter(s => s.slot === 'node'))
-const metricSlot = computed(() => slots.value.find(s => s.slot === 'metric') || null)
+const metricSlots = computed(() => slots.value.filter(s => s.slot === 'metric'))
 
 // ---- 暂存态（编辑不立即重跑，确认后由父组件编译新问句发进当前会话）----
 // key：node 槽用 span 位置区分多次出现；metric/dataset 单槽直接用 slot 名
@@ -145,7 +148,7 @@ const nodeTitle = (s) => {
   return tokenTitle(base, s) + learnedTip(s)
 }
 const metricTitle = computed(() => {
-  const s = metricSlot.value
+  const s = metricSlots.value[0]
   if (!s) return ''
   return s.span_text ? `指标：原句「${s.span_text}」解析为「${s.resolved_value}」` : `指标：${s.resolved_value}`
 })

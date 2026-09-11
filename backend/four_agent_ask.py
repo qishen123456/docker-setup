@@ -273,8 +273,8 @@ class FourAgentAskService:
 
     def _rank_request_spec(self, text: str, default_limit: int = 0, max_limit: int = 20) -> Dict[str, Any]:
         text = str(text or "")
-        top_match = re.search(r"(?:Top|TOP|top|前)\s*(\d+|[一二两三四五六七八九十]+)", text)
-        bottom_match = re.search(r"(?:后|倒数|垫底|落后)(?:的)?\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|名|位|家)?", text)
+        top_match = re.search(r"(?:Top|TOP|top|(?<!倒数)(?<!垫底)(?<!落后)前)\s*(\d+|[一二两三四五六七八九十]+)", text)
+        bottom_match = re.search(r"(?:后|倒数|垫底|落后)(?:的)?\s*(?:前)?\s*(\d+|[一二两三四五六七八九十]+)\s*(?:个|名|位|家)?", text)
         generic_match = self._rank_limit_match(text)
 
         top_limit = self._parse_cn_int(top_match.group(1), 0) if top_match else 0
@@ -288,7 +288,7 @@ class FourAgentAskService:
             else:
                 top_limit = generic_limit
 
-        top_requested = bool(top_match or re.search(r"(?:Top|TOP|top|最高|最好|第\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:名|位)?)", text))
+        top_requested = bool(top_match or re.search(r"(?:Top|TOP|top|最高|最好|(?<!倒数)(?<!垫底)(?<!落后)第\s*(?:\d+|[一二两三四五六七八九十]+)\s*(?:名|位)?)", text))
         bottom_requested = bool(bottom_match or re.search(r"(?:倒数|最低|最差|垫底)", text))
 
         effective_limit = max(top_limit, bottom_limit) or default_limit
@@ -503,6 +503,122 @@ class FourAgentAskService:
             )
 
         return normalized
+
+    def _auto_build_detail_table(self, report_spec: Optional[Dict[str, Any]], rows: List[Dict[str, Any]]) -> str:
+        """按 report_spec + rows 自动组装 markdown 明细对比表（2026-09-06）。
+
+        触发条件（放宽 2026-09-06）：rows≥2 + answerMode ∈ {comparative/detail} +
+        targetLevel=分公司 或 rows 含层级=分公司的行（兼容 LLM 生成 report_spec 时 targetLevel 缺失的场景）。
+        Agent4 LLM 即使有强约束也常不稳定输出表格，后端强制组装（fail-open for table）。
+        """
+        if not rows or len(rows) < 2:
+            return ""
+        spec = report_spec or {}
+        target_level = str(spec.get("targetLevel") or spec.get("target_level") or "")
+        answer_mode = str(spec.get("answerMode") or spec.get("answer_mode") or "")
+        # 放宽：answerMode 缺失时也出表（用户问"分别是多少"本就明细对比）
+        if answer_mode and answer_mode not in ("comparative", "detail"):
+            return ""
+        # 层级判断：targetLevel=分公司 或 rows 含层级=分公司的行
+        has_branch_level = target_level == "分公司" or any(
+            str(r.get("层级") or "") == "分公司" for r in rows
+        )
+        if not has_branch_level:
+            return ""
+        sample = rows[0] if rows else {}
+        node_col = "节点名称" if "节点名称" in sample else ("node" if "node" in sample else None)
+        if not node_col:
+            return ""
+        skip = {"条线", "层级", "上级名称", "上级", "_depth", "lvl_ord"}
+        # 明细指标列：含"滤芯/增值/开单/任务/达成"等关键词的金额/比率列
+        metric_cols: List[str] = []
+        for k in sample.keys():
+            if k in skip or k == node_col:
+                continue
+            if any(kw in k for kw in ("开单", "任务", "达成", "滤芯", "增值", "剩余")):
+                metric_cols.append(k)
+        if not metric_cols:
+            return ""
+        # 排序：按合计类（开单/总开单）降序，否则按首个指标降序
+        sort_col = None
+        for c in metric_cols:
+            if "合计" in c or ("开单" in c and "滤芯" not in c and "增值" not in c and "配件" not in c):
+                sort_col = c
+                break
+        if not sort_col:
+            sort_col = metric_cols[0]
+        # 数据自带合计行（层级=事业部，如 2026-09-06 golden 2696 UNION 的事业部权威总计）：
+        # 不参与明细排序与求和（否则合计=明细+总计翻倍），固定加粗渲染为末行。
+        builtin_totals = [r for r in rows if str(r.get("层级") or "") == "事业部"]
+        detail_rows = [r for r in rows if str(r.get("层级") or "") != "事业部"]
+        try:
+            rows_sorted = sorted(detail_rows, key=lambda r: float(r.get(sort_col) or 0), reverse=True)
+        except (TypeError, ValueError):
+            rows_sorted = detail_rows
+        # 组装表格
+        headers = [node_col] + metric_cols
+        lines = ["| " + " | ".join(str(h) for h in headers) + " |",
+                 "|" + "|".join(["---"] * len(headers)) + "|"]
+
+        def _cell(col: str, v: Any) -> str:
+            # 比率列补 %（列名含"率"，如 达成率 51.5 → 51.5%）
+            text = self._format_table_number(v)
+            if "率" in col and text != "—":
+                text += "%"
+            return text
+
+        for r in rows_sorted:
+            cells = [str(r.get(node_col, ""))]
+            for c in metric_cols:
+                v = r.get(c)
+                cells.append(_cell(c, v))
+            lines.append("| " + " | ".join(cells) + " |")
+        if builtin_totals:
+            for tr in builtin_totals:
+                cells = [f"**{tr.get(node_col) or '合计'}**"]
+                for c in metric_cols:
+                    cells.append(f"**{_cell(c, tr.get(c))}**")
+                lines.append("| " + " | ".join(cells) + " |")
+        else:
+            # 合计行（求和数值列）
+            total_cells = ["**合计**"]
+            for c in metric_cols:
+                vals: List[float] = []
+                for r in detail_rows:
+                    v = r.get(c)
+                    if v is None:
+                        continue
+                    try:
+                        vals.append(float(v))
+                    except (TypeError, ValueError):
+                        pass
+                total_cells.append(f"**{_cell(c, sum(vals))}**" if vals else "—")
+            lines.append("| " + " | ".join(total_cells) + " |")
+        table = "## 分公司明细对比表\n\n" + "\n".join(lines)
+        return table
+
+    @staticmethod
+    def _analysis_has_table(body: str) -> bool:
+        """检测 analysis 文本是否已含 markdown 表格（≥3 行以 | 开头），用于自动表注入去重。"""
+        pipe_lines = [l for l in str(body or "").split("\n") if l.strip().startswith("|")]
+        return len(pipe_lines) >= 3
+
+    @staticmethod
+    def _format_table_number(v: Any) -> str:
+        """表格内数字格式化（保持原始精度，避免 LLM 二次解释偏差）。"""
+        if v is None or v == "":
+            return "—"
+        try:
+            n = float(v)
+            if abs(n) >= 100000000:
+                return f"{n/100000000:.2f}亿"
+            if abs(n) >= 10000:
+                return f"{n/10000:.1f}万"
+            if abs(n) >= 1:
+                return f"{n:.2f}".rstrip("0").rstrip(".")
+            return str(v)
+        except (TypeError, ValueError):
+            return str(v)
 
     def _build_fallback_analysis(
         self,
@@ -1436,6 +1552,9 @@ class FourAgentAskService:
             text = re.sub(r"[\s？?。.!！,，、：:；;（）()]+", "", str(value or "").lower())
             text = re.sub(r"^(请问|帮我|帮忙|麻烦|查一下|看一下|查询|分析一下|我想知道)+", "", text)
             text = re.sub(r"(呢|啊|呀|吗|么|吧)$", "", text)
+            # 助词"的"不影响问法同一性（"用服事业部的业绩"≡"用服事业部业绩"），
+            # 不剥会让主体纠正改写（LLM 爱加"的"）精确错失 golden 直通（2026-09-03 实测）
+            text = text.replace("的", "")
             text = text.replace("消费者事业部", "").replace("消费事业部", "").replace("消费者", "")
             text = text.replace("商用事业部", "").replace("商用", "")
             return text
@@ -1462,10 +1581,19 @@ class FourAgentAskService:
             r"(?:节点名称|上级名称|分公司|代表处|业务部)\s+LIKE\s+'%([^%]+)%'",
             re.IGNORECASE,
         )
+        # 只有 LIKE 内容是"层级词"时才可能构成层级劫持；内容是节点名片段
+        # （如 '%粤桂琼%'）时是精确节点模糊匹配，不属于劫持
+        # （bug 2026-09-03：用服 golden 2695 "分公司 LIKE '%粤桂琼%'" 被误拒，
+        # 退回 LLM 生成，行数随 Agent3 复核波动）。
+        _LEVEL_LIKE_WORDS = ("城市分公司", "城市公司", "分公司", "业务部", "事业部", "代表处", "业务员", "业务代表", "条线")
 
         def sample_level_like_hijacks_question(sql: str) -> bool:
             text = str(sql or "")
-            like_levels = [m.group(1) for m in _LEVEL_LIKE_PATTERN.finditer(text)]
+            like_levels = [
+                m.group(1)
+                for m in _LEVEL_LIKE_PATTERN.finditer(text)
+                if str(m.group(1) or "").strip() in _LEVEL_LIKE_WORDS
+            ]
             if not like_levels:
                 return False
             requested = self._question_subject_names(question, context)
@@ -2965,26 +3093,43 @@ ranking_params 说明：
     ) -> Dict[str, Any]:
         options = []
         seen_ids: set[int] = set()
+        # 完整问句格式（2026-09-02 统一）：'{业务名} · {原问题}'，与节点级确认卡风格一致
+        try:
+            from disambiguation import unified_confirm as _uc
+        except Exception:
+            _uc = None
+        q = str(question or "").strip()
         for dataset, _score in supported_candidates:
             dataset_id = int(dataset.get("id") or 0)
             if dataset_id <= 0 or dataset_id in seen_ids:
                 continue
             seen_ids.add(dataset_id)
             dataset_name = dataset.get("dataset_name") or f"数据集 {dataset_id}"
+            if _uc and q:
+                label = f"{_uc._business_name(dataset_name)} · {q}"
+            else:
+                label = dataset_name
             options.append(
                 self._build_confirmation_option(
                     option_id=f"dataset_scope_{dataset_id}",
-                    label=dataset_name,
+                    label=label,
                     description=f"按 {dataset_name} 的“{'/'.join(matched_levels)}”口径继续。",
                     dataset_ids=[dataset_id],
                     option_type="dataset_disambiguation",
                     extra={
                         "confirmation_type": "dataset_disambiguation",
                         "resolved_dataset_name": dataset_name,
+                        "dataset_name": dataset_name,
                         "scope_mode": "aggregate",
                     },
                 )
             )
+        # 默认推荐排序（2026-09-02 统一）
+        if _uc and options:
+            try:
+                options = _uc.apply_recommendation(options)
+            except Exception:
+                pass
         dataset_ids = [int(item.get("id") or 0) for item, _score in supported_candidates if int(item.get("id") or 0) > 0]
         dataset_ids = list(dict.fromkeys(dataset_ids))
         return {
@@ -2996,7 +3141,7 @@ ranking_params 说明：
             "match_score": match_score,
             "confirmation_role": "boss",
             "confirmation_type": "dataset_disambiguation",
-            "confirmation_question": f"问题中的“{'/'.join(matched_levels)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
+            "confirmation_question": "你是不是想问：",
             "confirmation_options": options,
             "candidate_dataset_ids": candidate_dataset_ids or dataset_ids,
             "arbiter_reason": f"{reason}:{','.join(matched_levels)}",
@@ -3366,10 +3511,25 @@ ranking_params 说明：
         def is_org_member_alias(alias_text: str) -> bool:
             if alias_text in {str(dataset.get("dataset_name") or ""), str(dataset.get("business_domain") or "")}:
                 return False
-            return any(
+            if any(
                 alias_text.endswith(suffix) and len(alias_text) > len(suffix)
                 for suffix in subject_suffixes
-            )
+            ):
+                return True
+            # 2026-09-03 用服实测：节点裸名（不带层级后缀，如"粤桂琼"）混进 synonym 时
+            # 也要识别为组织成员别名——否则"粤桂琼呢"会被当成"点名消费者数据集"，
+            # 追问上下文继承（hint=[64]）在 _should_keep_followup_dataset_hint 被误释放。
+            try:
+                node_index = getattr(self, "_dataset_node_index", None)
+                if not isinstance(node_index, dict):
+                    node_index = self._load_dataset_node_index()
+                    self._dataset_node_index = node_index
+                return any(
+                    str(item.get("alias") or "").strip() == alias_text
+                    for item in (node_index.get("flat_alias_index") or [])
+                )
+            except Exception:
+                return False
 
         score = 0
         alias_candidates = [
@@ -3548,7 +3708,7 @@ ranking_params 说明：
                 "requires_confirmation": True,
                 "confirmation_role": "boss",
                 "confirmation_type": "dataset_disambiguation",
-                "confirmation_question": f"检测到“{first_match['match'].get('matched_alias')}”在多个数据集里都可能成立，请确认要使用哪个口径：",
+                "confirmation_question": "你是不是想问：",
                 "confirmation_options": options,
                 "candidate_dataset_ids": candidate_ids,
                 "resolved_entities_preview": first_match["match"].get("members") or [],
@@ -3680,11 +3840,17 @@ ranking_params 说明：
                         extra={"confirmation_type": "dataset_disambiguation", "scope_mode": "cross"},
                     )
                 )
+                # 默认推荐排序（2026-09-02 统一）：跨数据集汇总选项排最后（不在优先级表内）
+                try:
+                    from disambiguation import unified_confirm as _uc
+                    options = _uc.apply_recommendation(options)
+                except Exception:
+                    pass
                 return {
                     "requires_confirmation": True,
                     "confirmation_role": "boss",
                     "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": "当前问题可能命中多个数据集，请确认要使用哪个口径：",
+                    "confirmation_question": "你是不是想问：",
                     "confirmation_options": options,
                     "candidate_dataset_ids": candidate_ids,
                 }
@@ -3729,7 +3895,7 @@ ranking_params 说明：
                     "requires_confirmation": True,
                     "confirmation_role": "boss",
                     "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": f"问题中的“{'/'.join(matched_terms)}”在多个数据集中都可能出现，请确认使用哪个数据集口径：",
+                    "confirmation_question": "你是不是想问：",
                     "confirmation_options": options,
                     "candidate_dataset_ids": candidate_ids,
                 }
@@ -3808,7 +3974,7 @@ ranking_params 说明：
   "match_score": 0,
   "requires_confirmation": true,
   "confirmation_role": "boss",
-  "confirmation_question": "检测到多个可能的数据集，请选择要查询的口径：",
+  "confirmation_question": "你是不是想问：",
   "confirmation_options": [
     {{"id": "rec_1", "label": "系统推荐：电商事业部 - 业务经理排名", "dataset_ids": [62], "scope_filter": "业务经理层级", "score": 85, "reason": "业务经理是电商数据集明确支持的层级"}},
     {{"id": "opt_2", "label": "商用事业部 - 业务经理/业务员排名", "dataset_ids": [3], "scope_filter": "业务员层级", "score": 45, "reason": "商用数据集主要支持业务员层级"}}
@@ -3943,6 +4109,7 @@ ranking_params 说明：
                     "split_queries": [{"dataset_id": only["dataset_id"], "sub_query": rewritten}],
                 }
             if len(filtered) >= 2:
+                from disambiguation import unified_confirm as _uc
                 confirmation_options = []
                 seen_option_ids = set()
                 for idx, item in enumerate(filtered):
@@ -3955,14 +4122,15 @@ ranking_params 说明：
                     seen_option_ids.add(opt_id)
                     confirmation_options.append({
                         "id": opt_id,
-                        "label": f"{item['dataset_name']} - {item['node_name']}",
-                        "description": f"{item['node_level']}层级",
+                        "label": _uc.format_full_question(str(item.get("dataset_name") or ""), str(item["node_name"])),
+                        "description": f"{item['node_level']}层级 · {item['dataset_name']}",
                         "dataset_ids": [did],
                         "option_type": "dataset_disambiguation",
                         "option_id": opt_id,
                         "confirmation_type": "dataset_disambiguation",
                         "resolved_subject_name": item["node_name"],
                         "resolved_subject_level": item["node_level"],
+                        "dataset_name": str(item.get("dataset_name") or ""),
                         "scope_filter": {},
                         "score": 100,
                     })
@@ -3973,6 +4141,8 @@ ranking_params 说明：
                     node_name=bare_node_candidate,
                     candidate_dataset_ids=[o["dataset_ids"][0] for o in confirmation_options],
                 )
+                # 默认推荐：按数据集优先级排序 + 不撞车时标 recommended（2026-09-02 统一）
+                confirmation_options = _uc.apply_recommendation(confirmation_options)
                 return {
                     "dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
                     "intent": "confirm",
@@ -3982,7 +4152,7 @@ ranking_params 说明：
                     "match_score": 100,
                     "confirmation_role": "boss",
                     "confirmation_type": "dataset_disambiguation",
-                    "confirmation_question": f"您说的「{bare_node_candidate}」在多个数据集中都有命中，请确认要查询哪个：",
+                    "confirmation_question": "你是不是想问：",
                     "confirmation_options": confirmation_options,
                     "candidate_dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
                     "arbiter_reason": "bare_node_index_ambiguous",
@@ -4021,6 +4191,11 @@ ranking_params 说明：
                         ],
                     }
                 if len(distinct_matches) >= 2:
+                    # 统一确认卡：候选用"节点级完整问句"格式（业务名 · 节点 的 指标），替换"数据集名 - 节点名"
+                    try:
+                        from disambiguation import unified_confirm as _uc
+                    except Exception:
+                        _uc = None
                     confirmation_options = []
                     for idx, item in enumerate(distinct_matches):
                         dataset_id = int(item.get("dataset_id") or 0)
@@ -4029,10 +4204,14 @@ ranking_params 说明：
                         dataset_name = str(item.get("dataset_name") or f"数据集 {dataset_id}").strip()
                         node_name = str(item.get("node_name") or "").strip()
                         node_level = str(item.get("node_level") or "").strip()
+                        _label = (
+                            _uc.format_full_question(dataset_name, node_name)
+                            if _uc else f"{dataset_name} - {node_name}"
+                        )
                         confirmation_options.append(
                             {
                                 "id": f"node_index_{dataset_id}_{idx + 1}",
-                                "label": f"{dataset_name} - {node_name}",
+                                "label": _label,
                                 "description": f"{node_level}层级",
                                 "dataset_ids": [dataset_id],
                                 "option_type": "dataset_disambiguation",
@@ -4040,6 +4219,7 @@ ranking_params 说明：
                                 "confirmation_type": "dataset_disambiguation",
                                 "resolved_subject_name": node_name,
                                 "resolved_subject_level": node_level,
+                                "dataset_name": dataset_name,
                                 "scope_filter": {},
                                 "score": 100,
                             }
@@ -4052,6 +4232,9 @@ ranking_params 说明：
                             continue
                         seen_option_ids.add(option_id)
                         deduped_options.append(option)
+                    # 默认推荐：按数据集优先级排序 + 不撞车时标 recommended（2026-08-31 定稿）
+                    if _uc and deduped_options:
+                        deduped_options = _uc.apply_recommendation(deduped_options)
                     if deduped_options:
                         return {
                             "dataset_ids": matched_dataset_ids,
@@ -4062,7 +4245,7 @@ ranking_params 说明：
                             "match_score": 100,
                             "confirmation_role": "boss",
                             "confirmation_type": "dataset_disambiguation",
-                            "confirmation_question": f"您说的“{subject_name}”是指哪个数据集里的组织节点？",
+                            "confirmation_question": "你是不是想问：",
                             "confirmation_options": deduped_options,
                             "candidate_dataset_ids": matched_dataset_ids,
                             "arbiter_reason": "node_index_dataset_ambiguous",
@@ -4200,7 +4383,7 @@ ranking_params 说明：
                     for match in (entry.get("matches") or []):
                         try:
                             if int(match.get("dataset_id") or 0) in catalog_ids:
-                                hits.append(match)
+                                hits.append({**match, "_matched_alias": alias, "_alias_len": len(alias)})
                         except (TypeError, ValueError):
                             continue
                 return hits
@@ -4221,6 +4404,12 @@ ranking_params 说明：
                 except Exception:
                     pass
 
+            # 最长别名优先：题干已被长别名精确到节点时（"上海城市公司"），
+            # 丢弃其短前缀（"上海"）带出的兄弟节点，避免过度确认
+            if raw_hits:
+                max_alias_len = max(int(h.get("_alias_len") or 0) for h in raw_hits)
+                raw_hits = [h for h in raw_hits if int(h.get("_alias_len") or 0) == max_alias_len]
+
             # 按 (数据集, 节点) 去重，同节点的别名包含关系（南部/南部分公司）自然收敛
             distinct_node_hits: List[Dict[str, Any]] = []
             seen_node_keys = set()
@@ -4232,7 +4421,9 @@ ranking_params 说明：
                 distinct_node_hits.append(match)
 
             node_hit_dataset_ids = {int(m.get("dataset_id") or 0) for m in distinct_node_hits}
-            if len(node_hit_dataset_ids) == 1:
+            # 唯一节点才直锁；同数据集多节点（nb→南部/北部、上海→城市公司/代表处）
+            # 属于主体本身歧义，落下方节点确认卡让用户选，不再静默二选一
+            if len(node_hit_dataset_ids) == 1 and len(distinct_node_hits) <= 1:
                 locked_id = next(iter(node_hit_dataset_ids))
                 locked_score = next(
                     (score for d, _c, score in candidate_contexts if int(d.get("id") or 0) == locked_id),
@@ -4261,25 +4452,36 @@ ranking_params 说明：
                     locked_route["resolved_subject_level"] = str(distinct_node_hits[0].get("node_level") or "")
                 return locked_route
             if len(distinct_node_hits) >= 2:
+                from disambiguation import unified_confirm as _uc
+                shown_hits = distinct_node_hits[:6]
+                single_dataset = len({int(item.get("dataset_id") or 0) for item in shown_hits}) == 1
                 confirmation_options = []
-                for idx, item in enumerate(distinct_node_hits[:6]):
+                for idx, item in enumerate(shown_hits):
                     did = int(item.get("dataset_id") or 0)
                     opt_id = f"node_index_{did}_{idx + 1}"
                     node_name = str(item.get("node_name") or "").strip()
                     confirmation_options.append({
                         "id": opt_id,
-                        "label": f"{item.get('dataset_name') or f'数据集 {did}'} - {node_name}",
-                        "description": f"{item.get('node_level') or ''}层级",
+                        # 统一完整问句格式（含完整数据集名+完整节点名+指标），与 node_index_dataset_ambiguous 一致。
+                        # 节点名取书架真实 node_name（完整不省略），让用户一眼看懂"这是问哪句完整的话"。
+                        "label": _uc.format_full_question(str(item.get("dataset_name") or ""), node_name),
+                        "description": f"{item.get('dataset_name') or f'数据集 {did}'} · {item.get('node_level') or ''}层级",
                         "dataset_ids": [did],
                         "option_type": "dataset_disambiguation",
                         "option_id": opt_id,
                         "confirmation_type": "dataset_disambiguation",
                         "resolved_subject_name": node_name,
                         "resolved_subject_level": str(item.get("node_level") or "").strip(),
+                        "dataset_name": str(item.get("dataset_name") or "").strip(),
                         "scope_filter": {},
                         "score": 100,
                     })
-                hint_text = f"「{initials_hint}」" if initials_hint else "问题中的对象"
+                matched_alias = str(distinct_node_hits[0].get("_matched_alias") or "").strip()
+                hint_text = f"「{initials_hint or matched_alias}」" if (initials_hint or matched_alias) else "问题中的对象"
+                # 统一确认话术（与 node_index_dataset_ambiguous 一致）
+                confirm_question = "你是不是想问："
+                # 默认推荐：按数据集优先级排序 + 不撞车时标 recommended（2026-08-31 定稿）
+                confirmation_options = _uc.apply_recommendation(confirmation_options)
                 return {
                     "dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
                     "intent": "confirm",
@@ -4289,7 +4491,7 @@ ranking_params 说明：
                     "match_score": 100,
                     "route_margin": 100,
                     "candidate_dataset_ids": [o["dataset_ids"][0] for o in confirmation_options],
-                    "confirmation_question": f"{hint_text}在多个数据集中命中了不同节点，请确认要查询哪个：",
+                    "confirmation_question": confirm_question,
                     "confirmation_options": confirmation_options,
                     "arbiter_reason": "node_index_ambiguous",
                 }
@@ -4676,7 +4878,7 @@ ranking_params 说明：
                 "match_score": best_score,
                 "route_margin": route_margin,
                 "confirmation_role": "boss",
-                "confirmation_question": f"检测到多个数据集都支持{'、'.join(matched_levels)}口径，请选择要查询的数据集：",
+                "confirmation_question": "你是不是想问：",
                 "confirmation_options": level_confirm_options,
                 "candidate_dataset_ids": [item[0]["id"] for item in ranked[:3]],
                 "arbiter_reason": f"level_ambiguity_guard:{','.join(matched_levels)}",
@@ -4821,6 +5023,15 @@ ranking_params 说明：
         dataset_code = str(dataset.get("dataset_code") or dataset.get("code") or "")
         dataset_name = str(dataset.get("dataset_name") or dataset.get("name") or "")
         normalized_question = str(question or "").replace("\n", " ").strip()
+        # bug 2026-09-03：系统确认注记（"补充确认：确认组织节点：…；输出方式：先汇总后分析"）
+        # 含"后"等排名关键词，会误导消费/商用规则引擎的关键词扫描（"粤桂琼分公司业绩"确认后
+        # 被判成"倒数 Top3"：达成率 ASC LIMIT 3）。只剥系统注记（带固定标记），
+        # 保留用户自由补充文本（确认卡草稿框输入的口径可能含有效维度词）。
+        normalized_question = re.sub(
+            r"\s*补充确认：(?=\S*(?:确认组织节点：|确认成员集合：|输出方式：)).*$",
+            "",
+            normalized_question,
+        ).strip()
         original_question = str(context.get("original_question") or "").replace("\n", " ").strip()
         if original_question and original_question not in normalized_question:
             normalized_question = f"{normalized_question} {original_question}".strip()
@@ -5318,6 +5529,14 @@ LIMIT 200
             # 分别解析用户明确要求的前 N 与后 N，支持“前3后5”等双向不同数量
             top_rank_limit = int(query_intent.get("top_limit") if query_intent.get("top_limit") is not None else (rank_spec.get("top_limit") or 0))
             bottom_rank_limit = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec.get("bottom_limit") or 0))
+            # 有效排名方向回写 query_intent：报告构建器和前端卡片只读 query_intent，
+            # 不回写会出现"SQL 按 both 双向取数、报告却按单边标注榜首/末位"的撕裂（2026-08-30 实测）
+            if rank_sides and not str(query_intent.get("rank_sides") or "").strip():
+                query_intent["rank_sides"] = rank_sides
+            if rank_sides == "both":
+                query_intent["direction"] = "desc"
+            elif rank_sides == "bottom" and not str(query_intent.get("direction") or "").strip():
+                query_intent["direction"] = "asc"
             # 只有题干带明确数量词（Top/前/后/倒数）才默认取 Top3；仅说“排名/排行”时返回全部
             default_rank_limit = 3 if self._rank_limit_match(normalized_question) or any(
                 token in normalized_question for token in ["Top", "top", "前", "后", "倒数"]
@@ -6997,6 +7216,14 @@ WITH 字段提取 AS (
         rank_sides = str(query_intent.get("rank_sides") or rank_spec.get("sides") or "")
         consumer_top_rank_limit = int(query_intent.get("top_limit") if query_intent.get("top_limit") is not None else (rank_spec.get("top_limit") or 0))
         consumer_bottom_rank_limit = int(query_intent.get("bottom_limit") if query_intent.get("bottom_limit") is not None else (rank_spec.get("bottom_limit") or 0))
+        # 有效排名方向回写 query_intent：报告构建器和前端卡片只读 query_intent，
+        # 不回写会出现"SQL 按 both 双向取数、报告却按单边标注榜首/末位"的撕裂（2026-08-30 实测）
+        if rank_sides and not str(query_intent.get("rank_sides") or "").strip():
+            query_intent["rank_sides"] = rank_sides
+        if rank_sides == "both":
+            query_intent["direction"] = "desc"
+        elif rank_sides == "bottom" and not str(query_intent.get("direction") or "").strip():
+            query_intent["direction"] = "asc"
 
         def consumer_rank_limit() -> int:
             rank_limit = self._safe_int(query_intent.get("top_n"), 0) if intent_is_ranking else 0
@@ -7760,16 +7987,18 @@ Agent1 路由结果：
         if not normalized_question:
             return []
 
-        org_level_tokens = ("分公司", "城市分公司", "城市公司", "业务部", "代表处", "业务代表")
-        if not any(token in str(question or "") for token in org_level_tokens):
-            return []
-
         target_name = self._extract_followup_org_target(question)
         if target_name:
             # 修复：实体不属于 hint 数据集时释放 hint，让系统重新路由
             # 例如 Q1=消费者, Q2=东部分公司 → "东部分公司"只属于商用 → 返回[]释放hint
+            # 2026-09-03 用服实测：裸节点追问（"粤桂琼呢"，无层级词）也要继承上下文——
+            # 目标在上一轮数据集里就直接锁定，不能被层级词门槛挡掉后重新裸路由。
             if self._is_entity_in_dataset(target_name, latest_dataset_id):
                 return [latest_dataset_id]
+            return []
+
+        org_level_tokens = ("分公司", "城市分公司", "城市公司", "业务部", "代表处", "业务代表")
+        if not any(token in str(question or "") for token in org_level_tokens):
             return []
 
         profile = get_dataset_profile(target_dataset.get("dataset_code"), target_dataset.get("dataset_name"))
@@ -8581,11 +8810,35 @@ LLD：
             )
             if str(retry_result.get("review_summary") or "").strip() != "review fallback: agent3 unavailable":
                 result = retry_result
+            else:
+                # fail-open（2026-09-06）：Agent3 两次复核均不可用时【放行】SQL（宁可漏不可错拦）。
+                # 旧的 fail-closed（approved=False）导致 LLM 抖动时 SQL 明明正确也被拒 → 0 行
+                # （用户实测"滤芯/增值查询 0 行"根因：Agent3 超时 62s 两次失败，SQL 全字段正确仍被拒）。
+                # Agent3 是复核保险层，它挂了不应阻断主流程；放行并打风险标记。
+                result = {
+                    "approved": True,
+                    "final_sql": sql_text,
+                    "review_summary": "agent3 unavailable, executed without review (fail-open)",
+                    "risks": ["Agent3 复核不可用（模型超时/失败），SQL 未经复核直接执行。"],
+                    "fixes": [],
+                }
         result["approved"] = False if str(result.get("approved")).lower() in ("false", "0", "none", "") else bool(result.get("approved"))
         result["risks"] = result.get("risks") if isinstance(result.get("risks"), list) else [str(result.get("risks") or "").strip()] if result.get("risks") else []
         result["fixes"] = result.get("fixes") if isinstance(result.get("fixes"), list) else [str(result.get("fixes") or "").strip()] if result.get("fixes") else []
         if result.get("approved") is not False and not result.get("final_sql"):
             result["final_sql"] = sql_text
+        # fail-open（2026-09-06 进一步放宽）：Agent3 拒绝时【一律放行原 SQL】+ 警告。
+        # 覆盖范围：①两次复核均不可用（unavailable）②拒绝但 final_sql 空（矛盾）③拒绝且 final_sql 有值（Agent3 修正版不可信/LLM 抖动会改坏原 SQL）。
+        # 用户"宁可漏不可错拦"原则：Agent3 误判或抖动不能阻断主流程；原 SQL 是 Agent2 正常生成的，多数场景正确。
+        # 已有的最终 SQL 字段校验（_dataset_field_validation）仍兜底安全。
+        if not result.get("approved"):
+            result = {
+                "approved": True,
+                "final_sql": sql_text,
+                "review_summary": "agent3 not approved, executed original SQL (fail-open)",
+                "risks": (result.get("risks") or []) + ["Agent3 未通过复核，已放行原 SQL（疑为 LLM 误判/抖动）。"],
+                "fixes": result.get("fixes") or [],
+            }
         final_sql = str(result.get("final_sql") or "").strip()
         if final_sql:
             validation = self._dataset_field_validation(final_sql, context)
@@ -8681,15 +8934,29 @@ LLD：
         )
         global_report_standard = """
 你现在是一个智能数据分析报告生成引擎。生成报告时必须遵循以下全局标准：
-1. 动态布局：先识别意图。对比查询使用“核心结论 -> 关键指标对标 -> 层级差异核心看点 -> 落地建议”的对称结构；单体查询使用“核心 KPI -> 层级分布 -> 细分明细”的纵向结构；列表或排名查询突出名次、差距和相对领先/相对承压节点。
-2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用“万”；100万-1亿取整“万”；1亿以上保留2位小数“亿”。不得随意生成金额格式。
-3. 问题优先：核心结论第一句话必须直接回答用户原问题。用户问“哪个分公司/业务部/代表处最好、最高、最低、最差”时，先回答目标管理层级的对象名称，再给达成率、总任务、实际开单、任务缺口；下级城市公司/代表处只能作为后续支撑，不能抢在目标层级结论前面。
+1. 动态布局：先识别意图。对比查询使用"核心结论 -> 关键指标对标 -> 分公司级明细对比表 -> 层级差异核心看点 -> 落地建议"的对称结构；单体查询使用"核心 KPI -> 层级分布 -> 细分明细"的纵向结构；列表或排名查询突出名次、差距和相对领先/相对承压节点。
+2. 强制格式化：所有金额必须按统一函数口径表达：1万以下原样；1万-100万保留1位小数并使用"万"；100万-1亿取整"万"；1亿以上保留2位小数"亿"。不得随意生成金额格式。
+3. 问题优先：核心结论第一句话必须直接回答用户原问题。用户问"哪个分公司/业务部/代表处最好、最高、最低、最差"时，先回答目标管理层级的对象名称，再给达成率、总任务、实际开单、任务缺口；下级城市公司/代表处只能作为后续支撑，不能抢在目标层级结论前面。
 4. 模板优先：排名/TopN 展示必须遵循报告配置 intentPolicies.ranking.defaultTopN 或本轮 queryIntent.top_n；不要固定写 Top3。
-5. 风险提示：如果最优对象达成率仍低于 60%，核心结论必须提示“低于60%红线”或等价风险表述，避免只说相对最好。
-6. 视觉引导：根据本次结果的样本数量和达成率分布动态识别“表现较好”和“相对承压”；两组对象不得重复。只有 1 个可比对象时不做横向好坏对比，只描述该对象自身情况。
-7. 管理层摘要：核心结论不复读 TopN 全量名单，不超过 2 句话；排名类只点名前 3 和榜首关键指标，完整名单交给排名表。重点发现必须综合“差距、风险、动作”，不得再次罗列完整名单。
-8. 分析文本：严禁重复主语和长篇段落。单体分析采用“核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议”的结构；多组织对比必须明确“谁领先、差多少、谁向谁学、改什么”。
-9. 文案：报告标题统一为“业绩分析报告”，不得出现“极简报告”“极简总结”等冗余字样。
+5. 风险提示：如果最优对象达成率仍低于 60%，核心结论必须提示"低于60%红线"或等价风险表述，避免只说相对最好。
+6. 视觉引导：根据本次结果的样本数量和达成率分布动态识别"表现较好"和"相对承压"；两组对象不得重复。只有 1 个可比对象时不做横向好坏对比，只描述该对象自身情况。
+7. 管理层摘要：核心结论不复读 TopN 全量名单，不超过 2 句话；排名类只点名前 3 和榜首关键指标，完整名单交给排名表。重点发现必须综合"差距、风险、动作"，不得再次罗列完整名单。
+8. 分析文本：严禁重复主语和长篇段落。单体分析采用"核心结论 -> 亮点分析 -> 问题诊断 -> 改进建议"的结构；多组织对比必须明确"谁领先、差多少、谁向谁学、改什么"。
+9. 文案：报告标题统一为"业绩分析报告"，不得出现"极简报告""极简总结"等冗余字样。
+10. 强制表格（2026-09-06 用户反馈：报告必须按分公司分列展示明细，不能只给总数）：
+   a) **触发条件**：当问题涉及"多个明细指标对比"（如"滤芯和增值分别是多少""开单和达成率分别多少"）或"多对象对比/明细"（如"各分公司业绩如何"），且数据行≥2 行时——必须输出 markdown 表格。
+   b) **表格位置**：在"核心结论"之后、"层级差异核心看点"之前。
+   c) **表格列**（按可用性动态调整，**指标列每明细指标一列，单独合计列，目标列可选**）：
+      | 节点 | [指标A] | [指标B] | 合计 | 目标 | 达成率 |
+      示例（滤芯/增值/合计/目标/达成率 5 列）：
+      | 节点 | 滤芯开单金额 | 增值开单金额 | 合计开单 | 总任务金额 | 达成率 |
+      | 粤桂琼分公司 | 2687.8万 | 107.2万 | 2795.0万 | 5425.0万 | 51.5% |
+      | ...（按合计开单降序） |
+      | **合计** | **2.24亿** | **1716.4万** | **2.41亿** | **4.33亿** | **55.7%** |
+   d) **合计行必出**（最后一行加粗）：对所有数据行的各列求和，便于用户一眼看总数对比目标。
+   e) **目标列**：如果数据里有"总任务"等目标字段，**必须带目标列和达成率列**——用户原话"合计的整体是有目标的"，没目标也要标注（如"无目标"或"—"），不能漏掉目标维度。
+   f) **排序列**：明细对比默认按合计列降序；排名类按用户指定方向。
+   g) 表格内容用 markdown pipe 语法，前端会渲染为 HTML 表格。
 """.strip()
         system_prompt = f"{system_prompt}\n\n{global_report_standard}"
         prompt_groups = self._safe_dict(context.get("agent_prompts"))
@@ -8737,6 +9004,15 @@ Agent3 复核结果：
             # 兜底：剥离 <think> 思考块后若正文为空（token 被思考耗尽），改用规则化 fallback 报告，
             # 避免把"只有思考没有结论"的文本透传给前端导致重点发现/建议动作显示异常。
             body = re.sub(r"<think>[\s\S]*?</think>", "", str(content or "")).strip()
+            # 自动明细对比表（2026-09-06 用户反馈"按分公司分两列展示"）：Agent4 LLM 即使强约束也不稳定输出表格，
+            # 后端按 report_spec + rows 强制组装 markdown table 追加到 analysis（fail-open for table）。
+            # 去重（2026-09-06）：LLM 已自己输出表格时不重复注入（否则合计行出现 2 次，用户实测反馈）。
+            table_md = self._auto_build_detail_table(
+                result.get("report_spec"), result.get("rows") or []
+            )
+            if table_md and not self._analysis_has_table(body):
+                body = (body + "\n\n" + table_md).strip()
+                content = body
             if not body:
                 self._append_trace(
                     trace,
@@ -9428,16 +9704,20 @@ Agent3 复核结果：
         # 0 行诊断（输入理解层 P0.5 / 设计文档 §5）：全部数据集 0 行时三分支干预。
         # 分支 A/B → early_clarify 卡片（候选点击重问）；分支 C → 诚实文案替换垃圾分析报告。
         # fail-open：诊断器任何异常都不影响 0 行旧行为；正常问数（有行）零开销。
+        # 2026-09-03：诊断/卡片必须用用户原始问题（route.raw_question），不能用追问改写后的
+        # effective_question——条件类追问会被 resolve_followup 拼成"指令+上轮SQL+新问题"的
+        # prompt blob，对它做拼音召回会把 SQL 里的节点名当碎片，卡片文案也漏出 prompt。
         if dataset_results and not any(int(d.get("row_count") or 0) > 0 for d in dataset_results):
             try:
                 from disambiguation import zero_row_diagnosis as _zrd
 
                 if _zrd.is_enabled():
+                    _diag_question = str(route.get("raw_question") or "").strip() or question
                     _diag = _zrd.diagnose(
-                        question, route, dataset_results, current_user=current_user,
+                        _diag_question, route, dataset_results, current_user=current_user,
                     )
                     if _diag and _diag.get("branch") in ("A", "B") and _diag.get("candidates"):
-                        _zrd_result = _zrd.build_clarify_result(question, _diag, route)
+                        _zrd_result = _zrd.build_clarify_result(_diag_question, _diag, route)
                         _zrd_result["total_duration"] = round(time.time() - started, 2)
                         self._append_trace(
                             trace, "zero_row.diagnosis", "info",
@@ -9534,17 +9814,40 @@ Agent3 复核结果：
             )
             rewritten_question = str((org_subject_resolution or {}).get("rewritten_question") or "").strip()
             if rewritten_question:
-                effective_question = rewritten_question
-                self._append_trace(
-                    trace,
-                    "agent1.org_subject_resolved",
-                    "info",
-                    original_question=question,
-                    rewritten_question=rewritten_question,
-                    subject_name=(org_subject_resolution or {}).get("subject_name"),
-                    subject_level=(org_subject_resolution or {}).get("subject_level"),
-                    confidence=(org_subject_resolution or {}).get("confidence"),
-                )
+                # 域前缀保护（2026-09-03 用服接入实测）：主体纠正会把"用服粤桂琼"的
+                # 域前缀"用服"当口语剥掉，改写后路由只剩跨数据集同名节点，在
+                # 消费者/用服之间误弹确认卡。命中唯一域前缀且保留主体仍是真实节点时，
+                # 放弃改写，用原始问题进入路由（组织树解析器的域前缀收窄会直锁数据集）。
+                domain_scope_id = None
+                try:
+                    domain_scope_id = self.organization_route_resolver.domain_prefix_scope_id(
+                        question,
+                        rewritten_question,
+                        self.repository.get_agent1_catalog(),
+                    )
+                except Exception:
+                    domain_scope_id = None
+                if domain_scope_id is not None:
+                    self._append_trace(
+                        trace,
+                        "agent1.org_subject_rewrite_rejected",
+                        "info",
+                        original_question=question,
+                        rewritten_question=rewritten_question,
+                        domain_scope_dataset_id=domain_scope_id,
+                    )
+                else:
+                    effective_question = rewritten_question
+                    self._append_trace(
+                        trace,
+                        "agent1.org_subject_resolved",
+                        "info",
+                        original_question=question,
+                        rewritten_question=rewritten_question,
+                        subject_name=(org_subject_resolution or {}).get("subject_name"),
+                        subject_level=(org_subject_resolution or {}).get("subject_level"),
+                        confidence=(org_subject_resolution or {}).get("confidence"),
+                    )
         explicit_dataset_ids = self._explicit_dataset_ids_from_question(
             question,
             allowed_dataset_ids=allowed_dataset_ids,
@@ -9666,14 +9969,16 @@ Agent3 复核结果：
                     )
                     preferred_dataset_ids = []
                 else:
+                    # 用户/前端明确指定（非沿用 hint，followup_hint_locked=False 且 preferred 非空必然是显式选择）：
+                    # 尊重锁定不释放（2026-09-06 粤桂琼实测：传 selected_dataset_ids=[64] 仍被误释放弹卡）。
+                    # 沿用 hint 的释放走上面 followup_hint_locked 分支；explicit_dataset_ids（问题明确指向别的数据集）由后续逻辑优先处理。
                     self._append_trace(
                         trace,
-                        "agent1.preferred_dataset_released",
+                        "agent1.preferred_dataset_locked_explicit",
                         "info",
-                        reason="current_question_explicitly_matches_another_dataset",
+                        reason="explicitly_selected_dataset_respected",
                         preferred_dataset_ids=preferred_dataset_ids or [],
                     )
-                    preferred_dataset_ids = []
 
             if preferred_dataset_ids and not explicit_dataset_ids:
                 matched_levels_for_preferred = self._matched_org_level_terms(question)
@@ -9694,7 +9999,8 @@ Agent3 复核结果：
                             for term in matched_levels_for_preferred
                         ):
                             supported_preferred_level_ids.add(int(dataset.get("id") or 0))
-                    if len(supported_preferred_level_ids) >= 2:
+                    if len(supported_preferred_level_ids) >= 2 and followup_hint_locked:
+                        # 仅沿用 hint 时释放；用户明确指定（hint_locked=False）尊重锁定不释放（2026-09-06 粤桂琼实测）
                         self._append_trace(
                             trace,
                             "agent1.preferred_dataset_released",
@@ -9713,7 +10019,9 @@ Agent3 复核结果：
                     index_matches = self._node_index_matches(subject_name)
                     distinct_matches = self._dedupe_node_index_matches(index_matches)
                     candidate_dataset_ids = sorted({int(item.get("dataset_id") or 0) for item in distinct_matches if int(item.get("dataset_id") or 0) > 0})
-                    if len(distinct_matches) >= 2:
+                    if len(distinct_matches) >= 2 and followup_hint_locked:
+                        # 仅沿用 hint 时释放；用户明确指定（hint_locked=False）尊重锁定不释放（2026-09-06 粤桂琼实测：
+                        # 粤桂琼在消费者 ds=2 和用服 ds=64 都有，明确锁定 64 时被此分支误释放弹卡）
                         self._append_trace(
                             trace,
                             "agent1.preferred_dataset_released",
@@ -10054,9 +10362,32 @@ Agent3 复核结果：
             resolved_subject_name = str(selected_option_item.get("resolved_subject_name") or "").strip()
             resolved_subject_level = str(selected_option_item.get("resolved_subject_level") or "").strip()
             if not resolved_subject_name:
-                label_subject_name = self._extract_subject_from_confirmation_label(
-                    (selected_option_item or {}).get("label") or selected_option or ""
-                )
+                # 2026-09-03：dataset_disambiguation 选项的 label 是"数据集名 · 原始问句"
+                # （如"消费者事业部 · 垫底的三个分公司"）。通用提取取分隔符【后】段，会把
+                # 问句尾巴（"垫底的三个分公司"）当节点主体注入 route，触发规则引擎实体防御
+                # （WHERE 1=0）。这类卡只取【前】段数据集名作为主体（恢复 08-26 无前缀
+                # label 时代的等价行为）；节点/成员集合卡仍走后段提取。
+                _opt_type = str(
+                    selected_option_item.get("confirmation_type")
+                    or selected_option_item.get("option_type")
+                    or ""
+                ).strip()
+                if _opt_type == "dataset_disambiguation":
+                    _raw_label = re.sub(
+                        r"^系统推荐[:：]\s*", "",
+                        str((selected_option_item or {}).get("label") or selected_option or "").strip(),
+                    )
+                    for _sep in [" - ", " · ", "-", "·"]:
+                        if _sep in _raw_label:
+                            _raw_label = _raw_label.split(_sep, 1)[0].strip()
+                            break
+                    label_subject_name = re.sub(
+                        r"(的)?(业绩|情况|表现|完成情况|完成率|达成率|数据)$", "", _raw_label,
+                    ).strip()
+                else:
+                    label_subject_name = self._extract_subject_from_confirmation_label(
+                        (selected_option_item or {}).get("label") or selected_option or ""
+                    )
                 selected_dataset_id = 0
                 if len(route.get("dataset_ids") or []) == 1:
                     try:

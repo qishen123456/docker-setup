@@ -2,7 +2,7 @@
 """结构化解析条单测（parse-bar-design.md v1）。
 
 覆盖：三槽位聚合、span 定位三来源（matched_phrase 直击/别名反查/继承标记）、
-占用区间去重、出条铁律（确认卡/纠正卡/early_clarify/错误不出条）、
+占用区间去重、出条铁律（纠正卡/early_clarify/错误不出条；确认卡出"理解条"）、
 开关与可见角色、fail-open。
 
 依赖真实 config/dataset_node_index.json（南部→南部分公司 别名反查）；
@@ -107,9 +107,37 @@ class ParseBarSlotsTest(unittest.TestCase):
 class ParseBarGateTest(unittest.TestCase):
     """出条铁律 + 开关 + 可见角色 + fail-open。"""
 
-    def test_confirm_card_message_no_bar(self):
-        r = _result("各分公司业绩排名", requires_confirmation=True)
-        self.assertIsNone(_bar("各分公司业绩排名", r))
+    def test_confirm_card_message_shows_understanding_bar(self):
+        # 确认卡场景出"理解条"（2026-08-30 用户要求：确认前先看到系统理解了什么）
+        r = _result("nb的业绩", requires_confirmation=True, dataset_results=[])
+        r["route"] = {"dataset_ids": [3], "requires_confirmation": True, "initials_hint": "nb"}
+        r["confirmation_options"] = [
+            {"dataset_ids": [3], "resolved_subject_name": "南部分公司"},
+            {"dataset_ids": [3], "resolved_subject_name": "北部分公司"},
+        ]
+        with mock.patch.object(ps, "_load_datasets", return_value=[
+            {"dataset_id": 3, "dataset_name": "商用事业部开单金额", "nodes": []},
+        ]):
+            bar = _bar("nb的业绩", r)
+        self.assertIsNotNone(bar)
+        self.assertIn("商用事业部开单金额", bar["text"])
+        # 默认节点单值显示（= 排序后第1个候选），不再合并（2026-08-31 定稿）
+        self.assertIn("南部分公司", bar["text"])
+        self.assertNotIn("南部分公司 / 北部分公司", bar["text"])
+        self.assertIn("开单金额", bar["text"])
+        self.assertIn("nb", bar.get("inherited_note") or "")
+        node = next(s for s in bar["slots"] if s["slot"] == "node")
+        self.assertTrue(node.get("ambiguous"))
+        self.assertEqual(node.get("resolved_value"), "南部分公司")  # 默认节点单值
+        self.assertEqual(node.get("candidates"), ["南部分公司", "北部分公司"])  # 候选拆开供"换个对象"
+        self.assertEqual(node.get("span_text"), "nb")
+
+    def test_confirm_card_without_any_clue_no_bar(self):
+        # 确认卡但 route/选项都无可聚合信息（无数据集无节点无指标）→ 不出条
+        r = _result("怎么样", requires_confirmation=True, dataset_results=[])
+        r["route"] = {"requires_confirmation": True}
+        r["confirmation_options"] = []
+        self.assertIsNone(_bar("怎么样", r))
 
     def test_clarify_suggestion_message_still_shows_bar(self):
         # 守门员软建议条不再吞解析条（南部案例：LLM 抖动出软建议时条被吞）

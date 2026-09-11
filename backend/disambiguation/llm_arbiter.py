@@ -237,7 +237,7 @@ class DisambiguationArbiter:
             return {
                 "need_confirm": False,
                 "confirm_question": "",
-                "options": build_dataset_options(candidates[:1]),
+                "options": build_dataset_options(candidates[:1], question),
                 "auto_pick_option_id": f"arbiter_dataset_{top['dataset_id']}",
                 "refined_query": question,
                 "reason": "top_candidate_score_clear",
@@ -308,7 +308,7 @@ class DisambiguationArbiter:
         return {
             "need_confirm": bool(result.get("need_confirm")) and not auto_pick,
             "confirm_question": str(result.get("confirm_question") or fallback.get("confirm_question") or "请确认要使用哪个数据集口径："),
-            "options": normalized_options or build_dataset_options(candidates[:1]),
+            "options": normalized_options or build_dataset_options(candidates[:1], question),
             "auto_pick_option_id": auto_pick,
             "refined_query": str(result.get("refined_query") or ""),
             "reason": str(result.get("reason") or fallback.get("reason") or ""),

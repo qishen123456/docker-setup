@@ -59,7 +59,6 @@
                   :allow-copy="featureAccess.smart_question_copy"
                   :allow-edit="featureAccess.smart_question_edit"
                   :allow-rerun="featureAccess.smart_question_rerun"
-                  :spans="getQuestionParseSpans(msg)"
                   @copy="copyQuestion(msg)"
                   @edit="editQuestion(msg)"
                   @rerun="rerunQuestion(msg)"
@@ -140,6 +139,21 @@
                         :disabled="isRunning"
                         @click.stop.prevent="resendOriginalQuestion(msg)"
                       >没问题，按原问题继续查</button>
+                      <div class="sa-clarify-freeform">
+                        <input
+                          v-model="clarifyDrafts[msg.id]"
+                          class="sa-clarify-input"
+                          :disabled="isRunning"
+                          placeholder="都不是？输入你想问的"
+                          @keydown.enter.exact.prevent="handleClarifyDraftEnter($event, msg)"
+                          @click.stop
+                        />
+                        <button
+                          class="sa-clarify-send"
+                          :disabled="isRunning || !String(clarifyDrafts[msg.id] || '').trim()"
+                          @click.stop.prevent="submitClarifyDraft(msg)"
+                        >发送</button>
+                      </div>
                     </div>
 
                     <!-- 纠正条（守门员预览，后端按角色门控，默认仅超管可见） -->
@@ -159,6 +173,21 @@
                           :disabled="isRunning"
                           @click.stop.prevent="applyClarifySuggestion(cand)"
                         >{{ cand }}</button>
+                      </span>
+                      <span class="sa-clarify-freeform sa-clarify-freeform-inline">
+                        <input
+                          v-model="clarifyDrafts[msg.id]"
+                          class="sa-clarify-input"
+                          :disabled="isRunning"
+                          placeholder="都不是？输入你想问的"
+                          @keydown.enter.exact.prevent="handleClarifyDraftEnter($event, msg)"
+                          @click.stop
+                        />
+                        <button
+                          class="sa-clarify-send"
+                          :disabled="isRunning || !String(clarifyDrafts[msg.id] || '').trim()"
+                          @click.stop.prevent="submitClarifyDraft(msg)"
+                        >发送</button>
                       </span>
                     </div>
 
@@ -203,7 +232,7 @@
                             <span class="sa-confirm-info">
                               <span class="sa-confirm-row-label">
                                 {{ getConfirmOptionLabel(opt) }}
-                                <span v-if="idx === 0" class="sa-confirm-recommended">推荐</span>
+                                <span v-if="opt.recommended" class="sa-confirm-recommended">推荐</span>
                               </span>
                               <span v-if="getConfirmOptionDescription(opt)" class="sa-confirm-row-desc">
                                 {{ getConfirmOptionDescription(opt) }}
@@ -1398,6 +1427,7 @@ const commonQuestions = ref([])
 const commonQuestionsLoading = ref(false)
 const messages = reactive([])
 const confirmationDrafts = reactive({})
+const clarifyDrafts = reactive({})
 const confirmationSubmitting = reactive({})
 const confirmExpanded = reactive({})
 
@@ -1459,16 +1489,6 @@ const displayLogs = computed(() => {
   }
   return session.state.logs
 })
-
-// 用户问句的解析片段框出（解析条 v1）：取其后紧跟的 AI 回复的 parse_bar.spans
-const getQuestionParseSpans = (msg) => {
-  const list = displayMessages.value || []
-  const idx = list.findIndex(m => m.id === msg.id)
-  if (idx < 0) return null
-  const next = list[idx + 1]
-  const spans = next && next.role !== 'user' ? next.data?.parse_bar?.spans : null
-  return Array.isArray(spans) && spans.length ? spans : null
-}
 
 // 解析条编辑（重设计）：点候选 = 本地暂存（可连改多个槽位），确认后把修正问句
 // 作为一条新提问发进当前会话（新用户气泡 + 新 AI 回复），替代旧的"点选即就地重跑"
@@ -4072,6 +4092,7 @@ const clearExecutionPanelState = () => {
 const clearChatUiState = () => {
   Object.keys(thinkingOpen).forEach(k => delete thinkingOpen[k])
   Object.keys(confirmationDrafts).forEach(k => delete confirmationDrafts[k])
+  Object.keys(clarifyDrafts).forEach(k => delete clarifyDrafts[k])
   Object.keys(confirmationSubmitting).forEach(k => delete confirmationSubmitting[k])
   Object.keys(confirmExpanded).forEach(k => delete confirmExpanded[k])
   Object.keys(officeDrillOpen).forEach(k => delete officeDrillOpen[k])
@@ -4533,6 +4554,7 @@ const clearMessageRuntimeState = (items = []) => {
     if (!item?.id) return
     delete thinkingOpen[item.id]
     delete confirmationDrafts[item.id]
+    delete clarifyDrafts[item.id]
     delete confirmationSubmitting[item.id]
     delete confirmExpanded[item.id]
   })
@@ -4641,6 +4663,19 @@ const applyClarifySuggestion = (text) => {
   if (!t || isRunning.value) return
   query.value = t
   handleSend()
+}
+
+// 纠正条/错字卡自由输入：推荐候选都不是时，用户直接输入新问句走主链路
+const submitClarifyDraft = (msg) => {
+  const text = String(clarifyDrafts[msg?.id] || '').trim()
+  if (!text || isRunning.value) return
+  clarifyDrafts[msg.id] = ''
+  applyClarifySuggestion(text)
+}
+
+const handleClarifyDraftEnter = (event, msg) => {
+  if (event?.isComposing) return
+  submitClarifyDraft(msg)
 }
 
 // 错字短路纠正卡：用户确认原问题没错字，带 skipTypoCheck 跳过第 0 层快检重新发送
@@ -5081,6 +5116,20 @@ const doConfirm = async (opt, msg) => {
   startTimer()
   detailReportResult.value = null
   const originalData = msg?.data ? JSON.parse(JSON.stringify(msg.data)) : null
+  // 预选联动：点确认选项立即把解析条更新为选中的数据集/节点（执行中也显示所选，不等执行完）。
+  // 解决"我选了商用，但上面解析条没变"——ParseBar 用 slots 渲染，更新 slots 即联动（2026-09-01 用户实测反馈）。
+  if (msg?.data?.parse_bar && opt && typeof opt === 'object') {
+    const pb = msg.data.parse_bar
+    const selNode = String(opt.resolved_subject_name || '').trim()
+    const selDs = String(opt.dataset_name || '').trim()
+    if (Array.isArray(pb.slots)) {
+      pb.slots = pb.slots.map((s) => {
+        if (s && s.slot === 'node' && selNode) return { ...s, resolved_value: selNode }
+        if (s && s.slot === 'dataset' && selDs) return { ...s, resolved_value: selDs }
+        return s
+      })
+    }
+  }
   if (msg) {
     msg.loading = true
   }
@@ -6594,6 +6643,56 @@ onUnmounted(() => {
   color: #fff;
 }
 .sa-clarify-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* 纠正条/错字卡自由输入：推荐候选都不是时直接输入新问句 */
+.sa-clarify-freeform {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.sa-clarify-freeform-inline {
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+  width: auto;
+}
+.sa-clarify-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #f3c2c2;
+  border-radius: 15px;
+  font-size: 13px;
+  color: #333;
+  background: #fff;
+  outline: none;
+}
+.sa-clarify-input:focus {
+  border-color: #d33030;
+}
+.sa-clarify-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sa-clarify-send {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 15px;
+  font-size: 13px;
+  color: #fff;
+  background: #d33030;
+  cursor: pointer;
+}
+.sa-clarify-send:hover:not(:disabled) {
+  background: #b92828;
+}
+.sa-clarify-send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

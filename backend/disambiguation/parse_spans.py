@@ -13,7 +13,9 @@ span 定位三来源（§3.2）：
 多轮追问（§3.5）：实体来自上下文继承、原句无字面出现时，标 inherited=True，
 不硬找 span（"继承自上文"），覆盖率验收分母仅统计有 dataset_results 的消息。
 
-出条铁律（§1.3）：触发确认卡/纠正卡/early_clarify/错误的消息不出解析条。
+出条铁律（§1.3）：纠正卡/early_clarify/错误的消息不出解析条；确认卡消息出"理解条"
+（_build_confirmation_parse_bar，从 route/confirmation_options 聚合）——用户确认前
+需要先看到系统当前理解了什么（2026-08-30 用户要求）。
 """
 from __future__ import annotations
 
@@ -140,36 +142,68 @@ def _extract_node_slots(question: str, dsr0: Dict[str, Any]) -> List[Dict[str, A
     return slots
 
 
-def _extract_metric_slot(question: str, occupied: List[tuple]) -> Optional[Dict[str, Any]]:
-    """指标槽：保守词表 find（长词优先），find 不到不显示该槽。"""
+def _extract_metric_slots(question: str, occupied: List[tuple]) -> List[Dict[str, Any]]:
+    """指标槽：保守词表 find（长词优先），支持多指标（如"滤芯和增值开单分别是多少"→ 两个指标槽）。
+
+    明细优先（2026-09-06）：命中明细词（滤芯/增值，metric_detail_words 配置）时，
+    泛词槽（开单/金额/业绩等）让位——"滤芯类开单"里"开单"的泛匹配不再混入。
+    匹配区间互不重叠（occupied 去重），resolved 去重，最多 3 个防爆炸。
+    """
     aliases = _load_settings().get("metric_aliases") or {}
-    # 长词优先（"开单金额"先于"金额"命中）
+    detail_words = set(_load_settings().get("metric_detail_words") or [])
+    collected: List[Dict[str, Any]] = []
+    used_spans: List[tuple] = list(occupied)
     for word in sorted(aliases.keys(), key=len, reverse=True):
-        span = _find_unoccupied(question, str(word), occupied)
-        if span is not None:
-            occupied.append(span)
-            return {
-                "slot": "metric",
-                "resolved_value": str(aliases[word]),
-                "span_text": question[span[0]:span[1]],
-                "start": span[0],
-                "end": span[1],
-            }
-    return None
+        if len(collected) >= 3:
+            break
+        span = _find_unoccupied(question, str(word), used_spans)
+        if span is None:
+            continue
+        used_spans.append(span)
+        collected.append({
+            "slot": "metric",
+            "resolved_value": str(aliases[word]),
+            "span_text": question[span[0]:span[1]],
+            "start": span[0],
+            "end": span[1],
+            "_is_detail": str(word) in detail_words,
+        })
+    has_detail = any(s.get("_is_detail") for s in collected)
+    if has_detail:
+        collected = [s for s in collected if s.get("_is_detail")]
+    # resolved 去重（同义词只留首个）+ 按出现位置排序（滤芯在前增值在后）
+    seen: set = set()
+    slots: List[Dict[str, Any]] = []
+    for s in sorted(collected, key=lambda x: x.get("start", 0)):
+        if s["resolved_value"] in seen:
+            continue
+        seen.add(s["resolved_value"])
+        s.pop("_is_detail", None)
+        slots.append(s)
+    return slots
 
 
-def _build_text(dataset_names: List[str], node_values: List[str], metric_value: str, inherited_nodes: List[str]) -> str:
-    """转述条文案（Power BI Q&A 式自然语言，非工程师语言）。"""
+def _build_text(dataset_names: List[str], node_values: List[str], metric_value, inherited_nodes: List[str]) -> str:
+    """转述条文案（Power BI Q&A 式自然语言，非工程师语言）。
+
+    metric_value 支持单值（str）或多指标（list，如"滤芯和增值开单"→ ['滤芯开单金额','增值开单金额']，
+    展示为"的[滤芯开单金额]和[增值开单金额]"）。
+    """
+    if isinstance(metric_value, (list, tuple)):
+        metric_parts = [str(v) for v in metric_value if v]
+        metric_text = "和".join(f"[{v}]" for v in metric_parts)
+    else:
+        metric_text = f"[{metric_value}]" if metric_value else ""
     parts: List[str] = []
     if dataset_names:
         parts.append("在[" + "、".join(dataset_names) + "]里")
     if node_values:
         text = "".join(parts) + "查[" + "、".join(node_values) + "]"
-        if metric_value:
-            text += "的[" + metric_value + "]"
+        if metric_text:
+            text += "的" + metric_text
         return "我理解为：" + text
-    if metric_value:
-        return "我理解为：" + "".join(parts) + "查[" + metric_value + "]"
+    if metric_text:
+        return "我理解为：" + "".join(parts) + "查" + metric_text
     if parts:
         return "我理解为：" + "".join(parts) + "查询"
     return ""
@@ -188,16 +222,17 @@ def build_parse_bar(
         question = str(question or "").strip()
         if not question:
             return None
-        # 出条铁律：确认卡/early_clarify/错误消息不出解析条（阻断型候选 UI 不同屏）
+        # 出条铁律：纠正卡/early_clarify/错误消息不出解析条（阻断型候选 UI 不同屏）
         # 注：clarify_suggestion（守门员/首字母软建议条）不再互斥——它与解析条同为非阻断提示，
         # 且解析条槽位可编辑已承载同等纠偏能力；曾因互斥导致 LLM 抖动时解析条被吞（南部案例）。
+        # 确认卡场景出"理解条"：用户确认前需要先看到系统理解了什么（2026-08-30 用户要求）。
         route = result.get("route") or {}
         if result.get("error"):
             return None
-        if result.get("requires_confirmation") or route.get("requires_confirmation"):
-            return None
         if result.get("early_clarify"):
             return None
+        if result.get("requires_confirmation") or route.get("requires_confirmation"):
+            return _build_confirmation_parse_bar(question, result)
         dataset_results = [d for d in (result.get("dataset_results") or []) if isinstance(d, dict)]
         if not dataset_results:
             return None
@@ -215,8 +250,8 @@ def build_parse_bar(
 
         node_slots = _extract_node_slots(question, dsr0)
         occupied = [(s["start"], s["end"]) for s in node_slots if s.get("start") is not None]
-        metric_slot = _extract_metric_slot(question, occupied)
-        slots = dataset_slots + node_slots + ([metric_slot] if metric_slot else [])
+        metric_slots = _extract_metric_slots(question, occupied)
+        slots = dataset_slots + node_slots + metric_slots
         if not slots:
             return None
 
@@ -232,7 +267,7 @@ def build_parse_bar(
         text = _build_text(
             dataset_names,
             node_values,
-            str(metric_slot["resolved_value"]) if metric_slot else "",
+            [s["resolved_value"] for s in metric_slots],
             inherited_nodes,
         )
         bar: Dict[str, Any] = {
@@ -254,6 +289,129 @@ def build_parse_bar(
                 inherited_nodes = []
         if inherited_nodes:
             bar["inherited_note"] = "「" + "、".join(inherited_nodes) + "」继承自上文"
+        return bar
+    except Exception:
+        return None  # fail-open：任何异常都不出条，主流程零感知
+
+
+def _build_confirmation_parse_bar(question: str, result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """确认卡场景的"理解条"：此时流水线未执行、没有 dataset_results，
+    从 route/confirmation_options 聚合——数据集取 route 候选，节点取确认选项的
+    resolved_subject_name 并列展示（南部分公司 / 北部分公司），指标走保守词表。
+    让用户在确认前先看到系统理解了什么。任何异常 → None（fail-open）。
+    """
+    try:
+        route = result.get("route") or {}
+        options = [
+            o for o in (result.get("confirmation_options") or route.get("confirmation_options") or [])
+            if isinstance(o, dict)
+        ]
+        ds_ids: List[int] = []
+        for raw in (route.get("dataset_ids") or []):
+            try:
+                ds_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        if not ds_ids:
+            for opt in options:
+                for raw in (opt.get("dataset_ids") or []):
+                    try:
+                        ds_ids.append(int(raw))
+                    except (TypeError, ValueError):
+                        continue
+        ds_names: List[str] = []
+        name_by_id: Dict[int, str] = {}
+        if ds_ids:
+            for ds in _load_datasets():
+                try:
+                    did = int(ds.get("dataset_id") or 0)
+                except (TypeError, ValueError):
+                    continue
+                name = str(ds.get("dataset_name") or ds.get("name") or "").strip()
+                if did and name:
+                    name_by_id[did] = name
+            for did in dict.fromkeys(ds_ids):
+                name = name_by_id.get(did)
+                if name and name not in ds_names:
+                    ds_names.append(name)
+        # 默认候选 = 推荐排序后第 1 个（后端 apply_recommendation 已排序）。
+        # 解析条显示"默认理解"（单值）：默认候选的数据集 + 节点，不再并列合并——
+        # 与确认卡推荐第 1 个一致（"第一个确认的问题就应该是你理解的第一个问题"，2026-08-31 定稿）。
+        default_opt = options[0] if options else None
+        default_did = 0
+        if default_opt:
+            for raw in (default_opt.get("dataset_ids") or []):
+                try:
+                    default_did = int(raw)
+                    break
+                except (TypeError, ValueError):
+                    continue
+        default_node = str(default_opt.get("resolved_subject_name") or "").strip() if default_opt else ""
+
+        # 数据集槽：显示默认候选的数据集（单值）；无默认候选时退回并列（纯数据集确认场景）
+        if default_did and default_did in name_by_id:
+            dataset_slots = [{"slot": "dataset", "resolved_value": name_by_id[default_did]}]
+            display_ds_names = [name_by_id[default_did]]
+        else:
+            dataset_slots = [{"slot": "dataset", "resolved_value": name} for name in ds_names]
+            display_ds_names = ds_names
+
+        node_names: List[str] = []
+        for opt in options:
+            name = str(opt.get("resolved_subject_name") or "").strip()
+            if name and name not in node_names:
+                node_names.append(name)
+        node_slots: List[Dict[str, Any]] = []
+        occupied: List[tuple] = []
+        initials_hint = str(route.get("initials_hint") or "").strip()
+        if default_node:
+            # 默认节点单值显示；ambiguous 标记多候选，candidates 供前端"换个对象"拆开
+            slot: Dict[str, Any] = {
+                "slot": "node",
+                "resolved_value": default_node,
+                "ambiguous": len(node_names) > 1,
+                "candidates": node_names,
+            }
+            # span 定位：缩写原文（nb）优先，其次书架别名反查（"上海"）
+            span = _find_unoccupied(question, initials_hint, occupied) if initials_hint else None
+            if span is None:
+                by_node = _load_alias_by_node()
+                for member in node_names:
+                    for alias in by_node.get(member) or []:
+                        span = _find_unoccupied(question, alias, occupied)
+                        if span:
+                            break
+                    if span:
+                        break
+            if span is not None:
+                slot["span_text"] = question[span[0]:span[1]]
+                slot["start"], slot["end"] = span
+                occupied.append(span)
+            node_slots.append(slot)
+        # 数据集和节点都不知道时，孤零零的指标槽对用户没有决策价值，不出条
+        if not ds_names and not default_node:
+            return None
+        metric_slots = _extract_metric_slots(question, occupied)
+        slots = dataset_slots + node_slots + metric_slots
+        if not slots:
+            return None
+        text = _build_text(
+            display_ds_names,
+            [s["resolved_value"] for s in node_slots],
+            [s["resolved_value"] for s in metric_slots],
+            [],
+        )
+        bar: Dict[str, Any] = {
+            "text": text,
+            "slots": slots,
+            "spans": [s for s in slots if s.get("start") is not None],
+            "source": "parse_bar",
+        }
+        hint = initials_hint
+        if not hint and node_slots:
+            hint = str(node_slots[0].get("span_text") or "")
+        if hint:
+            bar["inherited_note"] = f"「{hint}」可对应多个节点，请在下方确认"
         return bar
     except Exception:
         return None  # fail-open：任何异常都不出条，主流程零感知
