@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="sStSal8X2VjOd7IX6bEnrr">
+<head data-page-node-id="1U8LcNwDeyxGj3cKPSOlwf">
+<meta charset="UTF-8" data-page-node-id="L763WUlryP92jNG8c1HZFZ">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="6BPpVXQ3y5t53ZBGH2yqdI">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" data-page-node-id="sXnxgKaGlkxT2HkN4xvQBI">
+<title>SmartAsk 智能问数系统 · 产品手册</title>
+<meta name="description" content="SmartAsk 智能问数系统产品手册：产品概述、核心能力、行业痛点、目标客户、应用场景与商业价值。" data-page-node-id="23W4iDzl5rscN3R637CLAs">
+<link rel="preconnect" href="https://fonts.googleapis.com" data-page-node-id="Syi7JEBoWLlehwHGBfL8Am">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin data-page-node-id="Wi28buEUjctgv1JliTcvqa">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" data-page-node-id="t0nEaNvRH4I8BP9WBDsxt4">
+<style>
+/* === 设计令牌 ===
+   意图：回归"专业报告"质感——浅灰画布 + 白卡片 + 柔和阴影承载全部内容页；
+   深色仅用于封面、焦点大卡与结尾页，制造开场与收束的仪式感。
+   等宽字体只用于编号、数据与标签，图表以内联 SVG 实现，零外部 JS 依赖。 */
+:root{
+  --ink:#0A1826;
+  --ink-2:#0E2436;
+  --ink-3:#153B54;
+  --bg:#F2F5F8;
+  --card:#FFFFFF;
+  --line:#E2E8F0;
+  --line-strong:#CBD6E1;
+  --text:#141F2B;
+  --text-2:#42536A;
+  --muted:#6B7C8E;
+  --accent:#0E8F8B;
+  --cyan:#12CFC6;
+  --cyan-bright:#3CE8DE;
+  --cyan-glow:rgba(18,207,198,.14);
+  --accent-soft:#E2F4F3;
+  --amber:#D98A2B;
+  --amber-soft:#FBF1E2;
+  --red:#C0504D;
+  --radius:16px;
+  --radius-sm:10px;
+  --shadow:0 1px 2px rgba(10,24,38,.05), 0 10px 28px rgba(10,24,38,.07);
+  --shadow-lg:0 2px 4px rgba(10,24,38,.06), 0 20px 52px rgba(10,24,38,.12);
+  --font:'Sora','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --mono:'JetBrains Mono','Sora',ui-monospace,'SF Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:var(--font);color:var(--text);background:#0B1219;-webkit-font-smoothing:antialiased;font-weight:400;}
+h1,h2,h3,h4{font-weight:600;letter-spacing:-.015em;line-height:1.25;}
+a{color:inherit;text-decoration:none;}
+ul{list-style:none;}
+.mono{font-family:var(--font);font-variant-numeric:tabular-nums;}
+
+/* === 舞台与缩放 ===
+   意图：固定 1920×1080 设计画布，等比缩放居中适配任意视口，版式恒定。 */
+#viewport{position:fixed;inset:0;overflow:hidden;}
+#stage{width:1920px;height:1080px;position:absolute;left:50%;top:50%;transform-origin:center center;}
+
+/* === 幻灯片显隐 ===
+   意图：opacity + visibility + pointer-events（不用 display），保证过渡平滑。 */
+.slide{
+  position:absolute;inset:0;padding:64px 96px;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateX(48px);
+  transition:opacity .5s cubic-bezier(.22,.61,.36,1), transform .5s cubic-bezier(.22,.61,.36,1), visibility 0s linear .5s;
+  background:var(--bg);
+  display:flex;flex-direction:column;
+}
+.slide.active{
+  opacity:1;visibility:visible;pointer-events:auto;transform:none;
+  transition:opacity .5s cubic-bezier(.22,.61,.36,1), transform .5s cubic-bezier(.22,.61,.36,1), visibility 0s;
+}
+.slide.deep{background:var(--ink);color:#DCE7EF;}
+.slide.deep h2,.slide.deep h3,.slide.deep h4{color:#fff;}
+
+/* 页内元素依次进入 */
+.anim{opacity:0;transform:translateY(20px);transition:opacity .55s cubic-bezier(.22,.61,.36,1),transform .55s cubic-bezier(.22,.61,.36,1);transition-delay:var(--d,0s);}
+.slide.active .anim{opacity:1;transform:none;}
+
+/* === 页眉 === */
+.s-head{margin-bottom:32px;flex-shrink:0;}
+.s-tag{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--font);font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);font-weight:600;margin-bottom:14px;
+}
+.s-tag::before{content:'';width:26px;height:1.5px;background:currentColor;opacity:.6;}
+.s-head h2{font-size:42px;color:var(--text);letter-spacing:-.02em;}
+.s-head p{margin-top:12px;color:var(--text-2);font-size:16.5px;font-weight:300;max-width:1200px;line-height:1.75;}
+.s-page{
+  position:absolute;top:68px;right:96px;
+  font-family:var(--font);font-size:13px;letter-spacing:.14em;color:#93A3B2;
+}
+
+/* === Bento 与卡片 ===
+   意图：焦点内容跨列放大，次要内容小卡错落；白卡 + 柔和阴影的报告质感。 */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;grid-auto-flow:dense;}
+.bx2{grid-column:span 2;}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 28px;box-shadow:var(--shadow);
+  transition:transform .22s, box-shadow .22s, border-color .22s;
+}
+.card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--line-strong);}
+.card h3{font-size:19px;margin-bottom:10px;display:flex;align-items:center;gap:12px;}
+.card p{font-size:15.5px;color:var(--text-2);font-weight:300;line-height:1.72;}
+.card .mono-k{font-family:var(--font);font-size:11.5px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:12px;}
+.ico{
+  width:34px;height:34px;border-radius:9px;flex-shrink:0;display:grid;place-items:center;
+  background:var(--accent-soft);color:var(--accent);
+}
+.ico svg{width:17px;height:17px;}
+.ico.amber{background:var(--amber-soft);color:var(--amber);}
+.ico.red{background:#FBECEB;color:var(--red);}
+
+/* 深色焦点大卡（仅用于关键主张） */
+.card.hero-card{
+  background:linear-gradient(150deg,var(--ink-2),var(--ink-3));
+  border-color:rgba(60,232,222,.25);
+}
+.card.hero-card h3,.card.hero-card h4{color:#fff;}
+.card.hero-card p{color:#9FB4C4;}
+.card.hero-card .mono-k{color:#5E7B8E;}
+
+/* 角标（克制使用：仅焦点大卡） */
+.tick{position:relative;}
+.tick::before,.tick::after{
+  content:'';position:absolute;width:16px;height:16px;
+  border:1.5px solid rgba(14,143,139,.4);transition:border-color .25s;pointer-events:none;
+}
+.tick::before{top:12px;left:12px;border-right:none;border-bottom:none;}
+.tick::after{bottom:12px;right:12px;border-left:none;border-top:none;}
+.card.hero-card.tick::before,.card.hero-card.tick::after{border-color:rgba(60,232,222,.45);}
+
+/* === 封面 ===
+   意图：左文右"机"——左侧价值主张，右侧真实问数过程的终端演示卡，
+   首屏即让人看到产品长什么样。 */
+.slide.cover{
+  background:
+    radial-gradient(1100px 520px at 8% -8%, rgba(18,207,198,.20), transparent 60%),
+    radial-gradient(820px 460px at 96% 4%, rgba(60,120,220,.13), transparent 62%),
+    linear-gradient(160deg,#04090F 0%, #081522 52%, #050D16 100%);
+  color:#E9F1F6;padding:88px 96px;
+}
+.cover::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(circle at 24% 0%,#000 0%,transparent 78%);
+  -webkit-mask-image:radial-gradient(circle at 24% 0%,#000 0%,transparent 78%);
+}
+.cover-grid{position:relative;display:grid;grid-template-columns:1.15fr .85fr;gap:64px;flex:1;align-items:center;}
+.cover-brand{display:flex;align-items:center;gap:14px;margin-bottom:40px;}
+.brand-mark{
+  width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--ink-3),var(--accent));
+  box-shadow:0 0 16px var(--cyan-glow);
+}
+.brand-mark svg{width:19px;height:19px;}
+.cover-brand b{font-size:21px;letter-spacing:-.02em;color:#fff;}
+.cover-brand span{font-family:var(--font);font-size:12px;color:#5E7B8E;letter-spacing:.14em;margin-left:4px;}
+.cover h1{font-size:64px;font-weight:700;color:#fff;letter-spacing:-.025em;line-height:1.18;}
+.cover h1 .hl{
+  color:var(--cyan-bright);
+  background:linear-gradient(180deg,transparent 64%,rgba(60,232,222,.2) 0%);
+  padding:0 3px;
+}
+.cover-sub{margin-top:24px;font-size:17.5px;color:#9FB4C4;font-weight:300;line-height:1.85;max-width:56ch;}
+.cover-pipe{margin-top:20px;font-family:var(--font);font-size:12.5px;letter-spacing:.08em;color:#46616F;}
+.cover-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:32px;}
+.cstat{
+  position:relative;border:1px solid rgba(255,255,255,.13);border-radius:6px;
+  padding:17px 18px;background:rgba(255,255,255,.04);transition:border-color .25s, box-shadow .25s;
+}
+.cstat:hover{border-color:rgba(60,232,222,.4);box-shadow:0 0 22px var(--cyan-glow);}
+.cstat .tag{font-family:var(--font);font-size:10.5px;letter-spacing:.16em;color:#5E7B8E;display:block;margin-bottom:8px;}
+.cstat b{display:block;font-size:25px;font-weight:700;color:#fff;font-family:var(--font);letter-spacing:-.02em;}
+.cstat span{font-size:13px;color:#8FA5B5;display:block;margin-top:4px;}
+.cover-hint{
+  margin-top:26px;display:inline-flex;align-items:center;gap:10px;
+  font-family:var(--font);font-size:12.5px;letter-spacing:.12em;color:#5E7B8E;
+}
+.cover-hint kbd{
+  border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:3px 9px;
+  color:#9FB4C4;font-family:var(--font);font-size:12px;background:rgba(255,255,255,.05);
+}
+.tech-bar{display:flex;align-items:center;gap:14px;margin-top:24px;font-family:var(--font);font-size:11.5px;letter-spacing:.14em;color:#46616F;flex-wrap:wrap;}
+.tech-bar i{width:4px;height:4px;border-radius:50%;background:#2A3B49;font-style:normal;}
+.cover-ds{margin-top:12px;font-size:13px;color:#5E7B8E;font-weight:300;}
+/* 终端演示卡 */
+.term{
+  position:relative;background:#0A141F;border:1px solid rgba(120,200,195,.22);
+  border-radius:14px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 30px 80px rgba(0,0,0,.5), 0 0 60px var(--cyan-glow);
+  font-family:var(--mono);
+}
+.term-bar{
+  display:flex;align-items:center;gap:8px;padding:14px 18px;
+  background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.08);
+}
+.term-bar i{width:11px;height:11px;border-radius:50%;background:#2A3B49;}
+.term-bar i:nth-child(1){background:#E0655F;}
+.term-bar i:nth-child(2){background:#E5B95C;}
+.term-bar i:nth-child(3){background:#5FBF7B;}
+.term-bar span{margin-left:auto;font-size:11px;letter-spacing:.14em;color:#46616F;}
+.term-body{padding:24px 26px 28px;font-size:14px;line-height:2.1;color:#8FA5B5;}
+.term-body .q{color:#E4EEF4;}
+.term-body .q::before{content:'› ';color:var(--cyan-bright);}
+.term-body .step{padding-left:18px;}
+.term-body .step b{color:#7E94A4;font-weight:400;}
+.term-body .step .ok{color:#5FBF7B;}
+.term-body .step .v{color:var(--cyan-bright);}
+.term-body .out{
+  margin:14px 0 4px;padding:16px 18px;border-radius:8px;
+  background:rgba(60,232,222,.06);border:1px solid rgba(60,232,222,.2);
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+}
+.term-body .out .k{font-size:12px;color:#7E94A4;letter-spacing:.1em;}
+.term-body .out .n{font-size:24px;color:#fff;font-weight:600;}
+.term-body .out .up{color:#5FBF7B;font-size:13px;}
+
+/* === 链路（横向 8 步） === */
+.pipe{display:grid;grid-template-columns:repeat(8,1fr);gap:0;margin-top:auto;}
+.pipe-step{
+  position:relative;padding:15px 16px 13px;background:var(--card);
+  border:1px solid var(--line);margin-right:14px;border-radius:8px;box-shadow:var(--shadow);
+}
+.pipe-step:last-child{margin-right:0;}
+.pipe-step:not(:last-child)::after{
+  content:'';position:absolute;right:-14px;top:50%;width:14px;height:1.5px;
+  background:var(--accent);opacity:.55;
+}
+.pipe-step .n{font-family:var(--font);font-size:10.5px;color:var(--accent);font-weight:600;letter-spacing:.12em;margin-bottom:6px;}
+.pipe-step b{display:block;font-size:14px;margin-bottom:3px;}
+.pipe-step span{font-size:11.8px;color:var(--muted);line-height:1.5;display:block;}
+
+/* === 定义块 === */
+.define{
+  background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:var(--radius);padding:30px 34px;box-shadow:var(--shadow);
+}
+.define p{font-size:16.5px;color:var(--text-2);font-weight:300;line-height:1.8;}
+.define strong{color:var(--text);font-weight:600;}
+
+/* === 图表卡（SVG 行业数据） ===
+   意图：市场页以真实数据图表为主角——柱状图 + 环形占比 + 采用率对比条，均标注来源。 */
+.chart-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 30px;display:flex;flex-direction:column;}
+.chart-card .mono-k{font-family:var(--font);font-size:11.5px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:6px;}
+.chart-card h3{font-size:19px;margin-bottom:4px;}
+.chart-card .sub{font-size:13px;color:var(--muted);font-weight:300;line-height:1.7;}
+.chart-card .src{margin-top:auto;padding-top:12px;font-family:var(--font);font-size:10.5px;letter-spacing:.1em;color:#93A3B2;text-transform:uppercase;}
+.axis-num{font-family:var(--font);font-weight:600;fill:var(--ink-2);}
+.axis-year{font-family:var(--font);fill:var(--muted);}
+.axis-grid{stroke:#E4EAF1;stroke-dasharray:4 5;}
+.bar-actual{fill:url(#barGrad);}
+.bar-fcst{fill:rgba(14,143,139,.12);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 4;}
+.donut-bg{stroke:#E7ECF2;}
+.donut-val{stroke:url(#donutGrad);stroke-linecap:round;}
+.mini-bar{height:9px;background:#E7ECF2;border-radius:999px;overflow:hidden;}
+.mini-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),#17B8B1);}
+.mini-row{display:grid;grid-template-columns:120px 1fr 56px;align-items:center;gap:12px;font-size:13px;color:var(--text-2);}
+.mini-row b{font-family:var(--font);font-size:13px;text-align:right;color:var(--ink-2);}
+
+/* === 痛点 === */
+.pain{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 28px;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  transition:transform .22s, box-shadow .22s, border-color .22s;
+}
+.pain:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:#E8B7B4;}
+.pain h3{font-size:19px;margin-bottom:12px;display:flex;align-items:center;gap:12px;}
+.pain .now{font-size:14.8px;color:var(--text-2);font-weight:300;line-height:1.72;flex:1;}
+.pain .cost{
+  margin-top:16px;padding-top:14px;border-top:1px dashed var(--line-strong);
+  font-size:13.5px;color:var(--red);display:flex;gap:10px;align-items:flex-start;line-height:1.6;
+}
+.pain .cost b{flex-shrink:0;font-weight:600;font-family:var(--font);font-size:11px;letter-spacing:.1em;padding-top:3px;}
+.quote-card{
+  background:linear-gradient(150deg,var(--ink-2),var(--ink-3));color:#DCE7EF;
+  border-radius:var(--radius);padding:32px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;
+}
+.quote-card::before{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:36px 36px;pointer-events:none;
+}
+.quote-card .mono-k{color:#5E7B8E;font-family:var(--font);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;display:block;margin-bottom:14px;}
+.quote-card p{font-size:22px;font-weight:500;color:#fff;line-height:1.55;position:relative;}
+.quote-card p em{font-style:normal;color:var(--cyan-bright);}
+.quote-card .qsub{font-size:13px;color:#8FA5B5;font-weight:300;margin-top:14px;line-height:1.6;}
+
+/* === 4-Agent 节点（浅色报告风） === */
+.agent-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:44px;flex:1;align-content:center;}
+.agent-node{
+  position:relative;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--radius);padding:26px;
+  box-shadow:var(--shadow);transition:transform .22s, box-shadow .22s, border-color .22s;
+}
+.agent-node:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:rgba(14,143,139,.4);}
+.agent-node:not(:first-child)::before{
+  content:'';position:absolute;left:-45px;top:50px;width:44px;height:1.5px;
+  background:linear-gradient(90deg,var(--line-strong),var(--accent));
+}
+.agent-node:not(:first-child)::after{
+  content:'▸';position:absolute;left:-18px;top:41px;color:var(--accent);
+  font-size:14px;font-family:var(--font);
+}
+.agent-node .no{
+  font-family:var(--font);font-size:11px;letter-spacing:.16em;color:var(--muted);
+  display:flex;align-items:center;gap:9px;margin-bottom:16px;
+}
+.agent-node .no i{
+  width:7px;height:7px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 8px rgba(14,143,139,.5);animation:pulse 2.2s ease-in-out infinite;font-style:normal;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.45;transform:scale(.8);}}
+.agent-node h4{font-size:21px;margin-bottom:4px;}
+.agent-node .role{font-family:var(--font);font-size:12px;color:var(--accent);margin-bottom:14px;letter-spacing:.06em;}
+.agent-node p{font-size:14px;color:var(--text-2);font-weight:300;line-height:1.72;}
+.agent-node code{
+  display:inline-block;margin-top:16px;font-size:11px;color:var(--muted);
+  background:var(--bg);border:1px solid var(--line);
+  padding:4px 9px;border-radius:5px;font-family:var(--mono);
+}
+.flow-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:auto;}
+.flow-cards .card{padding:20px 24px;}
+.flow-cards .card p{font-size:13.8px;}
+
+/* === 场景输出标签 === */
+.out-tag{display:block;margin-top:12px;font-family:var(--font);font-size:11px;color:var(--accent);letter-spacing:.08em;}
+
+/* === 能力 chips（浅色） === */
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;flex:1;align-content:center;}
+.chip{
+  display:flex;align-items:flex-start;gap:13px;
+  background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:16px 18px;box-shadow:var(--shadow);
+  transition:border-color .2s, transform .2s;
+}
+.chip:hover{border-color:rgba(14,143,139,.4);transform:translateY(-2px);}
+.chip .no{font-family:var(--font);font-size:11px;color:var(--accent);flex-shrink:0;letter-spacing:.1em;padding-top:3px;font-weight:600;}
+.chip b{font-size:15px;color:var(--text);font-weight:600;display:block;margin-bottom:2px;}
+.chip span{font-size:12.5px;color:var(--muted);font-weight:300;line-height:1.5;}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;}
+
+/* === 问句卡 === */
+.q-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;flex:1;align-content:center;}
+.q-item{
+  background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:20px 24px;box-shadow:var(--shadow);
+  border-left:4px solid var(--accent);transition:border-left-color .2s, transform .2s;
+  display:flex;flex-direction:column;gap:7px;justify-content:center;
+}
+.q-item:hover{border-left-color:var(--cyan);transform:translateX(4px);}
+.q-item .q{font-size:16.5px;font-weight:500;}
+.q-item .q::before{content:'“';color:var(--accent);margin-right:2px;}
+.q-item .q::after{content:'”';color:var(--accent);}
+.q-item .a{font-size:13.2px;color:var(--text-2);font-weight:300;line-height:1.6;}
+.q-item .a b{color:var(--accent);font-weight:600;}
+
+/* === 画像与角色 === */
+.persona{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  transition:transform .22s, box-shadow .22s, border-color .22s;
+}
+.persona:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:rgba(14,143,139,.3);}
+.persona-hd{padding:18px 24px;background:#F6F8FB;border-bottom:1px solid var(--line);}
+.persona-hd h3{font-size:16.5px;margin-bottom:4px;}
+.persona-hd .who{font-size:11px;color:var(--accent);font-weight:600;font-family:var(--font);letter-spacing:.08em;text-transform:uppercase;}
+.persona-bd{padding:16px 24px;flex:1;}
+.persona-bd p{font-size:13.8px;color:var(--text-2);font-weight:300;line-height:1.65;}
+.persona-ft{padding:12px 24px;border-top:1px dashed var(--line-strong);font-size:12.8px;color:var(--text-2);}
+.persona-ft b{color:var(--text);}
+/* === 优势卡 === */
+.adv-card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 28px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px;
+  transition:transform .22s, box-shadow .22s, border-color .22s;
+}
+.adv-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:rgba(14,143,139,.35);}
+.adv-card .adv-num{font-family:var(--font);font-size:11.5px;font-weight:600;color:var(--accent);letter-spacing:.14em;}
+.adv-card h4{font-size:18.5px;}
+.adv-card p{font-size:14.2px;color:var(--text-2);font-weight:300;line-height:1.68;}
+.adv-card.hero-adv{background:linear-gradient(150deg,var(--ink-2),var(--ink-3));border-color:rgba(60,232,222,.25);}
+.adv-card.hero-adv h4{color:#fff;}
+.adv-card.hero-adv p{color:#9FB4C4;}
+.adv-card.hero-adv .adv-num{color:var(--cyan-bright);}
+
+/* === 阈值行 === */
+.gauge{display:grid;gap:12px;margin-top:22px;}
+.gauge-row{display:flex;align-items:center;gap:14px;font-size:13px;color:#9FB4C4;flex-wrap:wrap;}
+.gauge-row .cond{font-family:var(--mono);font-size:12px;color:#7E94A4;flex:1;min-width:220px;}
+.gauge-row .act{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:4px 12px;
+  border-radius:5px;text-transform:uppercase;flex-shrink:0;
+}
+.gauge-row .act.go{background:rgba(60,232,222,.12);color:var(--cyan-bright);border:1px solid rgba(60,232,222,.3);}
+.gauge-row .act.ask{background:rgba(217,138,43,.14);color:#E9A94F;border:1px solid rgba(217,138,43,.35);}
+
+/* === 对比表 === */
+.tbl-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+thead th{
+  background:#F6F8FB;text-align:left;padding:13px 18px;font-weight:600;font-size:11.5px;
+  color:var(--text-2);border-bottom:1px solid var(--line);white-space:nowrap;
+  font-family:var(--font);letter-spacing:.06em;text-transform:uppercase;
+}
+tbody td{padding:12px 18px;border-bottom:1px solid var(--line);color:var(--text-2);}
+tbody tr:last-child td{border-bottom:none;}
+td.yes{color:var(--accent);font-weight:600;}
+td.no{color:var(--muted);}
+
+/* === 响应条 === */
+.bars{display:grid;gap:24px;}
+.bar-top{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;gap:16px;margin-bottom:8px;}
+.bar-top span{color:var(--text-2);}
+.bar-top b{font-size:15.5px;font-weight:700;font-family:var(--font);}
+.bar-track{height:11px;background:#E4EAF1;border-radius:999px;overflow:hidden;position:relative;}
+.bar-track::after{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(90deg,rgba(10,24,38,.08) 1px,transparent 1px);
+  background-size:10% 100%;
+}
+.bar-fill{
+  height:100%;border-radius:999px;width:0;position:relative;z-index:1;
+  background:linear-gradient(90deg,var(--accent),#17B8B1);
+  box-shadow:0 0 14px rgba(14,143,139,.45);
+  transition:width 1s cubic-bezier(.22,.61,.36,1) .3s;
+}
+.slide.active .bar-fill{width:var(--w);}
+.bar-fill.amber{background:linear-gradient(90deg,var(--amber),#E9A94F);box-shadow:none;}
+.roi-box{margin-top:24px;padding:18px 22px;background:var(--accent-soft);border-radius:10px;}
+.roi-box .mono{font-size:11px;letter-spacing:.12em;color:var(--accent);display:block;margin-bottom:8px;}
+.roi-box p{font-size:14px;color:var(--text-2);font-weight:300;line-height:1.7;}
+
+/* === 交付 === */
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.phase{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:24px 26px;box-shadow:var(--shadow);position:relative;
+}
+.phase::before{
+  content:'';position:absolute;left:26px;top:0;width:44px;height:3px;
+  background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:0 0 3px 3px;
+}
+.phase .pw{font-family:var(--font);font-size:12px;font-weight:600;color:var(--accent);letter-spacing:.12em;margin-bottom:12px;}
+.phase h4{font-size:17px;margin-bottom:8px;}
+.phase p{font-size:13.8px;color:var(--text-2);font-weight:300;line-height:1.68;}
+.phase .out{display:block;margin-top:10px;font-family:var(--font);font-size:11.5px;color:var(--accent);letter-spacing:.06em;}
+
+/* === 边界提示 === */
+.note{
+  background:var(--amber-soft);border:1px solid #F0DDBE;border-radius:var(--radius);
+  padding:20px 26px;font-size:13.8px;color:#7A5320;line-height:1.7;
+}
+.note b{color:#6B4718;}
+.note span.sep{margin:0 10px;color:#C79A4E;}
+
+/* === 结尾页 === */
+.slide.end{
+  background:
+    radial-gradient(900px 420px at 16% 0%, rgba(18,207,198,.2), transparent 60%),
+    linear-gradient(160deg,#081522,#050D16);
+  color:#DCE7EF;justify-content:center;
+}
+.end::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(circle at 18% 0%,#000 0%,transparent 70%);
+  -webkit-mask-image:radial-gradient(circle at 18% 0%,#000 0%,transparent 70%);
+}
+.end-inner{position:relative;max-width:1280px;}
+.end-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:72px;align-items:center;flex:1;position:relative;}
+.poc-card{
+  background:rgba(255,255,255,.05);border:1px solid rgba(120,200,195,.22);
+  border-radius:14px;padding:30px 34px;
+}
+.poc-card .mono-k{font-family:var(--font);font-size:11.5px;letter-spacing:.16em;color:#5E7B8E;text-transform:uppercase;display:block;margin-bottom:8px;}
+.poc-row{display:flex;gap:18px;align-items:flex-start;padding:15px 0;border-bottom:1px dashed rgba(255,255,255,.12);}
+.poc-row:last-child{border-bottom:none;padding-bottom:0;}
+.poc-row:first-of-type{padding-top:6px;}
+.poc-row b{font-family:var(--font);color:var(--cyan-bright);font-size:13px;flex-shrink:0;width:38px;padding-top:2px;}
+.poc-row p{font-size:14.5px;color:#B9C9D6;font-weight:300;line-height:1.65;}
+.end h2{font-size:52px;color:#fff;letter-spacing:-.02em;}
+.end .lead{margin-top:20px;color:#9FB4C4;font-size:17.5px;font-weight:300;max-width:74ch;line-height:1.85;}
+.poc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;}
+.poc{border:1px solid rgba(120,200,195,.22);border-radius:12px;padding:22px 26px;background:rgba(255,255,255,.04);}
+.poc .mono{font-size:11px;letter-spacing:.14em;color:#5E7B8E;display:block;margin-bottom:10px;}
+.poc p{font-size:15px;color:#E4EEF4;font-weight:400;line-height:1.65;}
+.end-meta{
+  margin-top:44px;display:grid;grid-template-columns:1fr 1fr;gap:22px 36px;
+  font-family:var(--font);font-size:12.5px;letter-spacing:.1em;color:#5E7B8E;
+}
+.end-meta b{color:#9FB4C4;font-weight:500;display:block;margin-bottom:6px;font-size:13px;}
+
+/* === 置顶标签栏 ===
+   意图：报告章节式导航，点击直达；与底部圆点并存，标签负责"在哪里"，圆点负责进度。 */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:60;height:58px;
+  display:flex;align-items:center;gap:20px;padding:0 24px;
+  background:rgba(255,255,255,.86);backdrop-filter:saturate(180%) blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.tb-brand{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.tb-brand .brand-mark{width:26px;height:26px;border-radius:7px;}
+.tb-brand .brand-mark svg{width:15px;height:15px;}
+.tb-brand b{font-size:14.5px;letter-spacing:-.01em;}
+.tb-brand span{font-family:var(--font);font-size:11px;color:var(--muted);letter-spacing:.1em;}
+.tb-tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;margin-left:auto;}
+.tb-tabs::-webkit-scrollbar{display:none;}
+.tb-tab{
+  font-family:var(--font);font-size:12px;letter-spacing:.04em;color:var(--text-2);
+  padding:7px 12px;border-radius:8px;white-space:nowrap;cursor:pointer;border:none;background:none;
+  transition:background .18s,color .18s;
+}
+.tb-tab:hover{background:var(--bg);color:var(--text);}
+.tb-tab.on{background:var(--ink-2);color:#fff;}
+
+/* === 底部圆点与箭头 === */
+.dots{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:50;
+  display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,.75);backdrop-filter:saturate(180%) blur(14px);
+  border:1px solid var(--line-strong);border-radius:999px;
+  padding:10px 16px;box-shadow:0 8px 30px rgba(10,24,38,.18);
+}
+.dot{
+  position:relative;width:9px;height:9px;border-radius:999px;border:none;cursor:pointer;
+  background:#C3CFDB;transition:all .25s;padding:0;
+}
+.dot:hover{background:var(--accent);}
+.dot.on{width:26px;background:var(--accent);box-shadow:0 0 10px rgba(14,143,139,.4);}
+.dot::after{
+  content:attr(data-name);position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+  background:rgba(10,24,38,.92);color:#DCE7EF;font-size:11.5px;font-family:var(--font);
+  letter-spacing:.06em;padding:5px 11px;border-radius:6px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .18s;
+}
+.dot:hover::after{opacity:1;}
+.arrow{
+  position:fixed;top:50%;transform:translateY(-50%);z-index:50;
+  width:52px;height:52px;border-radius:50%;cursor:pointer;
+  background:rgba(255,255,255,.8);backdrop-filter:blur(10px);
+  border:1px solid var(--line-strong);color:var(--text-2);
+  display:grid;place-items:center;transition:all .2s;box-shadow:var(--shadow);
+}
+.arrow:hover{border-color:var(--accent);color:var(--accent);}
+.arrow.prev{left:22px;}
+.arrow.next{right:22px;}
+.arrow[disabled]{opacity:.25;pointer-events:none;}
+.arrow svg{width:20px;height:20px;}
+.pager{
+  position:fixed;right:26px;bottom:26px;z-index:50;
+  font-family:var(--font);font-size:12.5px;letter-spacing:.14em;color:var(--text-2);
+  background:rgba(255,255,255,.75);backdrop-filter:blur(14px);
+  border:1px solid var(--line-strong);border-radius:8px;padding:8px 14px;
+}
+.pager b{color:var(--accent);font-weight:600;}
+
+/* === 边缘翻页热区 ===
+   意图：点击舞台左右边缘也可翻页，兜底嵌套预览环境拦截按钮/键盘的情况。 */
+.edge{position:absolute;top:0;bottom:0;width:72px;z-index:6;cursor:pointer;transition:opacity .2s, visibility .2s, background .2s;}
+.edge.left{left:0;}
+.edge.right{right:0;}
+.edge.left:hover{background:linear-gradient(90deg,rgba(14,143,139,.07),transparent);}
+.edge.right:hover{background:linear-gradient(-90deg,rgba(14,143,139,.07),transparent);}
+
+/* === 编辑模式 === */
+#editBtn{
+  display:none;
+  width:34px;height:34px;border-radius:9px;flex-shrink:0;
+  background:var(--bg);border:1px solid var(--line-strong);
+  color:var(--text-2);cursor:pointer;transition:all .2s;
+}
+#editBtn:hover{border-color:var(--accent);color:var(--accent);}
+#editBtn svg{width:15px;height:15px;}
+#editBar{
+  position:fixed;top:66px;left:50%;transform:translateX(-50%) translateY(-140px);z-index:60;
+  background:rgba(10,24,38,.88);backdrop-filter:blur(12px);color:#DCE7EF;
+  border:1px solid rgba(60,232,222,.4);border-radius:999px;padding:9px 22px;
+  font-family:var(--font);font-size:12px;letter-spacing:.1em;
+  transition:transform .3s cubic-bezier(.22,.61,.36,1);
+}
+body.editing #editBar{transform:translateX(-50%) translateY(0);}
+body.editing [contenteditable="true"]{outline:1.5px dashed rgba(14,143,139,.55);outline-offset:4px;border-radius:4px;cursor:text;}
+
+/* === 动效降级 === */
+@media (prefers-reduced-motion: reduce){
+  .slide,.anim,.bar-fill{transition:none !important;}
+  .agent-node .no i{animation:none;}
+}
+</style>
+</head>
+<body data-page-node-id="K3KhE0OFbfAuIcHaYGbWow">
+
+<!-- ========== 置顶标签栏 ========== -->
+<nav class="topbar" data-page-node-id="svyZa1lJbixnOly2FcF431">
+  <div class="tb-brand" data-page-node-id="7YFKQz1AUBRZb9m40GO3M5">
+    <div class="brand-mark" data-page-node-id="bwpGamxtty19cxByE2Hu9a">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#3CE8DE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="bEioAVVYIOz0TbjJNq3XSl"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2" data-page-node-id="bShW4SYFluTFHdanvbnOy1"/></svg>
+    </div>
+    <b data-page-node-id="yS2bEs3Me0JyanKbVX9Gnv">SmartAsk</b><span data-page-node-id="c8uEo6pYhuGND8RS0Xr0Zl">智能问数系统</span>
+  </div>
+  <div class="tb-tabs" id="tbTabs" data-page-node-id="SYmJBzsAGRr2dWD6olcdw1"></div>
+  <button id="editBtn" aria-label="编辑模式" title="编辑模式 (E)" data-page-node-id="cX6ahVSqnkMtLJGmD21IHf">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="UGmDSLphDrlBH8XRcyjrAY"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" data-page-node-id="TZd9DAtLaCtNfiWyzNqzOR"/></svg>
+  </button>
+</nav>
+
+<div id="viewport" data-page-node-id="nRHDYE3gDEwd72y3E6nB94">
+<div id="stage" data-page-node-id="eLw6s8D9O8nBAImrNTB1Yk">
+
+<!-- ========== 01 封面 ========== -->
+<section class="slide cover active" data-page-node-id="z1XpPP22KhS1ws3TGmbqLV">
+  <div class="cover-grid" data-page-node-id="ZSPFo8NwJIx9jETm0Puo8b">
+    <div data-page-node-id="6NsC8L4QIxG1VwMGVvggRm">
+      <div class="cover-brand anim" style="--d:.05s;" data-page-node-id="VSJffkg2qf4rLo5yD85tlY">
+        <div class="brand-mark" data-page-node-id="SCUvNmdDvrLzDIjNwRAxoT">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3CE8DE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="KWLm8bnAgURKcYcpPrkGzL"><path d="M4 18V9M10 18V5M16 18v-6M22 18H2" data-page-node-id="6wVIEwlOzwxqS7jTzxSvaR"/></svg>
+        </div>
+        <b data-page-node-id="DHi2mVWu7fvIVzityFFJ13">SmartAsk</b><span data-page-node-id="3CcQVEIuvsCC5eOElIuQav">智能问数系统</span>
+      </div>
+      <h1 class="anim" style="--d:.12s;" data-page-node-id="ae2CjDOawbvXvi6jtszqjB">让经营分析<br data-page-node-id="3rSTSfgDhiKVmj8WZg9cm8">从「等排期」变为<span class="hl" data-page-node-id="zxTGJT8h2OJSzq2Zh2rL5X">「秒级回答」</span></h1>
+      <p class="cover-sub anim" style="--d:.2s;" data-page-node-id="bHAMSQwIaKlP1mB7B0tvqu">面向企业经营分析场景的自然语言问数平台。业务人员用日常语言提问，系统自动完成数据集识别、口径确认、SQL 生成、安全复核与经营解读，输出可解释、可复核、可下钻的分析报告。</p>
+      <p class="cover-pipe anim" style="--d:.26s;" data-page-node-id="xIPJ5HrAXfwO4Y7JD2Adn7">NL → ROUTE → CONFIRM → SQL → REVIEW → EXECUTE → ANALYZE → REPORT</p>
+      <div class="cover-stats" data-page-node-id="1OSGnSOQQRLuB02z5NFRTy">
+        <div class="cstat anim" style="--d:.32s;" data-page-node-id="eboXc23U3ywLXBKzmKeOIx"><span class="tag" data-page-node-id="ZhIMxIJfAoVDFFwsGCEww4">ENGINE</span><b data-page-node-id="rKRS1EIA8OzWEXnbeRvcvG">4-Agent</b><span data-page-node-id="BMpV2AC5mvWjBsBRiDjdYH">协作式问数引擎</span></div>
+        <div class="cstat anim" style="--d:.38s;" data-page-node-id="QjVrGnBAtdqByIWmLkmy4Q"><span class="tag" data-page-node-id="2GazeeQ6fXn5NPqs0n0HXS">SCENES</span><b data-page-node-id="ES5GKOq9sbKTDv2GBUH5tV">6 类</b><span data-page-node-id="80FBj9v5ziKz17UlVoYNdV">经营分析报告场景</span></div>
+        <div class="cstat anim" style="--d:.44s;" data-page-node-id="rWbgQ5EeeeNORaMAWtAe8p"><span class="tag" data-page-node-id="29pamorenb8dFDBLFCbFf5">SECURITY</span><b data-page-node-id="DtNGiWdAdq6Z2GbJIQIvHl">4 层</b><span data-page-node-id="TRKRj1X15PaSRacTIBR7Hz">权限与合规管控</span></div>
+        <div class="cstat anim" style="--d:.5s;" data-page-node-id="f1VL5fdsNvPHRr4mrLY3UW"><span class="tag" data-page-node-id="sEGPX4CMXsHVvSg2F2WSIl">DEPLOY</span><b data-page-node-id="LIGNFb2R2mdlArU7ivxGMV">Docker</b><span data-page-node-id="58BdeN1nDiNg60eUIpHpDo">私有化一键部署</span></div>
+      </div>
+      <div class="cover-hint anim" style="--d:.58s;" data-page-node-id="J9Jl3YYkx4xEdro4o1e64j"><kbd data-page-node-id="xDLchCLzilLJ8W0PwGeos3">←</kbd><kbd data-page-node-id="LXerO5zVVQRzfXJB0lswmV">→</kbd> 方向键 · 滚轮 · 圆点均可翻页</div>
+      <div class="tech-bar anim" style="--d:.66s;" data-page-node-id="iiI6USwcmL2CD7DdSOvkI5"><span data-page-node-id="cxRlSdBUEeMSX1foZQHRVa">FLASK</span><i data-page-node-id="SQjR0DH9B1XFUVeteaVA40"></i><span data-page-node-id="KEmdwBxXKarLL395gyH6bC">VUE 3</span><i data-page-node-id="It68GkJ5W2qRdSRtKmPbNl"></i><span data-page-node-id="Uc1V4iJ846PXn3RSSl41R9">POSTGRESQL</span><i data-page-node-id="PJZMu1XJ3QBgUsw5AUJLGP"></i><span data-page-node-id="4PVFoPL7MyHQuUsPibcxYM">DOCKER COMPOSE</span><i data-page-node-id="f1Bsn6KURiObZVyUMDPnsW"></i><span data-page-node-id="WXeB7KrynpPfXFr1QuIGHk">OPENAI-COMPATIBLE</span><i data-page-node-id="wZHAqoWo1AbRcFmmy8Uhu7"></i><span data-page-node-id="mhZz9n9ypc5LE0PF1pkpDu">ECHARTS</span></div>
+      <div class="cover-ds anim" style="--d:.72s;" data-page-node-id="R1WOBkiHA04YNoy6cv2W3B">已验证数据集：消费者事业部任务达成 · 商用事业部经营数据 · 飞书电商事业部经营预算</div>
+    </div>
+    <div class="term anim" style="--d:.3s;" data-page-node-id="zXGyIGSgfSpAldwaGV99aZ">
+      <div class="term-bar" data-page-node-id="zyMHmGBAjHFzNtgCBoBnTi"><i data-page-node-id="MoSJyB4soXMrNhVvmNBKFt"></i><i data-page-node-id="9H1lRLEQhLXVnIRMAMDU3G"></i><i data-page-node-id="iyLSPNIEkBIxtE6N1mAvgm"></i><span data-page-node-id="z7kdcRRDp7LQjS3TP1NS5A">SMARTASK · LIVE QUERY</span></div>
+      <div class="term-body" data-page-node-id="estwHh3AsU7l3uo47IOBL9">
+        <div class="q" data-page-node-id="dPVwV42CXL9Ew6XcVryXfk">东部分公司本月达成率怎么样？</div>
+        <div class="step" data-page-node-id="pZkrNKSWDuqQ1b0qWZJprt"><b data-page-node-id="xMKd47CtDgfeoFcG6ueDtN">route</b> → consumer_dataset <span class="v" data-page-node-id="Iy86lswtUAavysfDx789He">(score 91)</span></div>
+        <div class="step" data-page-node-id="3AHbx4XDADh7INjsQTZrvR"><b data-page-node-id="U26mdKyIiHzufkAxQkpHva">confirm</b> → <span class="ok" data-page-node-id="F5GgwdmBGLuPZBk1dG6ymI">auto_pick</span> · margin 31</div>
+        <div class="step" data-page-node-id="CeUkBYWp7MkJRCS9OEihea"><b data-page-node-id="ZczZoGjNzZ31jOUCt4CKvU">sql</b> → generated · golden_matched</div>
+        <div class="step" data-page-node-id="tGFeF0XRdw3m4pXiK74LB6"><b data-page-node-id="bCUeGHuvawpBYdOaA9tZAD">review</b> → read_only <span class="ok" data-page-node-id="qPBbnCUys1PQoOCX84duvA">✓</span> · fields <span class="ok" data-page-node-id="NbUMDTDtS9jB9XtIWQAe1z">✓</span> · scope <span class="ok" data-page-node-id="RLtQ1fHRQkDGZOiR80hkdt">✓</span></div>
+        <div class="step" data-page-node-id="NCeDjEU8JGi0ePtSqsK1hA"><b data-page-node-id="qJj4uStFSLt4Qov7oGReGX">execute</b> → 412 rows · row_filter applied</div>
+        <div class="out" data-page-node-id="twwWOAlArTPWa8XWChgR9r">
+          <div data-page-node-id="bvCPcmSkF3eCatwQCRQojI"><div class="k" data-page-node-id="XDWGFxzqmVSOSF8pTL4u9l">本月达成率</div><div class="n" data-page-node-id="Hlp6Yh794Ot415yK8BE8JU">86.4%</div></div>
+          <div class="up" data-page-node-id="qDwRY5KEyWVIPrY5nITAdy">↗ 环比 +4.2pt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 02 产品概述 ========== -->
+<section class="slide" data-page-node-id="AYbXemPUsw4uA1Rke80Tny">
+  <span class="s-page" data-page-node-id="41qT49Z6XdssAbGUTfUaIr">02 / 14</span>
+  <div class="s-head anim" data-page-node-id="5VDQnXikw6oOvTvA76Vu3I">
+    <div class="s-tag" data-page-node-id="JaNT64VuWhjQ2os7id9hF0">01 / 产品概述</div>
+    <h2 data-page-node-id="Uh5aUljFurHJEyzfVQnFPE">什么是 SmartAsk</h2>
+  </div>
+  <div class="bento anim" style="--d:.1s;margin-bottom:18px;flex:1;align-content:center;" data-page-node-id="uYa3x6iZf1Ia0pD1V40ZgC">
+    <div class="define bx2 tick" data-page-node-id="keJhzGIBP1njtZCg895kls">
+      <p data-page-node-id="8HJckuWHRkZjGJj0fB21h9"><strong data-page-node-id="Vgj5YhzxKwGdseALlsGBfq">SmartAsk</strong> 是帮助企业业务人员用<strong data-page-node-id="3Q4OcubkMDbyVgWrGVpl3v">自然语言直接查询经营数据</strong>的 AI 数据应用平台。它将分散在数据库、报表与表格中的经营指标，收敛为统一的数据集知识库与口径规则；用户只需提出业务问题，系统便自动完成从意图识别到报告呈现的完整链路，把「提需求 → 等排期 → 对口径 → 出报表」的数小时乃至数天，压缩到<strong data-page-node-id="PdWy9iL2zXLh0nIKwr3Dgi">秒级流式返回</strong>。</p>
+      <p style="margin-top:14px;font-size:14.5px;color:var(--muted);" data-page-node-id="GmT5ChJ1xyD5bWGpdILW8e">与通用 AI 问答的本质区别：每次回答都被企业自己的数据字典、口径规则与权限体系约束——可复核、可审计、可下钻，而非模型的即兴输出。</p>
+    </div>
+    <div class="card" data-page-node-id="MkgGVGPP6URyCjZ560Nkze">
+      <h3 data-page-node-id="ZI6GHLFCS59STH1b0C8uFb"><span class="ico" data-page-node-id="PYcbGewTI92n35UITk4v1Y"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="69wfNHPCkozkZCKCvz2fkv"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" data-page-node-id="teyVhBDEv1I3HOCeSEzwaD"/></svg></span>自然语言入口</h3>
+      <p data-page-node-id="lr6sOHd5mEOytWW5mm9C4d">无需 SQL、不懂表结构，日常业务语言直接提问；支持 8 轮上下文追问与指代消解，题干序号、口语化表达与残缺问法自动清洗补全。</p>
+    </div>
+    <div class="card" data-page-node-id="0aT7X2B9TD9XJOa6vQzMRV">
+      <h3 data-page-node-id="wNZ1qVYRswe1KYEqOeDoJJ"><span class="ico" data-page-node-id="hFf0vU2tDgW73UKKbW2WCs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="u5yOy80ZQEr8NuMtKdm4e2"><path d="M12 2l3 6 6 1-4.5 4.3L18 20l-6-3.2L6 20l1.5-6.7L3 9l6-1z" data-page-node-id="FTFLVk4xIEptNhmsNstg1r"/></svg></span>四 Agent 引擎</h3>
+      <p data-page-node-id="EHX4JEW8OdQgetphCFh8xw">路由、生成、复核、解读分工协作，每层独立校验，避免大模型直出 SQL 的不可控；高频问题走确定性规则，复杂问题交给模型泛化。</p>
+    </div>
+    <div class="card bx2" data-page-node-id="EnqoZrsDhv5Bz4j4toEl1W">
+      <h3 data-page-node-id="PD9JAYCJB6w5kxUhDPcBfv"><span class="ico" data-page-node-id="L0ZD0EjnS2PbdnqPBkQoaq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="XR5v8fVIMdhTr4SGJcCZEo"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" data-page-node-id="CFFEXEmGg4WlmaSgJzjQaT"/><path d="M14 2v6h6M9 13h6M9 17h6" data-page-node-id="PzlUqURpNllBU4kt8TJx4D"/></svg></span>可解释的经营分析报告</h3>
+      <p data-page-node-id="eU4XCWCFiA0U15erifowPq">结构化输出核心结论、KPI 卡片、明细看板、图表与下钻结构，并保留完整执行轨迹与 SQL——每个答案都能讲清「数是怎么来的」。</p>
+    </div>
+    <div class="quote-card bx2" data-page-node-id="MyvcAoh4x8w70IxXXmSYiz">
+      <span class="mono-k" data-page-node-id="T370D2etGJAj9c1upgIgUn">ZERO SQL · ZERO QUEUE</span>
+      <p data-page-node-id="hcWHtQk1PzDh6ciw31TGnB">使用门槛从「会用工具」降到 <em data-page-node-id="Lfc9tKPUL8EvwrcM4uXtXd">「会提问」</em>。</p>
+      <p class="qsub" data-page-node-id="XVaefL6R8P6QR91LZ7togL">8 轮上下文记忆 · 追问指代消解 · 历史会话随时恢复复用</p>
+    </div>
+  </div>
+  <div class="pipe anim" style="--d:.2s;" data-page-node-id="XPIy1jELealnvq2UxmpmV0">
+    <div class="pipe-step" data-page-node-id="5SkSq5OYtCtFqaKbZ3YOJh"><div class="n" data-page-node-id="jlW2Y2lFphSM1YjA53EcB5">01</div><b data-page-node-id="N1EzV9XFNcTI5BfcxHrzEN">问题输入</b><span data-page-node-id="n2BphIloFAnFR9VG90EuDB">自然语言提问</span></div>
+    <div class="pipe-step" data-page-node-id="bUFUKpCBbmLE1s3WuwLrOk"><div class="n" data-page-node-id="mp46pgZ9NZjtqfb83HFIxD">02</div><b data-page-node-id="Ef1SDMH7WMmTun94Qk8asG">追问解析</b><span data-page-node-id="Pm2wzoh8bY3lNvUEY2NDNJ">8 轮短期记忆</span></div>
+    <div class="pipe-step" data-page-node-id="FA6gaAA35EhJ8JtkbVUck8"><div class="n" data-page-node-id="uCjYi2Ww1Sy05BqtrwAwtF">03</div><b data-page-node-id="PMKMiRNr7FWlTcf22Usaod">路由消歧</b><span data-page-node-id="RnrmdVNYSWp4cSSHGECwBt">歧义请求确认</span></div>
+    <div class="pipe-step" data-page-node-id="cpY8BFYhfCrCfyDgBKZCOE"><div class="n" data-page-node-id="21w9HloAip0m6ZHamoIz7y">04</div><b data-page-node-id="X4zkuPHXbwM7dcH6nLkK5a">SQL 生成</b><span data-page-node-id="yrZsyoH8jn4oBHbD91A1hS">字典 + Golden SQL</span></div>
+    <div class="pipe-step" data-page-node-id="E9RNB3q1HQWDAn1CMf5HTR"><div class="n" data-page-node-id="de7UgOF6hLf5SsyjMHSkJu">05</div><b data-page-node-id="DtkQMQOZPnIqVkBjn6Pcjr">安全复核</b><span data-page-node-id="e8UoY5ftMckL6bEd7TOaU1">只读与口径校验</span></div>
+    <div class="pipe-step" data-page-node-id="Dog8X9uVnUj44CIByLr4W7"><div class="n" data-page-node-id="XrzSkeYkrJa9l9WxHc1Ee0">06</div><b data-page-node-id="WuBK0CyihMw2gSZwyrp7xX">行级执行</b><span data-page-node-id="hC2MiT2mn1Osrgq4YOuFnx">组织范围过滤</span></div>
+    <div class="pipe-step" data-page-node-id="GlMzhomMhtxzYrc4JmQhYc"><div class="n" data-page-node-id="BLqYl7NRD6Bk9Hv8sdgGon">07</div><b data-page-node-id="BkO2tBDuCSIhaGAqi3g9At">经营解读</b><span data-page-node-id="g0wBbdhwelfp1d1XgCwoZz">结论与诊断</span></div>
+    <div class="pipe-step" data-page-node-id="8dkmVDnrELuPbJScoZduXL"><div class="n" data-page-node-id="uKmnyqByEhWrzJy9apPadl">08</div><b data-page-node-id="tfpaaEVjjlgLBcbU4pd7tx">报告呈现</b><span data-page-node-id="n1TRGtvu1Jv355JhtdxKbv">SSE 流式返回</span></div>
+  </div>
+</section>
+
+<!-- ========== 03 市场机会（图表页） ========== -->
+<section class="slide" data-page-node-id="nuoAf9mtRuVnmNEeerHdH0">
+  <span class="s-page" data-page-node-id="aANXBpKdjnQmeTUxMVHOXn">03 / 14</span>
+  <div class="s-head anim" data-page-node-id="6uyvXCI7aaQ2tUHZxJSXlG">
+    <div class="s-tag" data-page-node-id="bk5LD0NqJWXhTpB4iGjYTf">02 / 市场机会</div>
+    <h2 data-page-node-id="I94ldRnTY8LkC7cyfgmCjn">自然语言正在成为 BI 的新入口</h2>
+    <p data-page-node-id="dkZ33HCd9IWCJapFEnUxAH">企业买 BI 多年，但真正用起来的业务人员始终是少数。生成式 AI 把这个缺口补上了。</p>
+  </div>
+  <div class="anim" style="--d:.12s;display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:18px;" data-page-node-id="GZVg06hCdNsc5ZVrSvHOBs">
+    <div class="chart-card" data-page-node-id="OUi7ZPeL8HCT2knAS9nkpb">
+      <span class="mono-k" data-page-node-id="fNBfmRhnxWU38tcdjcZ3Nb">MARKET / CHINA BI SOFTWARE</span>
+      <h3 data-page-node-id="DPvMNCRFhmWB1Bdbqxo0sS">中国 BI 软件市场规模</h3>
+      <p class="sub" data-page-node-id="myIwNQZfEpjEc9HsmnjLb8">单位：亿美元 · 连续 6 年保持 25% 以上同比增速</p>
+      <svg viewBox="0 0 560 300" style="width:100%;margin-top:10px;" role="img" aria-label="中国 BI 软件市场规模柱状图" data-page-node-id="8V2NLO68vx1Zt0Eo0EUyUE">
+        <defs data-page-node-id="k0GphF1DMNTDENoKzMJFpR">
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1" data-page-node-id="uDU3BMg933GaXASTCHhuTS">
+            <stop offset="0" stop-color="#12B5AE" data-page-node-id="A1hmRPaZU6VD0vxS5I2TWs"/><stop offset="1" stop-color="#0E8F8B" data-page-node-id="yXDJPJsPUkXZysQzornJlp"/>
+          </linearGradient>
+        </defs>
+        <line class="axis-grid" x1="30" y1="72" x2="530" y2="72" data-page-node-id="aWQyB34q2XrZdfNzCMoe3z"/>
+        <line class="axis-grid" x1="30" y1="134" x2="530" y2="134" data-page-node-id="64viAPq7dGmJD6NWb3jPlJ"/>
+        <line class="axis-grid" x1="30" y1="196" x2="530" y2="196" data-page-node-id="ctwtSLWe1AnCBpi1GzOHsh"/>
+        <line class="axis-grid" x1="30" y1="258" x2="530" y2="258" data-page-node-id="bfzTrPCHIsgzGOAA8aC7rw"/>
+        <rect class="bar-actual" x="78" y="125" width="96" height="133" rx="6" data-page-node-id="n00shtJd7LXXeH5l4nvMSp"/>
+        <rect class="bar-actual" x="238" y="94" width="96" height="164" rx="6" data-page-node-id="EkUwr1LrOwVoNgJQA0HLPI"/>
+        <rect class="bar-fcst" x="398" y="37" width="96" height="221" rx="6" data-page-node-id="PgYjcGLZ9Be43YuWksvNx6"/>
+        <text class="axis-num" x="126" y="112" text-anchor="middle" font-size="22" data-page-node-id="tQGvMCJajYY9nfjuvoWAwH">10.7</text>
+        <text class="axis-num" x="286" y="81" text-anchor="middle" font-size="22" data-page-node-id="RdDGMsQhYgx3c0OnvIKZf3">13.2</text>
+        <text class="axis-num" x="446" y="24" text-anchor="middle" font-size="22" data-page-node-id="Q1qQeRz4rZBhRkAzpE8v23">17.8</text>
+        <text class="axis-year" x="126" y="282" text-anchor="middle" font-size="14" data-page-node-id="LRDwxmzdshbMjrw1PKSek7">2024</text>
+        <text class="axis-year" x="286" y="282" text-anchor="middle" font-size="14" data-page-node-id="FlyPsSU5WNDA4ULN4VBDBS">2025</text>
+        <text class="axis-year" x="446" y="282" text-anchor="middle" font-size="14" data-page-node-id="Sy4qZ7Hp7IdK7ZBgA8Pmgr">2026E</text>
+        <text x="398" y="60" text-anchor="start" font-size="12" fill="#0E8F8B" font-family="Noto Sans SC" letter-spacing="1" data-page-node-id="gJRe33ZAaGPxwZZDicuwuT">+33% YoY</text>
+      </svg>
+      <div class="src" data-page-node-id="qqAYgLfyUJuIYBAYMoVf9d">SOURCE: IDC · 2026 为预测值</div>
+    </div>
+    <div style="display:grid;gap:18px;" data-page-node-id="rRTGPVibbHUSNGTsNizhNQ">
+      <div class="chart-card" data-page-node-id="57Y1SU5Ugdxpdw2Qv4Trmb">
+        <span class="mono-k" data-page-node-id="zcYujMIFLJYeEeQIkcmMlM">SEGMENT / NL INTERACTION</span>
+        <h3 data-page-node-id="xtl4AMLfBIGzszkUtxHpaH">自然语言交互类产品占比</h3>
+        <div style="display:flex;align-items:center;gap:22px;margin-top:8px;" data-page-node-id="YJrFVlSQOLViW1bgSx42iU">
+          <svg viewBox="0 0 200 200" style="width:148px;flex-shrink:0;" role="img" aria-label="自然语言交互类占比 32%" data-page-node-id="aUqZqdOGXUbqjlz3Mp8hDF">
+            <defs data-page-node-id="rdyFGoluyxLab4lCLy7k5i">
+              <linearGradient id="donutGrad" x1="0" y1="0" x2="1" y2="1" data-page-node-id="Arue3mQV7COc6AAwAoxbJZ">
+                <stop offset="0" stop-color="#12B5AE" data-page-node-id="A9vA7ofNMBBySGIcHyJt3j"/><stop offset="1" stop-color="#0E8F8B" data-page-node-id="RFbAUe5UCVLfhRY3McFFJ3"/>
+              </linearGradient>
+            </defs>
+            <circle class="donut-bg" cx="100" cy="100" r="70" fill="none" stroke-width="26" data-page-node-id="i4PEiBjZT0QUngmnRmCMAr"/>
+            <circle class="donut-val" cx="100" cy="100" r="70" fill="none" stroke-width="26"
+              stroke-dasharray="140.7 439.8" transform="rotate(-90 100 100)" data-page-node-id="EPpgNUvPij03Cucgl9vPdN"/>
+            <text x="100" y="96" text-anchor="middle" font-size="34" font-weight="700" fill="#0A1826" font-family="Noto Sans SC" data-page-node-id="YixOLu8A8dd9FGciK3b6qd">32%</text>
+            <text x="100" y="122" text-anchor="middle" font-size="12" fill="#6B7C8E" data-page-node-id="yFeHZWzuT1FCQcrW6kxr1O">增长最快细分</text>
+          </svg>
+          <div style="font-size:13px;color:var(--text-2);line-height:1.8;font-weight:300;" data-page-node-id="XNSojwbHSwr5ZdlSq95M54">
+            中国智能 BI 工具市场 <b class="mono" style="color:var(--ink-2);" data-page-node-id="YwEtdzjpslYkBw7N0P8RbG">482 亿元</b>（+38%），其中自然语言交互类占比 32%，为增长最快的细分领域。
+          </div>
+        </div>
+        <div class="src" data-page-node-id="48g4FcIr0B6jdaTZVP5D7C">SOURCE: 行业研究 2025</div>
+      </div>
+      <div class="chart-card" data-page-node-id="ZoDYTljHF7j9sc2GbDisUH">
+        <span class="mono-k" data-page-node-id="RcSN8HocC8U3kCwHKecqui">ADOPTION / ABI PLATFORMS</span>
+        <h3 data-page-node-id="UgrvoGrtFpPU6bSMWCU0Q0">分析与 BI 平台采用率</h3>
+        <div style="display:grid;gap:12px;margin-top:12px;" data-page-node-id="eJBhNzBdSf2lTNSOPvrhoo">
+          <div class="mini-row" data-page-node-id="iBYNo1F8Np7l2wwD6atOI3"><span data-page-node-id="RSE93lT0bfZWKmgsNCYT1i">当前员工使用率</span><div class="mini-bar" data-page-node-id="MZodFqfKm3JZHETaZ7OHip"><i style="width:29%;background:#C3CFDB;" data-page-node-id="inwP4Re8Mk0Kl5vzKJX3vK"></i></div><b data-page-node-id="nvKRJiYeS1DJOCnLa1X00O">29%</b></div>
+          <div class="mini-row" data-page-node-id="xDnz0fHmthwCEg3o3VcsbH"><span data-page-node-id="G88TKcpUcmAMJW9aXYT42X">2025 年预测</span><div class="mini-bar" data-page-node-id="BMhzy4aEsJkHhVI3SDjqFl"><i style="width:52%;" data-page-node-id="zWI0si8QJwCKPuews6RQsZ"></i></div><b data-page-node-id="j1P8GPl9EZSA1eMHG0kzCq">50%+</b></div>
+        </div>
+        <p class="sub" style="margin-top:12px;" data-page-node-id="igZpKkW8KgQMgeJ32vFgYw">预置看板正被对话式、动态生成的洞察替代；近 80% 企业已或正在将生成式 AI 集成进 BI。</p>
+        <div class="src" data-page-node-id="HjGa5slrdgA7YVTNjuNCnm">SOURCE: GARTNER · IDC 中国</div>
+      </div>
+    </div>
+  </div>
+  <div class="define anim" style="--d:.2s;border-left-color:var(--amber);" data-page-node-id="ZkDsi3MMSWueTO4HnrK2jX">
+    <p data-page-node-id="NmWv7yPnlXpNupqFp5d4Qd"><strong data-page-node-id="eEhLmC8Rn5lhFNNtcGxomb">SmartAsk 的定位：</strong>不替代企业已有的数仓与 BI，而是叠加在其之上的<strong data-page-node-id="h6U0mJVeG8DkGK5w0bzxMd">自然语言问数入口</strong>——把存量数据资产的使用门槛从「会用工具」降到「会提问」。传统报表与看板仍占中国 BI 市场九成以上份额，业务人员却依然靠「找人要数」，中间缺失的正是把业务语言翻译成数据查询的最后一层。</p>
+  </div>
+</section>
+
+<!-- ========== 04 行业痛点 ========== -->
+<section class="slide" data-page-node-id="kpwaFIxXDguuKKqKrff4ip">
+  <span class="s-page" data-page-node-id="lo3MroJAaNQVFLw3Sb4ERE">04 / 14</span>
+  <div class="s-head anim" data-page-node-id="UFviEqFUWyKuDlY6z26fq2">
+    <div class="s-tag" data-page-node-id="mcUssmCcGLK4IV5Rz4sSS1">03 / 行业痛点</div>
+    <h2 data-page-node-id="2Nk2t9xhJaoC2qNXu6Ps34">经营分析的四道坎</h2>
+    <p data-page-node-id="Zf3cCKztuEWAGJoqCrrVAQ">这些问题在制造业、消费品、零售与项目型组织中高度相似，长期无法被传统报表与 BI 工具解决。</p>
+  </div>
+  <div class="bento anim" style="--d:.1s;flex:1;align-content:center;" data-page-node-id="yq9u4Or761zrBojKarSPoR">
+    <div class="pain bx2 tick" data-page-node-id="AXUJ89lT0ax2EhpX2Op8Cg">
+      <h3 data-page-node-id="yDC5dHfetxuuQyCvA9EmAm"><span class="ico red" data-page-node-id="92LoMAjk4muIH4onuwVDfv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="sIuTOyT1bkQoMmMRtUjDq3"><circle cx="12" cy="12" r="9" data-page-node-id="LBhtYnzNEsrq9vCGBtdnxn"/><path d="M12 7v5l3 2" data-page-node-id="lXc3W2OqC5UuBBZvScvTsm"/></svg></span>响应慢：一个问题等上几天</h3>
+      <p class="now" data-page-node-id="CCE1h88gZUAplfuUDI0oEI">业务问题往往发生在晨会、周会、经营复盘现场，但取数依赖数据团队排期。提需求、对口径、写 SQL、出报表，一个简单问题耗时数小时到数天，会议现场永远拿不到答案；等数据终于出来，决策窗口往往已经过去。</p>
+      <div class="cost" data-page-node-id="jA6HuMUiHYDzB1tkWDzNsC"><b data-page-node-id="6pJ82zyr4ow7Rn0SPaLxql">COST</b><span data-page-node-id="5QnYNEzsFwif7KB2JNfUgf">决策被数据响应时间拖慢，管理层被迫用滞后的数据做判断。</span></div>
+    </div>
+    <div class="pain" data-page-node-id="iqVkxGKtqs620CqIupu4TS">
+      <h3 data-page-node-id="FJ0a20HG0535cWe8o79OD6"><span class="ico red" data-page-node-id="qEAdjugl6DOIzPpSDdw5qe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="N54hKAmM6pX6abk795mMg6"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" data-page-node-id="ZcQkp6xLNbqnX6a79KF7Pm"/></svg></span>口径乱：同题多答</h3>
+      <p class="now" data-page-node-id="4k4xq2w3RhnGDXYqlyrSyk">「达成率」在不同事业部的层级、字段与统计方式各不相同。没有统一入口与确认机制时，不同人查出来的数不一致，跨部门对不上账。</p>
+      <div class="cost" data-page-node-id="N2nx1k8qBCuIKKCrQwm3Wt"><b data-page-node-id="E0EmuD9dGfXRUh6C2MyjWh">COST</b><span data-page-node-id="bpj6UE7AdL6rUoaKWeov1P">会议时间消耗在对数上，数据公信力受损。</span></div>
+    </div>
+    <div class="pain" data-page-node-id="qzl3HBsq37win5zkwlDgjy">
+      <h3 data-page-node-id="h6AdhJmQYBvqjWCHjgOaEs"><span class="ico red" data-page-node-id="l698TKV6hHnR0dqGTTgTGJ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="2GPNvqhQTJ076IVmnu7drP"><path d="M18 20V10M12 20V4M6 20v-6" data-page-node-id="2EkgZDGkzjJfDRQi9elhsL"/></svg></span>门槛高：两张皮</h3>
+      <p class="now" data-page-node-id="8NtZCrVPL5UUmMRntsBfN0">业务知道自己想问什么，却不知查哪张表哪个字段；数据人员懂技术，却未必理解问题背后的管理意图；BI 工具需要学习拖拽建模，自助分析停留在口号。</p>
+      <div class="cost" data-page-node-id="RdOW4BdUhQwh62dS5JCbJj"><b data-page-node-id="4cYdy7mDOrYT8yKWHWF00B">COST</b><span data-page-node-id="NZR4xqm2nzpm5ok5JYosC7">数据团队被重复取数淹没，无暇做高价值分析。</span></div>
+    </div>
+    <div class="pain bx2" data-page-node-id="AtTDdtaDbxLexqVbXXZIsh">
+      <h3 data-page-node-id="hhigMql7NMaye1xve74WQe"><span class="ico red" data-page-node-id="zkYGdbBV4Js4Kisc9t3R12"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="tUsLWQZ7DxEL9FzlgcmG0n"><path d="M21 12a9 9 0 1 1-3-6.7" data-page-node-id="PgAHDh5BpuiF0lHdzwmqFd"/><path d="M21 3v6h-6" data-page-node-id="TXozNbi6j5BMTm7SPpv85e"/></svg></span>不沉淀：人走了，口径就没了</h3>
+      <p class="now" data-page-node-id="Kod4dURAOfSnkKAKLEwvs6">分析口径、SQL 逻辑与业务经验散落在个人电脑与私人脚本里。同一类问题每次重新解释、重新写、重新对，知识无法沉淀到组织层面，换人就要重来，同样的问题一再发生。</p>
+      <div class="cost" data-page-node-id="7ezBekYO1M0K3LEJdEA5r6"><b data-page-node-id="aTdPDYKAFE0RsEdGANoHBW">COST</b><span data-page-node-id="SXZIydV30neFCyx6CNyyNN">分析能力随人员流动而流失，同样的口径错误反复发生。</span></div>
+    </div>
+    <div class="quote-card bx2" data-page-node-id="6g20VLSU4ZJ84vejDxaLFm">
+      <span class="mono-k" data-page-node-id="TViWGA2cZdGJ63GCdZmHIA">THE HIDDEN COST</span>
+      <p data-page-node-id="MpzRDzXqIXvOjntPwqQd5u">会议现场拿不到答案，<br data-page-node-id="zOnEYF4acMNMNaIVohizA4">是经营分析最大的<em data-page-node-id="nGCu96SDzlrPjwsdIHaHGB">隐性成本</em>。</p>
+      <p class="qsub" data-page-node-id="zoAEmv0O07Hu6n2q1ha96Z">响应每慢一天，就多一天凭经验拍板的风险。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 05 四 Agent 架构 ========== -->
+<section class="slide" data-page-node-id="UTLzEA3DQFHJagHxgise6o">
+  <span class="s-page" data-page-node-id="jeB8JhvnEXkdHFE09OVZZu">05 / 14</span>
+  <div class="s-head anim" data-page-node-id="C4vKuW8ZEfmm3eMjptWVgJ">
+    <div class="s-tag" data-page-node-id="bGustSrRulfrQ4NeuBbtg4">04 / 核心架构</div>
+    <h2 data-page-node-id="MCtYJuFIZQJ5whxLHrCmvF">四 Agent 协作引擎</h2>
+    <p data-page-node-id="8nlSW2NWUm9qPgh6t0NGNc">核心不是「让大模型直接写 SQL」，而是一条分工明确、每层独立校验的工程化流水线。</p>
+  </div>
+  <div class="agent-flow anim" style="--d:.1s;" data-page-node-id="WE0dBfyBCBeMpVT0nCDI2h">
+    <div class="agent-node" data-page-node-id="hwa54mvgmz3SV7tVUjkHm1">
+      <div class="no" data-page-node-id="gSkoRlsOZ71EN7sJvsxdGY"><i data-page-node-id="M5QfcBzZR8rn22Tp66GOBW"></i>AGENT_01 · ROUTER</div>
+      <h4 data-page-node-id="2B5XdCJ4I4KYvGevqmGL9O">路由中枢</h4>
+      <div class="role" data-page-node-id="6P4RrVZ1AWdro4JVbrosF9">理解问题，选对数据集</div>
+      <p data-page-node-id="C7zbA9Aqe3lvUBAAkaMTzV">解析指标、时间范围与分析对象，结合数据集元数据路由打分；识别歧义并在不确定时停下来请求口径确认，而不是硬猜。</p>
+      <code data-page-node-id="jp3ytk6IgEETPzNR2vpR3a">_agent1_route_with_llm</code>
+    </div>
+    <div class="agent-node" data-page-node-id="Rk4UhIxuiE1dRYD87UTkIE">
+      <div class="no" data-page-node-id="vnj1E1qawWxeIZHn0yBJ1m"><i data-page-node-id="uBsPnCCUiG2HbiFaZCYraz"></i>AGENT_02 · BUILDER</div>
+      <h4 data-page-node-id="iCoPt9htJw6kmLClTAW8rJ">SQL 架构师</h4>
+      <div class="role" data-page-node-id="5QwKTACvsae4TesRUIq206">按口径生成只读 SQL</div>
+      <p data-page-node-id="29slROYgGrK60iG70PeJf9">严格依据 DDL、数据字典、LLD 业务说明与 Golden SQL 样例生成查询；高频问题优先复用确定性规则，降低模型随机性。</p>
+      <code data-page-node-id="usIhAMHZwWxSGzQzZGsEh9">_agent2_generate_sql</code>
+    </div>
+    <div class="agent-node" data-page-node-id="7KQJpXp88LfmyKeRHBHEUG">
+      <div class="no" data-page-node-id="4XLjdFyD2mtdRQJe0CtfzD"><i data-page-node-id="4MBUxhQuCMfoGs5cEADuoT"></i>AGENT_03 · AUDITOR</div>
+      <h4 data-page-node-id="uFFxB8vokqRBKDHsYO0HOk">合规审计员</h4>
+      <div class="role" data-page-node-id="AjndcJaucqWFVfNnpeohKO">执行前的安全闸门</div>
+      <p data-page-node-id="4RfGx3QIlm355p9zuhZBcB">复核是否只读、字段是否存在、统计口径是否正确、组织路径是否越界；发现问题即触发修复链路，绝不带病执行。</p>
+      <code data-page-node-id="uLTd43VJ3MXbIVpy3VrA2f">_agent3_review</code>
+    </div>
+    <div class="agent-node" data-page-node-id="a9ZbED8Vet2zwU22w3lElv">
+      <div class="no" data-page-node-id="2WYTCGFspN8Fr2fDkvKnPx"><i data-page-node-id="21YiHgOKZhydb8ybSBdZMI"></i>AGENT_04 · ANALYST</div>
+      <h4 data-page-node-id="jmqHanhXXDgOOFVlYHpZEW">业务分析官</h4>
+      <div class="role" data-page-node-id="GDAFCpor457groy7a3VEH9">从高管视角给出结论</div>
+      <p data-page-node-id="M0XJwpy9EaF1XlMLg6WkZn">输出【核心结论】→【亮点分析】→【问题诊断】→【改进建议】的结构化经营解读，重点关注达成率异常节点。</p>
+      <code data-page-node-id="6AWdhhwxrfCG59bcdFNQNz">_agent4_analysis</code>
+    </div>
+  </div>
+  <div class="flow-cards anim" style="--d:.2s;" data-page-node-id="OGZUSrHKklvemYDElTGrCR">
+    <div class="card" data-page-node-id="79o1TdECT8ZAx20WBYX4ao"><span class="mono-k" data-page-node-id="XnrswnlStgrgwGvFgDTzCp">FLOW / DECIDE</span><p data-page-node-id="7mxNFpRlgiCNNV2nod5Eco">决策优先级：请求指定 → 数据集策略 → 默认流程；进阶需总开关 + 角色灰度双重许可。</p></div>
+    <div class="card" data-page-node-id="L2i6o5EaV6nHsjzStQpGC0"><span class="mono-k" data-page-node-id="pePnnQ6deRrHsuuPrY29OM">FLOW / FALLBACK</span><p data-page-node-id="yD5ZHORYvGZ3T0U2XRhbq1">进阶任一环节异常即自动回退基础流程重跑，问数链路始终可用。</p></div>
+    <div class="card" data-page-node-id="ZW01QSfYNW93arBjCzvmxJ"><span class="mono-k" data-page-node-id="uVM2CSaCfPZ5kZ5Rk7rmcR">FLOW / GRAYSCALE</span><p data-page-node-id="jPS4E6e5io21HxvOZewGSi">新流程可按角色、按数据集逐步放量，出问题一键切回，上线节奏完全可控。</p></div>
+  </div>
+</section>
+
+<!-- ========== 06 六大场景 ========== -->
+<section class="slide" data-page-node-id="wraCnGbYoG8AiZ0JFoctcT">
+  <span class="s-page" data-page-node-id="7vH7cgnzz2qg14MKHI6mSU">06 / 14</span>
+  <div class="s-head anim" data-page-node-id="fGCG5N7TwqKNc25rCIo9N9">
+    <div class="s-tag" data-page-node-id="tnKKT3uJ2ts69eXTrSLUCx">05 / 分析场景</div>
+    <h2 data-page-node-id="JQNCZQnKi80VazXcW8noRo">六大经营分析报告场景</h2>
+    <p data-page-node-id="Ik6IVvq4ECql5b5R2ny2uw">每个场景有独立的识别规则与报告契约，不是同一个模板的换皮。</p>
+  </div>
+  <div class="bento anim" style="--d:.1s;flex:1;align-content:center;" data-page-node-id="CXnBmSeMdFZOqyZvJFuyyV">
+    <div class="card bx2 tick" data-page-node-id="OBcoZhJoSupGGtlME27RB1">
+      <span class="mono-k" data-page-node-id="aGX7GGyXYjJjTxdltkvbpO">SCENE / DETAIL</span>
+      <h3 data-page-node-id="Ea79yZ42F3yIASEGUrRXxp">详情查询</h3>
+      <p data-page-node-id="kO4I6lASmICz1FjTQD7VdQ">单主体指标查询，如「东部分公司本月达成率怎么样」。返回核心结论 + KPI 卡片 + 下级组织明细，并默认带出直接下级支持下钻——单个对象不是终点，而是探索的起点。<span class="out-tag" data-page-node-id="Riloc0t4SNBJQF484EB4I1">OUTPUT → 结论 + KPI + 明细 + 图表 + 下钻</span></p>
+    </div>
+    <div class="card" data-page-node-id="FfQmS0Azl6i4XisXsRFDYQ">
+      <span class="mono-k" data-page-node-id="55vCvy80htCBNf2RuY23Wc">SCENE / RANKING</span>
+      <h3 data-page-node-id="NpbbUNc3B6VMWFgXYescLB">排名筛选</h3>
+      <p data-page-node-id="bBpnZmFrMODFXgjMCtRFoI">TopN、最好 / 最差，如「哪些分公司达成率低于 30%」。<span class="out-tag" data-page-node-id="IZNK0zHMNK3eHUEtWlUOlo">OUTPUT → TopN 清单 + 指标对比</span></p>
+    </div>
+    <div class="card" data-page-node-id="u31H8KrQriEDfH2rnlThZz">
+      <span class="mono-k" data-page-node-id="XA9eqxNgMWlFYwF4E4gFYO">SCENE / COMPARATIVE</span>
+      <h3 data-page-node-id="DkGJdNJ2T0MT9oBzejf63t">对比分析</h3>
+      <p data-page-node-id="BKRIHJHV1Mc4eQrM0UICyy">多主体并排比较，如「山东和河南的业绩对比如何」。<span class="out-tag" data-page-node-id="x35Ml4DiaddYhHHs1AtQAG">OUTPUT → 并排指标 + 差异分析</span></p>
+    </div>
+    <div class="card" data-page-node-id="4u9TtGE5UpHFgG7GJ3hz5d">
+      <span class="mono-k" data-page-node-id="sqf7C7GSEIeSPnSpFpjGDb">SCENE / DRILLDOWN</span>
+      <h3 data-page-node-id="WFHdfMdueHYr35ywUESZc4">组织下钻</h3>
+      <p data-page-node-id="aq8p4RVC1XYQkyidA6E5hM">沿组织层级逐层展开，如「东部下面各代表处表现如何」。<span class="out-tag" data-page-node-id="nqW7knsmPD6TGC7Io0EoHL">OUTPUT → 层级展开 + 逐级明细</span></p>
+    </div>
+    <div class="card" data-page-node-id="jIXFlf6PnfCKIQllZKXIpX">
+      <span class="mono-k" data-page-node-id="7QprE9rvqxYFa4Imi8K3FB">SCENE / FILTER</span>
+      <h3 data-page-node-id="SU7C7G7xkq8xGolg46xLjx">条件过滤</h3>
+      <p data-page-node-id="aRbgnO5ygHXMKBppLLQSzq">金额、阈值、渠道等条件筛选，自动完成单位换算。<span class="out-tag" data-page-node-id="4mWA5aNgiqGGk660JajVDn">OUTPUT → 条件清单 + 阈值高亮</span></p>
+    </div>
+    <div class="card bx2" data-page-node-id="MGetfFQUX5HMoi66ykgaOy">
+      <span class="mono-k" data-page-node-id="g2m6SRRzaaQDkXkQ6ROyqz">SCENE / DIAGNOSTIC</span>
+      <h3 data-page-node-id="ETXIOTZpKhbYGgxFPndTKh">诊断分析</h3>
+      <p data-page-node-id="MGLAbtkDpmCoRp0tDPsuiE">风险、缺口与异常归因，如「为什么这个月业绩下滑」。围绕达成率异常节点输出问题诊断与改进建议，而不只是罗列数字。<span class="out-tag" data-page-node-id="RB6U3e68nb7gfqu5ofe5KC">OUTPUT → 归因 + 诊断 + 改进建议</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 07 16 项能力链 ========== -->
+<section class="slide" data-page-node-id="LgrHgCYzrr1eLoltXhUl6E">
+  <span class="s-page" data-page-node-id="O4RJahJYut0jVKV8UlKCxC">07 / 14</span>
+  <div class="s-head anim" data-page-node-id="m812tMRaf4SQN5KS0cDIq3">
+    <div class="s-tag" data-page-node-id="83ApDTWwajbbUEsOHyuVle">06 / 进阶能力</div>
+    <h2 data-page-node-id="INjD5Kx0nbZJVo14N6GiWV">16 项进阶能力链</h2>
+    <p data-page-node-id="wsPGjdK1oXLHTQ0tZWirui">面向复杂问题的增强链路：从资产打包到证据投票，每一步都可独立开关、按角色灰度。</p>
+  </div>
+  <div class="duo anim" style="--d:.06s;" data-page-node-id="zHPrtctGkoJAV9gAPt0bQb">
+    <div class="card" style="padding:18px 24px;" data-page-node-id="1W9RtQJ9IS5nTozdMKAONp"><span class="mono-k" data-page-node-id="G4VgFtavXLXBmlC9E6BVrF">BASIC FLOW / DEFAULT</span><p style="font-size:14px;" data-page-node-id="F7Wp4fDcmrnYH815wb0DXC">基础流程：四 Agent 主线覆盖日常问数，默认全开、稳定优先。</p></div>
+    <div class="card" style="padding:18px 24px;" data-page-node-id="c3HOIHnTy1wV3G2RyYcje7"><span class="mono-k" data-page-node-id="oZCPHDRkgR4Yl9TnNrmmnZ">ADVANCED FLOW / GATED</span><p style="font-size:14px;" data-page-node-id="wSTIxv4zAoCVfr7CA3Qe8P">进阶流程：16 项能力链串联面向复杂分析；开关、角色、数据集三重灰度，异常自动回退。</p></div>
+  </div>
+  <div class="chips anim" style="--d:.1s;" data-page-node-id="eWZJwUePyU1ZrIs9d3Ge3X">
+    <div class="chip" data-page-node-id="ZfcMl2GMkfmxJMTOPLN0hE"><span class="no" data-page-node-id="1BbnuIUKUfMHsdzJQUnmiC">01</span><div data-page-node-id="IIK3rtaZKd7hMf6ddIjiYm"><b data-page-node-id="9rfM4hPWKIzGB21Erul7Pd">数据集路由</b><span data-page-node-id="f1Gz5DjQzfdTR9GtoVVuSX">关键词 + 业务域 + 别名匹配</span></div></div>
+    <div class="chip" data-page-node-id="jJ5jYoGeOmzGyEkkaq6YoG"><span class="no" data-page-node-id="KNK6G1IxtLDnEXBj6hXBL5">02</span><div data-page-node-id="gPmhpeCyAvI0uIQ74Zme1B"><b data-page-node-id="XUrn90qPIYhIF6HZRIxwZB">资产打包</b><span data-page-node-id="qpQCGUuLl604exrdPAPN9Z">字典 / DDL / LLD / Golden SQL</span></div></div>
+    <div class="chip" data-page-node-id="KRK7HFJ1a1fXWg3AJsnAbB"><span class="no" data-page-node-id="2RIr7nzaOWpbUwJGNbyxic">03</span><div data-page-node-id="0kZOPgEONZR9ABTyztNr9F"><b data-page-node-id="Ay4ZMh2B5Fb3eHSqAzNfGv">路由守门</b><span data-page-node-id="4w8qpbdPyglLClqvc2i7EN">自动锁定 / 提示确认 / 识别错配</span></div></div>
+    <div class="chip" data-page-node-id="L1Mjr8Td1TQjHu6xhMq6HF"><span class="no" data-page-node-id="xPaGmYA0a40AFGZ335roDi">04</span><div data-page-node-id="EsNTCYFWi4asVSQCV1NF4A"><b data-page-node-id="M6pYF2DDqtwya3rT53sGVn">任务规划</b><span data-page-node-id="VI8OsG8iv8AMjED6ztbxyT">识别意图后规划分析链路</span></div></div>
+    <div class="chip" data-page-node-id="tzv85oiVQJV91h83RyppTD"><span class="no" data-page-node-id="HTLZWALLK62I7kJVuTB2vu">05</span><div data-page-node-id="IUacEy0ti4CFEyRiZKmD05"><b data-page-node-id="OypXwqQAjphuQVSNL5PpC1">Golden SQL 复用</b><span data-page-node-id="WpGSArhCZCmBAHgVPe6pIx">命中样例则零偏差执行</span></div></div>
+    <div class="chip" data-page-node-id="9tDqMEicZPeKVyEgcWmewm"><span class="no" data-page-node-id="Z9EmST8o1qd0edm20Izoie">06</span><div data-page-node-id="hW1WwCD8EOPR0AM1BNfoN9"><b data-page-node-id="DwVWoloFiqr21MgQlVP4IV">SQL 生成</b><span data-page-node-id="3Su6iCgGNTbzrpGjMt5Vhw">基于资产包与口径生成</span></div></div>
+    <div class="chip" data-page-node-id="PNIopP0KdN1OSuhmDLDpnz"><span class="no" data-page-node-id="lNn9VMrXqVgtwR6fRTyEUz">07</span><div data-page-node-id="4lQfFRXOPhsABMW5nKxEaB"><b data-page-node-id="zDz1nCNI5K6RDNgk9tM9Xa">SQL 复核</b><span data-page-node-id="a2xN5InWsVj4JBOL5wygzE">只读安全、字段、口径校验</span></div></div>
+    <div class="chip" data-page-node-id="glVGvzD7rXvN2z4JBfvpux"><span class="no" data-page-node-id="kuFn8SmTB0Ffw8BtOIipA4">08</span><div data-page-node-id="vhH7P1VkvPOwIhEnWhgQy3"><b data-page-node-id="ke5q3y6QDoBN7bEH7LvbbA">SQL 执行</b><span data-page-node-id="FhiYM8FHxAzFB5VYEXC0zo">复用数据源路由执行</span></div></div>
+    <div class="chip" data-page-node-id="pEp4Y6meCMjLcGqasPO96z"><span class="no" data-page-node-id="cdE25uJA3j7ZbbKl9h4uhl">09</span><div data-page-node-id="lJ3rNOvHyCP9Rzci56Xj7L"><b data-page-node-id="j8ewwJRF7Xn4OD1CyiPXii">质量门</b><span data-page-node-id="Zn8CEcQwq5S2eWQgisCcYL">映射、复核、结果质量检查</span></div></div>
+    <div class="chip" data-page-node-id="I0nybo6WGsIQobzdBpUM4W"><span class="no" data-page-node-id="Q1f4fdg2UQF944l9vZk0R2">10</span><div data-page-node-id="cBCd38xVjsBD1jDxyY4BNv"><b data-page-node-id="Y6GB1pIOER0GnFRAI1cdW2">模板策略</b><span data-page-node-id="9EXP2vZZt0Jluy0g1UqVUA">TopN 是否跟随报告模板</span></div></div>
+    <div class="chip" data-page-node-id="zCpCx7gqj5fPA1Vof3InPv"><span class="no" data-page-node-id="TiMoW0BB1FvzknAGLSYdXl">11</span><div data-page-node-id="YFzxlOvbgwhGzQfOFn7ju3"><b data-page-node-id="u2fja8KkxCAGsCbcg5nM5B">Pandas 加工</b><span data-page-node-id="ibCswnUGiGsX5r89rJjYwA">排名、差异、缺口计算</span></div></div>
+    <div class="chip" data-page-node-id="UthzpcAHUrHgbiILUUKfjG"><span class="no" data-page-node-id="iDZe658c68RZ0VQih1US4V">12</span><div data-page-node-id="ItJG7YU1J4MX0UUt5FVlj2"><b data-page-node-id="U4RJCoTBrrpRsZU2ANkf8n">结果自检</b><span data-page-node-id="gqrXHdOIewGupEU5XqkNYW">空结果、错配、风险阈值</span></div></div>
+    <div class="chip" data-page-node-id="PFTJstPb5R5ky0hjUluA5z"><span class="no" data-page-node-id="LpIqIElGx9TJhKebSZRGpP">13</span><div data-page-node-id="57OnjIUwcZUHkal83VQfvD"><b data-page-node-id="a7zQGAy7ACYIc2FGrFyFpL">答案契约</b><span data-page-node-id="xXJfbuGGGpyW61BDnjePbj">核心结论必须直面问题</span></div></div>
+    <div class="chip" data-page-node-id="V8kaY2rwxKbq56Texpa5Au"><span class="no" data-page-node-id="bR5UsjxRNcV0J2Z0aD1Luc">14</span><div data-page-node-id="9GlwRwpB74LHat0wn4mIHQ"><b data-page-node-id="N7DKwd1Z5fu81Z4BBhnxOh">结论建议</b><span data-page-node-id="gpYVcYqdcgtRAC4Z0VztLc">基于证据生成重写建议</span></div></div>
+    <div class="chip" data-page-node-id="otHYteQenCmKU9drwFRHuC"><span class="no" data-page-node-id="kszLRmrXQsKmR72BE25vjF">15</span><div data-page-node-id="CmXeNSinaKsFGAudxyYUNt"><b data-page-node-id="EhK4cjxiwMDfAApos4TDum">证据投票择优</b><span data-page-node-id="PkIcMhd6UHMEynrdGvfBWM">多信号汇总采信建议</span></div></div>
+    <div class="chip" data-page-node-id="PVJv5bbrHSnmXmR86cZFoF"><span class="no" data-page-node-id="kopx5PYItLsyDeiauu4BWk">16</span><div data-page-node-id="c5GzUsBivxo42zyAANhl9p"><b data-page-node-id="8ErtkFN3clTHWvTaJZFkNq">报告组装</b><span data-page-node-id="6Kyv3hVIB2zTFGSuSULiJ6">保持契约稳定组装报告</span></div></div>
+  </div>
+</section>
+
+<!-- ========== 08 可信机制 ========== -->
+<section class="slide" data-page-node-id="GQKvdUXRpTf1AjpObBV3VE">
+  <span class="s-page" data-page-node-id="GBF5d95WdGGEs9IniKObM0">08 / 14</span>
+  <div class="s-head anim" data-page-node-id="qfAkrjgsSKDjzfr7kTH55F">
+    <div class="s-tag" data-page-node-id="yiBOPBEelpu2El8ois7yfm">07 / 可信与合规</div>
+    <h2 data-page-node-id="7Q1qeVWzOVC9cLgdyAmAvN">企业敢用，比模型能答更重要</h2>
+    <p data-page-node-id="3etuCg6nu4mbCuVOB5tLhz">问数产品最大的风险不是答不上来，而是「一本正经地给出错误答案」。工程层面的五道防线：</p>
+  </div>
+  <div class="bento anim" style="--d:.1s;grid-auto-rows:1fr;flex:1;align-content:center;" data-page-node-id="weVgtZrmXMQlR10FPO8dXE">
+    <div class="adv-card hero-adv bx2 tick" style="grid-row:span 2;" data-page-node-id="ijIqjF9oKzc5GWivhlocp7">
+      <div class="adv-num" data-page-node-id="a2KEFsdDbQiMEYMz0pTRce">DEFENSE_01 · DISAMBIGUATION</div>
+      <h4 data-page-node-id="BZHval5BIsfB4ScKH2co4V">口径不确定时，先问再做</h4>
+      <p data-page-node-id="lSaa7tdCFa8WKPoYfs638P">路由打分采用显式阈值：候选得分足够高且领先第二名足够多时自动选择；分差过小或次名得分过高时，主动向用户弹出口径确认卡片。宁可慢一步，不给错误答案——对企业经营分析来说，口径正确比回答速度更重要。</p>
+      <div class="gauge" style="margin-top:auto;" data-page-node-id="xdEjIKvvInwbym3MAnvHFd">
+        <div class="gauge-row" data-page-node-id="4hXsJDQQjYkD1S3EikB6tm"><span class="cond" data-page-node-id="bGtK4v1XI3Ul1CGKTjSkzm">score ≥ 80 && margin ≥ 20</span><span class="act go" data-page-node-id="V7LRE9x37pXnvbloY0DwRQ">AUTO_PICK</span></div>
+        <div class="gauge-row" data-page-node-id="VTBcONgK3SJDmOpkSC2emM"><span class="cond" data-page-node-id="yKo6aSn5RbMXXYPYnmgZGu">margin &lt; 15 || runner-up ≥ 55</span><span class="act ask" data-page-node-id="Uk7hb82cJTJVAqxIaIc8Yp">NEED_CONFIRM</span></div>
+        <div class="gauge-row" data-page-node-id="Z8zRL0y8cBc8yRrtuL35lT"><span class="cond" data-page-node-id="QjsCVO8e12rvsqhY6CD4D4">route &lt; 65 || output &lt; 62</span><span class="act ask" data-page-node-id="ihIw3wl3HcD1x6yQL3FMi4">LOW_CONFIDENCE</span></div>
+      </div>
+    </div>
+    <div class="adv-card" style="justify-content:center;" data-page-node-id="IaUOzvzLDGoSEzbwonCrZ1">
+      <div class="adv-num" data-page-node-id="541qyj4ImaG2ox4NZJEsoy">DEFENSE_02 · READ_ONLY</div>
+      <h4 data-page-node-id="NkxDvXNY4tRjZacdTKBwBe">只读 SQL + 独立复核</h4>
+      <p data-page-node-id="6n9IcFGO1FEVriO2CCVEu0">只允许查询类 SQL，禁止写入、修改与删除；Agent3 专职复核只读安全、字段合理性、统计口径与组织路径，发现问题即进入修复链路，绝不带病执行。</p>
+    </div>
+    <div class="adv-card" style="justify-content:center;" data-page-node-id="4Flpoo83rIluMgR0cXCGqY">
+      <div class="adv-num" data-page-node-id="YKHCXije8RrkW9ROGzvcGH">DEFENSE_03 · PERMISSION</div>
+      <h4 data-page-node-id="IuwE1uMQLaODGwrNVWfgMg">四层权限管控</h4>
+      <p data-page-node-id="SnwPGifrVdixCkyQSCaF0C">路由权限（能进哪些页面）、功能权限（能用哪些功能）、数据集权限（public / restricted / org_tree / disabled 四种模式）、行级权限（能看到哪些数据行），四层隔离。</p>
+    </div>
+    <div class="adv-card" style="justify-content:center;" data-page-node-id="CVD2a3NY9DuwMFIjOU6sT1">
+      <div class="adv-num" data-page-node-id="NRAwLN0QSPJx92gb7K6ttz">DEFENSE_04 · TRACEABLE</div>
+      <h4 data-page-node-id="BWo1X2lXEWvZuAbIDQuRab">全过程可追溯</h4>
+      <p data-page-node-id="KS0n2fABawtbYAALJhfnJf">前端实时展示执行轨迹（理解口径 → 生成 SQL → 校验 → 执行 → 报告），可展开完整 SQL、耗时与 Token 用量；后端全量落盘执行轨迹与系统审计日志。</p>
+    </div>
+    <div class="adv-card" style="justify-content:center;" data-page-node-id="oU1aaDygap1DqgdtIBGl2P">
+      <div class="adv-num" data-page-node-id="e21jMxD2eaaVENKnXypNIM">DEFENSE_05 · CONTRACT</div>
+      <h4 data-page-node-id="2Qy3CcLHKdKQEEH0O3aDSh">确定性报告契约</h4>
+      <p data-page-node-id="8y8Ftrpkm3zxCaLDlyw9y2">ReportSpec v2：后端输出结构化报告协议，前端按契约渲染 KPI、表格、图表与下钻结构，避免大模型自由生成页面导致的版式漂移与指标错配，结果可测试、可回归、可复用。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 09 真实问句 ========== -->
+<section class="slide" data-page-node-id="L0J3lH60qjQYTFILBfNsEm">
+  <span class="s-page" data-page-node-id="c6VzBhRvDJ6dotQe0Dbijx">09 / 14</span>
+  <div class="s-head anim" data-page-node-id="oqxRY3afZITAwnqZxhOQAj">
+    <div class="s-tag" data-page-node-id="JQOheenLImErCOF5qJnzmK">08 / 应用场景</div>
+    <h2 data-page-node-id="g3SWhIJZCJGRPFVNekiEfs">真实问句，真实返回</h2>
+    <p data-page-node-id="EjAaTsRw7jIi3Bd7i7NQct">以下问法均来自真实回归用例。已验证数据集：消费者事业部任务达成（分公司 / 城市分公司）、商用事业部经营数据（分公司 / 代表处 / 业务部 / 业务代表）、飞书电商事业部经营预算（业务部 / 细分业务 / 业务承接人）。</p>
+  </div>
+  <div class="q-grid anim" style="--d:.1s;" data-page-node-id="K1LoyiW4bmPCeeS0L3X20s">
+    <div class="q-item" data-page-node-id="mxDmlOt1eDZexDAp3IrYEQ"><div class="q" data-page-node-id="6erhMGWsKdUivebhH95m75">东部分公司本月达成率怎么样？</div><div class="a" data-page-node-id="cLZ89zViluIzgEvBEdrL3p">返回<b data-page-node-id="Q3kxG1yMzF0AzxqEYFgbtF">核心结论 + 达成率 KPI 卡 + 下级组织明细</b>，按报告契约输出亮点分析与问题诊断。</div></div>
+    <div class="q-item" data-page-node-id="NAH7WsqBvRwz6B5cx2hDZL"><div class="q" data-page-node-id="S22vhEEXhSxRMGbPHHhwMc">哪些分公司达成率低于 30%？</div><div class="a" data-page-node-id="8CK19uKdsTtVBypkLtVL3t">识别消费者与商用两个事业部均可回答，<b data-page-node-id="pUlCmtq2ZD3Q9GowL6lIu7">先弹出口径确认卡片</b>再执行，避免答非所问。</div></div>
+    <div class="q-item" data-page-node-id="NAs3umMGZEZHFiNab5NBzw"><div class="q" data-page-node-id="CtBBgnBqy7Lvx4DDffLGo6">消费者事业部哪些分公司年度开单金额低于 3000 万？</div><div class="a" data-page-node-id="HUrMMjBE5ZQ0lvTEoAs2dX">把「3000 万」<b data-page-node-id="AMa9dCsRj3dSrZUH0nLJNN">正确换算为数据库金额口径</b>后过滤，返回命中分公司清单及对应指标。</div></div>
+    <div class="q-item" data-page-node-id="S97COMDvL39ibebRPAnNAR"><div class="q" data-page-node-id="qjwuTRC2HIguKFwvGGNxfw">商用事业部公共办公业务部剩余任务最多的人员是谁？</div><div class="a" data-page-node-id="mXN26gCvXVr85mUcvDV0u1">沿组织树<b data-page-node-id="7ZDsbjiLKC9UIZB1Vtue0z">下钻到业务代表层级</b>，返回人员姓名与剩余任务指标。</div></div>
+    <div class="q-item" data-page-node-id="ZiwXB2wx1G7mX4nFjLNlDz"><div class="q" data-page-node-id="kvloozWROTYZD51mNub152">山东和河南的业绩对比如何？</div><div class="a" data-page-node-id="FOp2tFwrlz8eeGheUDRc83">识别为<b data-page-node-id="QBufvH2pYnB4gALCxHKlNH">对比场景</b>，并排输出两地区关键指标与差异分析结论。</div></div>
+    <div class="q-item" data-page-node-id="Tflpek85Sr30199zVOQvT0"><div class="q" data-page-node-id="QjDCj3Yz4GN9Og2U8lwGVC">电商事业部年度目标营收超过 1 亿的业务承接角色有哪些？</div><div class="a" data-page-node-id="Ayb4X7ExAXJdd71euDy1DA">把「1 亿」<b data-page-node-id="HVJMGbZyKBVMpRJ0yHNgw3">换算为数据库金额口径</b>后过滤，返回业务承接角色清单。</div></div>
+    <div class="q-item" data-page-node-id="bA6gHCp1BAvomDK4QQFYlF"><div class="q" data-page-node-id="wHFqN3qLIjRI7JaYCMCNmB">上海的业绩</div><div class="a" data-page-node-id="EtctJiZa5qDEcLByWiMYfa">「上海」在多个数据集中存在同名或近义节点，系统<b data-page-node-id="N95QwVGUHV7GCBs0E3HF1N">列出候选节点供选择</b>，而非随机选一个作答。</div></div>
+    <div class="q-item" data-page-node-id="Ms0U0CHoTAvcHH2fyBMEAf"><div class="q" data-page-node-id="Yf6xnL7JffpDd4TLhOiWi6">业绩咋样了 / 大于 5000 万的呢</div><div class="a" data-page-node-id="BHRV8VoHtbo3BEpXDtbLYn">支持<b data-page-node-id="Ow67sWcq3JflOC8PPLgme8">口语化表达与残缺追问</b>，结合 8 轮短期记忆补全上下文后执行。</div></div>
+  </div>
+</section>
+
+<!-- ========== 10 目标用户 ========== -->
+<section class="slide" data-page-node-id="FHcDVCzO2jQqHBpEnNPAfh">
+  <span class="s-page" data-page-node-id="zC9NPelPOwfeZzilHh6BMf">10 / 14</span>
+  <div class="s-head anim" data-page-node-id="4NKw33vaGiChzN7YcQ1lwe">
+    <div class="s-tag" data-page-node-id="iyFyfVUn3TLFo3YCphuplq">09 / 目标用户</div>
+    <h2 data-page-node-id="WrBmih4pvRnhB7bcLnleKz">谁在用，谁在买单</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;flex:1;align-content:center;" data-page-node-id="PdxC7yCnAj5c6h6gjJH4NK">
+    <div data-page-node-id="pQaDEcHDCk14GjbJAv7ob2">
+      <h3 class="mono anim" style="--d:.08s;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.16em;margin-bottom:16px;" data-page-node-id="Nq897EuWHIoSXB2at1eod0">内置四级角色 / ROLES</h3>
+      <div style="display:grid;gap:13px;" class="anim">
+        <div class="persona anim" style="--d:.14s;">
+          <div class="persona-hd"><h3>业务人员</h3><div class="who">USER · 销售 / 运营 / 区域经理</div></div>
+          <div class="persona-bd"><p>日常经营问数、查看分析报告与执行轨迹，自助取数、不再排队。</p></div>
+          <div class="persona-ft"><b>权限范围：</b>问数工作台 + SQL 调试台</div>
+        </div>
+        <div class="persona anim" style="--d:.2s;">
+          <div class="persona-hd"><h3>业务管理员</h3><div class="who">BUSINESS_ADMIN · 经营分析岗</div></div>
+          <div class="persona-bd"><p>业务侧问数与轻量调试，维护常用问题与口径反馈。</p></div>
+          <div class="persona-ft"><b>核心价值：</b>承接一线问题，减少与数据团队的往返</div>
+        </div>
+        <div class="persona anim" style="--d:.26s;">
+          <div class="persona-hd"><h3>数据 / IT 管理员</h3><div class="who">ADMIN · 数据负责人 / BI 工程师</div></div>
+          <div class="persona-bd"><p>维护数据集、数据源、AI 模型、报告模板与数据书架（LLD / 字典 / Golden SQL）。</p></div>
+          <div class="persona-ft"><b>核心价值：</b>口径集中治理，一次配置全公司生效</div>
+        </div>
+        <div class="persona anim" style="--d:.32s;">
+          <div class="persona-hd"><h3>超级管理员</h3><div class="who">SUPER_ADMIN · CIO / 数字化负责人</div></div>
+          <div class="persona-bd"><p>功能开关、流程灰度、字段权限、组织树、日志审计与迁移发布。</p></div>
+          <div class="persona-ft"><b>核心价值：</b>上线节奏可控，风险可回滚</div>
+        </div>
+      </div>
+    </div>
+    <div data-page-node-id="TBZE9hkLadjeFuYtJKmom5">
+      <h3 class="mono anim" style="--d:.08s;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.16em;margin-bottom:16px;" data-page-node-id="pRHNDF8O79I7cRJm9eJSfp">四类高匹配客户画像 / PERSONAS</h3>
+      <div style="display:grid;gap:13px;" class="anim" data-page-node-id="bhzRRvvrxZY6LDEYslNpdr">
+        <div class="persona anim" style="--d:.14s;" data-page-node-id="03ehtdQqT9JedHAqgPW9Bw">
+          <div class="persona-hd" data-page-node-id="nyqSinapN5cmfh0BSPcGSq"><h3 data-page-node-id="5pPu736PDsy6AZi5sEsbdO">已建 BI / 数仓，但业务用不起来</h3><div class="who" data-page-node-id="44bCXCWTitCMEKGCHqzirK">激活存量资产</div></div>
+          <div class="persona-bd" data-page-node-id="KYEvKl9xzkVyadVFpCtoPT"><p data-page-node-id="q4WCONxo1SI1zCpDB2w8ir">报表看板齐全，业务仍习惯「找人要数」。缺的不是数据，是通往数据的最后一公里。</p></div>
+          <div class="persona-ft" data-page-node-id="GtE9hWmnVrq7C7g7uj5MSp"><b data-page-node-id="qQvWkp9AvDsdVRkFksUCVz">切入方式：</b>叠加自然语言入口，激活存量数据资产</div>
+        </div>
+        <div class="persona anim" style="--d:.2s;" data-page-node-id="h8wQuLqzOa0C06w8ac4KGw">
+          <div class="persona-hd" data-page-node-id="2OJ7NzSrJKMLj7Es3EiLOM"><h3 data-page-node-id="eB2mzn84ZfPEXVarGMMEo6">数据团队排长队，被临时取数淹没</h3><div class="who" data-page-node-id="pZzpiMT8djdB9iN0zVbRuj">分流常规取数</div></div>
+          <div class="persona-bd" data-page-node-id="N1p4M5A1ItLlElYRiOoN3Z"><p data-page-node-id="7CX1hyvpa3X61gLAYh6cX7">高频重复的取数占据数据团队时间，高价值的建模与专题分析被不断推迟。</p></div>
+          <div class="persona-ft" data-page-node-id="InxJzKwmU74jScSSuekUHy"><b data-page-node-id="8nH5v4ruucWmGQA8Xgwdtb">切入方式：</b>分流常规取数，团队回归高价值工作</div>
+        </div>
+        <div class="persona anim" style="--d:.26s;" data-page-node-id="xCArd74Pf72zEQnyPtcyPQ">
+          <div class="persona-hd" data-page-node-id="jFUQtobEknjPTGiPyAfnEG"><h3 data-page-node-id="t1GzCytMF6D37fNYYb1u1B">多事业部多口径，跨部门对不上数</h3><div class="who" data-page-node-id="FY8YJT2iUhaZUqiXD9at8X">统一口径 + 主动确认</div></div>
+          <div class="persona-bd" data-page-node-id="LBj0KZUTyWHkWPfdBnhkrl"><p data-page-node-id="6QJsHLwOlGAt6m6WRHmSDf">组织层级复杂，同名指标口径不同，经营会上频繁对数。</p></div>
+          <div class="persona-ft" data-page-node-id="NMJ5s66wWLKdCIxSGm2gjf"><b data-page-node-id="YDPwwGf92iHGK8VAFX2Xyn">切入方式：</b>统一口径知识库 + 歧义主动确认</div>
+        </div>
+        <div class="persona anim" style="--d:.32s;" data-page-node-id="vFyKXJ8KSqi5snGZjsDtBi">
+          <div class="persona-hd" data-page-node-id="PBEyC73VHoGA5pedhQALm9"><h3 data-page-node-id="N5CpKGsusVabJRD5ZwalkB">预算敏感、要求私有化，先小规模验证</h3><div class="who" data-page-node-id="ksFWiRttJD77FmeJwByZHQ">单数据集试点起步</div></div>
+          <div class="persona-bd" data-page-node-id="QcojvaecrxMKWXWZiUMdwx"><p data-page-node-id="4sgiEGhXLGMXfX56jqoCBO">数据不出内网，不愿被单一厂商或模型绑定，以可控成本快速验证效果。</p></div>
+          <div class="persona-ft" data-page-node-id="WzESIrkIGXRIV1HppAZy0z"><b data-page-node-id="KCXBGnpKYshjl7uZzghSPC">切入方式：</b>私有化部署 + 单数据集试点，再横向扩展</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 11 商业价值 ========== -->
+<section class="slide" data-page-node-id="QIk8W6E9kZqOxdnQHFJ2Fi">
+  <span class="s-page" data-page-node-id="SBnuS91fZPnMNqKmiV3LYx">11 / 14</span>
+  <div class="s-head anim" data-page-node-id="ZYhazzijsGgqPO9AJ8jkbs">
+    <div class="s-tag" data-page-node-id="YeskwFpliFAK4Hvr1pFgyh">10 / 商业价值</div>
+    <h2 data-page-node-id="fAu0MP2C4dHPJjt2JoGE6f">可衡量的三类收益</h2>
+    <p data-page-node-id="AF2J5gNnlIw3B1MqKLyV2V">效率与质量立竿见影，资产沉淀随时间复利增长。</p>
+  </div>
+  <div style="display:grid;grid-template-columns:.9fr 1.1fr;gap:24px;flex:1;align-content:center;" data-page-node-id="pxfHHiGXTtXMqGIdBL9TBS">
+    <div style="display:grid;gap:16px;" data-page-node-id="aQB2gnGBmnK4HZ8ZXaVuKQ">
+      <div class="adv-card hero-adv anim" style="--d:.1s;" data-page-node-id="k0zPytuvIbLBsIyGIBIFog">
+        <div class="adv-num" data-page-node-id="7trnMC4hUbvko34CIi7j94">VALUE_01 · EFFICIENCY</div>
+        <h4 data-page-node-id="hIbHqJyAzfXyFsBWmRX8Bz">效率：数天 → 秒级</h4>
+        <p data-page-node-id="Kiewk5AGMyXyIg6SLsGItZ">常规经营问题从「提需求、等排期、对口径、出报表」压缩为「提问即答」，会议现场就能拿到结论——问题当场问、当场答、当场定，经营会议的工作方式随之改变。</p>
+      </div>
+      <div class="adv-card anim" style="--d:.16s;" data-page-node-id="kZLJ6KRn7nZbabjHFTKPZ3">
+        <div class="adv-num" data-page-node-id="WvAFcqGga4dhZtBeUAqYD6">VALUE_02 · CONSISTENCY</div>
+        <h4 data-page-node-id="UwsD28xwnjPZILCPkhWaHi">质量：口径不再因人而异</h4>
+        <p data-page-node-id="aGnBGdvZ21LsbT5rr9WqoY">知识库 + Golden SQL + 报告契约三重约束，配合歧义主动确认机制，从机制上消除「同一个问题多个答案」。</p>
+      </div>
+      <div class="adv-card anim" style="--d:.22s;" data-page-node-id="gavyxjJDeZqSmJeH0o6tsG">
+        <div class="adv-num" data-page-node-id="yOvsttTV7BbAu7JK4AVMAB">VALUE_03 · ASSET</div>
+        <h4 data-page-node-id="FgshpxyeKgl8YxiLNepNJ2">资产：越用越准的组织沉淀</h4>
+        <p data-page-node-id="VF0cKy7YTPpt8mOf3hk6wJ">每次问数的 SQL、口径、执行轨迹与报告结构均被记录；高频问题固化为 Golden SQL，形成不随人员流动丢失的分析资产。</p>
+      </div>
+    </div>
+    <div class="card tick anim" style="--d:.18s;padding:32px 34px;" data-page-node-id="LtpEvU3iXzFsQmriP1auxd">
+      <span class="mono-k" data-page-node-id="HaP09T8qFhfAZDW8pAdgUu">取数响应时间对比 / RESPONSE TIME</span>
+      <div class="bars" style="margin-top:8px;" data-page-node-id="vQQ3dDb2DNNWUvifW591RQ">
+        <div data-page-node-id="7HLHMcsi2Xz1IBitP80WHy"><div class="bar-top" data-page-node-id="L77Jx4BGFlqfxYTWvbKrPz"><span data-page-node-id="wRNqiGA5YyOht7HiRFdslP">传统方式：提需求 → 排期 → 对口径 → 出报表</span><b data-page-node-id="K2CzEtrbjGvfkTa99xhzr2">4h – 3d</b></div><div class="bar-track" data-page-node-id="wXhs0dAcGUoUmAHO0cDjkZ"><div class="bar-fill amber" style="--w:92%;" data-page-node-id="AAxU5sBJMmuDVis0DLyGqw"></div></div></div>
+        <div data-page-node-id="vMnBKxiK13oJrefzUdDBqc"><div class="bar-top" data-page-node-id="qlusk9gnVoGSn4kT9Ph0CD"><span data-page-node-id="Bub6Iu5YpLRDbnyi01HDRi">BI 自助分析（需先学会建模与拖拽）</span><b data-page-node-id="owqSiEPgxzAcik8DRydEa4">30min – 2h</b></div><div class="bar-track" data-page-node-id="3oRtehjSrnQBe6IPe308nL"><div class="bar-fill amber" style="--w:46%;" data-page-node-id="xhnVJIGjQ2yzcMDlu0mcCh"></div></div></div>
+        <div data-page-node-id="KNCONJ4vEQc2byK8lO18zF"><div class="bar-top" data-page-node-id="6HBhzrervEYet7R4yvnheq"><span data-page-node-id="l0k1OVwIg4hlAwiyOL9nk5">人工写 SQL（数据团队排期后执行）</span><b data-page-node-id="zC3jqjv79W3meoLP0MrwAu">20min – hours</b></div><div class="bar-track" data-page-node-id="DY2p6auHutHzS7c9LFJtER"><div class="bar-fill amber" style="--w:34%;" data-page-node-id="4hFqzo2BGO11evALJsIpez"></div></div></div>
+        <div data-page-node-id="qL9K3ZCXBNwT25hZkJxBji"><div class="bar-top" data-page-node-id="iHLWlhqqBsERDbUAOmkwll"><span data-page-node-id="GQAbyXtwUYulh2qgA8fDLE"><b style="color:var(--accent);" data-page-node-id="rY6spnKRUzzo2bmR4lcsIk">SmartAsk 自然语言问数</b></span><b style="color:var(--accent);" data-page-node-id="UCiLGMedFkGLac5BZlEz1B">seconds · stream</b></div><div class="bar-track" data-page-node-id="5BsHweoe9xeZCyVoFX5fCY"><div class="bar-fill" style="--w:8%;" data-page-node-id="3wmmOo3n1EiSBhoqZ5kGw7"></div></div></div>
+      </div>
+      <div class="roi-box" data-page-node-id="8iABHLHaqE4TOP4gcGd8ll">
+        <span class="mono" data-page-node-id="aY9qEXpG5rPb57YOH3ImZd">ROI 测算框架（示例口径）</span>
+        <p data-page-node-id="jIlJqyNs8hc0638GDNJ41j">月节省工时 ≈ 月均临时取数次数 × 单次人工耗时 × 系统承接比例。以月均 300 次、单次 30 分钟、承接 70% 计，每月可释放约 <b data-page-node-id="C9OSIBC7ZcJCsgBHQ323f6">105 小时</b>数据团队产能。</p>
+      </div>
+      <p class="mono" style="font-size:11.5px;color:var(--muted);margin-top:14px;" data-page-node-id="qDoeH3CLyolZg1wRE5kPPq">* 响应时间为定性区间对比；ROI 为测算示例而非承诺值，正式方案按客户真实参数重新测算。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 12 竞争优势 ========== -->
+<section class="slide" data-page-node-id="B7auRChwS4s7oJW7yKlBtM">
+  <span class="s-page" data-page-node-id="mSoPeSWW75yRoi0XjhoeW8">12 / 14</span>
+  <div class="s-head anim" data-page-node-id="MGS56jk3o2URCJaoXuHEJp">
+    <div class="s-tag" data-page-node-id="nlj40bdtFWMwD2JxXfg0Xt">11 / 竞争优势</div>
+    <h2 data-page-node-id="jehNinEEPbOQBSw1FPgFLX">与现有方案相比，差在哪一层</h2>
+    <p data-page-node-id="XOEi5UGKa93teyEmGozSsw">不与 BI 争夺看板市场，而是补齐它无法覆盖的「即时、灵活、可解释」分析需求。</p>
+  </div>
+  <div class="tbl-wrap anim" style="--d:.1s;margin-bottom:16px;" data-page-node-id="aUs7ICk1JEZx11SrbTErGl">
+    <table data-page-node-id="hUb2xDzWH5ZqFxGPdhNPvp">
+      <thead data-page-node-id="Pz6O7WXDqdynKfPrVLJutO"><tr data-page-node-id="SHCkFPIhwVilFY1NeqFUB1"><th style="width:130px;" data-page-node-id="rtW1kv3j9nqU4nvgMzJo5a">对比维度</th><th data-page-node-id="TzGhqMsH2oUFiab0qeBJma">固定报表</th><th data-page-node-id="PSjsemgizFTTway5UtJaOi">通用 BI 工具</th><th data-page-node-id="Hy9uwsWsFJBls9VDfV97gh">人工 SQL</th><th data-page-node-id="EFW5VixmUJg5MnsEKBZyq4">通用 AI 问答</th><th style="width:170px;" data-page-node-id="wNu7B7lXJ76QeODUlNGIqp">SmartAsk</th></tr></thead>
+      <tbody data-page-node-id="YCnuL1fZKAttwfXaLGImV8">
+        <tr data-page-node-id="Y4qp9mnTjKrHmyH7wGD7kf"><td data-page-node-id="PFfAoLJeDsomdqoRyABvbc">响应速度</td><td class="no" data-page-node-id="2Mv6qD1FkAoCmxABn294th">数小时 – 数天</td><td class="no" data-page-node-id="QFaNxBxEnAiozNCD8bZbEf">需先学习建模</td><td class="no" data-page-node-id="ljobft0mYvhXBRfiy3yi8R">数分钟 – 数小时</td><td data-page-node-id="1Tn1t13maRm4UKWggvr2q8">快</td><td class="yes" data-page-node-id="Zhu7yjuZsJ5FvGOCCM20fs">秒级流式返回</td></tr>
+        <tr data-page-node-id="W6Lx1dSnjeHdddmLpF56F3"><td data-page-node-id="Un50rVfNBHql4uG7LOed6r">使用门槛</td><td data-page-node-id="sc4VELtQLfVv5879Wvugx1">低（只能看）</td><td data-page-node-id="WtF90uvmWRWIJjMBWwTkb1">中（需拖拽学习）</td><td data-page-node-id="qJS9xrLyVmM8nMdt7mK3j5">高（需懂 SQL）</td><td data-page-node-id="1cwmp2vXU6WKq1JkCGTnQM">低</td><td class="yes" data-page-node-id="OHAjhrMFsXzczk3u7d47bb">极低（自然语言）</td></tr>
+        <tr data-page-node-id="3upkW33srlGMaDEx3FxCJh"><td data-page-node-id="xuEGmQfGiEkbpFzbzuB7Oi">问题灵活性</td><td class="no" data-page-node-id="Ucy8HPKCgyP4eDYpVFDmAO">仅限预设</td><td data-page-node-id="F5LZHF1prdQNIU1OyFS9sl">中</td><td data-page-node-id="F2ZzVdFMyUyaFk5aS84dUG">高</td><td data-page-node-id="lsnxafeCBihU2PNnDGCxqm">高</td><td class="yes" data-page-node-id="MGB7Jg3NeCMloOhjzPW8kb">高（自然语言 + 追问）</td></tr>
+        <tr data-page-node-id="bKvwIo31eAb17kflBDHYq2"><td data-page-node-id="6X5TTGBOQEwY2b8p6Qu0Ac">口径一致性</td><td data-page-node-id="B5SSUT01Qhyt0PngZI5dhm">中</td><td data-page-node-id="ZompIUuDlhkr78cbCLAnI3">中（依赖配置）</td><td class="no" data-page-node-id="4OCUrOzaMaH9uur1sYHLhT">低（因人而异）</td><td class="no" data-page-node-id="NPg5GKOPydLJHQgLw1uPM6">低（无企业口径）</td><td class="yes" data-page-node-id="VDvGuHQamw8az69zmZLrUT">高（知识库 + Golden SQL + 契约）</td></tr>
+        <tr data-page-node-id="aoWbkrZzVVUghD1hdwUvMt"><td data-page-node-id="F3r04UA2HXhZxWEJBARU48">可解释性</td><td class="no" data-page-node-id="JQqlj3PiRxZaBvo0iVPTYN">低（只给结果）</td><td data-page-node-id="Gvx4ik3tEYq7N7KwlB3wFK">中（可下钻）</td><td data-page-node-id="CCkMFbKBN5c2G1gBL2RkCW">中（可看 SQL）</td><td class="no" data-page-node-id="wIGPPBzSuCDxEbthLcMq2u">低（黑盒）</td><td class="yes" data-page-node-id="2Gw91bloaQj001axMcCEPj">高（轨迹 + 复核 + 可信度）</td></tr>
+        <tr data-page-node-id="QEPpUNKtWrySemWTVNaD3M"><td data-page-node-id="RNiVEIYHdtGMyQYAr9sVnq">权限控制</td><td data-page-node-id="whzvz1GKZY49nloStDrfT9">中（报表级）</td><td data-page-node-id="DLrjXB9dSzqDm4Sz5BcR3r">中（数据集级）</td><td class="no" data-page-node-id="ILCIR64gSFeaxCE6XIikq3">低（数据库级）</td><td class="no" data-page-node-id="Ey79jokoifNVf3XxsLnRsO">低</td><td class="yes" data-page-node-id="2PksGO8FkAxTwcMsDtJHUf">高（四层权限 + 行级过滤）</td></tr>
+        <tr data-page-node-id="PsDLbyiKCftAefunygcbbu"><td data-page-node-id="yKYVvGHBEyiDVmyfQbmwBp">分析沉淀</td><td class="no" data-page-node-id="GOMBvUiRalZAwseOcK0kZt">低（静态）</td><td data-page-node-id="3El0funrzaAA4NB8mcg8FZ">中（看板保存）</td><td class="no" data-page-node-id="0KAUbcIAxss5YzGs8ciqBy">低（个人脚本）</td><td class="no" data-page-node-id="Z8ePutt8AAK4TrQAvb6yXk">低</td><td class="yes" data-page-node-id="smd9RfjdrVfNfoH00MERZO">高（资产化沉淀）</td></tr>
+        <tr data-page-node-id="zm0zYhXICNtBb8JcbtChY0"><td data-page-node-id="Gd9fewnqhhHKBBj6h6pfH4">私有化与模型自主</td><td data-page-node-id="ui3eBEwsa4jCLE307P3OSv">—</td><td data-page-node-id="J3hBCAHwN7BftHpBrBt39G">视厂商</td><td data-page-node-id="F67QShdoTuq5dR90L3OcpO">—</td><td class="no" data-page-node-id="jLRPZugjwpRm6Waap288Iz">多为公有云</td><td class="yes" data-page-node-id="u1YNUZaECiUs2NDwEQ4zcR">私有化部署 + 多模型热切换</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="bento anim" style="--d:.18s;" data-page-node-id="n5ozn6CCYI3cEl2zEfurgN">
+    <div class="adv-card hero-adv bx2 tick" data-page-node-id="ykkGeUD6pODGAePYQdJspY">
+      <div class="adv-num" data-page-node-id="1kh7xbBByMpaBlgBpICCkz">EDGE_01</div>
+      <h4 data-page-node-id="JGexT0iQMpw5lveDF5MUrY">工程化的可信链路，而非单点模型能力</h4>
+      <p data-page-node-id="M1CVqpnqnm7O5tPEEHWjUu">四 Agent 分工 + 独立复核 + 只读约束 + 行级过滤，把「模型能不能答对」变成「系统能否拦住错误」，可控性显著高于直接调用大模型生成 SQL 的方案。</p>
+    </div>
+    <div class="adv-card" data-page-node-id="qorSw8eDvjNOzqNzU5EwhM">
+      <div class="adv-num" data-page-node-id="paCO1ujeO52g4chgJyW7dE">EDGE_02</div>
+      <h4 data-page-node-id="3XEsev8SiomkZemNsKxtu3">配置驱动扩展</h4>
+      <p data-page-node-id="6XyevRDbJZjOMYhZNN5mKr">新增数据集、指标、报告模板与权限规则均通过配置完成，不改代码；流程可按角色与数据集灰度，异常自动回退基础流程。</p>
+    </div>
+    <div class="adv-card" data-page-node-id="HYew9FEze0rhHu8OkuDW15">
+      <div class="adv-num" data-page-node-id="SDRw1h8jYMsJsK6YEjgVG0">EDGE_03</div>
+      <h4 data-page-node-id="1Ol7v8l3ZCoptEYkZ2TDT9">多层级组织实战验证</h4>
+      <p data-page-node-id="unw12Mc8rxfOkBUKPnEoQZ">在覆盖分公司、城市公司、代表处、业务部、业务代表的多级组织树上完成回归验证，具备处理复杂组织层级与逐级下钻的实战能力。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 13 交付部署 ========== -->
+<section class="slide" data-page-node-id="CIsDsAkgqx2zHlPDbQDMiT">
+  <span class="s-page" data-page-node-id="6pZf0UQwrflgmVrU8BM9g7">13 / 14</span>
+  <div class="s-head anim" data-page-node-id="GrryISSVBKtEnpcKyawYm0">
+    <div class="s-tag" data-page-node-id="fUidwcvgEBrO9UQEEEHkhg">12 / 交付与部署</div>
+    <h2 data-page-node-id="fldFfB79HUGqRWebUwQ2H5">从试点到规模化，路径清晰</h2>
+    <p data-page-node-id="g4xyoGRbAxw66q2QUq8R5D">「单数据集试点 → 多数据集扩展 → 全员推广」三阶段推进，每阶段有明确验收口径。</p>
+  </div>
+  <div class="phases anim" style="--d:.1s;margin-bottom:16px;" data-page-node-id="nQCj8YzmLauPq2iaxYRt4z">
+    <div class="phase" data-page-node-id="bUjkUBbuCBqsoBYnPQl8jT"><div class="pw" data-page-node-id="AEY5krJgAkdCvH9SdsIWUz">WEEK 1 – 2</div><h4 data-page-node-id="SPm9eLIEpl9I4ZwxbVbnS4">环境搭建与首个数据集接入</h4><p data-page-node-id="QivY9IuSorDXl5RCJauN5j">私有化部署三容器环境，接入一个高价值数据集，配置组织树与角色权限，完成首批 30 – 50 个真实问法验证。<span class="out" data-page-node-id="QDEDfTlzDXvhcbfmW7f5uU">输出 → 可演示的首个数据集 + 验收基线</span></p></div>
+    <div class="phase" data-page-node-id="99oovUR4odtuHDgMy94GWt"><div class="pw" data-page-node-id="JwT1ro3wAhkHhdVAWk7Dew">WEEK 3 – 6</div><h4 data-page-node-id="mh8NhNyP8qhprtyjaOAb0z">口径固化与效果调优</h4><p data-page-node-id="gu0RpAsi1Wril0U6YMcfS3">沉淀 Golden SQL 与指标别名词典，配置报告契约与风险阈值，建立回归测试集并纳入日常验证。<span class="out" data-page-node-id="qXd0klkOKlKaRCA9iXpBOd">输出 → 口径资产包 + 回归测试集</span></p></div>
+    <div class="phase" data-page-node-id="gVLsHsEoKTI6kHu1YuqGQH"><div class="pw" data-page-node-id="vlQfZUz61Wib6GAEF9xJ3T">WEEK 7 – 12</div><h4 data-page-node-id="J8t7SBK8CNNpSXxLKXisyw">横向扩展与全员推广</h4><p data-page-node-id="gaoEFUSjc8ZcWvsGUkwFB3">扩展至更多事业部与数据集，开通管理后台与运营看板，完成管理员培训与交付文档移交，进入持续运营。<span class="out" data-page-node-id="X7c2B6yEiSunhtOdVREAfW">输出 → 全员可用 + 运营看板</span></p></div>
+  </div>
+  <div class="anim" style="--d:.13s;margin-bottom:16px;">
+    <div class="card" style="padding:20px 26px;">
+      <span class="mono-k">DEPLOY PIPELINE / 容器启动依赖链</span>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:4px;">
+        <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px 16px;position:relative;"><span style="font-family:var(--font);font-size:10.5px;color:var(--accent);font-weight:600;letter-spacing:.12em;display:block;margin-bottom:5px;">STEP 1</span><b style="font-size:14px;">PostgreSQL 健康等待</b><span style="font-size:12px;color:var(--muted);display:block;margin-top:3px;">数据库就绪后才进入迁移</span></div>
+        <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px 16px;"><span style="font-family:var(--font);font-size:10.5px;color:var(--accent);font-weight:600;letter-spacing:.12em;display:block;margin-bottom:5px;">STEP 2</span><b style="font-size:14px;">migrate 自动迁移</b><span style="font-size:12px;color:var(--muted);display:block;margin-top:3px;">8 个 schema 迁移完成后退出</span></div>
+        <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px 16px;"><span style="font-family:var(--font);font-size:10.5px;color:var(--accent);font-weight:600;letter-spacing:.12em;display:block;margin-bottom:5px;">STEP 3</span><b style="font-size:14px;">backend 健康启动</b><span style="font-size:12px;color:var(--muted);display:block;margin-top:3px;">依赖迁移成功才拉起应用</span></div>
+        <div style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px 16px;"><span style="font-family:var(--font);font-size:10.5px;color:var(--accent);font-weight:600;letter-spacing:.12em;display:block;margin-bottom:5px;">STEP 4</span><b style="font-size:14px;">frontend 静态托管</b><span style="font-size:12px;color:var(--muted);display:block;margin-top:3px;">nginx 托管并反代后端接口</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="bento anim" style="--d:.16s;margin-bottom:16px;flex:1;align-content:center;" data-page-node-id="SxAOVcNxz7UlyjluySirY2">
+    <div class="card bx2 tick" data-page-node-id="cdWlFYUutMZ1CxNGxvBGhs">
+      <h3 data-page-node-id="cyBbJCqwaq7lQ8u20Al4KH"><span class="ico" data-page-node-id="0l7FKR1fXOf6hjMQWtSWk1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="8dHlglt5gxT57SXn5epA1n"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" data-page-node-id="KC1VcxEROf8sKAtFtjRg1K"/></svg></span>Docker 三容器一键部署</h3>
+      <p data-page-node-id="yqGRGa73QkOZhzGb4mWtO0">应用 / 前端 / 数据库三容器编排，含健康检查与自动重启；支持 Windows 与 Linux，数据全程不出内网。模型兼容任意 OpenAI 接口规范的服务，可接国产或私有模型，支持热切换与效果对比。</p>
+    </div>
+    <div class="card" data-page-node-id="HsldBaytVE6lPBo1A82L8v">
+      <h3 data-page-node-id="wK4qQnGm3nuwe1IOZ48ZNG"><span class="ico" data-page-node-id="JA0DSsJHosRMNk1mWDTwMi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="RauwTL2tT1odgl319vJsL7"><ellipse cx="12" cy="5" rx="8" ry="3" data-page-node-id="RRj7shEGRvGjQH6zljHuaX"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" data-page-node-id="3xWi9qzN2np6Hfhcb3n0oZ"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" data-page-node-id="8ZcsRBDduUZSbXGLGsQrli"/></svg></span>数据源支持</h3>
+      <p data-page-node-id="fKDNh0TkqCBbDrRdMzTQGb">PostgreSQL、MySQL、SQLite 等主流数据源；飞书多维表格可定时同步入仓，业务数据无需人工导入。</p>
+    </div>
+    <div class="card" data-page-node-id="0vVESDSyCdWOsuYrS51CKm">
+      <h3 data-page-node-id="PTlhmAl5LwFm6HoYyT0Lxa"><span class="ico" data-page-node-id="Gz3DPgJP3A0EWj9gWHmiv3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="uLYb4bjXlR8jJoSgulVb49"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" data-page-node-id="fgOAUZMX957ZrHIFueouYr"/><path d="M9 12l2 2 4-4" data-page-node-id="2MJ1izEP9NFTLmkDXiAZWT"/></svg></span>运营与治理</h3>
+      <p data-page-node-id="SFFnnsCCujJo635BU08VYH">问数统计、用户活跃排名、低置信度问题清单与错误日志看板；运行态配置可导出、导入与备份，发布不丢配置、可回滚。</p>
+    </div>
+  </div>
+  <div class="note anim" style="--d:.22s;margin-top:auto;" data-page-node-id="oRW2jQOQ0h0XGxNRGRMnsM">
+    <b data-page-node-id="7EzY8Ph5wpbFAVCHYVLxU6">能力边界（如实说明）：</b>面向结构化数据查询分析，不支持预测建模<span class="sep" data-page-node-id="xRUN5s1q4ydnh3HHb5e30E">·</span>数据接驳以定时同步为主，非实时流<span class="sep" data-page-node-id="agvjShSIDDs7Op88RS0cPQ">·</span>SQL Server 与 MCP 工具调用为规划中能力<span class="sep" data-page-node-id="9nLfsisi3Bq7EUf8wsK3bF">·</span>输出质量依赖底层数据质量与口径维护，需配套数据治理责任人。
+  </div>
+</section>
+
+<!-- ========== 14 结尾 ========== -->
+<section class="slide end">
+  <div class="end-grid">
+    <div>
+      <div class="s-tag anim" style="--d:.05s;">START A PILOT</div>
+      <h2 class="anim" style="--d:.12s;">让数据真正被业务用起来</h2>
+      <p class="lead anim" style="--d:.2s;">如果您的企业已经建设了数仓或 BI，但业务人员仍在排队等数据；如果经营会上还在为口径争执——SmartAsk 值得一次真实的 POC 验证。我们可以基于您提供的真实问题集，在自有数据上完成对照测试。</p>
+      <div class="end-meta anim" style="--d:.32s;">
+        <div><b>PRODUCT</b>SmartAsk 智能问数系统</div>
+        <div><b>DEPLOY</b>私有化 · Docker Compose</div>
+        <div><b>DATA SOURCES</b>PostgreSQL / MySQL / SQLite / 飞书同步</div>
+        <div><b>MODELS</b>OpenAI-compatible · 国产与私有模型</div>
+      </div>
+    </div>
+    <div class="poc-card anim" style="--d:.26s;">
+      <span class="mono-k">POC / 四周节奏</span>
+      <div class="poc-row"><b>W1</b><p>环境搭建与首个数据集接入，配置组织树与角色权限</p></div>
+      <div class="poc-row"><b>W2</b><p>以 30 – 50 个业务真实问题做对照测试，形成基线报告</p></div>
+      <div class="poc-row"><b>W3</b><p>口径调优与 Golden SQL 沉淀，业务侧小范围试用</p></div>
+      <div class="poc-row"><b>W4</b><p>效果汇报与试点决策，明确规模化推广路径</p></div>
+    </div>
+  </div>
+  <div class="poc-grid anim" style="--d:.38s;margin-top:48px;">
+    <div class="poc"><span class="mono">POC 需要 / 01</span><p>一个高价值数据集（表结构 + 字段字典 + 口径说明）</p></div>
+    <div class="poc"><span class="mono">POC 需要 / 02</span><p>30 – 50 个业务真实问题，作为对照测试基线</p></div>
+    <div class="poc"><span class="mono">POC 需要 / 03</span><p>一名业务口径对接人，确认指标定义与验收口径</p></div>
+  </div>
+</section>
+
+<div class="edge left" id="edgeL" data-page-node-id="Mp4D8YGenV7FwDrqq7fwVj"></div>
+<div class="edge right" id="edgeR" data-page-node-id="8zSQOn4SYlt7Cz4iJer6Fa"></div>
+</div>
+</div>
+
+<!-- ========== 导航 UI ========== -->
+<div class="dots" id="dots" data-page-node-id="TATxLJUkqiXeui0FRFqkBF"></div>
+<button class="arrow prev" id="btnPrev" aria-label="上一页" data-page-node-id="IdC0IWlOAbuHNUxmQalTcR">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="LG6NTcfg7RSIQpC2YY7Xkw"><path d="M15 18l-6-6 6-6" data-page-node-id="cc25hraVAY2NY5BIhOZb7N"/></svg>
+</button>
+<button class="arrow next" id="btnNext" aria-label="下一页" data-page-node-id="WEpvjlzNNwT9WzhUA1KAry">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="s5rAicfCNhd3limMOPqKC2"><path d="M9 6l6 6-6 6" data-page-node-id="ixOiBeqkpUINpknz0CV4E4"/></svg>
+</button>
+<div class="pager" data-page-node-id="WglGYmExlKDc77MzeyC0Oa"><b id="pgCur" data-page-node-id="PoUsiCLtGsujaNyU9Zzqi4">01</b> / <span id="pgTotal" data-page-node-id="v0GUNqBoqmGrMiskTvcSjh">14</span></div>
+<div id="editBar" data-page-node-id="pTXMLebZRWcQLxCCLRnHgJ">编辑模式 · 点击文字直接修改 · 按 E 或 ESC 退出</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* === 舞台等比缩放 === */
+  var stage = document.getElementById('stage');
+  function fit(){
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  /* === 页面与导航 === */
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var NAMES = ['封面','产品概述','市场机会','行业痛点','四 Agent 架构','六大场景','进阶能力链','可信与合规','应用场景','目标用户','商业价值','竞争优势','交付部署','合作入口'];
+  var TABS = [
+    {name:'概述', page:2},
+    {name:'市场', page:3},
+    {name:'痛点', page:4},
+    {name:'能力', page:5, to:7},
+    {name:'可信', page:8},
+    {name:'场景', page:9},
+    {name:'客户', page:10},
+    {name:'价值', page:11},
+    {name:'优势', page:12},
+    {name:'交付', page:13}
+  ];
+  var cur = 0;
+
+  var dotsBox = document.getElementById('dots');
+  var dots = slides.map(function(_, i){
+    var d = document.createElement('button');
+    d.className = 'dot';
+    d.setAttribute('data-name', NAMES[i] || ('第 ' + (i+1) + ' 页'));
+    d.setAttribute('aria-label', '跳转到 ' + (NAMES[i] || i+1));
+    d.addEventListener('click', function(){ go(i); });
+    dotsBox.appendChild(d);
+    return d;
+  });
+
+  var tabsBox = document.getElementById('tbTabs');
+  var tabs = TABS.map(function(tb){
+    var t = document.createElement('button');
+    t.className = 'tb-tab';
+    t.textContent = tb.name;
+    t.addEventListener('click', function(){ go(tb.page - 1); });
+    tabsBox.appendChild(t);
+    return t;
+  });
+
+  var pgCur = document.getElementById('pgCur');
+  var btnPrev = document.getElementById('btnPrev');
+  var btnNext = document.getElementById('btnNext');
+  var edgeL = document.getElementById('edgeL');
+  var edgeR = document.getElementById('edgeR');
+  document.getElementById('pgTotal').textContent = String(slides.length).padStart(2, '0');
+
+  function render(){
+    slides.forEach(function(s, i){ s.classList.toggle('active', i === cur); });
+    dots.forEach(function(d, i){ d.classList.toggle('on', i === cur); });
+    tabs.forEach(function(t, i){
+      var tb = TABS[i];
+      var end = tb.to || tb.page;
+      var on = (cur + 1) >= tb.page && (cur + 1) <= end;
+      t.classList.toggle('on', on);
+      if (on && tabsBox.scrollWidth > tabsBox.clientWidth) {
+        tabsBox.scrollTo({ left: t.offsetLeft - tabsBox.clientWidth / 2 + t.offsetWidth / 2, behavior: 'smooth' });
+      }
+    });
+    pgCur.textContent = String(cur + 1).padStart(2, '0');
+    btnPrev.disabled = (cur === 0);
+    btnNext.disabled = (cur === slides.length - 1);
+    edgeL.style.visibility = (cur === 0) ? 'hidden' : 'visible';
+    edgeR.style.visibility = (cur === slides.length - 1) ? 'hidden' : 'visible';
+  }
+  function go(i, silent){
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    render();
+    if (!silent) {
+      try { history.replaceState(null, '', '#' + (cur + 1)); } catch (e) {}
+    }
+  }
+  var next = function(){ go(cur + 1); };
+  var prev = function(){ go(cur - 1); };
+
+  /* hash 直达：#3 打开第 3 页 */
+  var hm = location.hash.match(/^#(\d+)$/);
+  if (hm) cur = Math.max(0, Math.min(slides.length - 1, parseInt(hm[1], 10) - 1));
+  window.addEventListener('hashchange', function(){
+    var m = location.hash.match(/^#(\d+)$/);
+    if (m) go(parseInt(m[1], 10) - 1, true);
+  });
+
+  btnPrev.addEventListener('click', prev);
+  btnNext.addEventListener('click', next);
+  edgeL.addEventListener('click', prev);
+  edgeR.addEventListener('click', next);
+
+  /* === 键盘 === */
+  var editing = false;
+  document.addEventListener('keydown', function(e){
+    if (editing) {
+      if (e.key === 'Escape') toggleEdit();
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End':  e.preventDefault(); go(slides.length - 1); break;
+      default:
+        if (e.key.toLowerCase() === 'e') toggleEdit();
+    }
+  });
+
+  /* === 滚轮翻页（节流，每 650ms 最多一页） === */
+  var wheelLock = false;
+  window.addEventListener('wheel', function(e){
+    if (editing || wheelLock) return;
+    if (Math.abs(e.deltaY) < 12) return;
+    wheelLock = true;
+    setTimeout(function(){ wheelLock = false; }, 650);
+    e.deltaY > 0 ? next() : prev();
+  }, { passive: true });
+
+  /* === 触屏滑动 === */
+  var tx = 0, ty = 0;
+  document.addEventListener('touchstart', function(e){
+    tx = e.changedTouches[0].clientX; ty = e.changedTouches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', function(e){
+    var dx = e.changedTouches[0].clientX - tx;
+    var dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy)) {
+      dx < 0 ? next() : prev();
+    }
+  }, { passive: true });
+
+  /* === 内联编辑模式 === */
+  var editBtn = document.getElementById('editBtn');
+  var EDIT_SEL = '.slide h1, .slide h2, .slide h3, .slide h4, .slide p';
+  function toggleEdit(){
+    editing = !editing;
+    document.body.classList.toggle('editing', editing);
+    document.querySelectorAll(EDIT_SEL).forEach(function(el){
+      el.contentEditable = editing ? 'true' : 'false';
+    });
+  }
+  editBtn.addEventListener('click', toggleEdit);
+
+  render();
+})();
+</script>
+</body>
+</html>
