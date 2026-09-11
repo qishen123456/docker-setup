@@ -406,13 +406,16 @@ def run_case(case, svc):
     out["turns"].append({"q": q, "results": results})
 
     # 弹确认走完：每个分支重新 ask + confirm + 断言
-    for branch in case.get("confirm", []):
+    # 2026-09-03：分支各自用独立 sid（-cf0/-cf1…）。分支是"平行宇宙"（选2 vs 选3），
+    # 共享 sid 会让上一分支 confirm 写入的短期记忆污染下一分支的 ask——
+    # 实测 N6 第二分支被记忆劫持改弹节点级确认卡（选项无 dataset_ids），误报"找不到选项"。
+    for branch_idx, branch in enumerate(case.get("confirm", [])):
         sel_ds = branch.get("select", {}).get("dataset_ids")
         if not sel_ds:
             out["turns"].append({"q": q + " → confirm(缺select)", "results": [("confirm", None, "FAIL(缺select)")]})
             continue
         try:
-            r_ask = _ask(svc, q, sid + "-cf", user)
+            r_ask = _ask(svc, q, f"{sid}-cf{branch_idx}", user)
         except Exception as e:
             out["turns"].append({"q": q + " → 选{}".format(sel_ds), "results": [("EXC", repr(e), "EXC")]})
             continue
@@ -515,6 +518,12 @@ def main():
     if id_filter:
         cases = [c for c in cases if str(c.get("id", "")).startswith(id_filter)]
         print(f"过滤后 {len(cases)} 个用例（前缀 {id_filter}）")
+
+    # skip 标记：数据前提不存在等原因暂停的用例——不执行、不打 LLM、不计入断言，单独列示
+    skipped = [c for c in cases if c.get("skip")]
+    cases = [c for c in cases if not c.get("skip")]
+    for c in skipped:
+        print(f"SKIP {c.get('id')}: {c.get('skip_reason') or '未注明原因'}")
 
     from four_agent_ask import four_agent_ask_service as svc
 

@@ -103,6 +103,8 @@ md5sum backend/four_agent_ask.py
 }
 ```
 
+数据前提不存在等原因需要暂停的用例，加 `"skip": true` + `"skip_reason"`（2026-09-10 起支持）：runner 会打印 SKIP 行并跳过执行，不打 LLM、不计入断言合计。数据前提恢复后删掉这两个字段即可重新启用。
+
 **弹确认要「走完」**（用 `confirm` 数组，每个候选数据集都测一遍）：
 
 ```json

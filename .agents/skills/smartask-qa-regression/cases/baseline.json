@@ -96,7 +96,7 @@
     },
     {
       "id": "F2",
-      "source": "baseline §5.1",
+      "source": "baseline §5.1（2026-09-03 飞书数据漂移 47→34，范围随之校准）",
       "question": "达成率低于50%的城市分公司",
       "asserts": [
         {
@@ -115,8 +115,8 @@
           "path": "dataset_results.0.row_count",
           "op": "range",
           "expect": [
-            40,
-            55
+            30,
+            45
           ]
         }
       ]
@@ -238,7 +238,10 @@
         {
           "path": "dataset_results.0.row_count",
           "op": "range",
-          "expect": [6, 9],
+          "expect": [
+            6,
+            9
+          ],
           "note": "1家最低分公司(江浙沪)+其城市分公司下级；旧expect=1是误判口径(memory 2026-08记录)"
         }
       ]
